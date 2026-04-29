@@ -72,7 +72,7 @@ export async function POST(req: NextRequest) {
             new ImageRun({
               data: headerImageBuffer,
               type: headerImageType,
-              transformation: { width: 480, height: 76 },
+              transformation: { width: 624, height: 99 },
             }),
             new TextRun({ text: '     Anexa 10', size: 18 }),
           ]
@@ -219,7 +219,7 @@ export async function POST(req: NextRequest) {
       properties: {
         page: {
           size: { width: 11906, height: 16838 },
-          margin: { top: 720, right: 720, bottom: 720, left: 1080 }
+          margin: { top: 284, right: 720, bottom: 720, left: 1080 }
         }
       },
       children: allChildren,
