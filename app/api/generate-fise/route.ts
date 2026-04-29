@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import fs from 'fs'
-import path from 'path'
+import { getHeaderImage } from '@/lib/antete'
 
 export async function POST(req: NextRequest) {
   const { session_id } = await req.json()
@@ -27,27 +26,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
-  // Load header image
-  const headerImageKey = session.locations?.header_image || null
-  let headerImageBuffer: Buffer | null = null
-  let headerImageType: 'jpg' | 'png' = 'jpg'
-  if (headerImageKey) {
-    for (const ext of ['jpg', 'jpeg', 'png']) {
-      const imgPath = path.join(process.cwd(), 'public', `${headerImageKey}.${ext}`)
-      if (fs.existsSync(imgPath)) {
-        headerImageBuffer = fs.readFileSync(imgPath)
-        headerImageType = ext === 'png' ? 'png' : 'jpg'
-        break
-      }
-    }
-  }
-  if (!headerImageBuffer) {
-    const fallbackPath = path.join(process.cwd(), 'public', 'antet_snagov.png')
-    if (fs.existsSync(fallbackPath)) {
-      headerImageBuffer = fs.readFileSync(fallbackPath)
-      headerImageType = 'png'
-    }
-  }
+  const headerImageBuffer = getHeaderImage(session.locations?.header_image || null)
+  const headerImageType: 'png' = 'png'
 
   const sessionDate = new Date(session.session_date).toLocaleDateString('ro-RO', {
     day: '2-digit', month: 'long', year: 'numeric'

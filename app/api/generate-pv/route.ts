@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import fs from 'fs'
-import path from 'path'
+import { getHeaderImage } from '@/lib/antete'
 
 export async function POST(req: NextRequest) {
   const { session_id } = await req.json()
@@ -34,76 +33,38 @@ export async function POST(req: NextRequest) {
 
   const {
     Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
-    AlignmentType, BorderStyle, WidthType, ShadingType, ImageRun, PageBreak
+    AlignmentType, BorderStyle, WidthType, ShadingType, ImageRun
   } = await import('docx')
 
-  // Determina imaginea antet bazată pe locație
-  const headerImageKey = session.locations?.header_image || null
-  let headerImageBuffer: Buffer | null = null
-  let headerImageType: 'jpg' | 'png' = 'jpg'
-
-  if (headerImageKey) {
-    // Caută fișierul în public folder
-    const extensions = ['jpg', 'jpeg', 'png']
-    for (const ext of extensions) {
-      const imgPath = path.join(process.cwd(), 'public', `${headerImageKey}.${ext}`)
-      if (fs.existsSync(imgPath)) {
-        headerImageBuffer = fs.readFileSync(imgPath)
-        headerImageType = ext === 'png' ? 'png' : 'jpg'
-        break
-      }
-    }
-    // Fallback: încearcă și fără extensie specificată
-    if (!headerImageBuffer) {
-      const imgPath = path.join(process.cwd(), 'public', `${headerImageKey}.png`)
-      if (fs.existsSync(imgPath)) {
-        headerImageBuffer = fs.readFileSync(imgPath)
-        headerImageType = 'png'
-      }
-    }
-  }
-
-  // Dacă nu am găsit imagine specifică, caută snagov ca fallback
-  if (!headerImageBuffer) {
-    const fallbackPath = path.join(process.cwd(), 'public', 'antet_snagov.png')
-    if (fs.existsSync(fallbackPath)) {
-      headerImageBuffer = fs.readFileSync(fallbackPath)
-      headerImageType = 'png'
-    }
-  }
+  const headerImageBuffer = getHeaderImage(session.locations?.header_image || null)
 
   const border = { style: BorderStyle.SINGLE, size: 4, color: '000000' }
   const borders = { top: border, bottom: border, left: border, right: border }
   const cellMargins = { top: 60, bottom: 60, left: 80, right: 80 }
 
-  function makeHeaderParagraph(): any[] {
+  function makeHeader(): any[] {
     if (headerImageBuffer) {
-      // Antet grafic — imagine lățime completă, aliniată stânga
       return [
         new Paragraph({
           alignment: AlignmentType.LEFT,
-          spacing: { after: 200 },
+          spacing: { after: 240 },
           children: [
             new ImageRun({
               data: headerImageBuffer,
-              type: headerImageType,
-              transformation: {
-                width: 500,  // ~14cm — lățimea imaginii în document
-                height: 80,  // proporțional cu originalul
-              },
+              type: 'png',
+              transformation: { width: 510, height: 82 },
             })
           ]
         })
       ]
-    } else {
-      // Fallback text dacă nu există imagine
-      return [
-        new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 80 }, children: [new TextRun({ text: 'MINISTERUL TRANSPORTURILOR ȘI INFRASTRUCTURII', bold: true, size: 20 })] }),
-        new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 80 }, children: [new TextRun({ text: 'AUTORITATEA NAVALĂ ROMÂNĂ', bold: true, size: 20 })] }),
-        new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 80 }, children: [new TextRun({ text: 'CĂPITĂNIA ZONALĂ GIURGIU', bold: true, size: 20 })] }),
-        new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 200 }, children: [new TextRun({ text: 'CĂPITĂNIA PORT SNAGOV', bold: true, size: 20 })] }),
-      ]
     }
+    // Fallback text
+    return [
+      new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 60 }, children: [new TextRun({ text: 'MINISTERUL TRANSPORTURILOR ȘI INFRASTRUCTURII', bold: true, size: 20 })] }),
+      new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 60 }, children: [new TextRun({ text: 'AUTORITATEA NAVALĂ ROMÂNĂ', bold: true, size: 20 })] }),
+      new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 60 }, children: [new TextRun({ text: session.locations?.name?.toUpperCase() || '', bold: true, size: 20 })] }),
+      new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 200 }, children: [new TextRun({ text: '', bold: true, size: 20 })] }),
+    ]
   }
 
   function makeStudentRows() {
@@ -136,16 +97,12 @@ export async function POST(req: NextRequest) {
   }
 
   const children: any[] = [
-    // Antet grafic
-    ...makeHeaderParagraph(),
+    ...makeHeader(),
 
-    // Număr înregistrare
     new Paragraph({ alignment: AlignmentType.LEFT, spacing: { after: 100 }, children: [new TextRun({ text: 'Nr................/............................', size: 18 })] }),
 
-    // Titlu
     new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 200, after: 200 }, children: [new TextRun({ text: 'Proces – Verbal  Examen Practic', bold: true, size: 28 })] }),
 
-    // Corp text
     new Paragraph({ spacing: { after: 120 }, children: [
       new TextRun({ text: '\tSubsemnatul ', size: 18 }),
       new TextRun({ text: session.evaluators?.full_name || '...', bold: true, size: 18 }),
@@ -172,7 +129,6 @@ export async function POST(req: NextRequest) {
       new TextRun({ text: '…, evaluarea/examinarea cunoștintelor practice ale candidaților enumerați mai jos, și în baza fișei individuale de verificare a aptitudinilor am constatat următoarele:', size: 18 }),
     ]}),
 
-    // Tabel cursanți
     new Table({
       width: { size: 9600, type: WidthType.DXA },
       columnWidths: [700, 3500, 2200, 1200, 2000],
@@ -183,7 +139,6 @@ export async function POST(req: NextRequest) {
       new TextRun({ text: '\tDrept pentru care am încheiat prezentul proces-verbal în două exemplare, un exemplar a fost înaintat furnizorului de educație, formare profesională sau de perfecționare în vederea emiterii certificatelor de absolvire curs după caz.', size: 18 }),
     ]}),
 
-    // Semnături
     new Paragraph({ spacing: { before: 400, after: 120 }, tabStops: [{ type: 'right', position: 9360 }], children: [
       new TextRun({ text: 'Evaluator/Examinator', bold: true, size: 18 }),
       new TextRun({ text: '\t', size: 18 }),
