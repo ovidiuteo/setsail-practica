@@ -205,6 +205,7 @@ export default function SesiuniPage() {
                           {st.label}
                         </span>
                         <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">Clasa {s.class_caa}</span>
+                      {s.is_clone && <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded">Clonă</span>}
                       </div>
                       <div className="text-sm text-gray-500 flex flex-wrap gap-x-4 gap-y-0.5">
                         <span>📍 {s.locations?.name}, {s.locations?.county}</span>
