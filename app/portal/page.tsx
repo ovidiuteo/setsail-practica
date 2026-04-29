@@ -16,6 +16,7 @@ export default function PortalPage() {
   const [ocrLoading, setOcrLoading] = useState(false)
   const [ocrStatus, setOcrStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
   const [signatureSaved, setSignatureSaved] = useState(false)
+  const [existingSignature, setExistingSignature] = useState<string | null>(null)
 
   const [form, setForm] = useState({
     phone: '', birth_date: '', ci_series: '', ci_number: '',
@@ -38,6 +39,35 @@ export default function PortalPage() {
     const c = params.get('cod')
     if (c) setCode(c.toUpperCase())
   }, [])
+
+  // Incarca semnatura existenta in canvas dupa ce step devine confirm
+  useEffect(() => {
+    if (step !== 'confirm') return
+    // Asteptam ca canvas-ul sa fie montat
+    const timer = setTimeout(() => {
+      const canvas = canvasRef.current
+      if (!canvas) return
+      const ctx = canvas.getContext('2d')!
+      ctx.fillStyle = '#fff'
+      ctx.fillRect(0, 0, canvas.width, canvas.height)
+      ctx.strokeStyle = '#0a1628'
+      ctx.lineWidth = 2.5
+      ctx.lineCap = 'round'
+      ctx.lineJoin = 'round'
+      hasDrawn.current = false
+      if (existingSignature) {
+        const img = new Image()
+        img.onload = () => {
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+          setSignatureSaved(true)
+        }
+        img.src = existingSignature
+      } else {
+        setSignatureSaved(false)
+      }
+    }, 200)
+    return () => clearTimeout(timer)
+  }, [step, existingSignature])
 
   async function login() {
     setLoginError('')
@@ -75,12 +105,12 @@ export default function PortalPage() {
       county: st.county || '',
       email: st.email || emailInput.trim(),
     })
+    setExistingSignature(st.signature_data || null)
     setStep('confirm')
-    setTimeout(() => initCanvas(), 300)
   }
 
   // Canvas semnătură
-  function initCanvas() {
+  function initCanvas(existingSig?: string) {
     const canvas = canvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')!
@@ -92,6 +122,13 @@ export default function PortalPage() {
     ctx.lineJoin = 'round'
     hasDrawn.current = false
     setSignatureSaved(false)
+    // Daca exista semnatura anterioara, o afisam
+    if (existingSig) {
+      const img = new Image()
+      img.onload = () => ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+      img.src = existingSig
+      setSignatureSaved(true)
+    }
   }
 
   function getPos(e: { clientX: number; clientY: number }, canvas: HTMLCanvasElement) {
@@ -128,7 +165,15 @@ export default function PortalPage() {
     lastPos.current = pos
   }
 
-  function clearCanvas() { initCanvas() }
+  function clearCanvas() {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')!
+    ctx.fillStyle = '#fff'
+    ctx.fillRect(0, 0, canvas.width, canvas.height)
+    hasDrawn.current = false
+    setSignatureSaved(false)
+  }
 
   async function saveSignature() {
     if (!hasDrawn.current) return
@@ -461,14 +506,14 @@ export default function PortalPage() {
                   className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors">
                   <RotateCcw size={13} /> Șterge
                 </button>
-                <button onClick={saveSignature} disabled={signatureSaved}
+                <button onClick={saveSignature}
                   className={`flex-1 py-2.5 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-all ${
                     signatureSaved
                       ? 'bg-green-100 text-green-700 border border-green-300'
                       : 'bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200'
                   }`}>
                   {signatureSaved
-                    ? <><CheckCircle size={14} /> Semnătură salvată</>
+                    ? <><CheckCircle size={14} /> Salvată ✓ (apasă din nou pentru a înlocui)</>
                     : <><Check size={14} /> Salvează</>}
                 </button>
               </div>
