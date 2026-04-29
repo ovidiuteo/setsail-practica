@@ -62,7 +62,7 @@ export default function PortalPage() {
       .single()
 
     if (!st) { setLoginError('Email-ul nu a fost găsit în această sesiune. Verificați adresa sau contactați instructorul.'); return }
-    if (st.portal_status === 'signed') { setLoginError('Ați semnat deja pentru această sesiune.'); return }
+    // Cursantii care au semnat pot reveni oricand sa modifice datele
 
     setSession(s)
     setStudent(st)
@@ -283,6 +283,12 @@ export default function PortalPage() {
             <div className="bg-white rounded-2xl p-6 shadow-2xl">
               <h2 className="font-bold text-gray-900 mb-1">Date personale</h2>
               <p className="text-xs text-gray-400 mb-4">Verificați și completați informațiile</p>
+            {student?.portal_status === 'signed' && (
+              <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-xl text-xs text-green-700 flex items-center gap-2">
+                <CheckCircle size={14} className="shrink-0" />
+                Ați completat deja această fișă. Puteți modifica orice informație și salva din nou.
+              </div>
+            )}
 
               {/* Info fixă */}
               <div className="bg-gray-50 rounded-xl p-3 mb-5 space-y-1.5">
@@ -480,7 +486,7 @@ export default function PortalPage() {
                   canSave ? 'opacity-100 hover:opacity-90' : 'opacity-50 cursor-not-allowed'
                 }`}
                 style={{ background: canSave ? '#0a1628' : '#6b7280' }}>
-                {saving ? 'Se salvează...' : '✓ Salvează și finalizează'}
+                {saving ? 'Se salvează...' : student?.portal_status === 'signed' ? '✓ Actualizează datele' : '✓ Salvează și finalizează'}
               </button>
               {!canSave && (
                 <p className="text-amber-200 text-xs text-center mt-2 flex items-center justify-center gap-1.5">
