@@ -1,5 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import fs from 'fs'
+import path from 'path'
 
 export async function POST(req: NextRequest) {
   const { session_id } = await req.json()
@@ -25,13 +27,35 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
+  // Load header image
+  const headerImageKey = session.locations?.header_image || null
+  let headerImageBuffer: Buffer | null = null
+  let headerImageType: 'jpg' | 'png' = 'jpg'
+  if (headerImageKey) {
+    for (const ext of ['jpg', 'jpeg', 'png']) {
+      const imgPath = path.join(process.cwd(), 'public', `${headerImageKey}.${ext}`)
+      if (fs.existsSync(imgPath)) {
+        headerImageBuffer = fs.readFileSync(imgPath)
+        headerImageType = ext === 'png' ? 'png' : 'jpg'
+        break
+      }
+    }
+  }
+  if (!headerImageBuffer) {
+    const fallbackPath = path.join(process.cwd(), 'public', 'antet_snagov.png')
+    if (fs.existsSync(fallbackPath)) {
+      headerImageBuffer = fs.readFileSync(fallbackPath)
+      headerImageType = 'png'
+    }
+  }
+
   const sessionDate = new Date(session.session_date).toLocaleDateString('ro-RO', {
     day: '2-digit', month: 'long', year: 'numeric'
   })
 
   const {
     Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
-    AlignmentType, BorderStyle, WidthType, ShadingType, PageBreak
+    AlignmentType, BorderStyle, WidthType, ShadingType, PageBreak, ImageRun
   } = await import('docx')
 
   const border = { style: BorderStyle.SINGLE, size: 4, color: '000000' }
@@ -59,8 +83,24 @@ export async function POST(req: NextRequest) {
 
   function makeStudentSection(s: any, isLast: boolean): any[] {
     const children: any[] = [
-      new Paragraph({ alignment: AlignmentType.RIGHT, spacing: { after: 60 },
-        children: [new TextRun({ text: 'Anexa 10', size: 18 })] }),
+      // Antet grafic dacă există, altfel text
+      ...(headerImageBuffer ? [
+        new Paragraph({
+          alignment: AlignmentType.LEFT,
+          spacing: { after: 160 },
+          children: [
+            new ImageRun({
+              data: headerImageBuffer,
+              type: headerImageType,
+              transformation: { width: 480, height: 76 },
+            }),
+            new TextRun({ text: '     Anexa 10', size: 18 }),
+          ]
+        })
+      ] : [
+        new Paragraph({ alignment: AlignmentType.RIGHT, spacing: { after: 60 },
+          children: [new TextRun({ text: 'Anexa 10', size: 18 })] }),
+      ]),
 
       new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 60 },
         children: [new TextRun({ text: 'Fișă de verificare aptitudini', bold: true, size: 24 })] }),
