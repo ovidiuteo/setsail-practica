@@ -67,24 +67,24 @@ export async function POST(req: NextRequest) {
 
     const evalRowsHtml = evalRows.map(r => `
       <tr>
-        <td style="border:1px solid #000;padding:5px 6px;font-size:12.8pt;vertical-align:top;">${r.req}</td>
-        <td style="border:1px solid #000;padding:5px 6px;font-size:12.8pt;vertical-align:top;">${r.apt}</td>
-        <td style="border:1px solid #000;padding:5px 6px;font-size:12.8pt;vertical-align:top;"></td>
+        <td style="border:1px solid #000;padding:5px 6px;font-size:12pt;vertical-align:top;">${r.req}</td>
+        <td style="border:1px solid #000;padding:5px 6px;font-size:12pt;vertical-align:top;">${r.apt}</td>
+        <td style="border:1px solid #000;padding:5px 6px;font-size:12pt;vertical-align:top;"></td>
       </tr>`).join('')
 
     const headerHtml = ''  // fara antet
 
     return `
-    <div style="page-break-after:${idx < students.length - 1 ? 'always' : 'auto'};padding:14mm 14mm 10mm 14mm;font-family:Arial,sans-serif;font-size:13.5pt;color:#000;">
+    <div style="page-break-after:${idx < students.length - 1 ? 'always' : 'auto'};padding:14mm 14mm 10mm 14mm;font-family:Arial,sans-serif;font-size:12pt;color:#000;">
 
       ${headerHtml}
 
-      <div style="font-weight:bold;font-size:16.5pt;margin-bottom:2px;">Fișă de verificare aptitudini</div>
-      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;">
+      <div style="font-weight:bold;font-size:16pt;margin-bottom:2px;">Fișă de verificare aptitudini</div>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:28px;">
         <div style="font-weight:bold;font-size:15pt;">pentru conducerea și manevra ambarcațiunii de agrement</div>
-        <div style="font-size:13.5pt;white-space:nowrap;padding-left:24px;">Anexa 10</div>
+        <div style="font-size:12pt;white-space:nowrap;padding-left:24px;">Anexa 10</div>
       </div>
-      <div style="font-size:12.8pt;margin-bottom:8px;">Pentru obținerea Certificatului Internațional de Conducător de ambarcațiune de agrement</div>
+      <div style="font-size:12pt;margin-bottom:8px;">Pentru obținerea Certificatului Internațional de Conducător de ambarcațiune de agrement</div>
 
       <table style="width:100%;border-collapse:collapse;margin-bottom:6px;">
         <tr>
@@ -109,36 +109,36 @@ export async function POST(req: NextRequest) {
       <table style="width:100%;border-collapse:collapse;margin-bottom:8px;">
         <thead>
           <tr style="background:#e0e0e0;">
-            <th style="border:1px solid #000;padding:4px 6px;font-size:12.8pt;width:35%;text-align:center;">Cerințe</th>
-            <th style="border:1px solid #000;padding:4px 6px;font-size:12.8pt;width:48%;text-align:center;">Aptitudini</th>
-            <th style="border:1px solid #000;padding:4px 6px;font-size:12.8pt;width:17%;text-align:center;">Obs. (admis/respins)</th>
+            <th style="border:1px solid #000;padding:4px 6px;font-size:12pt;width:35%;text-align:center;">Cerințe</th>
+            <th style="border:1px solid #000;padding:4px 6px;font-size:12pt;width:48%;text-align:center;">Aptitudini</th>
+            <th style="border:1px solid #000;padding:4px 6px;font-size:12pt;width:17%;text-align:center;">Obs. (admis/respins)</th>
           </tr>
         </thead>
         <tbody>${evalRowsHtml}</tbody>
       </table>
 
-      <div style="margin-bottom:10px;font-size:13.5pt;">
+      <div style="margin-bottom:10px;font-size:12pt;">
         Rezultat evaluare finală .............................................................................(admis/respins)
       </div>
 
       <table style="width:100%;border-collapse:collapse;">
         <tr>
-          <td style="width:50%;padding:2px 0;font-size:13.5pt;"><b>Data:</b> ${sessionDate}</td>
-          <td style="text-align:right;font-size:13.5pt;"><b>Întocmit,</b></td>
+          <td style="width:50%;padding:2px 0;font-size:12pt;"><b>Data:</b> ${sessionDate}</td>
+          <td style="text-align:right;font-size:12pt;"><b>Întocmit,</b></td>
         </tr>
         <tr>
           <td style="padding-top:4px;">
-            <div style="font-size:13.5pt;font-weight:bold;margin-bottom:2px;">Semnătura cursant: ${s.full_name || ''}</div>
+            <div style="font-size:12pt;font-weight:bold;margin-bottom:2px;">Semnătura cursant: ${s.full_name || ''}</div>
             ${sigHtml}
           </td>
           <td style="vertical-align:bottom;text-align:right;padding-top:4px;">
-            <div style="font-size:12.8pt;">Nume și prenume / semnătura evaluator</div>
+            <div style="font-size:12pt;">Nume și prenume / semnătura evaluator</div>
             <div style="border-bottom:1px solid #000;width:160px;height:30px;display:inline-block;margin-top:4px;"></div>
           </td>
         </tr>
       </table>
 
-      <div style="text-align:center;font-size:10.5pt;color:#666;margin-top:8px;">
+      <div style="text-align:center;font-size:12pt;color:#666;margin-top:8px;">
         SetSail Advertising SRL — ${session.locations?.name || ''} — ${sessionDate} — ${idx + 1}/${students.length}
       </div>
     </div>`
