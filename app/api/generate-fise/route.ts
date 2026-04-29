@@ -97,7 +97,7 @@ export async function POST(req: NextRequest) {
         children: [
           new TextRun({ text: 'pentru conducerea și manevra ambarcațiunii de agrement', bold: true, size: 30 }),
           new TextRun({ text: '\t', size: 30 }),
-          new TextRun({ text: 'Anexa 10', size: 27 }),
+          new TextRun({ text: 'Anexa 10', size: 24 }),
         ]
       }),
     )
@@ -107,42 +107,42 @@ export async function POST(req: NextRequest) {
       new Paragraph({
         spacing: { after: 80 },
         children: [
-          new TextRun({ text: 'Pentru obţinerea Certificatului Internaţional de Conducător de ambarcațiune de agrement', bold: true, size: 27 }),
+          new TextRun({ text: 'Pentru obţinerea Certificatului Internaţional de Conducător de ambarcațiune de agrement', bold: true, size: 24 }),
         ]
       }),
       new Paragraph({
         spacing: { after: 80 },
         children: [
-          new TextRun({ text: 'CLASA:  ', bold: true, size: 27 }),
-          new TextRun({ text: s.class_caa || session.class_caa || '___________', bold: true, size: 27 }),
+          new TextRun({ text: 'CLASA:  ', bold: true, size: 24 }),
+          new TextRun({ text: s.class_caa || session.class_caa || '___________', bold: true, size: 24 }),
         ]
       }),
       new Paragraph({
         spacing: { after: 120 },
         children: [
-          new TextRun({ text: 'Perioada de desfăşurare curs:  ', bold: true, size: 27 }),
-          new TextRun({ text: sessionDate, size: 27 }),
+          new TextRun({ text: 'Perioada de desfăşurare curs:  ', bold: true, size: 24 }),
+          new TextRun({ text: sessionDate, size: 24 }),
         ]
       }),
       new Paragraph({
         spacing: { after: 160 },
         children: [
-          new TextRun({ text: 'Numele şi prenumele candidatului:  ', bold: true, size: 27 }),
-          new TextRun({ text: s.full_name || '_______________________________________________', size: 27 }),
+          new TextRun({ text: 'Numele şi prenumele candidatului:  ', bold: true, size: 24 }),
+          new TextRun({ text: s.full_name || '_______________________________________________', size: 24 }),
         ]
       }),
       new Paragraph({
         spacing: { after: 160 },
         children: [
-          new TextRun({ text: 'CNP:  ', bold: true, size: 27 }),
-          new TextRun({ text: dot(s.cnp), size: 27 }),
+          new TextRun({ text: 'CNP:  ', bold: true, size: 24 }),
+          new TextRun({ text: dot(s.cnp), size: 24 }),
         ]
       }),
       new Paragraph({
         spacing: { after: 200 },
         children: [
-          new TextRun({ text: 'Document de identitate: ', bold: true, size: 27 }),
-          new TextRun({ text: ciDoc, size: 27 }),
+          new TextRun({ text: 'Document de identitate: ', bold: true, size: 24 }),
+          new TextRun({ text: ciDoc, size: 24 }),
         ]
       }),
     )
@@ -151,7 +151,7 @@ export async function POST(req: NextRequest) {
     children.push(
       new Paragraph({
         spacing: { after: 80 },
-        children: [new TextRun({ text: 'Verificări: ', bold: true, size: 27 })]
+        children: [new TextRun({ text: 'Verificări: ', bold: true, size: 24 })]
       }),
       new Table({
         width: { size: CONTENT_W, type: WidthType.DXA },
@@ -164,12 +164,12 @@ export async function POST(req: NextRequest) {
               new TableCell({
                 borders, margins: cellMargins, width: { size: COL1, type: WidthType.DXA },
                 shading: { fill: 'E8E8E8', type: ShadingType.CLEAR },
-                children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Cerinţe', bold: true, size: 27 })] })]
+                children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Cerinţe', bold: true, size: 24 })] })]
               }),
               new TableCell({
                 borders, margins: cellMargins, width: { size: COL2, type: WidthType.DXA },
                 shading: { fill: 'E8E8E8', type: ShadingType.CLEAR },
-                children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Aptitudini', bold: true, size: 27 })] })]
+                children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Aptitudini', bold: true, size: 24 })] })]
               }),
               new TableCell({
                 borders, margins: cellMargins, width: { size: COL3, type: WidthType.DXA },
@@ -204,7 +204,7 @@ export async function POST(req: NextRequest) {
       new Paragraph({
         spacing: { before: 200, after: 200 },
         children: [
-          new TextRun({ text: '       Rezultat evaluare finală .......................................................................(admis/respins)', size: 27 }),
+          new TextRun({ text: '       Rezultat evaluare finală .......................................................................(admis/respins)', size: 24 }),
         ]
       })
     )
@@ -216,9 +216,9 @@ export async function POST(req: NextRequest) {
         spacing: { after: 80 },
         tabStops: [{ type: TabStopType.RIGHT, position: CONTENT_W }],
         children: [
-          new TextRun({ text: `Data : ${sessionDate}`, size: 27 }),
-          new TextRun({ text: '\t', size: 27 }),
-          new TextRun({ text: 'Intocmit,', size: 27 }),
+          new TextRun({ text: `Data : ${sessionDate}`, size: 24 }),
+          new TextRun({ text: '\t', size: 24 }),
+          new TextRun({ text: 'Intocmit,', size: 24 }),
         ]
       }),
       // Evaluator - numele autorității dreapta
@@ -226,18 +226,18 @@ export async function POST(req: NextRequest) {
         spacing: { after: 80 },
         tabStops: [{ type: TabStopType.RIGHT, position: CONTENT_W }],
         children: [
-          new TextRun({ text: '', size: 27 }),
-          new TextRun({ text: '\t', size: 27 }),
-          new TextRun({ text: 'Nume şi prenume/semnătura', size: 27 }),
+          new TextRun({ text: '', size: 24 }),
+          new TextRun({ text: '\t', size: 24 }),
+          new TextRun({ text: 'Nume şi prenume/semnătura', size: 24 }),
         ]
       }),
       new Paragraph({
         spacing: { after: 200 },
         tabStops: [{ type: TabStopType.RIGHT, position: CONTENT_W }],
         children: [
-          new TextRun({ text: '', size: 27 }),
-          new TextRun({ text: '\t', size: 27 }),
-          new TextRun({ text: session.evaluators?.full_name || '............................', bold: true, size: 27 }),
+          new TextRun({ text: '', size: 24 }),
+          new TextRun({ text: '\t', size: 24 }),
+          new TextRun({ text: session.evaluators?.full_name || '............................', bold: true, size: 24 }),
         ]
       }),
     )
@@ -247,13 +247,13 @@ export async function POST(req: NextRequest) {
       new Paragraph({
         spacing: { after: 60 },
         children: [
-          new TextRun({ text: 'Nume şi prenume/semnătura cursant', size: 27 }),
+          new TextRun({ text: 'Nume şi prenume/semnătura cursant', size: 24 }),
         ]
       }),
       new Paragraph({
         spacing: { after: 60 },
         children: [
-          new TextRun({ text: s.full_name || '............................', bold: true, size: 27 }),
+          new TextRun({ text: s.full_name || '............................', bold: true, size: 24 }),
         ]
       }),
     )
@@ -283,7 +283,7 @@ export async function POST(req: NextRequest) {
     children.push(
       new Paragraph({
         spacing: { after: 40 },
-        children: [new TextRun({ text: '............................ ...........................', size: 27 })]
+        children: [new TextRun({ text: '............................ ...........................', size: 24 })]
       })
     )
 
