@@ -26,6 +26,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
+  // Footer locatie
+  const footerLine1 = session.locations?.footer_line1 || ''
+  const footerLine2 = session.locations?.footer_line2 || ''
+  const footerLine3 = session.locations?.footer_line3 || ''
+  const hasFooter = !!(footerLine1 || footerLine2 || footerLine3)
+
   const headerImageBuffer = getHeaderImage(session.locations?.header_image || null)
   const headerImageType: 'png' = 'png'
 
@@ -286,6 +292,41 @@ export async function POST(req: NextRequest) {
         children: [new TextRun({ text: '............................ ...........................', size: 24 })]
       })
     )
+
+    // Footer locatie - centrat, jos pagina
+    if (hasFooter) {
+      children.push(
+        new Paragraph({ spacing: { before: 400 }, alignment: AlignmentType.CENTER, children: [new TextRun({ text: footerLine1, size: 16, color: '444444' })] }),
+        new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: footerLine2, size: 16, color: '444444' })] }),
+        new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: footerLine3, size: 16, color: '444444', bold: true })] }),
+      )
+    }
+
+    // ── FOOTER ──
+    const f1 = session.locations?.footer_line1
+    const f2 = session.locations?.footer_line2
+    const f3 = session.locations?.footer_line3
+    if (f1 || f2 || f3) {
+      children.push(
+        new Paragraph({ spacing: { before: 400 }, alignment: AlignmentType.CENTER, children: [new TextRun({ text: '_'.repeat(90), size: 16, color: '888888' })] }),
+        ...(f1 ? [new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 40 }, children: [new TextRun({ text: f1, size: 16, color: '444444' })] })] : []),
+        ...(f2 ? [new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 40 }, children: [new TextRun({ text: f2, size: 16, color: '444444' })] })] : []),
+        ...(f3 ? [new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 0 }, children: [new TextRun({ text: f3, size: 16, color: '444444' })] })] : []),
+      )
+    }
+
+    // ── FOOTER ──
+    const fl1 = session.locations?.footer_line1
+    const fl2 = session.locations?.footer_line2
+    const fl3 = session.locations?.footer_line3
+    if (fl1 || fl2 || fl3) {
+      children.push(
+        new Paragraph({ spacing: { before: 400, after: 40 }, alignment: AlignmentType.CENTER, children: [new TextRun({ text: '_'.repeat(90), size: 16, color: '888888' })] }),
+        ...(fl1 ? [new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 40 }, children: [new TextRun({ text: fl1, size: 16, color: '444444' })] })] : []),
+        ...(fl2 ? [new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 40 }, children: [new TextRun({ text: fl2, size: 16, color: '444444' })] })] : []),
+        ...(fl3 ? [new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 0 }, children: [new TextRun({ text: fl3, size: 16, color: '444444' })] })] : []),
+      )
+    }
 
     // Page break între cursanți
     if (!isLast) {
