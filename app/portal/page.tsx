@@ -327,7 +327,11 @@ export default function PortalPage() {
             {/* Date personale */}
             <div className="bg-white rounded-2xl p-6 shadow-2xl">
               <h2 className="font-bold text-gray-900 mb-1">Date personale</h2>
-              <p className="text-xs text-gray-400 mb-4">Verificați și completați informațiile</p>
+              <p className="text-xs text-gray-400 mb-2">Verificați și completați informațiile</p>
+            <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex gap-2">
+              <span className="text-base leading-none">⚠️</span>
+              <span><strong>Diacriticele și cratima din CI contează la nume</strong> — scrieți exact cum apare în cartea de identitate (ex: Răzvan-Andrei, Căpățână).</span>
+            </div>
             {student?.portal_status === 'signed' && (
               <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-xl text-xs text-green-700 flex items-center gap-2">
                 <CheckCircle size={14} className="shrink-0" />
