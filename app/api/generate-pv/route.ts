@@ -198,8 +198,8 @@ export async function POST(req: NextRequest) {
       })
     })
 
-    // Adauga randuri goale pana la minim 18 (fara numar curent)
-    const MIN_ROWS = 18
+    // Adauga randuri goale pana la minim configurat per locatie (0 = exact cati sunt)
+    const MIN_ROWS = session.locations?.min_table_rows ?? 18
     const emptyRowsNeeded = Math.max(0, MIN_ROWS - dataRows.length)
     const emptyRows = Array.from({ length: emptyRowsNeeded }, (_, i) =>
       new TableRow({
