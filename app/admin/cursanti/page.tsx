@@ -19,19 +19,22 @@ export default function CursantiPage() {
   const [principals, setPrincipals] = useState<any[]>([]) // sesiuni principale
   const [allSessions, setAllSessions] = useState<any[]>([]) // toate sesiunile
   const [studentCounts, setStudentCounts] = useState<Record<string,number>>({})
+  const [sessMapState, setSessMapState] = useState<Record<string,any>>({})
 
   useEffect(() => {
     async function load() {
       const [{ data: sts }, { data: sess }] = await Promise.all([
         supabase.from('students').select('*').order('full_name'),
         supabase.from('sessions')
-          .select('id, session_date, session_type, parent_session_id, locations(name, county), boats(name), access_code')
+          .select('id, session_date, session_type, parent_session_id, locations(name, county), boats(name), access_code, status')
           .order('session_date', { ascending: true })
           .order('created_at', { ascending: true }),
       ])
 
       const sessMap: Record<string, any> = {}
       for (const s of (sess || [])) sessMap[s.id] = s
+      // Sesiunile non-absent pentru filtre
+      const nonAbsentSess = (sess || []).filter((s: any) => s.session_type !== 'absent')
 
       const enriched = (sts || []).map(st => ({ ...st, _session: sessMap[st.session_id] || null }))
 
@@ -45,6 +48,7 @@ export default function CursantiPage() {
       setStudentCounts(counts)
       setPrincipals((sess||[]).filter((s:any) => s.session_type === 'principal'))
       setAllSessions(sess || [])
+      setSessMapState(sessMap)
       setLoading(false)
     }
     load()
@@ -70,8 +74,76 @@ export default function CursantiPage() {
     }
 
     // Filtru sesiune
+    if (filterSession === 'absent_pending') {
+      // Tabel special pentru absenti in curs de alocare
+      return filtered.map((s: any, i: number) => {
+        const ps = portalMap[s.portal_status] || portalMap.pending
+        const Icon = ps.icon
+        const origSess = s.original_session_id ? sessMapState[s.original_session_id] : null
+        const origParent = origSess?.parent_session_id ? sessMapState[origSess.parent_session_id] : origSess
+        const currentSess = s._session
+        return (
+          <tr key={s.id} className="hover:bg-amber-50/30 transition-colors bg-amber-50/10">
+            <td className="px-4 py-3 text-gray-400 text-xs">{i + 1}</td>
+            <td className="px-4 py-3 font-medium text-gray-900">{s.full_name}</td>
+            <td className="px-4 py-3 font-mono text-xs text-gray-500">{s.cnp || '—'}</td>
+            <td className="px-4 py-3 text-xs">
+              {s.ci_series && s.ci_number
+                ? <span className="font-mono font-semibold px-1.5 py-0.5 rounded" style={{background:'#dcfce7',color:'#166534'}}>{s.ci_series} {s.ci_number}</span>
+                : <span className="text-gray-400">—</span>}
+            </td>
+            <td className="px-4 py-3 text-xs text-gray-500">{s.email || '—'}</td>
+            <td className="px-4 py-3 text-xs text-gray-500">{s.class_caa?.replace(',','+') || '—'}</td>
+            {/* Sesiunea de origine (absent) */}
+            <td className="px-4 py-3 text-xs">
+              {origParent ? (
+                <Link href={`/admin/sesiuni/${origParent.id}`} className="flex items-center gap-1 text-red-500 hover:text-red-700 hover:underline">
+                  <span>🔴 {new Date(origParent.session_date).toLocaleDateString('ro-RO',{day:'2-digit',month:'short',year:'numeric'})}</span>
+                  <span className="text-red-400">· {origParent.locations?.name}</span>
+                  <ExternalLink size={11}/>
+                </Link>
+              ) : <span className="text-gray-400">—</span>}
+            </td>
+            {/* Sesiunea tinta (unde e alocat) */}
+            <td className="px-4 py-3 text-xs">
+              {currentSess && currentSess.session_type !== 'absent' ? (
+                <Link href={`/admin/sesiuni/${currentSess.parent_session_id || currentSess.id}`} className="flex items-center gap-1 text-amber-600 hover:text-amber-800 hover:underline">
+                  <span>→ {new Date(currentSess.session_date).toLocaleDateString('ro-RO',{day:'2-digit',month:'short',year:'numeric'})}</span>
+                  <span className="text-amber-400">· {currentSess.locations?.name}</span>
+                  {currentSess.session_type === 'clone' && <span className="text-blue-400">⎇</span>}
+                  <ExternalLink size={11}/>
+                </Link>
+              ) : <span className="text-gray-400 italic">nealocată</span>}
+            </td>
+            <td className="px-4 py-3">
+              <span className="flex items-center gap-1.5 text-xs font-medium" style={{ color: ps.color }}>
+                <Icon size={13} />{ps.label}
+              </span>
+            </td>
+            <td className="px-2 py-3">
+              {currentSess && currentSess.session_type !== 'absent' && (
+                <Link href={`/admin/sesiuni/${currentSess.parent_session_id || currentSess.id}`}
+                  className="text-gray-300 hover:text-gray-600 transition-colors">
+                  <ExternalLink size={13}/>
+                </Link>
+              )}
+            </td>
+          </tr>
+        )
+      })
+    }
+
     if (filterSession === 'absent') {
       result = result.filter(s => s._session?.session_type === 'absent')
+    } else if (filterSession === 'absent_pending') {
+      // Cursanti cu original_session_id pointing la o sesiune absent
+      // si sesiunea lor curenta nu e completed
+      result = result.filter(s => {
+        const origSess = s.original_session_id ? sessMapState[s.original_session_id] : null
+        const isFromAbsent = origSess?.session_type === 'absent'
+        const currentSessNotCompleted = s._session?.status !== 'completed'
+        return isFromAbsent && currentSessNotCompleted
+      })
     } else if (filterSession !== 'all') {
       // Selectata o sesiune principala - include si clonele ei
       const principal = allSessions.find(s => s.id === filterSession)
@@ -157,6 +229,65 @@ export default function CursantiPage() {
 
   // Construieste continutul tabelului in functie de filtru
   function renderTableBody() {
+    if (filterSession === 'absent_pending') {
+      // Tabel special pentru absenti in curs de alocare
+      return filtered.map((s: any, i: number) => {
+        const ps = portalMap[s.portal_status] || portalMap.pending
+        const Icon = ps.icon
+        const origSess = s.original_session_id ? sessMapState[s.original_session_id] : null
+        const origParent = origSess?.parent_session_id ? sessMapState[origSess.parent_session_id] : origSess
+        const currentSess = s._session
+        return (
+          <tr key={s.id} className="hover:bg-amber-50/30 transition-colors bg-amber-50/10">
+            <td className="px-4 py-3 text-gray-400 text-xs">{i + 1}</td>
+            <td className="px-4 py-3 font-medium text-gray-900">{s.full_name}</td>
+            <td className="px-4 py-3 font-mono text-xs text-gray-500">{s.cnp || '—'}</td>
+            <td className="px-4 py-3 text-xs">
+              {s.ci_series && s.ci_number
+                ? <span className="font-mono font-semibold px-1.5 py-0.5 rounded" style={{background:'#dcfce7',color:'#166534'}}>{s.ci_series} {s.ci_number}</span>
+                : <span className="text-gray-400">—</span>}
+            </td>
+            <td className="px-4 py-3 text-xs text-gray-500">{s.email || '—'}</td>
+            <td className="px-4 py-3 text-xs text-gray-500">{s.class_caa?.replace(',','+') || '—'}</td>
+            {/* Sesiunea de origine (absent) */}
+            <td className="px-4 py-3 text-xs">
+              {origParent ? (
+                <Link href={`/admin/sesiuni/${origParent.id}`} className="flex items-center gap-1 text-red-500 hover:text-red-700 hover:underline">
+                  <span>🔴 {new Date(origParent.session_date).toLocaleDateString('ro-RO',{day:'2-digit',month:'short',year:'numeric'})}</span>
+                  <span className="text-red-400">· {origParent.locations?.name}</span>
+                  <ExternalLink size={11}/>
+                </Link>
+              ) : <span className="text-gray-400">—</span>}
+            </td>
+            {/* Sesiunea tinta (unde e alocat) */}
+            <td className="px-4 py-3 text-xs">
+              {currentSess && currentSess.session_type !== 'absent' ? (
+                <Link href={`/admin/sesiuni/${currentSess.parent_session_id || currentSess.id}`} className="flex items-center gap-1 text-amber-600 hover:text-amber-800 hover:underline">
+                  <span>→ {new Date(currentSess.session_date).toLocaleDateString('ro-RO',{day:'2-digit',month:'short',year:'numeric'})}</span>
+                  <span className="text-amber-400">· {currentSess.locations?.name}</span>
+                  {currentSess.session_type === 'clone' && <span className="text-blue-400">⎇</span>}
+                  <ExternalLink size={11}/>
+                </Link>
+              ) : <span className="text-gray-400 italic">nealocată</span>}
+            </td>
+            <td className="px-4 py-3">
+              <span className="flex items-center gap-1.5 text-xs font-medium" style={{ color: ps.color }}>
+                <Icon size={13} />{ps.label}
+              </span>
+            </td>
+            <td className="px-2 py-3">
+              {currentSess && currentSess.session_type !== 'absent' && (
+                <Link href={`/admin/sesiuni/${currentSess.parent_session_id || currentSess.id}`}
+                  className="text-gray-300 hover:text-gray-600 transition-colors">
+                  <ExternalLink size={13}/>
+                </Link>
+              )}
+            </td>
+          </tr>
+        )
+      })
+    }
+
     if (filterSession === 'absent') {
       // Absentii grupati pe sesiuni, cele mai vechi primele
       const absentSessions = allSessions
@@ -231,6 +362,7 @@ export default function CursantiPage() {
           value={filterSession} onChange={e => setFilterSession(e.target.value)}>
           <option value="all">Toate sesiunile</option>
           <option value="absent">⚠ Absenți</option>
+          <option value="absent_pending">🔄 Absenți în curs de alocare</option>
           {principals.map((s: any) => (
             <option key={s.id} value={s.id}>
               {new Date(s.session_date).toLocaleDateString('ro-RO', { day: '2-digit', month: 'short', year: 'numeric' })} — {s.locations?.name}
