@@ -13,6 +13,7 @@ const statusMap: Record<string, { label: string; color: string }> = {
 export default function SesiuniPage() {
   const [sessions, setSessions] = useState<any[]>([])
   const [studentCounts, setStudentCounts] = useState<Record<string,{total:number,absenti:number}>>({})
+  const [filter, setFilter] = useState<'active'|'all'>('active') // active = exclude completed
   const [refs, setRefs] = useState({ locations: [], boats: [], evaluators: [], instructors: [] } as any)
   const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState<string | null>(null)
@@ -22,7 +23,7 @@ export default function SesiuniPage() {
 
   async function load() {
     const [{ data: s }, loc, boat, ev, instr] = await Promise.all([
-      supabase.from('sessions').select('*, locations(name, county), evaluators(full_name), instructors(full_name), boats(name)').order('session_date', { ascending: false }).order('created_at', { ascending: true }),
+      supabase.from('sessions').select('*, locations(name, county), evaluators(full_name), instructors(full_name), boats(name)').order('session_date', { ascending: false }).order('created_at', { ascending: false }),
       supabase.from('locations').select('*').order('name'),
       supabase.from('boats').select('*').order('name'),
       supabase.from('evaluators').select('*').order('full_name'),
@@ -102,14 +103,28 @@ export default function SesiuniPage() {
           <h1 className="text-2xl font-bold text-gray-900" style={{ fontFamily: 'Georgia, serif' }}>
             Sesiuni Practică
           </h1>
-          <p className="text-gray-500 text-sm mt-1">{sessions.length} sesiuni</p>
+          <p className="text-gray-500 text-sm mt-1">
+            {sessions.filter((s:any)=>s.session_type==='principal').length} sesiuni
+          </p>
         </div>
-        <Link href="/admin/sesiuni/nou"
-          className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-white"
-          style={{ background: '#0a1628' }}
-        >
-          <Plus size={16} /> Sesiune nouă
-        </Link>
+        <div className="flex items-center gap-2">
+          <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+            <button onClick={()=>setFilter('active')}
+              className={`px-3 py-2 text-xs font-medium transition-colors ${filter==='active'?'bg-gray-900 text-white':'text-gray-500 hover:bg-gray-50'}`}>
+              Active
+            </button>
+            <button onClick={()=>setFilter('all')}
+              className={`px-3 py-2 text-xs font-medium transition-colors ${filter==='all'?'bg-gray-900 text-white':'text-gray-500 hover:bg-gray-50'}`}>
+              Toate
+            </button>
+          </div>
+          <Link href="/admin/sesiuni/nou"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-white"
+            style={{ background: '#0a1628' }}
+          >
+            <Plus size={16} /> Sesiune nouă
+          </Link>
+        </div>
       </div>
 
       {loading ? (
@@ -122,7 +137,10 @@ export default function SesiuniPage() {
       ) : (
         <div className="space-y-4">
           {/* Tree view - grupam sesiunile principale cu clonele si absentii lor */}
-          {sessions.filter((s: any) => s.session_type === 'principal').map((principal: any) => {
+          {sessions
+            .filter((s: any) => s.session_type === 'principal')
+            .filter((s: any) => filter === 'all' || s.status !== 'completed')
+            .map((principal: any) => {
             const clones = sessions.filter((s: any) => s.session_type === 'clone' && s.parent_session_id === principal.id)
             const absentSess = sessions.find((s: any) => s.session_type === 'absent' && s.parent_session_id === principal.id)
             const principalCount = studentCounts[principal.id] || {total:0, absenti:0}
@@ -252,7 +270,18 @@ export default function SesiuniPage() {
                         </span>
                         <div className="absolute left-0 top-6 z-50 hidden group-hover:flex flex-col bg-white rounded-xl shadow-xl border border-gray-100 py-1 min-w-32">
                           {(['draft','active','focus','completed'] as const).map(sv => (
-                            <button key={sv} onClick={async(e)=>{e.stopPropagation();await supabase.from('sessions').update({status:sv}).eq('id',s.id);setSessions(ss=>ss.map(x=>x.id===s.id?{...x,status:sv}:x))}}
+                            <button key={sv} onClick={async(e)=>{
+              e.stopPropagation()
+              await supabase.from('sessions').update({status:sv}).eq('id',s.id)
+              // Actualizeaza si clonele cu acelasi status (fara focus)
+              const cloneStatus = sv === 'focus' ? 'active' : sv
+              await supabase.from('sessions').update({status:cloneStatus}).eq('parent_session_id',s.id).eq('session_type','clone')
+              setSessions(ss=>ss.map(x=>{
+                if(x.id===s.id) return {...x,status:sv}
+                if(x.parent_session_id===s.id && x.session_type==='clone') return {...x,status:cloneStatus}
+                return x
+              }))
+            }}
                               className="px-3 py-2 text-xs text-left hover:bg-gray-50 transition-colors font-medium"
                               style={{color:{draft:'#6b7280',active:'#d97706',focus:'#7c3aed',completed:'#059669'}[sv]}}>
                               {{draft:'Ciornă',active:'Activă',focus:'Focus',completed:'Finalizată'}[sv]}
