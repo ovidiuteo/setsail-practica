@@ -389,6 +389,9 @@ export default function SessionDetailPage() {
   const [sessions, setSessions] = useState<Session[]>([]) // principal + clone + absent
   const [studentsMap, setStudentsMap] = useState<Record<string,Student[]>>({})
   const [loading, setLoading] = useState(true)
+  const [showRandomizer, setShowRandomizer] = useState(false)
+  const [randomCounts, setRandomCounts] = useState<number[]>([])
+  const [randomizing, setRandomizing] = useState(false)
   const [editingSession, setEditingSession] = useState<string|null>(null)
   const [editSessionValues, setEditSessionValues] = useState<any>({})
   const [savingSession, setSavingSession] = useState(false)
@@ -498,6 +501,44 @@ export default function SessionDetailPage() {
 
   useEffect(() => { load() }, [id])
 
+  // Randomizare cursanti pe liste
+  async function doRandomize() {
+    setRandomizing(true)
+    // Colectam toate sesiunile active (principal + clone, fara absent)
+    const activeSessions = sessions.filter(s => s.session_type !== 'absent')
+    // Colectam TOTI cursantii de pe toate listele active
+    const allActiveStudents: Student[] = []
+    for (const sess of activeSessions) {
+      const sts = studentsMap[sess.id] || []
+      allActiveStudents.push(...sts)
+    }
+    // Shuffle Fisher-Yates
+    const shuffled = [...allActiveStudents]
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+    }
+    // Distribuie pe liste conform randomCounts
+    let idx = 0
+    for (let si = 0; si < activeSessions.length; si++) {
+      const sess = activeSessions[si]
+      const count = randomCounts[si] || 0
+      const batch = shuffled.slice(idx, idx + count)
+      idx += count
+      // Sorteaza alfabetic
+      batch.sort((a, b) => a.full_name.localeCompare(b.full_name, 'ro'))
+      // Actualizeaza session_id si order_in_session
+      for (let bi = 0; bi < batch.length; bi++) {
+        await supabase.from('students')
+          .update({ session_id: sess.id, order_in_session: bi + 1 })
+          .eq('id', batch[bi].id)
+      }
+      setSessionStudents(sess.id, batch.map((s, i) => ({...s, session_id: sess.id, order_in_session: i+1})))
+    }
+    setShowRandomizer(false)
+    setRandomizing(false)
+  }
+
   if (loading) return <div className="p-8 text-center text-gray-400">Se încarcă...</div>
   if (!mainSession) return <div className="p-8 text-center text-gray-400">Sesiunea nu a fost găsită.</div>
 
@@ -547,11 +588,77 @@ export default function SessionDetailPage() {
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">
           <Pencil size={12}/> Editează sesiunea
         </button>
+        <button onClick={()=>{
+          const activeSess = sessions.filter(s=>s.session_type!=='absent')
+          setRandomCounts(activeSess.map(s=>(studentsMap[s.id]||[]).length))
+          setShowRandomizer(true)
+        }}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-purple-200 text-purple-700 hover:bg-purple-50">
+          🎲 Randomizează
+        </button>
         <Link href={`/admin/sesiuni/${id}/clone`}
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-50">
           <GitBranch size={12}/> {cloneSessions.length>0?'Adaugă clonă':'Clonează'}
         </Link>
       </div>
+
+      {/* Modal randomizator */}
+      {showRandomizer && (() => {
+        const activeSess = sessions.filter(s => s.session_type !== 'absent')
+        const totalStudents = activeSess.reduce((sum, s) => sum + (studentsMap[s.id]||[]).length, 0)
+        const totalAllocated = randomCounts.reduce((a,b)=>a+b,0)
+        const isValid = totalAllocated === totalStudents && randomCounts.every(c=>c>=0)
+        return (
+          <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+              <h3 className="font-semibold text-gray-900 mb-1">🎲 Randomizare cursanți</h3>
+              <p className="text-xs text-gray-400 mb-4">
+                Total cursanți: <strong>{totalStudents}</strong> · 
+                Alocați: <strong className={totalAllocated===totalStudents?'text-green-600':'text-red-500'}>{totalAllocated}</strong>
+              </p>
+              <div className="space-y-3 mb-5">
+                {activeSess.map((sess, si) => (
+                  <div key={sess.id} className="flex items-center gap-3">
+                    <div className="flex-1">
+                      <div className="text-xs font-medium text-gray-700 flex items-center gap-1">
+                        {sess.session_type==='clone' && <span className="text-blue-400">⎇</span>}
+                        {new Date(sess.session_date).toLocaleDateString('ro-RO',{day:'2-digit',month:'short',year:'numeric'})}
+                        {' · '}{sess.locations?.name}
+                      </div>
+                      <div className="text-xs text-gray-400">{studentsMap[sess.id]?.length||0} cursanți curenți</div>
+                    </div>
+                    <input
+                      type="number" min="0" max={totalStudents}
+                      className="w-20 border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-purple-400"
+                      value={randomCounts[si]||0}
+                      onChange={e => {
+                        const val = Math.max(0, parseInt(e.target.value)||0)
+                        setRandomCounts(prev => prev.map((c,i) => i===si ? val : c))
+                      }}
+                    />
+                    <span className="text-xs text-gray-400 w-12">cursanți</span>
+                  </div>
+                ))}
+              </div>
+              {!isValid && (
+                <p className="text-xs text-red-500 mb-3 text-center">
+                  {totalAllocated > totalStudents
+                    ? `Ai alocat ${totalAllocated-totalStudents} cursanți în plus`
+                    : `Mai ai ${totalStudents-totalAllocated} cursanți nealocați`}
+                </p>
+              )}
+              <div className="flex justify-end gap-2">
+                <button onClick={()=>setShowRandomizer(false)} className="px-4 py-2 rounded-lg text-xs border border-gray-200 text-gray-500 hover:bg-gray-50">Anulează</button>
+                <button onClick={doRandomize} disabled={!isValid||randomizing}
+                  className="px-5 py-2 rounded-lg text-xs font-medium text-white disabled:opacity-50"
+                  style={{background:'#7c3aed'}}>
+                  {randomizing?'Se randomizează...':'🎲 Randomize allocation'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
 
       {/* Modal editare sesiune */}
       {editingSession && (
