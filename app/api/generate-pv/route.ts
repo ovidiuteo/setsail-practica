@@ -342,7 +342,7 @@ export async function POST(req: NextRequest) {
       properties: {
         page: {
           size: { width: 11906, height: 16838 },
-          margin: { top: 284, right: 720, bottom: fl1 ? 1200 : 720, left: 1080 }
+          margin: { top: 284, right: 720, bottom: 113, left: 1080, footer: 113 }
         }
       },
       footers: fl1 ? {
