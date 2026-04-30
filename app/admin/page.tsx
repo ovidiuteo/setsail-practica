@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Calendar, Users, CheckCircle, Clock, Plus, ExternalLink, GitBranch } from 'lucide-react'
+import { Calendar, Users, CheckCircle, Clock, Plus, ExternalLink, GitBranch, UserX, ArrowRight } from 'lucide-react'
 import Link from 'next/link'
 
 const statusMap: Record<string, { label: string; color: string }> = {
@@ -12,67 +12,105 @@ const statusMap: Record<string, { label: string; color: string }> = {
 }
 
 export default function AdminDashboard() {
-  const [stats, setStats] = useState({ sessions: 0, students: 0, active: 0, completed: 0 })
-  const [recentSessions, setRecentSessions] = useState<any[]>([])
+  const [stats, setStats]           = useState({ sessions: 0, students: 0, active: 0, completed: 0 })
   const [allSessions, setAllSessions] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
+  const [absentStudents, setAbsentStudents] = useState<any[]>([])
+  const [loading, setLoading]       = useState(true)
+  const [filter, setFilter]         = useState<'active'|'all'>('active')
+  const [moving, setMoving]         = useState<string|null>(null)
+  const [moveMenuId, setMoveMenuId] = useState<string|null>(null)
 
-  useEffect(() => {
-    async function load() {
-      const [{ data: sessions }, { data: students }] = await Promise.all([
-        supabase.from('sessions')
-          .select('*, locations(name, county), instructors(full_name), boats(name), evaluators(full_name)')
-          .order('session_date', { ascending: true })
-          .order('created_at', { ascending: true }),
-        supabase.from('students').select('id, portal_status, session_id')
-      ])
+  async function load() {
+    const [{ data: sessions }, { data: allSts }] = await Promise.all([
+      supabase.from('sessions')
+        .select('*, locations(name, county), instructors(full_name), boats(name), evaluators(full_name)')
+        .order('session_date', { ascending: true })
+        .order('created_at', { ascending: true }),
+      supabase.from('students').select('*, sessions!session_id(session_date, session_type, status, locations(name))')
+    ])
 
-      const all = sessions || []
-      const sts = students || []
+    const all = sessions || []
+    const sts = allSts || []
 
-      // Doar principalele pentru statistici
-      const principals = all.filter((s: any) => s.session_type === 'principal')
+    const counts: Record<string,number> = {}
+    for (const st of sts) counts[st.session_id] = (counts[st.session_id]||0) + 1
 
-      setStats({
-        sessions: principals.length,
-        students: sts.length,
-        active: principals.filter((s: any) => ['active','focus'].includes(s.status)).length,
-        completed: principals.filter((s: any) => s.status === 'completed').length,
-      })
+    const enriched = all.map((s:any) => ({...s, _count: counts[s.id]||0}))
+    const principals = enriched.filter((s:any) => s.session_type === 'principal')
 
-      // Fetch student counts
-      const { data: allStudents } = await supabase.from('students').select('session_id')
-      const counts: Record<string,number> = {}
-      for (const st of (allStudents||[])) {
-        counts[st.session_id] = (counts[st.session_id]||0) + 1
-      }
+    setStats({
+      sessions: principals.length,
+      students: sts.filter((s:any) => s.sessions?.session_type !== 'absent').length,
+      active: principals.filter((s:any) => ['active','focus'].includes(s.status)).length,
+      completed: principals.filter((s:any) => s.status === 'completed').length,
+    })
+    setAllSessions(enriched)
 
-      const enrichedAll = all.map((s:any) => ({...s, _count: counts[s.id]||0}))
-      const enrichedPrincipals = enrichedAll.filter((s:any) => s.session_type === 'principal')
-
-      setAllSessions(enrichedAll)
-      setRecentSessions(enrichedPrincipals.slice(0, 5)) // ascending: cele mai vechi primele
-      setLoading(false)
+    // Absenti: cursanti din sesiunile de tip 'absent' + date allocated_session
+    const absentSessIds = enriched.filter((s:any) => s.session_type === 'absent').map((s:any) => s.id)
+    if (absentSessIds.length > 0) {
+      const { data: absSts } = await supabase
+        .from('students')
+        .select('*')
+        .in('session_id', absentSessIds)
+        .order('full_name')
+      setAbsentStudents(absSts || [])
+    } else {
+      setAbsentStudents([])
     }
-    load()
-  }, [])
+    setLoading(false)
+  }
+
+  useEffect(() => { load() }, [])
+
+  // Sesiunile la care se poate aloca (focus, active, draft - nu absent si nu completed)
+  const allocatableSessions = allSessions
+    .filter((s:any) => s.session_type === 'principal' && s.status !== 'completed')
+    .concat(allSessions.filter((s:any) => s.session_type === 'clone' && s.status !== 'completed'))
+
+  async function allocateToSession(student: any, targetSessionId: string) {
+    setMoving(student.id); setMoveMenuId(null)
+    await supabase.from('students').update({ allocated_session_id: targetSessionId }).eq('id', student.id)
+    setAbsentStudents(prev => prev.map(s => s.id === student.id ? {...s, allocated_session_id: targetSessionId} : s))
+    setMoving(null)
+  }
 
   const statCards = [
-    { label: 'Sesiuni totale', value: stats.sessions, icon: Calendar, color: '#1e3a6e' },
-    { label: 'Cursanți înregistrați', value: stats.students, icon: Users, color: '#0a1628' },
-    { label: 'Sesiuni active', value: stats.active, icon: Clock, color: '#d97706' },
-    { label: 'Sesiuni finalizate', value: stats.completed, icon: CheckCircle, color: '#059669' },
+    { label: 'Sesiuni totale',      value: stats.sessions,  icon: Calendar,     color: '#1e3a6e' },
+    { label: 'Cursanți înregistrați', value: stats.students, icon: Users,       color: '#0a1628' },
+    { label: 'Sesiuni active',      value: stats.active,    icon: Clock,        color: '#d97706' },
+    { label: 'Sesiuni finalizate',  value: stats.completed, icon: CheckCircle,  color: '#059669' },
   ]
 
+  const principals = allSessions.filter((s:any) => s.session_type === 'principal')
+  const displayedPrincipals = filter === 'active'
+    ? principals.filter((s:any) => s.status !== 'completed')
+    : principals
+
+  // Grupam absentii pe sesiunile lor de origine (sesiunea absent parent)
+  const absentBySession: Record<string, { sess: any, students: any[] }> = {}
+  for (const st of absentStudents) {
+    const absSess = allSessions.find((s:any) => s.id === st.session_id)
+    if (!absSess) continue
+    const parentId = absSess.parent_session_id || absSess.id
+    if (!absentBySession[parentId]) {
+      const parentSess = allSessions.find((s:any) => s.id === parentId)
+      absentBySession[parentId] = { sess: parentSess || absSess, students: [] }
+    }
+    absentBySession[parentId].students.push(st)
+  }
+  const absentGroups = Object.values(absentBySession)
+    .sort((a,b) => a.sess.session_date.localeCompare(b.sess.session_date))
+
   return (
-    <div className="p-8">
+    <div className="p-8" onClick={() => setMoveMenuId(null)}>
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-gray-900" style={{ fontFamily: 'Georgia, serif' }}>Dashboard</h1>
           <p className="text-gray-500 text-sm mt-1">Gestionare examene practice yachting</p>
         </div>
         <Link href="/admin/sesiuni/nou"
-          className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-white hover:opacity-90 transition-opacity"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-white hover:opacity-90"
           style={{ background: '#0a1628' }}>
           <Plus size={16} /> Sesiune nouă
         </Link>
@@ -95,86 +133,87 @@ export default function AdminDashboard() {
         ))}
       </div>
 
-      {/* Sesiuni recente cu tree view */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+      {/* Sesiuni recente cu filtre */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 mb-6">
         <div className="p-5 border-b border-gray-100 flex items-center justify-between">
-          <h2 className="font-semibold text-gray-900">Sesiuni recente</h2>
-          <Link href="/admin/sesiuni" className="text-sm text-blue-600 hover:underline">Vezi toate →</Link>
+          <h2 className="font-semibold text-gray-900">Sesiuni Practică</h2>
+          <div className="flex items-center gap-3">
+            <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+              <button onClick={() => setFilter('active')}
+                className={`px-3 py-1.5 text-xs font-medium transition-colors ${filter==='active'?'bg-gray-900 text-white':'text-gray-500 hover:bg-gray-50'}`}>
+                Nefinalizate
+              </button>
+              <button onClick={() => setFilter('all')}
+                className={`px-3 py-1.5 text-xs font-medium transition-colors ${filter==='all'?'bg-gray-900 text-white':'text-gray-500 hover:bg-gray-50'}`}>
+                Toate
+              </button>
+            </div>
+            <Link href="/admin/sesiuni" className="text-sm text-blue-600 hover:underline">Vezi toate →</Link>
+          </div>
         </div>
 
         {loading ? (
           <div className="p-8 text-center text-gray-400">Se încarcă...</div>
-        ) : recentSessions.length === 0 ? (
+        ) : displayedPrincipals.length === 0 ? (
           <div className="p-8 text-center text-gray-400">
-            <p className="mb-3">Nicio sesiune creată încă.</p>
+            <p className="mb-3">Nicio sesiune.</p>
             <Link href="/admin/sesiuni/nou" className="text-blue-600 hover:underline text-sm">Creează prima sesiune →</Link>
           </div>
         ) : (
           <div className="divide-y divide-gray-50">
-            {recentSessions.map((principal: any) => {
+            {displayedPrincipals.map((principal: any) => {
               const st = statusMap[principal.status] || statusMap.draft
-              const clones = allSessions.filter((s: any) => s.session_type === 'clone' && s.parent_session_id === principal.id)
+              const clones = allSessions.filter((s:any) => s.session_type === 'clone' && s.parent_session_id === principal.id)
+              const totalCount = principal._count + clones.reduce((sum:number,c:any)=>sum+(c._count||0),0)
 
               return (
                 <div key={principal.id} className="p-4">
-                  {/* Randul principal */}
                   <div className="flex items-center justify-between">
                     <div>
                       <div className="flex items-center gap-2 mb-0.5">
                         <span className="font-medium text-gray-900 text-sm">
                           {new Date(principal.session_date).toLocaleDateString('ro-RO', { day: '2-digit', month: 'long', year: 'numeric' })}
                         </span>
-                        <span className="px-2 py-0.5 rounded-full text-xs font-medium" style={{ background: st.color + '15', color: st.color }}>
-                          {st.label}
-                        </span>
+                        <span className="px-2 py-0.5 rounded-full text-xs font-medium" style={{ background: st.color+'15', color: st.color }}>{st.label}</span>
                         <span className="text-xs text-gray-400">
-                          Clasa {principal.class_caa?.replace(',', '+')}
-                          {' · Total: '}
-                          <span className="font-medium text-gray-600">
-                            {(principal._count||0) + clones.reduce((sum:number,c:any)=>sum+(c._count||0),0)} cursanți
-                          </span>
+                          Clasa {principal.class_caa?.replace(',','+')} · Total: <strong>{totalCount}</strong> cursanți
                         </span>
                       </div>
                       <div className="text-xs text-gray-500 flex gap-3 flex-wrap">
-                        <span>📍 {principal.locations?.name}{principal.locations?.county ? `, ${principal.locations.county}` : ''}</span>
-                        <span>⛵ {principal.boats?.name || '—'}</span>
-                        <span>👤 {principal.instructors?.full_name || '—'}</span>
-                        <span>🏛️ {principal.evaluators?.full_name || '—'} · {principal._count||0} cursanți</span>
+                        <span>📍 {principal.locations?.name}{principal.locations?.county?`, ${principal.locations.county}`:''}</span>
+                        <span>⛵ {principal.boats?.name||'—'}</span>
+                        <span>👤 {principal.instructors?.full_name||'—'}</span>
+                        <span>🏛️ {principal.evaluators?.full_name||'—'} · {principal._count} cursanți</span>
                       </div>
                     </div>
                     <Link href={`/admin/sesiuni/${principal.id}`} className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-400 hover:text-gray-700 transition-colors">
-                      <ExternalLink size={14} />
+                      <ExternalLink size={14}/>
                     </Link>
                   </div>
 
-                  {/* Clone */}
-                  {clones.map((clone: any) => {
+                  {clones.map((clone:any) => {
                     const cloneSt = statusMap[clone.status] || statusMap.draft
                     return (
-                      <div key={clone.id} className="mt-2 ml-5 flex gap-0 items-start">
+                      <div key={clone.id} className="mt-2 ml-5 flex items-start">
                         <div className="flex flex-col items-center mr-2 mt-1.5">
                           <div className="w-px h-3 bg-blue-200"/>
                           <div className="w-3 h-px bg-blue-200"/>
                         </div>
                         <div className="flex-1 flex items-center justify-between bg-blue-50/60 rounded-lg px-3 py-1.5 border border-blue-100">
-                          <div className="flex items-center gap-2">
+                          <div className="flex items-center gap-2 flex-wrap">
                             <GitBranch size={11} className="text-blue-400 shrink-0"/>
                             <span className="text-xs font-medium text-blue-600">Clonă</span>
-                            <span className="text-xs text-gray-600">
-                              {new Date(clone.session_date).toLocaleDateString('ro-RO', { day: '2-digit', month: 'short', year: 'numeric' })}
-                            </span>
-                            <span className="px-1.5 py-0.5 rounded-full text-xs font-medium" style={{ background: cloneSt.color + '15', color: cloneSt.color }}>
-                              {cloneSt.label}
-                            </span>
+                            <span className="text-xs text-gray-600">{new Date(clone.session_date).toLocaleDateString('ro-RO', {day:'2-digit',month:'short',year:'numeric'})}</span>
+                            <span className="px-1.5 py-0.5 rounded-full text-xs font-medium" style={{background:cloneSt.color+'15',color:cloneSt.color}}>{cloneSt.label}</span>
                             <span className="text-xs text-gray-400">
-                              📍 {clone.locations?.name}{clone.locations?.county ? `, ${clone.locations.county}` : ''}
+                              📍 {clone.locations?.name}{clone.locations?.county?`, ${clone.locations.county}`:''}
                               {' · '}⛵ {clone.boats?.name||'—'}
                               {' · '}👤 {clone.instructors?.full_name||'—'}
                               {' · '}🏛️ {clone.evaluators?.full_name||'—'}
                               {' · '}{clone._count||0} cursanți
                             </span>
                           </div>
-                          <Link href={`/admin/sesiuni/${principal.id}`} className="text-blue-300 hover:text-blue-600 transition-colors">
+                          <Link href={`/admin/sesiuni/${principal.id}`} className="text-blue-300 hover:text-blue-600 transition-colors ml-2">
                             <ExternalLink size={12}/>
                           </Link>
                         </div>
@@ -187,6 +226,74 @@ export default function AdminDashboard() {
           </div>
         )}
       </div>
+
+      {/* Sectiunea Absenti */}
+      {!loading && absentGroups.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm border border-red-100">
+          <div className="p-5 border-b border-red-100 flex items-center gap-2">
+            <UserX size={16} className="text-red-400"/>
+            <h2 className="font-semibold text-red-700">
+              Absenți în așteptare ({absentStudents.length})
+            </h2>
+          </div>
+          <div className="divide-y divide-red-50">
+            {absentGroups.map(({ sess, students: grpSts }) => (
+              <div key={sess.id} className="p-4">
+                <div className="text-xs font-medium text-red-500 mb-2">
+                  De la sesiunea {new Date(sess.session_date).toLocaleDateString('ro-RO', {day:'2-digit',month:'long',year:'numeric'})} · {sess.locations?.name}
+                </div>
+                <div className="space-y-1.5">
+                  {grpSts.map((st:any) => {
+                    const allocSess = st.allocated_session_id
+                      ? allSessions.find((s:any) => s.id === st.allocated_session_id)
+                      : null
+
+                    return (
+                      <div key={st.id} className="flex items-center justify-between bg-red-50 rounded-lg px-3 py-2">
+                        <div>
+                          <span className="text-sm font-medium text-gray-900">{st.full_name}</span>
+                          {allocSess && (
+                            <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                              → Alocat: {new Date(allocSess.session_date).toLocaleDateString('ro-RO',{day:'2-digit',month:'short',year:'numeric'})} · {allocSess.locations?.name}
+                            </span>
+                          )}
+                        </div>
+                        <div className="relative" onClick={e=>e.stopPropagation()}>
+                          <button
+                            onClick={() => setMoveMenuId(moveMenuId===st.id?null:st.id)}
+                            disabled={moving===st.id}
+                            className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-red-200 text-red-500 hover:bg-red-100 transition-colors text-xs font-medium">
+                            <ArrowRight size={12}/> Alocă
+                          </button>
+                          {moveMenuId===st.id && (
+                            <div className="absolute right-0 top-8 z-50 bg-white rounded-xl shadow-xl border border-gray-100 min-w-56 py-1">
+                              <div className="px-3 py-1.5 text-xs text-gray-400 border-b border-gray-50">Alocă la sesiunea:</div>
+                              {allocatableSessions.map((ts:any) => (
+                                <button key={ts.id} onClick={()=>allocateToSession(st, ts.id)}
+                                  className="w-full text-left px-3 py-2 text-xs hover:bg-gray-50 transition-colors">
+                                  <div className="font-medium text-gray-900 flex items-center gap-1">
+                                    {ts.session_type==='clone'&&<span className="text-blue-400">⎇</span>}
+                                    {new Date(ts.session_date).toLocaleDateString('ro-RO',{day:'2-digit',month:'long',year:'numeric'})}
+                                    <span className="px-1.5 py-0.5 rounded-full text-xs ml-1" style={{background:statusMap[ts.status]?.color+'20',color:statusMap[ts.status]?.color}}>{statusMap[ts.status]?.label}</span>
+                                  </div>
+                                  <div className="text-gray-400">{ts.locations?.name} · {ts.boats?.name} · {ts.instructors?.full_name}</div>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="px-5 py-3 bg-red-50/50 rounded-b-xl border-t border-red-100">
+            <p className="text-xs text-red-400">Absenții dispar din această listă doar după ce sesiunea la care sunt alocați este finalizată cu ei pe listă.</p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

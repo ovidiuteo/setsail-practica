@@ -23,7 +23,7 @@ export default function SesiuniPage() {
 
   async function load() {
     const [{ data: s }, loc, boat, ev, instr] = await Promise.all([
-      supabase.from('sessions').select('*, locations(name, county), evaluators(full_name), instructors(full_name), boats(name)').order('session_date', { ascending: false }).order('created_at', { ascending: false }),
+      supabase.from('sessions').select('*, locations(name, county), evaluators(full_name), instructors(full_name), boats(name)').order('session_date', { ascending: true }).order('created_at', { ascending: true }),
       supabase.from('locations').select('*').order('name'),
       supabase.from('boats').select('*').order('name'),
       supabase.from('evaluators').select('*').order('full_name'),
