@@ -1,436 +1,295 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Download, FileText, Users, Copy, Plus, Trash2, Check, X, Pencil, GitBranch } from 'lucide-react'
+import { ArrowLeft, Copy, ChevronRight, ChevronLeft, Check, Users } from 'lucide-react'
 
-const statusMap: Record<string, { label: string; color: string }> = {
-  draft: { label: 'Ciornă', color: '#6b7280' },
-  active: { label: 'Activă', color: '#d97706' },
-  completed: { label: 'Finalizată', color: '#059669' },
-}
-
-const portalMap: Record<string, { label: string; color: string }> = {
-  pending: { label: 'Neconectat', color: '#9ca3af' },
-  signed: { label: 'Semnat', color: '#059669' },
-  absent: { label: 'Absent', color: '#ef4444' },
-}
-
-type Student = {
-  id: string
-  full_name: string
-  cnp: string
-  email: string
-  phone: string
-  birth_date: string
-  ci_series: string
-  ci_number: string
-  address: string
-  county: string
-  class_caa: string
-  portal_status: string
-  order_in_session: number
-  signed_at: string
-}
-
-const EMPTY_STUDENT = {
-  full_name: '', cnp: '', email: '', phone: '',
-  birth_date: '', ci_series: '', ci_number: '',
-  address: '', county: '', class_caa: 'C,D'
-}
-
-export default function SessionDetailPage() {
+export default function CloneSessionPage() {
   const { id } = useParams() as { id: string }
-  const [session, setSession] = useState<any>(null)
-  const [students, setStudents] = useState<Student[]>([])
-  const [loading, setLoading] = useState(true)
-  const [copied, setCopied] = useState(false)
-  const [generatingPV, setGeneratingPV] = useState(false)
-  const [generatingFise, setGeneratingFise] = useState(false)
-  const [showAddForm, setShowAddForm] = useState(false)
-  const [newStudent, setNewStudent] = useState<any>(EMPTY_STUDENT)
-  const [adding, setAdding] = useState(false)
-  const [editingId, setEditingId] = useState<string | null>(null)
-  const [editValues, setEditValues] = useState<any>({})
+  const router = useRouter()
+
+  const [original, setOriginal] = useState<any>(null)
+  const [refs, setRefs] = useState({ locations: [], boats: [], evaluators: [], instructors: [] } as any)
+  const [form, setForm] = useState({
+    session_date: '',
+    location_id: '',
+    boat_id: '',
+    evaluator_id: '',
+    instructor_id: '',
+    class_caa: 'C,D',
+    status: 'draft',
+    notes: '',
+    location_detail: '',
+  })
+
+  // Cursanți din sesiunea originală
+  const [allStudents, setAllStudents] = useState<any[]>([])
+  // Cursanți alocați la clonă
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
   const [saving, setSaving] = useState(false)
+  const [loading, setLoading] = useState(true)
 
-  async function load() {
-    const [{ data: s }, { data: sts }] = await Promise.all([
-      supabase.from('sessions').select('*, locations(*), boats(*), evaluators(*), instructors(*)').eq('id', id).single(),
-      supabase.from('students').select('*').eq('session_id', id).order('order_in_session'),
-    ])
-    setSession(s)
-    setStudents((sts || []) as Student[])
-    setLoading(false)
-  }
-
-  useEffect(() => { load() }, [id])
-
-  function copyPortalLink() {
-    if (!session) return
-    navigator.clipboard.writeText(`${window.location.origin}/portal?cod=${session.access_code}`)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
-
-  async function setStatus(status: string) {
-    await supabase.from('sessions').update({ status }).eq('id', id)
-    setSession((s: any) => ({ ...s, status }))
-  }
-
-  async function addStudent() {
-    if (!newStudent.full_name) return
-    setAdding(true)
-    const maxOrder = students.reduce((m, s) => Math.max(m, s.order_in_session || 0), 0)
-    const { data } = await supabase.from('students').insert({
-      ...newStudent,
-      full_name: newStudent.full_name.toUpperCase(),
-      session_id: id,
-      order_in_session: maxOrder + 1,
-      portal_status: 'pending'
-    }).select().single()
-    if (data) setStudents(ss => [...ss, data as Student])
-    setNewStudent(EMPTY_STUDENT)
-    setShowAddForm(false)
-    setAdding(false)
-  }
-
-  async function removeStudent(sid: string) {
-    if (!confirm('Ștergi cursantul?')) return
-    await supabase.from('students').delete().eq('id', sid)
-    // Renumeroteaza dupa stergere
-    const remaining = students.filter(s => s.id !== sid)
-    const reordered = remaining.map((s, i) => ({ ...s, order_in_session: i + 1 }))
-    setStudents(reordered)
-    // Actualizeaza in baza de date
-    for (const s of reordered) {
-      await supabase.from('students').update({ order_in_session: s.order_in_session }).eq('id', s.id)
+  useEffect(() => {
+    async function load() {
+      const [{ data: s }, { data: sts }, loc, boat, ev, instr] = await Promise.all([
+        supabase.from('sessions').select('*, locations(*), boats(*), evaluators(*), instructors(*)').eq('id', id).single(),
+        supabase.from('students').select('*').eq('session_id', id).order('order_in_session'),
+        supabase.from('locations').select('*').order('name'),
+        supabase.from('boats').select('*').order('name'),
+        supabase.from('evaluators').select('*').order('full_name'),
+        supabase.from('instructors').select('*').order('full_name'),
+      ])
+      setOriginal(s)
+      setAllStudents(sts || [])
+      // Pre-selectează toți cursanții
+      setSelectedIds(new Set((sts || []).map((st: any) => st.id)))
+      setRefs({ locations: loc.data || [], boats: boat.data || [], evaluators: ev.data || [], instructors: instr.data || [] })
+      // Pre-completează formularul cu datele originale
+      if (s) {
+        setForm({
+          session_date: s.session_date,
+          location_id: s.location_id || '',
+          boat_id: s.boat_id || '',
+          evaluator_id: s.evaluator_id || '',
+          instructor_id: s.instructor_id || '',
+          class_caa: s.class_caa || 'C,D',
+          status: 'draft',
+          notes: s.notes || '',
+          location_detail: s.location_detail || '',
+        })
+      }
+      setLoading(false)
     }
-  }
+    load()
+  }, [id])
 
-  function startEdit(s: Student) {
-    setEditingId(s.id)
-    setEditValues({
-      full_name: s.full_name || '',
-      cnp: s.cnp || '',
-      email: s.email || '',
-      phone: s.phone || '',
-      birth_date: s.birth_date || '',
-      ci_series: s.ci_series || '',
-      ci_number: s.ci_number || '',
-      address: s.address || '',
-      county: s.county || '',
-      class_caa: s.class_caa || 'C,D',
+  function toggleStudent(sid: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(sid)) next.delete(sid)
+      else next.add(sid)
+      return next
     })
   }
 
-  async function saveEdit(sid: string) {
+  function selectAll() { setSelectedIds(new Set(allStudents.map(s => s.id))) }
+  function selectNone() { setSelectedIds(new Set()) }
+
+  async function createClone() {
+    if (!form.session_date || !form.location_id || !form.evaluator_id || !form.instructor_id) {
+      alert('Completează data, locația, evaluatorul și instructorul.')
+      return
+    }
+    if (selectedIds.size === 0) {
+      alert('Selectează cel puțin un cursant.')
+      return
+    }
     setSaving(true)
-    const { data } = await supabase.from('students')
-      .update({ ...editValues, full_name: editValues.full_name.toUpperCase() })
-      .eq('id', sid).select().single()
-    if (data) setStudents(ss => ss.map(s => s.id === sid ? data as Student : s))
-    setEditingId(null)
-    setEditValues({})
-    setSaving(false)
+
+    // Creează sesiunea clonată
+    const { data: newSession, error } = await supabase.from('sessions').insert({
+      ...form,
+      parent_session_id: id,
+      is_clone: true,
+    }).select().single()
+
+    if (error || !newSession) {
+      alert('Eroare la creare: ' + error?.message)
+      setSaving(false)
+      return
+    }
+
+    // Copiază cursanții selectați în noua sesiune
+    const studentsToClone = allStudents
+      .filter(s => selectedIds.has(s.id))
+      .map((s, i) => ({
+        session_id: newSession.id,
+        full_name: s.full_name,
+        cnp: s.cnp,
+        email: s.email,
+        phone: s.phone,
+        birth_date: s.birth_date,
+        ci_series: s.ci_series,
+        ci_number: s.ci_number,
+        address: s.address,
+        county: s.county,
+        class_caa: s.class_caa,
+        id_document: s.id_document,
+        order_in_session: i + 1,
+        portal_status: 'pending',
+      }))
+
+    await supabase.from('students').insert(studentsToClone)
+
+    router.push(`/admin/sesiuni/${newSession.id}`)
   }
 
-  async function generatePV() {
-    setGeneratingPV(true)
-    try {
-      const res = await fetch('/api/generate-pv', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: id }) })
-      if (!res.ok) throw new Error(await res.text())
-      const blob = await res.blob()
-      const a = document.createElement('a'); a.href = URL.createObjectURL(blob)
-      a.download = `PV_Practic_${session?.session_date}_${session?.locations?.name}.docx`; a.click()
-    } catch (e: any) { alert('Eroare: ' + e.message) }
-    setGeneratingPV(false)
-  }
-
-  async function generateFise() {
-    setGeneratingFise(true)
-    try {
-      const res = await fetch('/api/generate-fise', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: id }) })
-      if (!res.ok) throw new Error(await res.text())
-      const blob = await res.blob()
-      const a = document.createElement('a'); a.href = URL.createObjectURL(blob)
-      a.download = `Fise_Anexa10_${session?.session_date}.docx`; a.click()
-    } catch (e: any) { alert('Eroare: ' + e.message) }
-    setGeneratingFise(false)
-  }
-
-  const [generatingPDF, setGeneratingPDF] = useState(false)
-  async function generateFisePDF() {
-    setGeneratingPDF(true)
-    try {
-      const res = await fetch('/api/generate-fise-pdf', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session_id: id }) })
-      if (!res.ok) throw new Error(await res.text())
-      const isPdfFallback = res.headers.get('X-Pdf-Fallback') === 'true'
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      if (isPdfFallback) {
-        // Deschide în tab nou pentru print manual
-        const win = window.open(url, '_blank')
-        if (win) { win.onload = () => { win.print() } }
-      } else {
-        const a = document.createElement('a'); a.href = url
-        a.download = `Fise_Anexa10_${session?.session_date}.pdf`; a.click()
-      }
-    } catch (e: any) { alert('Eroare: ' + e.message) }
-    setGeneratingPDF(false)
-  }
+  const inputCls = "w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+  const labelCls = "block text-xs font-medium text-gray-500 mb-1.5"
 
   if (loading) return <div className="p-8 text-center text-gray-400">Se încarcă...</div>
-  if (!session) return <div className="p-8 text-center text-gray-400">Sesiunea nu a fost găsită.</div>
-
-  const st = statusMap[session.status] || statusMap.draft
-  const signedCount = students.filter(s => s.portal_status === 'signed').length
-  const inCls = "border border-blue-100 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white w-full"
-  const addCls = "border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white w-full"
 
   return (
     <div className="p-8">
-      {/* Header */}
       <div className="flex items-center gap-3 mb-6">
-        <Link href="/admin/sesiuni" className="text-gray-400 hover:text-gray-700"><ArrowLeft size={20} /></Link>
-        <div className="flex-1">
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-gray-900" style={{ fontFamily: 'Georgia, serif' }}>
-              {new Date(session.session_date).toLocaleDateString('ro-RO', { day: '2-digit', month: 'long', year: 'numeric' })}
-            </h1>
-            <span className="px-2.5 py-1 rounded-full text-xs font-medium" style={{ background: st.color + '20', color: st.color }}>{st.label}</span>
-          </div>
-          <p className="text-sm text-gray-500 mt-0.5">{session.locations?.name}, {session.locations?.county}</p>
-          {session.is_clone && session.parent_session_id && (
-            <Link href={`/admin/sesiuni/${session.parent_session_id}`} className="text-xs text-blue-500 hover:underline mt-0.5 block">
-              ↑ Sesiune originală
-            </Link>
-          )}
-        </div>
-        <div className="flex gap-2">
-          <Link href={`/admin/sesiuni/${id}/clone`}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-50">
-            <GitBranch size={12} /> Clonează
-          </Link>
-          {session.status !== 'active' && (
-            <button onClick={() => setStatus('active')} className="px-3 py-1.5 text-xs rounded-lg border border-amber-200 text-amber-700 hover:bg-amber-50">→ Activează</button>
-          )}
-          {session.status !== 'completed' && (
-            <button onClick={() => setStatus('completed')} className="px-3 py-1.5 text-xs rounded-lg border border-green-200 text-green-700 hover:bg-green-50">✓ Finalizează</button>
-          )}
+        <Link href={`/admin/sesiuni/${id}`} className="text-gray-400 hover:text-gray-700">
+          <ArrowLeft size={20} />
+        </Link>
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900" style={{ fontFamily: 'Georgia, serif' }}>
+            Clonează sesiunea
+          </h1>
+          <p className="text-sm text-gray-400 mt-0.5">
+            Original: {original && new Date(original.session_date).toLocaleDateString('ro-RO', { day: '2-digit', month: 'long', year: 'numeric' })} — {original?.locations?.name}
+          </p>
         </div>
       </div>
 
-      <div className="grid grid-cols-3 gap-6">
-        {/* Left sidebar */}
-        <div className="space-y-4">
-          <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-            <h3 className="font-semibold text-sm text-gray-900 mb-3">Detalii sesiune</h3>
-            <div className="space-y-2 text-sm">
-              {[
-                ['Instructor', session.instructors?.full_name],
-                ['Evaluator ANR', session.evaluators?.full_name],
-                ['Decizie ANR', session.evaluators?.decision_number],
-                ['Ambarcațiune', session.boats?.name || '—'],
-                ['Clasa CAA', session.class_caa],
-                ['Nr. solicitare', session.request_number || '—'],
-                ['Locație detaliată', session.location_detail || '—'],
-              ].map(([label, value]) => (
-                <div key={label} className="flex justify-between gap-2">
-                  <span className="text-gray-400 text-xs shrink-0">{label}</span>
-                  <span className="text-gray-900 text-xs text-right font-medium">{value}</span>
-                </div>
-              ))}
-            </div>
+      <div className="grid grid-cols-2 gap-6">
+        {/* Stânga: Formularul sesiunii noi */}
+        <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
+          <div className="flex items-center gap-2 mb-5">
+            <Copy size={16} className="text-gray-400" />
+            <h2 className="font-semibold text-gray-900">Detalii sesiune nouă</h2>
           </div>
 
-          <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-            <h3 className="font-semibold text-sm text-gray-900 mb-3">Link portal cursanți</h3>
-            <div className="bg-gray-50 rounded-lg p-3 font-mono text-xs text-gray-600 break-all mb-3">
-              /portal?cod=<strong>{session.access_code}</strong>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className={labelCls}>Data *</label>
+                <input type="date" className={inputCls} value={form.session_date}
+                  onChange={e => setForm(f => ({ ...f, session_date: e.target.value }))} />
+              </div>
+              <div>
+                <label className={labelCls}>Clasa CAA</label>
+                <select className={inputCls} value={form.class_caa}
+                  onChange={e => setForm(f => ({ ...f, class_caa: e.target.value }))}>
+                  <option value="C">C</option>
+                  <option value="D">D</option>
+                  <option value="C,D">C și D</option>
+                </select>
+              </div>
             </div>
-            <button onClick={copyPortalLink} className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-medium border border-gray-200 hover:bg-gray-50 transition-colors">
-              <Copy size={12} />{copied ? '✓ Copiat!' : 'Copiază link complet'}
-            </button>
-            <div className="mt-3 text-xs text-gray-400 text-center">{signedCount}/{students.length} cursanți au semnat</div>
-          </div>
 
-          <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-            <h3 className="font-semibold text-sm text-gray-900 mb-3">Documente</h3>
-            <div className="space-y-2">
-              <button onClick={generatePV} disabled={generatingPV || students.length === 0}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50"
-                style={{ background: '#0a1628' }}>
-                <FileText size={13} />{generatingPV ? 'Se generează...' : 'Proces Verbal (Anexa 12)'}
-              </button>
-              <button onClick={generateFise} disabled={generatingFise || students.length === 0}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-medium border border-gray-200 hover:bg-gray-50 disabled:opacity-50">
-                <Download size={13} />{generatingFise ? 'Se generează...' : 'Fișe DOCX (Anexa 10)'}
-              </button>
-              <button onClick={generateFisePDF} disabled={generatingPDF || students.length === 0}
-                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-medium border border-red-100 text-red-700 hover:bg-red-50 disabled:opacity-50">
-                <Download size={13} />{generatingPDF ? 'Se generează...' : 'Fișe PDF cu semnături'}
-              </button>
+            <div>
+              <label className={labelCls}>Locație *</label>
+              <select className={inputCls} value={form.location_id}
+                onChange={e => {
+                  const locId = e.target.value
+                  const loc = refs.locations.find((l: any) => l.id === locId)
+                  const defaultDetail = loc ? loc.name + ', jud. ' + loc.county : ''
+                  setForm(f => ({ ...f, location_id: locId, location_detail: defaultDetail }))
+                }}>
+                <option value="">— Selectează —</option>
+                {refs.locations.map((l: any) => <option key={l.id} value={l.id}>{l.name}, {l.county}</option>)}
+              </select>
             </div>
-            <p className="text-xs text-gray-400 mt-3 text-center">Câmpurile de evaluare rămân goale pentru completare manuală.</p>
+
+            <div>
+              <label className={labelCls}>Locație detaliată</label>
+              <input className={inputCls} value={form.location_detail}
+                onChange={e => setForm(f => ({ ...f, location_detail: e.target.value }))}
+                placeholder={refs.locations.find((l: any) => l.id === form.location_id)?.location_detail || 'ex: Lac Snagov – complex Delta Snagov, strada Nicolae Grigorescu, sat Izvorani, comuna Ciolpani'} />
+            </div>
+            <div>
+              <label className={labelCls}>Ambarcațiune</label>
+              <select className={inputCls} value={form.boat_id}
+                onChange={e => setForm(f => ({ ...f, boat_id: e.target.value }))}>
+                <option value="">— Selectează —</option>
+                {refs.boats.map((b: any) => <option key={b.id} value={b.id}>{b.name}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className={labelCls}>Evaluator ANR *</label>
+              <select className={inputCls} value={form.evaluator_id}
+                onChange={e => setForm(f => ({ ...f, evaluator_id: e.target.value }))}>
+                <option value="">— Selectează —</option>
+                {refs.evaluators.map((e: any) => <option key={e.id} value={e.id}>{e.full_name} — {e.title}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className={labelCls}>Instructor SetSail *</label>
+              <select className={inputCls} value={form.instructor_id}
+                onChange={e => setForm(f => ({ ...f, instructor_id: e.target.value }))}>
+                <option value="">— Selectează —</option>
+                {refs.instructors.map((i: any) => <option key={i.id} value={i.id}>{i.full_name}</option>)}
+              </select>
+            </div>
+
+            <div>
+              <label className={labelCls}>Observații</label>
+              <textarea className={inputCls} rows={2} value={form.notes}
+                onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+                placeholder="A doua zi, altă barcă, etc." />
+            </div>
           </div>
         </div>
 
-        {/* Students table */}
-        <div className="col-span-2">
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100">
-            <div className="p-4 border-b border-gray-100 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Users size={16} className="text-gray-400" />
-                <span className="font-semibold text-sm text-gray-900">Cursanți ({students.length})</span>
-              </div>
-              <button onClick={() => { setShowAddForm(true); setEditingId(null) }}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 hover:bg-gray-50">
-                <Plus size={12} /> Adaugă
+        {/* Dreapta: Selectare cursanți */}
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100">
+          <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Users size={16} className="text-gray-400" />
+              <span className="font-semibold text-gray-900">
+                Cursanți ({selectedIds.size}/{allStudents.length} selectați)
+              </span>
+            </div>
+            <div className="flex gap-2">
+              <button onClick={selectAll} className="text-xs text-blue-500 hover:text-blue-700 px-2 py-1 rounded border border-blue-100 hover:bg-blue-50">
+                Toți
+              </button>
+              <button onClick={selectNone} className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1 rounded border border-gray-200 hover:bg-gray-50">
+                Niciunul
               </button>
             </div>
+          </div>
 
-            {/* Add form */}
-            {showAddForm && (
-              <div className="p-4 border-b border-blue-50 bg-blue-50/40">
-                <div className="grid grid-cols-4 gap-2 mb-2">
-                  <div className="col-span-2">
-                    <div className="text-xs text-gray-400 mb-1">Nume complet *</div>
-                    <input className={addCls} placeholder="POPESCU ION" value={newStudent.full_name}
-                      onChange={e => setNewStudent((s: any) => ({ ...s, full_name: e.target.value.toUpperCase() }))} />
+          <div className="divide-y divide-gray-50 max-h-96 overflow-y-auto">
+            {allStudents.map(s => {
+              const isSelected = selectedIds.has(s.id)
+              return (
+                <div key={s.id}
+                  onClick={() => toggleStudent(s.id)}
+                  className={`flex items-center gap-3 px-4 py-3 cursor-pointer transition-colors ${isSelected ? 'bg-blue-50' : 'hover:bg-gray-50'}`}>
+                  <div className={`w-5 h-5 rounded flex items-center justify-center shrink-0 transition-all ${isSelected ? 'bg-blue-600' : 'border-2 border-gray-200'}`}>
+                    {isSelected && <Check size={12} className="text-white" />}
                   </div>
-                  <div>
-                    <div className="text-xs text-gray-400 mb-1">CNP</div>
-                    <input className={addCls} placeholder="1800101..." value={newStudent.cnp}
-                      onChange={e => setNewStudent((s: any) => ({ ...s, cnp: e.target.value }))} />
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-medium text-gray-900">{s.full_name}</div>
+                    <div className="text-xs text-gray-400 mt-0.5 flex gap-3">
+                      {s.cnp && <span className="font-mono">{s.cnp}</span>}
+                      {s.email && <span>{s.email}</span>}
+                    </div>
                   </div>
-                  <div>
-                    <div className="text-xs text-gray-400 mb-1">Clasa</div>
-                    <select className={addCls} value={newStudent.class_caa}
-                      onChange={e => setNewStudent((s: any) => ({ ...s, class_caa: e.target.value }))}>
-                      <option value="C">C</option><option value="D">D</option><option value="C,D">C,D</option>
-                    </select>
-                  </div>
-                  <div className="col-span-2">
-                    <div className="text-xs text-gray-400 mb-1">Email</div>
-                    <input className={addCls} placeholder="email@..." value={newStudent.email}
-                      onChange={e => setNewStudent((s: any) => ({ ...s, email: e.target.value }))} />
-                  </div>
-                  <div>
-                    <div className="text-xs text-gray-400 mb-1">Telefon</div>
-                    <input className={addCls} placeholder="07XX..." value={newStudent.phone}
-                      onChange={e => setNewStudent((s: any) => ({ ...s, phone: e.target.value }))} />
-                  </div>
-                  <div>
-                    <div className="text-xs text-gray-400 mb-1">Data nașterii</div>
-                    <input className={addCls} placeholder="dd.mm.yyyy" value={newStudent.birth_date}
-                      onChange={e => setNewStudent((s: any) => ({ ...s, birth_date: e.target.value }))} />
-                  </div>
+                  <span className="text-xs text-gray-400">{s.class_caa}</span>
                 </div>
-                <div className="flex justify-end gap-2">
-                  <button onClick={() => { setShowAddForm(false); setNewStudent(EMPTY_STUDENT) }}
-                    className="px-3 py-1.5 rounded-lg text-xs border border-gray-200 text-gray-500 hover:bg-gray-50"><X size={12} /> Anulează</button>
-                  <button onClick={addStudent} disabled={adding}
-                    className="px-4 py-1.5 rounded-lg text-xs font-medium text-white disabled:opacity-50"
-                    style={{ background: '#0a1628' }}>
-                    <span className="flex items-center gap-1"><Check size={12} />{adding ? 'Se adaugă...' : 'Adaugă cursant'}</span>
-                  </button>
-                </div>
-              </div>
-            )}
+              )
+            })}
+          </div>
 
-            {students.length === 0 ? (
-              <div className="p-10 text-center text-gray-400 text-sm">Niciun cursant adăugat.</div>
-            ) : (
-              <div className="overflow-auto">
-                <table className="w-full text-xs">
-                  <thead>
-                    <tr className="bg-gray-50 border-b border-gray-100">
-                      <th className="text-left px-3 py-2.5 font-medium text-gray-400 w-6">#</th>
-                      <th className="text-left px-3 py-2.5 font-medium text-gray-500">Nume</th>
-                      <th className="text-left px-3 py-2.5 font-medium text-gray-500">CNP</th>
-                      <th className="text-left px-3 py-2.5 font-medium text-gray-500">Email</th>
-                      <th className="text-left px-3 py-2.5 font-medium text-gray-500">Telefon</th>
-                      <th className="text-left px-3 py-2.5 font-medium text-gray-500">CI</th>
-                      <th className="text-left px-3 py-2.5 font-medium text-gray-500">Clasa</th>
-                      <th className="text-left px-3 py-2.5 font-medium text-gray-500">Portal</th>
-                      <th className="w-16"></th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-50">
-                    {students.map((s, i) => {
-                      const ps = portalMap[s.portal_status] || portalMap.pending
-                      const isEditing = editingId === s.id
-                      return (
-                        <tr key={s.id} className={isEditing ? 'bg-blue-50/40' : 'hover:bg-gray-50 transition-colors'}>
-                          <td className="px-3 py-2 text-gray-300">{i + 1}</td>
-                          {isEditing ? (
-                            <>
-                              <td className="px-1 py-1.5"><input className={inCls + ' font-medium min-w-28'} value={editValues.full_name} onChange={e => setEditValues((v: any) => ({ ...v, full_name: e.target.value.toUpperCase() }))} /></td>
-                              <td className="px-1 py-1.5"><input className={inCls + ' font-mono w-28'} value={editValues.cnp} onChange={e => setEditValues((v: any) => ({ ...v, cnp: e.target.value }))} /></td>
-                              <td className="px-1 py-1.5"><input className={inCls + ' min-w-32'} value={editValues.email} onChange={e => setEditValues((v: any) => ({ ...v, email: e.target.value }))} /></td>
-                              <td className="px-1 py-1.5"><input className={inCls + ' w-24'} value={editValues.phone} onChange={e => setEditValues((v: any) => ({ ...v, phone: e.target.value }))} /></td>
-                              <td className="px-1 py-1.5">
-                                <div className="flex gap-1">
-                                  <input className={inCls + ' w-12'} placeholder="AB" value={editValues.ci_series} onChange={e => setEditValues((v: any) => ({ ...v, ci_series: e.target.value.toUpperCase() }))} />
-                                  <input className={inCls + ' w-16'} placeholder="123456" value={editValues.ci_number} onChange={e => setEditValues((v: any) => ({ ...v, ci_number: e.target.value }))} />
-                                </div>
-                              </td>
-                              <td className="px-1 py-1.5">
-                                <select className={inCls} value={editValues.class_caa} onChange={e => setEditValues((v: any) => ({ ...v, class_caa: e.target.value }))}>
-                                  <option value="C">C</option><option value="D">D</option><option value="C,D">C,D</option>
-                                </select>
-                              </td>
-                              <td className="px-1 py-1.5">
-                                <span className="text-gray-400 text-xs" style={{ color: ps.color }}>{ps.label}</span>
-                              </td>
-                              <td className="px-2 py-1.5">
-                                <div className="flex gap-1">
-                                  <button onClick={() => saveEdit(s.id)} disabled={saving} className="p-1 rounded bg-green-100 text-green-700 hover:bg-green-200"><Check size={12} /></button>
-                                  <button onClick={() => setEditingId(null)} className="p-1 rounded bg-gray-100 text-gray-500 hover:bg-gray-200"><X size={12} /></button>
-                                </div>
-                              </td>
-                            </>
-                          ) : (
-                            <>
-                              <td className="px-3 py-2 font-medium text-gray-900">{s.full_name}</td>
-                              <td className="px-3 py-2 font-mono text-gray-400">{s.cnp || '—'}</td>
-                              <td className="px-3 py-2 text-gray-500">{s.email || '—'}</td>
-                              <td className="px-3 py-2 text-gray-500">{s.phone || '—'}</td>
-                              <td className="px-3 py-2">
-                                {s.ci_series && s.ci_number ? (
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-mono font-semibold" style={{ background: '#dcfce7', color: '#166534' }}>
-                                    {s.ci_series} {s.ci_number}
-                                  </span>
-                                ) : (
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded-md text-xs font-medium" style={{ background: '#fee2e2', color: '#991b1b' }}>
-                                    lipsă
-                                  </span>
-                                )}
-                              </td>
-                              <td className="px-3 py-2 text-gray-500">{s.class_caa}</td>
-                              <td className="px-3 py-2">
-                                <span className="text-xs font-medium" style={{ color: ps.color }}>{ps.label}</span>
-                                {s.signed_at && <div className="text-gray-300 text-xs">{new Date(s.signed_at).toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' })}</div>}
-                              </td>
-                              <td className="px-2 py-2">
-                                <div className="flex gap-1">
-                                  <button onClick={() => startEdit(s)} className="p-1.5 rounded border border-gray-200 text-gray-400 hover:text-blue-600 hover:border-blue-200 hover:bg-blue-50 transition-colors"><Pencil size={12} /></button>
-                                  <button onClick={() => removeStudent(s.id)} className="p-1.5 rounded border border-gray-100 text-red-300 hover:text-red-500 hover:bg-red-50 transition-colors"><Trash2 size={12} /></button>
-                                </div>
-                              </td>
-                            </>
-                          )}
-                        </tr>
-                      )
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            )}
+          {/* Info */}
+          <div className="p-4 border-t border-gray-100 bg-amber-50/50">
+            <p className="text-xs text-amber-700">
+              💡 Cursanții selectați vor fi copiați în sesiunea nouă. Datele lor (CI, adresă, semnătură) se copiază automat — nu trebuie să se logheze din nou pe portal.
+            </p>
           </div>
         </div>
+      </div>
+
+      {/* Buton creare */}
+      <div className="mt-6 flex items-center justify-between">
+        <Link href={`/admin/sesiuni/${id}`} className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700">
+          ← Înapoi la sesiunea originală
+        </Link>
+        <button onClick={createClone} disabled={saving || selectedIds.size === 0}
+          className="flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-semibold text-white disabled:opacity-50 transition-opacity hover:opacity-90"
+          style={{ background: '#0a1628' }}>
+          <Copy size={15} />
+          {saving ? 'Se creează...' : `Creează sesiunea cu ${selectedIds.size} cursanți`}
+        </button>
       </div>
     </div>
   )
