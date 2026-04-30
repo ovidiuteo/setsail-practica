@@ -78,12 +78,12 @@ export async function POST(req: NextRequest) {
   const CONTENT_W = 10106
 
   // Coloane fixe
-  const COL_NR   = 320
-  const COL_CNP  = 2000
-  const COL_CLASA = 650
-  const COL_ADMIS = 750
-  const COL_RESP  = 750
-  const COL_ABS   = 750
+  const COL_NR   = 270
+  const COL_CNP  = 1800
+  const COL_CLASA = 600
+  const COL_ADMIS = 680
+  const COL_RESP  = 680
+  const COL_ABS   = 680
   const FIXED_TOTAL = COL_NR + COL_CNP + COL_CLASA + COL_ADMIS + COL_RESP + COL_ABS // 5220
   const NAME_TOTAL = CONTENT_W - FIXED_TOTAL // 4786 DXA pentru Nume + Prenume
 
