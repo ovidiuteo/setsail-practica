@@ -169,18 +169,18 @@ export async function POST(req: NextRequest) {
             children: [
               new TableCell({
                 borders, margins: cellMargins, width: { size: COL1, type: WidthType.DXA },
-                shading: { fill: 'E8E8E8', type: ShadingType.CLEAR },
+                shading: { fill: 'FFFFFF', type: ShadingType.CLEAR },
                 children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Cerinţe', bold: true, size: 24 })] })]
               }),
               new TableCell({
                 borders, margins: cellMargins, width: { size: COL2, type: WidthType.DXA },
-                shading: { fill: 'E8E8E8', type: ShadingType.CLEAR },
-                children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Aptitudini', bold: true, size: 24 })] })]
+                shading: { fill: 'FFFFFF', type: ShadingType.CLEAR },
+                children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Aptitudini', italics: true, size: 24 })] })]
               }),
               new TableCell({
                 borders, margins: cellMargins, width: { size: COL3, type: WidthType.DXA },
-                shading: { fill: 'E8E8E8', type: ShadingType.CLEAR },
-                children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Observaţii (admis / respins)', bold: true, size: 24 })] })]
+                shading: { fill: 'FFFFFF', type: ShadingType.CLEAR },
+                children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Observaţii (admis / respins)', italics: true, size: 24 })] })]
               }),
             ]
           }),
