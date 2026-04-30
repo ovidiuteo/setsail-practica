@@ -126,22 +126,17 @@ export default function AdminDashboard() {
                         </span>
                         <span className="text-xs text-gray-400">
                           Clasa {principal.class_caa?.replace(',', '+')}
-                          {' · '}
+                          {' · Total: '}
                           <span className="font-medium text-gray-600">
-                            Total: {(principal._count||0) + clones.reduce((sum:number,c:any)=>sum+(c._count||0),0)} cursanți
+                            {(principal._count||0) + clones.reduce((sum:number,c:any)=>sum+(c._count||0),0)} cursanți
                           </span>
-                          {' · '}
-                          {principal._count||0} lista 1
-                          {clones.map((c:any,ci:number)=>(
-                            <span key={c.id}>{' · '}{c._count||0} lista {ci+2}</span>
-                          ))}
                         </span>
                       </div>
                       <div className="text-xs text-gray-500 flex gap-3 flex-wrap">
                         <span>📍 {principal.locations?.name}{principal.locations?.county ? `, ${principal.locations.county}` : ''}</span>
                         <span>⛵ {principal.boats?.name || '—'}</span>
                         <span>👤 {principal.instructors?.full_name || '—'}</span>
-                        <span>🏛️ {principal.evaluators?.full_name || '—'}</span>
+                        <span>🏛️ {principal.evaluators?.full_name || '—'} · {principal._count||0} cursanți</span>
                       </div>
                     </div>
                     <Link href={`/admin/sesiuni/${principal.id}`} className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-400 hover:text-gray-700 transition-colors">
@@ -173,7 +168,7 @@ export default function AdminDashboard() {
                               {' · '}⛵ {clone.boats?.name||'—'}
                               {' · '}👤 {clone.instructors?.full_name||'—'}
                               {' · '}🏛️ {clone.evaluators?.full_name||'—'}
-                              {' · '}{clone._count||0} cursanți
+                              {' · '}{clone._count||0} cursanți                              {' · '}{clone._count||0} cursanți
                             </span>
                           </div>
                           <Link href={`/admin/sesiuni/${principal.id}`} className="text-blue-300 hover:text-blue-600 transition-colors">
