@@ -21,9 +21,9 @@ export default function AdminDashboard() {
     async function load() {
       const [{ data: sessions }, { data: students }] = await Promise.all([
         supabase.from('sessions')
-          .select('*, locations(name, county), instructors(full_name), boats(name)')
-          .order('session_date', { ascending: false })
-          .order('created_at', { ascending: false }),
+          .select('*, locations(name, county), instructors(full_name), boats(name), evaluators(full_name)')
+          .order('session_date', { ascending: true })
+          .order('created_at', { ascending: true }),
         supabase.from('students').select('id, portal_status, session_id')
       ])
 
@@ -40,9 +40,15 @@ export default function AdminDashboard() {
         completed: principals.filter((s: any) => s.status === 'completed').length,
       })
 
-      setAllSessions(all)
-      // Sesiuni recente = ultimele 5 principale
-      setRecentSessions(principals.slice(0, 5))
+      // Fetch student counts
+      const { data: allStudents } = await supabase.from('students').select('session_id')
+      const counts: Record<string,number> = {}
+      for (const st of (allStudents||[])) {
+        counts[st.session_id] = (counts[st.session_id]||0) + 1
+      }
+
+      setAllSessions(all.map((s:any) => ({...s, _count: counts[s.id]||0})))
+      setRecentSessions(principals.slice(-5).reverse())
       setLoading(false)
     }
     load()
@@ -118,12 +124,13 @@ export default function AdminDashboard() {
                         <span className="px-2 py-0.5 rounded-full text-xs font-medium" style={{ background: st.color + '15', color: st.color }}>
                           {st.label}
                         </span>
-                        <span className="text-xs text-gray-400">Clasa {principal.class_caa?.replace(',', '+')}</span>
+                        <span className="text-xs text-gray-400">Clasa {principal.class_caa?.replace(',', '+')} · {principal._count||0} cursanți</span>
                       </div>
-                      <div className="text-xs text-gray-500 flex gap-3">
+                      <div className="text-xs text-gray-500 flex gap-3 flex-wrap">
                         <span>📍 {principal.locations?.name}{principal.locations?.county ? `, ${principal.locations.county}` : ''}</span>
                         <span>⛵ {principal.boats?.name || '—'}</span>
                         <span>👤 {principal.instructors?.full_name || '—'}</span>
+                        <span>🏛️ {principal.evaluators?.full_name || '—'}</span>
                       </div>
                     </div>
                     <Link href={`/admin/sesiuni/${principal.id}`} className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-400 hover:text-gray-700 transition-colors">
@@ -151,7 +158,11 @@ export default function AdminDashboard() {
                               {cloneSt.label}
                             </span>
                             <span className="text-xs text-gray-400">
-                              📍 {clone.locations?.name} · ⛵ {clone.boats?.name || '—'}
+                              📍 {clone.locations?.name}{clone.locations?.county ? `, ${clone.locations.county}` : ''}
+                              {' · '}⛵ {clone.boats?.name||'—'}
+                              {' · '}👤 {clone.instructors?.full_name||'—'}
+                              {' · '}🏛️ {clone.evaluators?.full_name||'—'}
+                              {' · '}{clone._count||0} cursanți
                             </span>
                           </div>
                           <Link href={`/admin/sesiuni/${principal.id}`} className="text-blue-300 hover:text-blue-600 transition-colors">
