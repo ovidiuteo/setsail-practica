@@ -22,8 +22,8 @@ export default function AdminDashboard() {
       const [{ data: sessions }, { data: students }] = await Promise.all([
         supabase.from('sessions')
           .select('*, locations(name, county), instructors(full_name), boats(name), evaluators(full_name)')
-          .order('session_date', { ascending: true })
-          .order('created_at', { ascending: true }),
+          .order('session_date', { ascending: false })
+          .order('created_at', { ascending: false }),
         supabase.from('students').select('id, portal_status, session_id')
       ])
 
@@ -48,7 +48,7 @@ export default function AdminDashboard() {
       }
 
       setAllSessions(all.map((s:any) => ({...s, _count: counts[s.id]||0})))
-      setRecentSessions(principals.slice(-5).reverse())
+      setRecentSessions(principals.slice(0, 5))
       setLoading(false)
     }
     load()
@@ -124,7 +124,18 @@ export default function AdminDashboard() {
                         <span className="px-2 py-0.5 rounded-full text-xs font-medium" style={{ background: st.color + '15', color: st.color }}>
                           {st.label}
                         </span>
-                        <span className="text-xs text-gray-400">Clasa {principal.class_caa?.replace(',', '+')} · {principal._count||0} cursanți</span>
+                        <span className="text-xs text-gray-400">
+                          Clasa {principal.class_caa?.replace(',', '+')}
+                          {' · '}
+                          <span className="font-medium text-gray-600">
+                            Total: {(principal._count||0) + clones.reduce((sum:number,c:any)=>sum+(c._count||0),0)} cursanți
+                          </span>
+                          {' · '}
+                          {principal._count||0} lista 1
+                          {clones.map((c:any,ci:number)=>(
+                            <span key={c.id}>{' · '}{c._count||0} lista {ci+2}</span>
+                          ))}
+                        </span>
                       </div>
                       <div className="text-xs text-gray-500 flex gap-3 flex-wrap">
                         <span>📍 {principal.locations?.name}{principal.locations?.county ? `, ${principal.locations.county}` : ''}</span>
