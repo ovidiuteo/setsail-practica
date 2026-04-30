@@ -351,15 +351,34 @@ export default function SesiuniPage() {
                               </span>
                             </div>
                             <div className="text-xs text-gray-400 flex gap-3">
-                              <span>📍 {clone.locations?.name}</span>
+                              <span>📍 {clone.locations?.name}{clone.locations?.county ? `, ${clone.locations.county}` : ''}</span>
                               <span>⛵ {clone.boats?.name||'—'}</span>
                               <span>👤 {clone.instructors?.full_name||'—'}</span>
+                              <span>🏛️ {clone.evaluators?.full_name||'—'}</span>
                             </div>
                           </div>
-                          <Link href={`/admin/sesiuni/${principal.id}`}
-                            className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-400 hover:text-gray-700 transition-colors">
-                            <ExternalLink size={13}/>
-                          </Link>
+                          <div className="flex gap-1">
+                            <div className="relative group">
+                              <span className="px-2 py-0.5 rounded-full text-xs font-medium cursor-pointer hover:opacity-80"
+                                style={{background:cloneSt.color+'15',color:cloneSt.color}}>
+                                {cloneSt.label} ▾
+                              </span>
+                              <div className="absolute right-0 top-6 z-50 hidden group-hover:flex flex-col bg-white rounded-xl shadow-xl border border-gray-100 py-1 min-w-28">
+                                {(['draft','active','completed'] as const).map(sv => (
+                                  <button key={sv} onClick={async(e)=>{e.stopPropagation();await supabase.from('sessions').update({status:sv}).eq('id',clone.id);setSessions(ss=>ss.map(x=>x.id===clone.id?{...x,status:sv}:x))}}
+                                    className="px-3 py-1.5 text-xs text-left hover:bg-gray-50 font-medium"
+                                    style={{color:{draft:'#6b7280',active:'#d97706',completed:'#059669'}[sv]}}>
+                                    {{draft:'Ciornă',active:'Activă',completed:'Finalizată'}[sv]}
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                            <button onClick={()=>startEdit(clone)} className="p-1.5 rounded-lg border border-gray-200 hover:bg-blue-50 text-gray-400 hover:text-blue-600 transition-colors"><Pencil size={13}/></button>
+                            <Link href={`/admin/sesiuni/${principal.id}`}
+                              className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-400 hover:text-gray-700 transition-colors">
+                              <ExternalLink size={13}/>
+                            </Link>
+                          </div>
                         </div>
                       </div>
                     </div>

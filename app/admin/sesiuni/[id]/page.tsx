@@ -389,9 +389,40 @@ export default function SessionDetailPage() {
   const [sessions, setSessions] = useState<Session[]>([]) // principal + clone + absent
   const [studentsMap, setStudentsMap] = useState<Record<string,Student[]>>({})
   const [loading, setLoading] = useState(true)
+  const [editingSession, setEditingSession] = useState<string|null>(null)
+  const [editSessionValues, setEditSessionValues] = useState<any>({})
+  const [savingSession, setSavingSession] = useState(false)
+  const [refs, setRefs] = useState<any>({locations:[], boats:[], evaluators:[], instructors:[]})
 
   function setSessionStudents(sessionId: string, sts: Student[]) {
     setStudentsMap(prev => ({...prev, [sessionId]: sts}))
+  }
+
+  function startEditSession(sess: Session) {
+    setEditingSession(sess.id)
+    setEditSessionValues({
+      session_date: sess.session_date,
+      location_id: (sess as any).location_id || '',
+      boat_id: (sess as any).boat_id || '',
+      evaluator_id: (sess as any).evaluator_id || '',
+      instructor_id: (sess as any).instructor_id || '',
+      class_caa: sess.class_caa || 'C,D',
+      request_number: sess.request_number || '',
+      location_detail: sess.location_detail || '',
+    })
+  }
+
+  async function saveEditSession(sid: string) {
+    setSavingSession(true)
+    await supabase.from('sessions').update(editSessionValues).eq('id', sid)
+    // Reload session data
+    const { data: updated } = await supabase.from('sessions').select('*, locations(*), boats(*), evaluators(*), instructors(*)').eq('id', sid).single()
+    if (updated) {
+      setSessions(prev => prev.map(s => s.id === sid ? {...s, ...updated} : s))
+      if (sid === id) setMainSession(updated as Session)
+    }
+    setEditingSession(null)
+    setSavingSession(false)
   }
 
   async function updateStatus(sid: string, status: string) {
@@ -410,6 +441,15 @@ export default function SessionDetailPage() {
   }
 
   async function load() {
+    // Fetch refs pentru editare
+    const [{ data: locations }, { data: boats }, { data: evaluators }, { data: instructors }] = await Promise.all([
+      supabase.from('locations').select('*').order('name'),
+      supabase.from('boats').select('*').order('name'),
+      supabase.from('evaluators').select('*').order('full_name'),
+      supabase.from('instructors').select('*').order('full_name'),
+    ])
+    setRefs({ locations: locations||[], boats: boats||[], evaluators: evaluators||[], instructors: instructors||[] })
+
     const { data: s } = await supabase
       .from('sessions').select('*, locations(*), boats(*), evaluators(*), instructors(*)')
       .eq('id', id).single()
@@ -503,11 +543,67 @@ export default function SessionDetailPage() {
           </div>
           <p className="text-sm text-gray-500 mt-0.5">{mainSession.locations?.name}, {mainSession.locations?.county}</p>
         </div>
+        <button onClick={()=>startEditSession(mainSession)}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">
+          <Pencil size={12}/> Editează sesiunea
+        </button>
         <Link href={`/admin/sesiuni/${id}/clone`}
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-50">
           <GitBranch size={12}/> {cloneSessions.length>0?'Adaugă clonă':'Clonează'}
         </Link>
       </div>
+
+      {/* Modal editare sesiune */}
+      {editingSession && (
+        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6">
+            <h3 className="font-semibold text-gray-900 mb-4">Editează sesiunea</h3>
+            <div className="grid grid-cols-2 gap-3">
+              {[
+                ['Data', 'session_date', 'date'],
+                ['Nr. solicitare', 'request_number', 'text'],
+                ['Locație detaliată', 'location_detail', 'text'],
+                ['Clasa CAA', 'class_caa', 'select-class'],
+              ].map(([label, key, type]) => (
+                <div key={key} className={key==='location_detail'?'col-span-2':''}>
+                  <div className="text-xs text-gray-400 mb-1">{label}</div>
+                  {type==='select-class' ? (
+                    <select className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs w-full focus:outline-none focus:ring-1 focus:ring-blue-400"
+                      value={editSessionValues[key]} onChange={e=>setEditSessionValues((v:any)=>({...v,[key]:e.target.value}))}>
+                      {['A','B','C','D','C,D','Radio'].map(c=><option key={c} value={c}>{c.replace(',','+')}</option>)}
+                    </select>
+                  ) : (
+                    <input type={type} className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs w-full focus:outline-none focus:ring-1 focus:ring-blue-400"
+                      value={editSessionValues[key]||''} onChange={e=>setEditSessionValues((v:any)=>({...v,[key]:e.target.value}))}/>
+                  )}
+                </div>
+              ))}
+              {[
+                ['Locație', 'location_id', refs.locations, 'name', 'county'],
+                ['Ambarcațiune', 'boat_id', refs.boats, 'name', null],
+                ['Evaluator ANR', 'evaluator_id', refs.evaluators, 'full_name', null],
+                ['Instructor', 'instructor_id', refs.instructors, 'full_name', null],
+              ].map(([label, key, options, nameField, extraField]: any) => (
+                <div key={key}>
+                  <div className="text-xs text-gray-400 mb-1">{label}</div>
+                  <select className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs w-full focus:outline-none focus:ring-1 focus:ring-blue-400"
+                    value={editSessionValues[key]||''} onChange={e=>setEditSessionValues((v:any)=>({...v,[key]:e.target.value}))}>
+                    <option value="">— Selectează —</option>
+                    {options.map((o:any)=><option key={o.id} value={o.id}>{o[nameField]}{extraField&&o[extraField]?`, ${o[extraField]}`:''}</option>)}
+                  </select>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2 mt-4">
+              <button onClick={()=>setEditingSession(null)} className="px-4 py-2 rounded-lg text-xs border border-gray-200 text-gray-500 hover:bg-gray-50">Anulează</button>
+              <button onClick={()=>saveEditSession(editingSession)} disabled={savingSession}
+                className="px-4 py-2 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#059669'}}>
+                {savingSession?'Se salvează...':'Salvează'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Sesiunea principala */}
       <div className="grid grid-cols-3 gap-6">
