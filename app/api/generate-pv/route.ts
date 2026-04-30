@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
             new ImageRun({
               data: headerImageBuffer,
               type: 'png',
-              transformation: { width: 663, height: 107 },
+              transformation: { width: 663, height: 86 },
             }),
           ],
         })
@@ -148,7 +148,7 @@ export async function POST(req: NextRequest) {
     const dataRows = students.map((s: any, idx: number) => {
       const { nume, prenume } = splitName(s.full_name || '')
       return new TableRow({
-        height: { value: 400, rule: 'atLeast' as any },
+        height: { value: 200, rule: 'atLeast' as any },
         children: [
           new TableCell({ borders, width: { size: colW[0], type: WidthType.DXA }, margins: cellM, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: String(s.order_in_session || idx + 1), size: 22 })] })] }),
           new TableCell({ borders, width: { size: colW[1], type: WidthType.DXA }, margins: cellM, children: [new Paragraph({ children: [new TextRun({ text: nume, size: 22 })] })] }),
@@ -206,10 +206,10 @@ export async function POST(req: NextRequest) {
         ]}),
         new TableRow({ children: [
           new TableCell({ borders: noBorders, width: { size: 4500, type: WidthType.DXA }, margins: cellM,
-            children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: '(Semnătură)', size: 16 })] })] }),
+            children: [new Paragraph({ spacing: { after: 0 }, alignment: AlignmentType.CENTER, children: [new TextRun({ text: '(Semnătură)', size: 16 })] })] }),
           new TableCell({ borders: noBorders, width: { size: 1106, type: WidthType.DXA }, margins: cellM, children: [new Paragraph({ children: [] })] }),
           new TableCell({ borders: noBorders, width: { size: 4500, type: WidthType.DXA }, margins: cellM,
-            children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: '(Semnătură)', size: 16 })] })] }),
+            children: [new Paragraph({ spacing: { after: 0 }, alignment: AlignmentType.CENTER, children: [new TextRun({ text: '(Semnătură)', size: 16 })] })] }),
         ]}),
       ]
     })
@@ -234,7 +234,7 @@ export async function POST(req: NextRequest) {
 
     // Paragraful 1 - Subsemnatul
     new Paragraph({
-      spacing: { after: 160 },
+      spacing: { after: 0 },
       indent: { firstLine: 720 },
       alignment: AlignmentType.BOTH,
       children: [
@@ -252,7 +252,7 @@ export async function POST(req: NextRequest) {
 
     // Paragraful 2 - Avand in vedere
     new Paragraph({
-      spacing: { after: 160 },
+      spacing: { after: 0 },
       indent: { firstLine: 720 },
       alignment: AlignmentType.BOTH,
       children: [
@@ -264,7 +264,7 @@ export async function POST(req: NextRequest) {
 
     // Paragraful 3 - In baza solicitarii
     new Paragraph({
-      spacing: { after: 240 },
+      spacing: { after: 0 },
       indent: { firstLine: 720 },
       alignment: AlignmentType.BOTH,
       children: [
@@ -289,7 +289,7 @@ export async function POST(req: NextRequest) {
 
     // Paragraf final
     new Paragraph({
-      spacing: { before: 300, after: 300 },
+      spacing: { before: 0, after: 0 },
       alignment: AlignmentType.BOTH,
       children: [
         new TextRun({ text: '\tDrept pentru care am încheiat prezentul proces-verbal  în două exemplare, un exemplar a fost înaintat furnizorului de educație, formare profesională sau de perfecționare în vederea emiterii certificatelor de absolvire curs după caz.', size: 22 }),
