@@ -22,8 +22,8 @@ export default function AdminDashboard() {
       const [{ data: sessions }, { data: students }] = await Promise.all([
         supabase.from('sessions')
           .select('*, locations(name, county), instructors(full_name), boats(name), evaluators(full_name)')
-          .order('session_date', { ascending: false })
-          .order('created_at', { ascending: false }),
+          .order('session_date', { ascending: true })
+          .order('created_at', { ascending: true }),
         supabase.from('students').select('id, portal_status, session_id')
       ])
 
@@ -47,8 +47,11 @@ export default function AdminDashboard() {
         counts[st.session_id] = (counts[st.session_id]||0) + 1
       }
 
-      setAllSessions(all.map((s:any) => ({...s, _count: counts[s.id]||0})))
-      setRecentSessions(principals.slice(0, 5))
+      const enrichedAll = all.map((s:any) => ({...s, _count: counts[s.id]||0}))
+      const enrichedPrincipals = enrichedAll.filter((s:any) => s.session_type === 'principal')
+
+      setAllSessions(enrichedAll)
+      setRecentSessions(enrichedPrincipals.slice(0, 5)) // ascending: cele mai vechi primele
       setLoading(false)
     }
     load()
@@ -168,7 +171,7 @@ export default function AdminDashboard() {
                               {' · '}⛵ {clone.boats?.name||'—'}
                               {' · '}👤 {clone.instructors?.full_name||'—'}
                               {' · '}🏛️ {clone.evaluators?.full_name||'—'}
-                              {' · '}{clone._count||0} cursanți                              {' · '}{clone._count||0} cursanți
+                              {' · '}{clone._count||0} cursanți
                             </span>
                           </div>
                           <Link href={`/admin/sesiuni/${principal.id}`} className="text-blue-300 hover:text-blue-600 transition-colors">
