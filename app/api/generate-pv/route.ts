@@ -282,7 +282,7 @@ export async function POST(req: NextRequest) {
         new TextRun({ text: capitania, bold: true, size: 22 }),
         new TextRun({ text: ', desemnat prin Decizia Directorului General al Autorității Navale Române nr. ', size: 22 }),
         new TextRun({ text: decizieANR, bold: true, size: 22 }),
-        new TextRun({ text: ' în calitate de evaluator la examenele practice a cursurilor aprobate organizate de furnizorii de educație, formare profesională sau de perfecționare pentru obținerea certificatelor internaționale de conducător de ambarcațiune de agrement,', size: 22 }),
+        new TextRun({ text: ', în calitate de evaluator la examenele practice ale cursurilor aprobate, organizate de furnizorii de educație, formare profesională sau de perfecționare, pentru obținerea certificatelor internaționale de conducător de ambarcațiune de agrement,', size: 22 }),
       ]
     }),
 
@@ -292,9 +292,9 @@ export async function POST(req: NextRequest) {
       indent: { firstLine: 720 },
       alignment: AlignmentType.BOTH,
       children: [
-        new TextRun({ text: 'Având în vedere prevederile ,,', size: 22 }),
+        new TextRun({ text: 'Având în vedere prevederile „', size: 22 }),
         new TextRun({ text: 'Regulamentului privind cerințele minime de pregătire, precum și condițiile de obținere a certificatelor internaționale de conducător de ambarcațiune de agrement', italics: true, size: 22 }),
-        new TextRun({ text: '" aprobat prin Ordinul M.T. nr. 527/2016 cu modificările și completările în vigoare și ', size: 22 }),
+        new TextRun({ text: '”, aprobat prin Ordinul M.T. nr. 527/2016, cu modificările și completările în vigoare și,', size: 22 }),
       ]
     }),
 
@@ -304,19 +304,19 @@ export async function POST(req: NextRequest) {
       indent: { firstLine: 720 },
       alignment: AlignmentType.BOTH,
       children: [
-        new TextRun({ text: 'În  baza solicitării furnizorului ', size: 22 }),
-        new TextRun({ text: 'S.C. SET SAIL ADVERTISING SRL', bold: true, size: 22 }),
-        new TextRun({ text: '  nr. ', size: 22 }),
+        new TextRun({ text: 'În baza solicitării furnizorului ', size: 22 }),
+        new TextRun({ text: 'S.C. Set Sail Advertising S.R.L.', bold: true, size: 22 }),
+        new TextRun({ text: ', nr. ', size: 22 }),
         new TextRun({ text: nrSolicitare, bold: true, size: 22 }),
         new TextRun({ text: ', s-a desfășurat în locația ', size: 22 }),
         new TextRun({ text: locatieDetaliata, bold: true, size: 22 }),
-        new TextRun({ text: ', cu ambarcațiunea nr. ', size: 22 }),
-        new TextRun({ text: barcaInmatriculare, bold: true, size: 22 }),
-        new TextRun({ text: ' ', size: 22 }),
+        new TextRun({ text: ', cu ambarcațiunea ', size: 22 }),
         new TextRun({ text: barcaNume, bold: true, size: 22 }),
+        new TextRun({ text: ', ', size: 22 }),
+        new TextRun({ text: barcaInmatriculare, bold: true, size: 22 }),
         new TextRun({ text: ', în prezența instructorului ', size: 22 }),
         new TextRun({ text: instructor, bold: true, size: 22 }),
-        new TextRun({ text: ',  evaluarea/examinarea cunoștintelor practice ale candidaților enumerați mai jos, iar în baza fișei individuale de verificare a aptitudinilor am constatat următoarele:', size: 22 }),
+        new TextRun({ text: ', evaluarea/examinarea cunoștințelor practice ale candidaților enumerați mai jos și, în baza fișei individuale de verificare a aptitudinilor, am constatat următoarele:', size: 22 }),
       ]
     }),
 
@@ -328,7 +328,7 @@ export async function POST(req: NextRequest) {
       spacing: { before: 0, after: 0 },
       alignment: AlignmentType.BOTH,
       children: [
-        new TextRun({ text: '\tDrept pentru care am încheiat prezentul proces-verbal  în două exemplare, un exemplar a fost înaintat furnizorului de educație, formare profesională sau de perfecționare în vederea emiterii certificatelor de absolvire curs după caz.', size: 22 }),
+        new TextRun({ text: 'Drept pentru care am încheiat prezentul proces-verbal în două exemplare; un exemplar a fost înaintat furnizorului de educație, formare profesională sau de perfecționare, în vederea emiterii certificatelor de absolvire a cursului, după caz.', size: 22 }),
       ]
     }),
 
