@@ -198,10 +198,27 @@ export async function POST(req: NextRequest) {
       })
     })
 
+    // Adauga randuri goale pana la minim 18 (fara numar curent)
+    const MIN_ROWS = 18
+    const emptyRowsNeeded = Math.max(0, MIN_ROWS - dataRows.length)
+    const emptyRows = Array.from({ length: emptyRowsNeeded }, (_, i) =>
+      new TableRow({
+        height: { value: 200, rule: 'atLeast' as any },
+        children: colW.map((w, ci) =>
+          new TableCell({
+            borders,
+            width: { size: w, type: WidthType.DXA },
+            margins: cellM,
+            children: [new Paragraph({ children: [new TextRun({ text: '', size: 22 })] })]
+          })
+        )
+      })
+    )
+
     return new Table({
       width: { size: colW.reduce((a,b)=>a+b,0), type: WidthType.DXA },
       columnWidths: colW,
-      rows: [headerRow, ...dataRows],
+      rows: [headerRow, ...dataRows, ...emptyRows],
     })
   }
 
@@ -234,10 +251,10 @@ export async function POST(req: NextRequest) {
             ] }),
         ]}),
         new TableRow({ children: [
-          new TableCell({ borders: noBorders, width: { size: 4500, type: WidthType.DXA }, margins: { top: 400, bottom: 80, left: 100, right: 100 },
+          new TableCell({ borders: noBorders, width: { size: 4500, type: WidthType.DXA }, margins: { top: 300, bottom: 80, left: 100, right: 100 },
             children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: '............................  ...........................', size: 20 })] })] }),
           new TableCell({ borders: noBorders, width: { size: 1106, type: WidthType.DXA }, margins: cellM, children: [new Paragraph({ children: [] })] }),
-          new TableCell({ borders: noBorders, width: { size: 4500, type: WidthType.DXA }, margins: { top: 400, bottom: 80, left: 100, right: 100 },
+          new TableCell({ borders: noBorders, width: { size: 4500, type: WidthType.DXA }, margins: { top: 300, bottom: 80, left: 100, right: 100 },
             children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: '............................  ...........................', size: 20 })] })] }),
         ]}),
         new TableRow({ children: [
