@@ -88,16 +88,7 @@ export default function CursantiPage() {
 
     if (filterSession === 'absent') {
       result = result.filter(s => s._session?.session_type === 'absent')
-    } else if (filterSession === 'absent_pending') {
-      // Cursanti cu original_session_id pointing la o sesiune absent
-      // si sesiunea lor curenta nu e completed
-      result = result.filter(s => {
-        const origSess = s.original_session_id ? sessMapState[s.original_session_id] : null
-        const isFromAbsent = origSess?.session_type === 'absent'
-        const currentSessNotCompleted = s._session?.status !== 'completed'
-        return isFromAbsent && currentSessNotCompleted
-      })
-    } else if (filterSession !== 'all') {
+    } else if (filterSession !== 'all' && filterSession !== 'absent_pending') {
       // Selectata o sesiune principala - include si clonele ei
       const principal = allSessions.find(s => s.id === filterSession)
       if (principal) {
