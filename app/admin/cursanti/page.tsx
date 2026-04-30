@@ -174,14 +174,33 @@ export default function CursantiPage() {
   // Construieste continutul tabelului in functie de filtru
   function renderTableBody() {
     if (filterSession === 'absent_pending') {
-      // Tabel special pentru absenti in curs de alocare
       return filtered.map((s: any, i: number) => {
-        const ps = portalMap[s.portal_status] || portalMap.pending
-        const Icon = ps.icon
-        const origSess = s.original_session_id ? sessMapState[s.original_session_id] : null
-        const isFromAbsent = origSess?.session_type === 'absent'
-        const currentSessNotCompleted = s._session?.status !== 'completed'
-        return isFromAbsent && currentSessNotCompleted
+        const origSess = s._origSession
+        const origParent = origSess?.parent_session_id ? (sessMapState[origSess.parent_session_id] || origSess) : origSess
+        const currentSess = s._session
+        return (
+          <tr key={s.id} className="hover:bg-amber-50/30 transition-colors">
+            <td className="px-4 py-3 text-gray-400 text-xs">{i + 1}</td>
+            <td className="px-4 py-3 font-medium text-gray-900">{s.full_name}</td>
+            <td className="px-4 py-3 text-xs">
+              {origParent ? (
+                <Link href={`/admin/sesiuni/${origParent.id}`} className="flex items-center gap-1 text-red-500 hover:underline">
+                  🔴 {new Date(origParent.session_date).toLocaleDateString('ro-RO',{day:'2-digit',month:'short',year:'numeric'})} · {origParent.locations?.name}
+                  <ExternalLink size={11}/>
+                </Link>
+              ) : <span className="text-gray-400">—</span>}
+            </td>
+            <td className="px-4 py-3 text-xs">
+              {currentSess && currentSess.session_type !== 'absent' ? (
+                <Link href={`/admin/sesiuni/${currentSess.parent_session_id || currentSess.id}`} className="flex items-center gap-1 text-amber-600 hover:underline">
+                  → {new Date(currentSess.session_date).toLocaleDateString('ro-RO',{day:'2-digit',month:'short',year:'numeric'})} · {currentSess.locations?.name}
+                  {currentSess.session_type === 'clone' && <span className="text-blue-400 ml-0.5">⎇</span>}
+                  <ExternalLink size={11}/>
+                </Link>
+              ) : <span className="text-gray-400 italic text-xs">nealocată</span>}
+            </td>
+          </tr>
+        )
       })
     }
 
