@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
   const CONTENT_W = 10106
 
   // Coloane tabel cursanti: Nr | Nume | Prenume | CNP | Clasa | Admis | Respins | Absent
-  const colW = [600, 1800, 2000, 2206, 800, 800, 900, 900]
+  const colW = [400, 1600, 3106, 2000, 650, 750, 750, 750]
   // Total: 10006 ~ CONTENT_W
 
   function makeHeader(): any[] {
