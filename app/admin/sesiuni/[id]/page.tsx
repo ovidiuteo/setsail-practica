@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Download, FileText, Users, Copy, Plus, Trash2, Check, X, Pencil } from 'lucide-react'
+import { ArrowLeft, Download, FileText, Users, Copy, Plus, Trash2, Check, X, Pencil, GitBranch } from 'lucide-react'
 
 const statusMap: Record<string, { label: string; color: string }> = {
   draft: { label: 'Ciornă', color: '#6b7280' },
@@ -99,7 +99,14 @@ export default function SessionDetailPage() {
   async function removeStudent(sid: string) {
     if (!confirm('Ștergi cursantul?')) return
     await supabase.from('students').delete().eq('id', sid)
-    setStudents(ss => ss.filter(s => s.id !== sid))
+    // Renumeroteaza dupa stergere
+    const remaining = students.filter(s => s.id !== sid)
+    const reordered = remaining.map((s, i) => ({ ...s, order_in_session: i + 1 }))
+    setStudents(reordered)
+    // Actualizeaza in baza de date
+    for (const s of reordered) {
+      await supabase.from('students').update({ order_in_session: s.order_in_session }).eq('id', s.id)
+    }
   }
 
   function startEdit(s: Student) {
@@ -195,8 +202,17 @@ export default function SessionDetailPage() {
             <span className="px-2.5 py-1 rounded-full text-xs font-medium" style={{ background: st.color + '20', color: st.color }}>{st.label}</span>
           </div>
           <p className="text-sm text-gray-500 mt-0.5">{session.locations?.name}, {session.locations?.county}</p>
+          {session.is_clone && session.parent_session_id && (
+            <Link href={`/admin/sesiuni/${session.parent_session_id}`} className="text-xs text-blue-500 hover:underline mt-0.5 block">
+              ↑ Sesiune originală
+            </Link>
+          )}
         </div>
         <div className="flex gap-2">
+          <Link href={`/admin/sesiuni/${id}/clone`}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-blue-200 text-blue-700 hover:bg-blue-50">
+            <GitBranch size={12} /> Clonează
+          </Link>
           {session.status !== 'active' && (
             <button onClick={() => setStatus('active')} className="px-3 py-1.5 text-xs rounded-lg border border-amber-200 text-amber-700 hover:bg-amber-50">→ Activează</button>
           )}
