@@ -36,7 +36,11 @@ export default function CursantiPage() {
       // Sesiunile non-absent pentru filtre
       const nonAbsentSess = (sess || []).filter((s: any) => s.session_type !== 'absent')
 
-      const enriched = (sts || []).map(st => ({ ...st, _session: sessMap[st.session_id] || null }))
+      const enriched = (sts || []).map(st => ({
+        ...st,
+        _session: sessMap[st.session_id] || null,
+        _origSession: st.original_session_id ? sessMap[st.original_session_id] || null : null,
+      }))
 
       // Counts per session
       const counts: Record<string,number> = {}
@@ -75,12 +79,8 @@ export default function CursantiPage() {
 
     // Filtru sesiune - DOAR filtrare date
     if (filterSession === 'absent_pending') {
-      // Separat - nu returnam JSX aici
       return result.filter(s => {
-        const ps = portalMap[s.portal_status] || portalMap.pending
-        const Icon = ps.icon
-        const origSess = s.original_session_id ? sessMapState[s.original_session_id] : null
-        const isFromAbsent = origSess?.session_type === 'absent'
+        const isFromAbsent = s._origSession?.session_type === 'absent'
         const currentSessNotCompleted = s._session?.status !== 'completed'
         return isFromAbsent && currentSessNotCompleted
       })
