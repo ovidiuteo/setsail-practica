@@ -328,7 +328,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange }:
           <div className="mt-4">
             <div className="text-xs text-gray-400 mb-2">Status sesiune</div>
             <div className="flex flex-wrap gap-1.5">
-              {(['draft','active','focus','completed'] as const).map(sv => (
+              {(sess.session_type === 'principal' ? ['draft','active','focus','completed'] : ['draft','active','completed'] as const).map((sv: string) => (
                 <button key={sv} onClick={()=>onStatusChange(sess.id, sv)}
                   className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all border-2 ${sess.status===sv ? 'text-white border-transparent' : 'bg-white hover:opacity-90'}`}
                   style={sess.status===sv
@@ -395,7 +395,6 @@ export default function SessionDetailPage() {
   }
 
   async function updateStatus(sid: string, status: string) {
-    // Dialog pentru Finalizata
     if (status === 'completed') {
       const confirmed = window.confirm(
         'Ești sigur că sesiunea este finalizată?\n\n' +
@@ -406,9 +405,8 @@ export default function SessionDetailPage() {
       if (!confirmed) return
     }
     await supabase.from('sessions').update({status}).eq('id', sid)
-    setSessions(prev => prev.map(s => s.id===sid ? {...s,status} : s))
-    // Actualizeaza si mainSession daca e cazul
-    if (sid === mainSession?.id) setMainSession(prev => prev ? {...prev, status} : prev)
+    setSessions(prev => prev.map(s => s.id===sid ? {...s, status} : s))
+    if (sid === id) setMainSession(prev => prev ? {...prev, status} : prev)
   }
 
   async function load() {
@@ -432,9 +430,9 @@ export default function SessionDetailPage() {
       map[sess.id] = (sts||[]) as Student[]
     }
 
-    // Creeaza sesiunea de absenti daca nu exista
+    // Creeaza sesiunea de absenti DOAR pentru sesiunile principale (nu clone)
     const absentSess = allSess.find(s => s.session_type === 'absent')
-    if (!absentSess) {
+    if (!absentSess && s.session_type === 'principal') {
       const { data: newAbsent } = await supabase.from('sessions').insert({
         session_date: s.session_date,
         location_id: s.location_id,
