@@ -11,7 +11,7 @@ export default function NouaSesiunePage() {
   const [form, setForm] = useState({
     session_date: new Date().toISOString().split('T')[0],
     location_id: '', boat_id: '', evaluator_id: '', instructor_id: '',
-    class_caa: 'C,D', status: 'draft', notes: ''
+    class_caa: 'C,D', status: 'draft', notes: '', request_number: ''
   })
   const [csvText, setCsvText] = useState('')
   const [students, setStudents] = useState<{ full_name: string; cnp: string; email: string; id_document: string; class_caa: string }[]>([])

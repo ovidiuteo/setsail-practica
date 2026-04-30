@@ -58,6 +58,7 @@ export default function SesiuniPage() {
       class_caa: s.class_caa,
       status: s.status,
       notes: s.notes || '',
+      request_number: s.request_number || '',
     })
   }
 
@@ -173,6 +174,12 @@ export default function SesiuniPage() {
                           <option value="">— Selectează —</option>
                           {refs.instructors.map((i: any) => <option key={i.id} value={i.id}>{i.full_name}</option>)}
                         </select>
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-400 mb-1">Nr. solicitare furnizor</div>
+                        <input className={inputCls + ' w-full'} value={editValues.request_number}
+                          onChange={e => setEditValues((v: any) => ({ ...v, request_number: e.target.value }))}
+                          placeholder="ex: 16/ 23.08.2024" />
                       </div>
                       <div>
                         <div className="text-xs text-gray-400 mb-1">Observații</div>

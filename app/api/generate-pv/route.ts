@@ -52,7 +52,7 @@ export async function POST(req: NextRequest) {
             new ImageRun({
               data: headerImageBuffer,
               type: 'png',
-              transformation: { width: 510, height: 82 },
+              transformation: { width: 663, height: 107 },
             })
           ]
         })
@@ -120,7 +120,9 @@ export async function POST(req: NextRequest) {
     new Paragraph({ spacing: { after: 200 }, children: [
       new TextRun({ text: '\tÎn  baza solicitării furnizorului…', size: 18 }),
       new TextRun({ text: 'SET SAIL ADVERTISING SRL', bold: true, size: 18 }),
-      new TextRun({ text: '…, nr……../….......…… s-a desfășurat în locația…', size: 18 }),
+      new TextRun({ text: '…, nr.', size: 18 }),
+      new TextRun({ text: session.request_number || '……../….......……', bold: true, size: 18 }),
+      new TextRun({ text: ' s-a desfășurat în locația…', size: 18 }),
       new TextRun({ text: `${session.locations?.name?.toUpperCase() || ''}, JUD. ${session.locations?.county?.toUpperCase() || ''}`, bold: true, size: 18 }),
       new TextRun({ text: '……,cu ambarcațiunea…', size: 18 }),
       new TextRun({ text: session.boats?.name?.toUpperCase() || '...', bold: true, size: 18 }),
@@ -161,7 +163,7 @@ export async function POST(req: NextRequest) {
       properties: {
         page: {
           size: { width: 11906, height: 16838 },
-          margin: { top: 720, right: 720, bottom: 720, left: 1080 }
+          margin: { top: 284, right: 720, bottom: 720, left: 1080 }
         }
       },
       children,
