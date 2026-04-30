@@ -46,6 +46,7 @@ export default function ImportCursantiPage() {
   useEffect(() => {
     supabase.from('sessions')
       .select('id, session_date, access_code, locations(name), class_caa')
+      .eq('session_type', 'principal')
       .order('session_date', { ascending: false })
       .then(({ data }) => {
         setSessions(data || [])
