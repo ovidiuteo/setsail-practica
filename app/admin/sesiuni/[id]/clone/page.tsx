@@ -20,6 +20,7 @@ export default function CloneSessionPage() {
     class_caa: 'C,D',
     status: 'draft',
     notes: '',
+    location_detail: '',
   })
 
   // Cursanți din sesiunea originală
@@ -55,6 +56,7 @@ export default function CloneSessionPage() {
           class_caa: s.class_caa || 'C,D',
           status: 'draft',
           notes: s.notes || '',
+          location_detail: s.location_detail || '',
         })
       }
       setLoading(false)
@@ -173,12 +175,22 @@ export default function CloneSessionPage() {
             <div>
               <label className={labelCls}>Locație *</label>
               <select className={inputCls} value={form.location_id}
-                onChange={e => setForm(f => ({ ...f, location_id: e.target.value }))}>
+                onChange={e => {
+                  const locId = e.target.value
+                  const loc = refs.locations.find((l: any) => l.id === locId)
+                  setForm(f => ({ ...f, location_id: locId, location_detail: loc?.location_detail || '' }))
+                }}>
                 <option value="">— Selectează —</option>
                 {refs.locations.map((l: any) => <option key={l.id} value={l.id}>{l.name}, {l.county}</option>)}
               </select>
             </div>
 
+            <div>
+              <label className={labelCls}>Locație detaliată</label>
+              <input className={inputCls} value={form.location_detail}
+                onChange={e => setForm(f => ({ ...f, location_detail: e.target.value }))}
+                placeholder="ex: Lac Snagov – complex Delta Snagov..." />
+            </div>
             <div>
               <label className={labelCls}>Ambarcațiune</label>
               <select className={inputCls} value={form.boat_id}

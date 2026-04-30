@@ -59,6 +59,7 @@ export default function SesiuniPage() {
       status: s.status,
       notes: s.notes || '',
       request_number: s.request_number || '',
+      location_detail: s.location_detail || '',
     })
   }
 
@@ -146,7 +147,11 @@ export default function SesiuniPage() {
                       <div>
                         <div className="text-xs text-gray-400 mb-1">Locație</div>
                         <select className={selectCls + ' w-full'} value={editValues.location_id}
-                          onChange={e => setEditValues((v: any) => ({ ...v, location_id: e.target.value }))}>
+                          onChange={e => {
+                            const locId = e.target.value
+                            const loc = refs.locations.find((l: any) => l.id === locId)
+                            setEditValues((v: any) => ({ ...v, location_id: locId, location_detail: v.location_detail || loc?.location_detail || '' }))
+                          }}>
                           <option value="">— Selectează —</option>
                           {refs.locations.map((l: any) => <option key={l.id} value={l.id}>{l.name}, {l.county}</option>)}
                         </select>
@@ -174,6 +179,12 @@ export default function SesiuniPage() {
                           <option value="">— Selectează —</option>
                           {refs.instructors.map((i: any) => <option key={i.id} value={i.id}>{i.full_name}</option>)}
                         </select>
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-400 mb-1">Locație detaliată</div>
+                        <input className={inputCls + ' w-full'} value={editValues.location_detail}
+                          onChange={e => setEditValues((v: any) => ({ ...v, location_detail: e.target.value }))}
+                          placeholder="ex: Lac Snagov – complex Delta Snagov..." />
                       </div>
                       <div>
                         <div className="text-xs text-gray-400 mb-1">Nr. solicitare furnizor</div>

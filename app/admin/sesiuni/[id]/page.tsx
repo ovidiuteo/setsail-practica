@@ -235,6 +235,7 @@ export default function SessionDetailPage() {
                 ['Ambarcațiune', session.boats?.name || '—'],
                 ['Clasa CAA', session.class_caa],
                 ['Nr. solicitare', session.request_number || '—'],
+                ['Locație detaliată', session.location_detail || '—'],
               ].map(([label, value]) => (
                 <div key={label} className="flex justify-between gap-2">
                   <span className="text-gray-400 text-xs shrink-0">{label}</span>
