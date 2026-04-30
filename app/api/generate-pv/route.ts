@@ -334,13 +334,6 @@ export async function POST(req: NextRequest) {
     // Tabel semnaturi
     makeSignatureTable(),
 
-    // Footer locatie
-    ...(fl1 ? [
-      new Paragraph({ spacing: { before: 400, after: 40 }, alignment: AlignmentType.CENTER, children: [new TextRun({ text: '_'.repeat(100), size: 14, color: '888888' })] }),
-      new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 40 }, children: [new TextRun({ text: fl1, size: 14, color: '444444' })] }),
-      new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 40 }, children: [new TextRun({ text: fl2, size: 14, color: '444444' })] }),
-      new Paragraph({ alignment: AlignmentType.CENTER, spacing: { after: 0 }, children: [new TextRun({ text: fl3, size: 14, color: '444444' })] }),
-    ] : []),
   ]
 
   const doc = new Document({
