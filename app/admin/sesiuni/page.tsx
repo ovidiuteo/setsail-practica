@@ -128,11 +128,14 @@ export default function SesiuniPage() {
                       </div>
                       <div>
                         <div className="text-xs text-gray-400 mb-1">Clasa CAA</div>
-                        <select className={selectCls + ' w-full'} value={editValues.class_caa}
+                          <select className={selectCls + ' w-full'} value={editValues.class_caa}
                           onChange={e => setEditValues((v: any) => ({ ...v, class_caa: e.target.value }))}>
+                          <option value="A">A</option>
+                          <option value="B">B</option>
                           <option value="C">C</option>
                           <option value="D">D</option>
                           <option value="C,D">C și D</option>
+                          <option value="Radio">Radio</option>
                         </select>
                       </div>
                       <div>
@@ -220,9 +223,21 @@ export default function SesiuniPage() {
                         <span className="font-semibold text-gray-900">
                           {new Date(s.session_date).toLocaleDateString('ro-RO', { day: '2-digit', month: 'long', year: 'numeric' })}
                         </span>
-                        <span className="px-2.5 py-0.5 rounded-full text-xs font-medium" style={{ background: st.color + '15', color: st.color }}>
-                          {st.label}
+                        <div className="relative group">
+                        <span className="px-2.5 py-0.5 rounded-full text-xs font-medium cursor-pointer hover:opacity-80 transition-opacity"
+                          style={{ background: st.color + '15', color: st.color }}>
+                          {st.label} ▾
                         </span>
+                        <div className="absolute left-0 top-6 z-50 hidden group-hover:flex flex-col bg-white rounded-xl shadow-xl border border-gray-100 py-1 min-w-32">
+                          {(['draft','active','focus','completed'] as const).map(sv => (
+                            <button key={sv} onClick={async(e)=>{e.stopPropagation();await supabase.from('sessions').update({status:sv}).eq('id',s.id);setSessions(ss=>ss.map(x=>x.id===s.id?{...x,status:sv}:x))}}
+                              className="px-3 py-2 text-xs text-left hover:bg-gray-50 transition-colors font-medium"
+                              style={{color:{draft:'#6b7280',active:'#d97706',focus:'#7c3aed',completed:'#059669'}[sv]}}>
+                              {{draft:'Ciornă',active:'Activă',focus:'Focus',completed:'Finalizată'}[sv]}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
                         <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">Clasa {s.class_caa}</span>
                       {s.is_clone && <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded">Clonă</span>}
                       </div>

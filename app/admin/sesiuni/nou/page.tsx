@@ -98,9 +98,12 @@ export default function NouaSesiunePage() {
             <label className={labelClass}>Clasa CAA *</label>
             <select className={inputClass} value={form.class_caa}
               onChange={e => setForm(f => ({ ...f, class_caa: e.target.value }))}>
+              <option value="A">A</option>
+              <option value="B">B</option>
               <option value="C">C</option>
               <option value="D">D</option>
               <option value="C,D">C și D</option>
+              <option value="Radio">Radio</option>
             </select>
           </div>
           <div>

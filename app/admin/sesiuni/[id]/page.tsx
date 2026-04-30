@@ -136,7 +136,7 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
             <div><div className="text-xs text-gray-400 mb-1">CNP</div><input className={addCls} placeholder="1800101..." value={newSt.cnp} onChange={e=>setNewSt((s:any)=>({...s,cnp:e.target.value}))}/></div>
             <div><div className="text-xs text-gray-400 mb-1">Clasa</div>
               <select className={addCls} value={newSt.class_caa} onChange={e=>setNewSt((s:any)=>({...s,class_caa:e.target.value}))}>
-                <option value="C">C</option><option value="D">D</option><option value="C,D">C,D</option></select></div>
+                <option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option><option value="C,D">C,D</option><option value="Radio">Radio</option></select></div>
             <div className="col-span-2"><div className="text-xs text-gray-400 mb-1">Email</div><input className={addCls} placeholder="email@..." value={newSt.email} onChange={e=>setNewSt((s:any)=>({...s,email:e.target.value}))}/></div>
             <div><div className="text-xs text-gray-400 mb-1">Telefon</div><input className={addCls} placeholder="07XX..." value={newSt.phone} onChange={e=>setNewSt((s:any)=>({...s,phone:e.target.value}))}/></div>
             <div><div className="text-xs text-gray-400 mb-1">Data nașterii</div><input className={addCls} placeholder="dd.mm.yyyy" value={newSt.birth_date} onChange={e=>setNewSt((s:any)=>({...s,birth_date:e.target.value}))}/></div>
@@ -185,7 +185,7 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
                         <input className={inCls+' w-16'} placeholder="123456" value={editValues.ci_number} onChange={e=>setEditValues((v:any)=>({...v,ci_number:e.target.value}))}/>
                       </div></td>
                       <td className="px-1 py-1.5"><select className={inCls} value={editValues.class_caa} onChange={e=>setEditValues((v:any)=>({...v,class_caa:e.target.value}))}>
-                        <option value="C">C</option><option value="D">D</option><option value="C,D">C,D</option></select></td>
+                        <option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option><option value="C,D">C,D</option><option value="Radio">Radio</option></select></td>
                       <td className="px-1 py-1.5"><span className="text-xs" style={{color:ps.color}}>{ps.label}</span></td>
                       <td className="px-2 py-1.5"><div className="flex gap-1">
                         <button onClick={()=>saveEdit(s.id)} disabled={saving} className="p-1 rounded bg-green-100 text-green-700"><Check size={12}/></button>
@@ -325,14 +325,19 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange }:
         </div>
         {/* Status buttons */}
         {!isAbsent && (
-          <div className="mt-4 flex flex-wrap gap-1.5">
-            {(['draft','active','focus','completed'] as const).map(s => (
-              <button key={s} onClick={()=>onStatusChange(sess.id, s)}
-                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${sess.status===s ? 'text-white' : 'border hover:opacity-80'}`}
-                style={sess.status===s ? {background: statusMap[s].color} : {borderColor: statusMap[s].color+'40', color: statusMap[s].color}}>
-                {statusMap[s].label}
-              </button>
-            ))}
+          <div className="mt-4">
+            <div className="text-xs text-gray-400 mb-2">Status sesiune</div>
+            <div className="flex flex-wrap gap-1.5">
+              {(['draft','active','focus','completed'] as const).map(sv => (
+                <button key={sv} onClick={()=>onStatusChange(sess.id, sv)}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all border-2 ${sess.status===sv ? 'text-white border-transparent' : 'bg-white hover:opacity-90'}`}
+                  style={sess.status===sv
+                    ? {background: statusMap[sv].color, borderColor: statusMap[sv].color}
+                    : {borderColor: statusMap[sv].color+'60', color: statusMap[sv].color}}>
+                  {sess.status===sv && '✓ '}{statusMap[sv].label}
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -390,8 +395,20 @@ export default function SessionDetailPage() {
   }
 
   async function updateStatus(sid: string, status: string) {
+    // Dialog pentru Finalizata
+    if (status === 'completed') {
+      const confirmed = window.confirm(
+        'Ești sigur că sesiunea este finalizată?\n\n' +
+        '• Cursanții nu mai pot accesa portalul\n' +
+        '• Absenții pot fi alocați la alte sesiuni\n\n' +
+        'Poți reveni oricând la alt status.'
+      )
+      if (!confirmed) return
+    }
     await supabase.from('sessions').update({status}).eq('id', sid)
     setSessions(prev => prev.map(s => s.id===sid ? {...s,status} : s))
+    // Actualizeaza si mainSession daca e cazul
+    if (sid === mainSession?.id) setMainSession(prev => prev ? {...prev, status} : prev)
   }
 
   async function load() {
