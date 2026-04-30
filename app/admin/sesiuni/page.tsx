@@ -12,6 +12,7 @@ const statusMap: Record<string, { label: string; color: string }> = {
 
 export default function SesiuniPage() {
   const [sessions, setSessions] = useState<any[]>([])
+  const [studentCounts, setStudentCounts] = useState<Record<string,{total:number,absenti:number}>>({})
   const [refs, setRefs] = useState({ locations: [], boats: [], evaluators: [], instructors: [] } as any)
   const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState<string | null>(null)
@@ -21,13 +22,23 @@ export default function SesiuniPage() {
 
   async function load() {
     const [{ data: s }, loc, boat, ev, instr] = await Promise.all([
-      supabase.from('sessions').select('*, locations(name, county), evaluators(full_name), instructors(full_name), boats(name)').eq('session_type', 'principal').order('session_date', { ascending: false }),
+      supabase.from('sessions').select('*, locations(name, county), evaluators(full_name), instructors(full_name), boats(name)').order('session_date', { ascending: false }).order('created_at', { ascending: true }),
       supabase.from('locations').select('*').order('name'),
       supabase.from('boats').select('*').order('name'),
       supabase.from('evaluators').select('*').order('full_name'),
       supabase.from('instructors').select('*').order('full_name'),
     ])
-    setSessions(s || [])
+    const allSess = s || []
+    setSessions(allSess)
+    // Fetch student counts per session
+    const { data: allStudents } = await supabase.from('students').select('session_id, portal_status')
+    const counts: Record<string, {total:number, absenti:number}> = {}
+    for (const st of (allStudents||[])) {
+      if (!counts[st.session_id]) counts[st.session_id] = {total:0, absenti:0}
+      counts[st.session_id].total++
+      if (st.portal_status === 'absent') counts[st.session_id].absenti++
+    }
+    setStudentCounts(counts)
     setRefs({ locations: loc.data || [], boats: boat.data || [], evaluators: ev.data || [], instructors: instr.data || [] })
     setLoading(false)
   }
@@ -109,13 +120,24 @@ export default function SesiuniPage() {
           <Link href="/admin/sesiuni/nou" className="text-blue-600 hover:underline text-sm">Creează prima sesiune →</Link>
         </div>
       ) : (
-        <div className="space-y-3">
-          {sessions.map((s: any) => {
+        <div className="space-y-4">
+          {/* Tree view - grupam sesiunile principale cu clonele si absentii lor */}
+          {sessions.filter((s: any) => s.session_type === 'principal').map((principal: any) => {
+            const clones = sessions.filter((s: any) => s.session_type === 'clone' && s.parent_session_id === principal.id)
+            const absentSess = sessions.find((s: any) => s.session_type === 'absent' && s.parent_session_id === principal.id)
+            const principalCount = studentCounts[principal.id] || {total:0, absenti:0}
+            const cloneCounts = clones.map((c: any) => studentCounts[c.id] || {total:0, absenti:0})
+            const absentCount = absentSess ? (studentCounts[absentSess.id] || {total:0, absenti:0}) : null
+            const totalAll = principalCount.total + cloneCounts.reduce((sum: number, c: any) => sum + c.total, 0)
+
+            const s = principal
             const st = statusMap[s.status] || statusMap.draft
             const isEditing = editingId === s.id
 
             return (
-              <div key={s.id} className={`bg-white rounded-xl shadow-sm border transition-colors ${isEditing ? 'border-blue-200' : 'border-gray-100'}`}>
+              <div key={s.id} className="space-y-0">
+                {/* SESIUNEA PRINCIPALA */}
+                <div className={`bg-white rounded-xl shadow-sm border transition-colors ${isEditing ? 'border-blue-200' : 'border-gray-100'}`}>
                 {isEditing ? (
                   /* Edit mode */
                   <div className="p-5">
@@ -273,6 +295,69 @@ export default function SesiuniPage() {
                     </div>
                   </div>
                 )}
+              </div>
+                {/* CLONE */}
+                {clones.map((clone: any, ci: number) => {
+                  const cloneCount = cloneCounts[ci] || {total:0, absenti:0}
+                  const cloneSt = statusMap[clone.status] || statusMap.draft
+                  return (
+                    <div key={clone.id} className="ml-6 flex gap-0">
+                      <div className="flex flex-col items-center mr-2 pt-4">
+                        <div className="w-px h-4 bg-blue-200"/>
+                        <div className="w-3 h-px bg-blue-200"/>
+                      </div>
+                      <div className="flex-1 bg-white rounded-xl shadow-sm border border-blue-100 mb-1">
+                        <div className="p-3 flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-0.5">
+                              <span className="text-xs text-blue-400 font-medium">⎇ Clonă</span>
+                              <span className="font-medium text-gray-800 text-sm">
+                                {new Date(clone.session_date).toLocaleDateString('ro-RO', {day:'2-digit',month:'long',year:'numeric'})}
+                              </span>
+                              <span className="px-2 py-0.5 rounded-full text-xs font-medium" style={{background:cloneSt.color+'15',color:cloneSt.color}}>{cloneSt.label}</span>
+                              <span className="text-xs text-gray-400">
+                                Clasa {clone.class_caa.replace(',','+')} · {cloneCount.total} cursanți
+                              </span>
+                            </div>
+                            <div className="text-xs text-gray-400 flex gap-3">
+                              <span>📍 {clone.locations?.name}</span>
+                              <span>⛵ {clone.boats?.name||'—'}</span>
+                              <span>👤 {clone.instructors?.full_name||'—'}</span>
+                            </div>
+                          </div>
+                          <Link href={`/admin/sesiuni/${principal.id}`}
+                            className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-400 hover:text-gray-700 transition-colors">
+                            <ExternalLink size={13}/>
+                          </Link>
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+                {/* ABSENTI */}
+                {absentCount && absentCount.total > 0 && (
+                  <div className="ml-6 flex gap-0">
+                    <div className="flex flex-col items-center mr-2 pt-4">
+                      <div className="w-px h-4 bg-red-200"/>
+                      <div className="w-3 h-px bg-red-200"/>
+                    </div>
+                    <div className="flex-1 bg-red-50 rounded-xl border border-red-100 mb-1">
+                      <div className="p-3 flex items-center gap-3">
+                        <span className="text-xs text-red-500 font-medium">⚠ Absenți</span>
+                        <span className="text-xs text-red-600 font-semibold">{absentCount.total} cursanți</span>
+                        <span className="text-xs text-red-400">în așteptare pentru reprogramare</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+                {/* INFO TOTAL */}
+                <div className="ml-6 mb-2">
+                  <span className="text-xs text-gray-400">
+                    Total: <strong>{totalAll}</strong> cursanți
+                    {clones.length > 0 && <> · {clones.length + 1} liste ({1 + clones.length})</>}
+                    {absentCount && absentCount.total > 0 && <> · <span className="text-red-500">{absentCount.total} absenți</span></>}
+                  </span>
+                </div>
               </div>
             )
           })}
