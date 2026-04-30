@@ -46,15 +46,26 @@ export default function AdminDashboard() {
     })
     setAllSessions(enriched)
 
-    // Absenti: cursanti din sesiunile de tip 'absent' + date allocated_session
+    // Absenti: cursanti cu original_session_id pointing la sesiune absent
+    // si sesiunea lor curenta nu e finalizata cu ei pe lista
     const absentSessIds = enriched.filter((s:any) => s.session_type === 'absent').map((s:any) => s.id)
+    const completedSessIds = enriched.filter((s:any) => s.status === 'completed').map((s:any) => s.id)
+
     if (absentSessIds.length > 0) {
-      const { data: absSts } = await supabase
-        .from('students')
-        .select('*')
+      // Cursanti inca pe sesiunile absent (nelocati inca)
+      const { data: stillAbsent } = await supabase
+        .from('students').select('*')
         .in('session_id', absentSessIds)
         .order('full_name')
-      setAbsentStudents(absSts || [])
+      // Cursanti alocati dar sesiunea tinta nu e completata
+      const { data: allocated } = await supabase
+        .from('students').select('*')
+        .in('original_session_id', absentSessIds)
+        .not('session_id', 'in', `(${absentSessIds.join(',')})`)
+        .order('full_name')
+      // Filtreaza cei deja pe sesiuni completate
+      const allocatedPending = (allocated || []).filter((s:any) => !completedSessIds.includes(s.session_id))
+      setAbsentStudents([...(stillAbsent || []), ...allocatedPending])
     } else {
       setAbsentStudents([])
     }
@@ -70,8 +81,19 @@ export default function AdminDashboard() {
 
   async function allocateToSession(student: any, targetSessionId: string) {
     setMoving(student.id); setMoveMenuId(null)
-    await supabase.from('students').update({ allocated_session_id: targetSessionId }).eq('id', student.id)
-    setAbsentStudents(prev => prev.map(s => s.id === student.id ? {...s, allocated_session_id: targetSessionId} : s))
+    // Calculeaza ordinea in sesiunea tinta
+    const { data: targetSts } = await supabase.from('students').select('order_in_session').eq('session_id', targetSessionId).order('order_in_session', {ascending: false}).limit(1)
+    const maxOrder = targetSts?.[0]?.order_in_session || 0
+    // Muta fizic cursantul in sesiunea tinta, pastreaza original_session_id ca referinta la absent
+    await supabase.from('students').update({
+      session_id: targetSessionId,
+      allocated_session_id: targetSessionId,
+      original_session_id: student.session_id, // sesiunea absent de origine
+      portal_status: student.portal_status === 'absent' ? 'pending' : student.portal_status,
+      order_in_session: maxOrder + 1
+    }).eq('id', student.id)
+    // Scoate din lista de absenti
+    setAbsentStudents(prev => prev.filter(s => s.id !== student.id))
     setMoving(null)
   }
 
@@ -90,7 +112,9 @@ export default function AdminDashboard() {
   // Grupam absentii pe sesiunile lor de origine (sesiunea absent parent)
   const absentBySession: Record<string, { sess: any, students: any[] }> = {}
   for (const st of absentStudents) {
-    const absSess = allSessions.find((s:any) => s.id === st.session_id)
+    // Gasim sesiunea absent de origine
+    const origSessId = st.original_session_id || st.session_id
+    const absSess = allSessions.find((s:any) => s.id === origSessId)
     if (!absSess) continue
     const parentId = absSess.parent_session_id || absSess.id
     if (!absentBySession[parentId]) {
@@ -252,11 +276,14 @@ export default function AdminDashboard() {
                       <div key={st.id} className="flex items-center justify-between bg-red-50 rounded-lg px-3 py-2">
                         <div>
                           <span className="text-sm font-medium text-gray-900">{st.full_name}</span>
-                          {allocSess && (
-                            <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
-                              → Alocat: {new Date(allocSess.session_date).toLocaleDateString('ro-RO',{day:'2-digit',month:'short',year:'numeric'})} · {allocSess.locations?.name}
-                            </span>
-                          )}
+                          {st.allocated_session_id && st.session_id !== (allSessions.find((s:any)=>s.session_type==='absent'&&s.id===st.session_id)?.id) && (() => {
+                            const allocSess = allSessions.find((s:any) => s.id === st.session_id)
+                            return allocSess ? (
+                              <span className="ml-2 text-xs px-2 py-0.5 rounded-full bg-amber-100 text-amber-700">
+                                → Alocat: {new Date(allocSess.session_date).toLocaleDateString('ro-RO',{day:'2-digit',month:'short',year:'numeric'})} · {allocSess.locations?.name}
+                              </span>
+                            ) : null
+                          })()}
                         </div>
                         <div className="relative" onClick={e=>e.stopPropagation()}>
                           <button
