@@ -190,7 +190,7 @@ export async function POST(req: NextRequest) {
           new TableCell({ borders, width: { size: colW[1], type: WidthType.DXA }, margins: cellM, children: [new Paragraph({ children: [new TextRun({ text: nume, size: 22 })] })] }),
           new TableCell({ borders, width: { size: colW[2], type: WidthType.DXA }, margins: cellM, children: [new Paragraph({ children: [new TextRun({ text: prenume, size: 22 })] })] }),
           new TableCell({ borders, width: { size: colW[3], type: WidthType.DXA }, margins: cellM, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: s.cnp || '', size: 22 })] })] }),
-          new TableCell({ borders, width: { size: colW[4], type: WidthType.DXA }, margins: cellM, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: s.class_caa || clasaCAA, size: 22 })] })] }),
+          new TableCell({ borders, width: { size: colW[4], type: WidthType.DXA }, margins: cellM, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: (s.class_caa || clasaCAA).replace(',', '+'), size: 22 })] })] }),
           new TableCell({ borders, width: { size: colW[5], type: WidthType.DXA }, margins: cellM, children: [new Paragraph({ children: [new TextRun({ text: '', size: 22 })] })] }),
           new TableCell({ borders, width: { size: colW[6], type: WidthType.DXA }, margins: cellM, children: [new Paragraph({ children: [new TextRun({ text: '', size: 22 })] })] }),
           new TableCell({ borders, width: { size: colW[7], type: WidthType.DXA }, margins: cellM, children: [new Paragraph({ children: [new TextRun({ text: '', size: 22 })] })] }),
@@ -293,7 +293,7 @@ export async function POST(req: NextRequest) {
       alignment: AlignmentType.BOTH,
       children: [
         new TextRun({ text: 'Având în vedere prevederile ,,', size: 22 }),
-        new TextRun({ text: 'Regulamentului privind cerințele minime de prătire, precum și condițiile de obținere a certificatelor internaționale de conducător de ambarcațiune de agrement', italics: true, size: 22 }),
+        new TextRun({ text: 'Regulamentului privind cerințele minime de pregătire, precum și condițiile de obținere a certificatelor internaționale de conducător de ambarcațiune de agrement', italics: true, size: 22 }),
         new TextRun({ text: '" aprobat prin Ordinul M.T. nr. 527/2016 cu modificările și completările în vigoare și ', size: 22 }),
       ]
     }),

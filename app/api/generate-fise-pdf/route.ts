@@ -98,7 +98,7 @@ export async function POST(req: NextRequest) {
 
       <table style="width:100%;border-collapse:collapse;margin-bottom:6px;">
         <tr>
-          <td style="padding:2px 0;width:50%;"><b>CLASA:</b> ${s.class_caa || session.class_caa}</td>
+          <td style="padding:2px 0;width:50%;"><b>CLASA:</b> ${(s.class_caa || session.class_caa || '').replace(',', '+')}</td>
           <td style="padding:2px 0;"><b>Perioada:</b> ${sessionDate}</td>
         </tr>
         <tr>

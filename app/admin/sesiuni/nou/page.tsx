@@ -112,7 +112,7 @@ export default function NouaSesiunePage() {
               onChange={e => {
                 const locId = e.target.value
                 const loc = refs.locations.find((l: any) => l.id === locId)
-                const defaultDetail = loc ? loc.name + ', jud. ' + loc.county : ''
+                const defaultDetail = loc ? (loc.county ? loc.name + ', jud. ' + loc.county : loc.name) : ''
                 setForm(f => ({ ...f, location_id: locId, location_detail: defaultDetail }))
               }}>
               <option value="">— Selectează —</option>

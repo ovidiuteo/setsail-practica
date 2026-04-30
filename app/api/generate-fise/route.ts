@@ -120,7 +120,7 @@ export async function POST(req: NextRequest) {
         spacing: { after: 80 },
         children: [
           new TextRun({ text: 'CLASA:  ', bold: true, size: 24 }),
-          new TextRun({ text: s.class_caa || session.class_caa || '___________', bold: true, size: 24 }),
+          new TextRun({ text: (s.class_caa || session.class_caa || '').replace(',', '+') || '___________', bold: true, size: 24 }),
         ]
       }),
       new Paragraph({
