@@ -5,7 +5,8 @@ import Link from 'next/link'
 import { Plus, Copy, ExternalLink, Trash2, Pencil, Check, X } from 'lucide-react'
 
 const statusMap: Record<string, { label: string; color: string }> = {
-  draft: { label: 'Ciornă', color: '#6b7280' },
+  draft:     { label: 'Ciornă',     color: '#6b7280' },
+  focus:     { label: 'Focus',      color: '#7c3aed' },
   active: { label: 'Activă', color: '#d97706' },
   completed: { label: 'Finalizată', color: '#059669' },
 }
