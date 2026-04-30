@@ -35,7 +35,7 @@ export async function POST(req: NextRequest) {
   const {
     Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
     AlignmentType, BorderStyle, WidthType, ShadingType, ImageRun,
-    TabStopType, PageNumber, Footer, Header
+    TabStopType, PageNumber, Footer, Header, convertMillimetersToTwip
   } = await import('docx')
 
   // Rezolva capitania bazata pe locatie (#...# logic)
@@ -348,9 +348,31 @@ export async function POST(req: NextRequest) {
       properties: {
         page: {
           size: { width: 11906, height: 16838 },
-          margin: { top: 284, right: 720, bottom: 720, left: 1080 }
+          margin: { top: 284, right: 720, bottom: fl1 ? 1200 : 720, left: 1080 }
         }
       },
+      footers: fl1 ? {
+        default: new Footer({
+          children: [
+            new Paragraph({
+              border: { top: { style: BorderStyle.SINGLE, size: 6, color: '888888', space: 4 } },
+              alignment: AlignmentType.CENTER,
+              spacing: { before: 0, after: 40 },
+              children: [new TextRun({ text: fl1, size: 14, color: '444444' })]
+            }),
+            new Paragraph({
+              alignment: AlignmentType.CENTER,
+              spacing: { after: 40 },
+              children: [new TextRun({ text: fl2, size: 14, color: '444444' })]
+            }),
+            new Paragraph({
+              alignment: AlignmentType.CENTER,
+              spacing: { after: 0 },
+              children: [new TextRun({ text: fl3, size: 14, color: '444444' })]
+            }),
+          ]
+        })
+      } : undefined,
       children,
     }]
   })
