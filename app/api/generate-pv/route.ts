@@ -92,9 +92,7 @@ export async function POST(req: NextRequest) {
               type: 'png',
               transformation: { width: 663, height: 107 },
             }),
-            new TextRun({ text: '\t\t\t\tAnexa 12', size: 18 }),
           ],
-          tabStops: [{ type: TabStopType.RIGHT, position: CONTENT_W }],
         })
       ]
     }
@@ -108,8 +106,7 @@ export async function POST(req: NextRequest) {
         tabStops: [{ type: TabStopType.RIGHT, position: CONTENT_W }],
         children: [
           new TextRun({ text: 'CĂPITĂNIA PORT SNAGOV', bold: true, size: 20 }),
-          new TextRun({ text: '\t', size: 18 }),
-          new TextRun({ text: 'Anexa 12', size: 18 }),
+
         ]
       }),
     ]
@@ -121,23 +118,23 @@ export async function POST(req: NextRequest) {
       tableHeader: true,
       children: [
         new TableCell({ borders, width: { size: colW[0], type: WidthType.DXA }, margins: cellM, shading: { fill: 'D0D0D0', type: ShadingType.CLEAR }, verticalMerge: 'restart' as any,
-          children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Nr.', bold: true, size: 16 })] }),
-                     new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'crt.', bold: true, size: 16 })] })] }),
+          children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Nr.', bold: true, size: 22 })] }),
+                     new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'crt.', bold: true, size: 22 })] })] }),
         new TableCell({ borders, width: { size: colW[1], type: WidthType.DXA }, margins: cellM, shading: { fill: 'D0D0D0', type: ShadingType.CLEAR },
-          children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Nume', bold: true, size: 16 })] })] }),
+          children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Nume', bold: true, size: 22 })] })] }),
         new TableCell({ borders, width: { size: colW[2], type: WidthType.DXA }, margins: cellM, shading: { fill: 'D0D0D0', type: ShadingType.CLEAR },
-          children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Prenume', bold: true, size: 16 })] })] }),
+          children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Prenume', bold: true, size: 22 })] })] }),
         new TableCell({ borders, width: { size: colW[3], type: WidthType.DXA }, margins: cellM, shading: { fill: 'D0D0D0', type: ShadingType.CLEAR },
-          children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'CNP', bold: true, size: 16 })] })] }),
+          children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'CNP', bold: true, size: 22 })] })] }),
         new TableCell({ borders, width: { size: colW[4], type: WidthType.DXA }, margins: cellM, shading: { fill: 'D0D0D0', type: ShadingType.CLEAR },
-          children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Clasa', bold: true, size: 16 })] }),
-                     new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'CAA', bold: true, size: 16 })] })] }),
+          children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Clasa', bold: true, size: 22 })] }),
+                     new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'CAA', bold: true, size: 22 })] })] }),
         new TableCell({ borders, width: { size: colW[5], type: WidthType.DXA }, margins: cellM, shading: { fill: 'D0D0D0', type: ShadingType.CLEAR },
-          children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Admis', bold: true, size: 16 })] })] }),
+          children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Admis', bold: true, size: 22 })] })] }),
         new TableCell({ borders, width: { size: colW[6], type: WidthType.DXA }, margins: cellM, shading: { fill: 'D0D0D0', type: ShadingType.CLEAR },
-          children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Respins', bold: true, size: 16 })] })] }),
+          children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Respins', bold: true, size: 22 })] })] }),
         new TableCell({ borders, width: { size: colW[7], type: WidthType.DXA }, margins: cellM, shading: { fill: 'D0D0D0', type: ShadingType.CLEAR },
-          children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Absent', bold: true, size: 16 })] })] }),
+          children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Absent', bold: true, size: 22 })] })] }),
       ]
     })
 
@@ -153,14 +150,14 @@ export async function POST(req: NextRequest) {
       return new TableRow({
         height: { value: 400, rule: 'atLeast' as any },
         children: [
-          new TableCell({ borders, width: { size: colW[0], type: WidthType.DXA }, margins: cellM, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: String(s.order_in_session || idx + 1), size: 16 })] })] }),
-          new TableCell({ borders, width: { size: colW[1], type: WidthType.DXA }, margins: cellM, children: [new Paragraph({ children: [new TextRun({ text: nume, size: 16 })] })] }),
-          new TableCell({ borders, width: { size: colW[2], type: WidthType.DXA }, margins: cellM, children: [new Paragraph({ children: [new TextRun({ text: prenume, size: 16 })] })] }),
-          new TableCell({ borders, width: { size: colW[3], type: WidthType.DXA }, margins: cellM, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: s.cnp || '', size: 16 })] })] }),
-          new TableCell({ borders, width: { size: colW[4], type: WidthType.DXA }, margins: cellM, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: s.class_caa || clasaCAA, size: 16 })] })] }),
-          new TableCell({ borders, width: { size: colW[5], type: WidthType.DXA }, margins: cellM, children: [new Paragraph({ children: [new TextRun({ text: '', size: 16 })] })] }),
-          new TableCell({ borders, width: { size: colW[6], type: WidthType.DXA }, margins: cellM, children: [new Paragraph({ children: [new TextRun({ text: '', size: 16 })] })] }),
-          new TableCell({ borders, width: { size: colW[7], type: WidthType.DXA }, margins: cellM, children: [new Paragraph({ children: [new TextRun({ text: '', size: 16 })] })] }),
+          new TableCell({ borders, width: { size: colW[0], type: WidthType.DXA }, margins: cellM, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: String(s.order_in_session || idx + 1), size: 22 })] })] }),
+          new TableCell({ borders, width: { size: colW[1], type: WidthType.DXA }, margins: cellM, children: [new Paragraph({ children: [new TextRun({ text: nume, size: 22 })] })] }),
+          new TableCell({ borders, width: { size: colW[2], type: WidthType.DXA }, margins: cellM, children: [new Paragraph({ children: [new TextRun({ text: prenume, size: 22 })] })] }),
+          new TableCell({ borders, width: { size: colW[3], type: WidthType.DXA }, margins: cellM, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: s.cnp || '', size: 22 })] })] }),
+          new TableCell({ borders, width: { size: colW[4], type: WidthType.DXA }, margins: cellM, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: s.class_caa || clasaCAA, size: 22 })] })] }),
+          new TableCell({ borders, width: { size: colW[5], type: WidthType.DXA }, margins: cellM, children: [new Paragraph({ children: [new TextRun({ text: '', size: 22 })] })] }),
+          new TableCell({ borders, width: { size: colW[6], type: WidthType.DXA }, margins: cellM, children: [new Paragraph({ children: [new TextRun({ text: '', size: 22 })] })] }),
+          new TableCell({ borders, width: { size: colW[7], type: WidthType.DXA }, margins: cellM, children: [new Paragraph({ children: [new TextRun({ text: '', size: 22 })] })] }),
         ]
       })
     })
@@ -180,32 +177,32 @@ export async function POST(req: NextRequest) {
       rows: [
         new TableRow({ children: [
           new TableCell({ borders: noBorders, width: { size: 4500, type: WidthType.DXA }, margins: cellM,
-            children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Evaluator/Examinator', bold: true, size: 18 })] })] }),
+            children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Evaluator/Examinator', bold: true, size: 20 })] })] }),
           new TableCell({ borders: noBorders, width: { size: 1106, type: WidthType.DXA }, margins: cellM,
             children: [new Paragraph({ children: [] })] }),
           new TableCell({ borders: noBorders, width: { size: 4500, type: WidthType.DXA }, margins: cellM,
-            children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Reprezentant furnizor/instructor', bold: true, size: 18 })] })] }),
+            children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Reprezentant furnizor/instructor', bold: true, size: 20 })] })] }),
         ]}),
         new TableRow({ children: [
           new TableCell({ borders: noBorders, width: { size: 4500, type: WidthType.DXA }, margins: cellM,
             children: [
-              new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: evaluatorNume, bold: true, size: 18 })] }),
+              new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: evaluatorNume, bold: true, size: 20 })] }),
               new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: evaluatorFunctie, size: 16 })] }),
             ] }),
           new TableCell({ borders: noBorders, width: { size: 1106, type: WidthType.DXA }, margins: cellM,
             children: [new Paragraph({ children: [] })] }),
           new TableCell({ borders: noBorders, width: { size: 4500, type: WidthType.DXA }, margins: cellM,
             children: [
-              new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: instructor, bold: true, size: 18 })] }),
+              new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: instructor, bold: true, size: 20 })] }),
               new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: '(Nume, prenume)', size: 16 })] }),
             ] }),
         ]}),
         new TableRow({ children: [
           new TableCell({ borders: noBorders, width: { size: 4500, type: WidthType.DXA }, margins: { top: 400, bottom: 80, left: 100, right: 100 },
-            children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: '............................  ...........................', size: 18 })] })] }),
+            children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: '............................  ...........................', size: 20 })] })] }),
           new TableCell({ borders: noBorders, width: { size: 1106, type: WidthType.DXA }, margins: cellM, children: [new Paragraph({ children: [] })] }),
           new TableCell({ borders: noBorders, width: { size: 4500, type: WidthType.DXA }, margins: { top: 400, bottom: 80, left: 100, right: 100 },
-            children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: '............................  ...........................', size: 18 })] })] }),
+            children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: '............................  ...........................', size: 20 })] })] }),
         ]}),
         new TableRow({ children: [
           new TableCell({ borders: noBorders, width: { size: 4500, type: WidthType.DXA }, margins: cellM,
@@ -225,7 +222,7 @@ export async function POST(req: NextRequest) {
     // Nr. inregistrare
     new Paragraph({
       spacing: { before: 120, after: 200 },
-      children: [new TextRun({ text: 'Nr. ........... / .....................', size: 18 })]
+      children: [new TextRun({ text: 'Nr. ........... / .....................', size: 20 })]
     }),
 
     // Titlu
@@ -241,15 +238,15 @@ export async function POST(req: NextRequest) {
       indent: { firstLine: 720 },
       alignment: AlignmentType.BOTH,
       children: [
-        new TextRun({ text: 'Subsemnatul ', size: 18 }),
-        new TextRun({ text: evaluatorNume, bold: true, size: 18 }),
-        new TextRun({ text: ', cu funcția ', size: 18 }),
-        new TextRun({ text: evaluatorFunctie, bold: true, size: 18 }),
-        new TextRun({ text: ', din cadrul ', size: 18 }),
-        new TextRun({ text: capitania, bold: true, size: 18 }),
-        new TextRun({ text: ', desemnat prin Decizia Directorului General al Autorității Navale Române nr. ', size: 18 }),
-        new TextRun({ text: decizieANR, bold: true, size: 18 }),
-        new TextRun({ text: ' în calitate de evaluator la examenele practice a cursurilor aprobate organizate de furnizorii de educație, formare profesională sau de perfecționare pentru obținerea certificatelor internaționale de conducător de ambarcațiune de agrement,', size: 18 }),
+        new TextRun({ text: 'Subsemnatul ', size: 22 }),
+        new TextRun({ text: evaluatorNume, bold: true, size: 22 }),
+        new TextRun({ text: ', cu funcția ', size: 22 }),
+        new TextRun({ text: evaluatorFunctie, bold: true, size: 22 }),
+        new TextRun({ text: ', din cadrul ', size: 22 }),
+        new TextRun({ text: capitania, bold: true, size: 22 }),
+        new TextRun({ text: ', desemnat prin Decizia Directorului General al Autorității Navale Române nr. ', size: 22 }),
+        new TextRun({ text: decizieANR, bold: true, size: 22 }),
+        new TextRun({ text: ' în calitate de evaluator la examenele practice a cursurilor aprobate organizate de furnizorii de educație, formare profesională sau de perfecționare pentru obținerea certificatelor internaționale de conducător de ambarcațiune de agrement,', size: 22 }),
       ]
     }),
 
@@ -259,9 +256,9 @@ export async function POST(req: NextRequest) {
       indent: { firstLine: 720 },
       alignment: AlignmentType.BOTH,
       children: [
-        new TextRun({ text: 'Având în vedere prevederile ,,', size: 18 }),
-        new TextRun({ text: 'Regulamentului privind cerințele minime de prătire, precum și condițiile de obținere a certificatelor internaționale de conducător de ambarcațiune de agrement', italics: true, size: 18 }),
-        new TextRun({ text: '" aprobat prin Ordinul M.T. nr. 527/2016 cu modificările și completările în vigoare și ', size: 18 }),
+        new TextRun({ text: 'Având în vedere prevederile ,,', size: 22 }),
+        new TextRun({ text: 'Regulamentului privind cerințele minime de prătire, precum și condițiile de obținere a certificatelor internaționale de conducător de ambarcațiune de agrement', italics: true, size: 22 }),
+        new TextRun({ text: '" aprobat prin Ordinul M.T. nr. 527/2016 cu modificările și completările în vigoare și ', size: 22 }),
       ]
     }),
 
@@ -271,19 +268,19 @@ export async function POST(req: NextRequest) {
       indent: { firstLine: 720 },
       alignment: AlignmentType.BOTH,
       children: [
-        new TextRun({ text: 'În  baza solicitării furnizorului ', size: 18 }),
-        new TextRun({ text: 'S.C. SET SAIL ADVERTISING SRL', bold: true, size: 18 }),
-        new TextRun({ text: '  nr. ', size: 18 }),
-        new TextRun({ text: nrSolicitare, bold: true, size: 18 }),
-        new TextRun({ text: ', s-a desfășurat în locația ', size: 18 }),
-        new TextRun({ text: locatieDetaliata, bold: true, size: 18 }),
-        new TextRun({ text: ', cu ambarcațiunea nr. ', size: 18 }),
-        new TextRun({ text: barcaInmatriculare, bold: true, size: 18 }),
-        new TextRun({ text: ' ', size: 18 }),
-        new TextRun({ text: barcaNume, bold: true, size: 18 }),
-        new TextRun({ text: ', în prezența instructorului ', size: 18 }),
-        new TextRun({ text: instructor, bold: true, size: 18 }),
-        new TextRun({ text: ',  evaluarea/examinarea cunoștintelor practice ale candidaților enumerați mai jos, iar în baza fișei individuale de verificare a aptitudinilor am constatat următoarele:', size: 18 }),
+        new TextRun({ text: 'În  baza solicitării furnizorului ', size: 22 }),
+        new TextRun({ text: 'S.C. SET SAIL ADVERTISING SRL', bold: true, size: 22 }),
+        new TextRun({ text: '  nr. ', size: 22 }),
+        new TextRun({ text: nrSolicitare, bold: true, size: 22 }),
+        new TextRun({ text: ', s-a desfășurat în locația ', size: 22 }),
+        new TextRun({ text: locatieDetaliata, bold: true, size: 22 }),
+        new TextRun({ text: ', cu ambarcațiunea nr. ', size: 22 }),
+        new TextRun({ text: barcaInmatriculare, bold: true, size: 22 }),
+        new TextRun({ text: ' ', size: 22 }),
+        new TextRun({ text: barcaNume, bold: true, size: 22 }),
+        new TextRun({ text: ', în prezența instructorului ', size: 22 }),
+        new TextRun({ text: instructor, bold: true, size: 22 }),
+        new TextRun({ text: ',  evaluarea/examinarea cunoștintelor practice ale candidaților enumerați mai jos, iar în baza fișei individuale de verificare a aptitudinilor am constatat următoarele:', size: 22 }),
       ]
     }),
 
@@ -295,7 +292,7 @@ export async function POST(req: NextRequest) {
       spacing: { before: 300, after: 300 },
       alignment: AlignmentType.BOTH,
       children: [
-        new TextRun({ text: '\tDrept pentru care am încheiat prezentul proces-verbal  în două exemplare, un exemplar a fost înaintat furnizorului de educație, formare profesională sau de perfecționare în vederea emiterii certificatelor de absolvire curs după caz.', size: 18 }),
+        new TextRun({ text: '\tDrept pentru care am încheiat prezentul proces-verbal  în două exemplare, un exemplar a fost înaintat furnizorului de educație, formare profesională sau de perfecționare în vederea emiterii certificatelor de absolvire curs după caz.', size: 22 }),
       ]
     }),
 
