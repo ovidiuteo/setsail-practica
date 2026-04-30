@@ -53,7 +53,17 @@ export async function POST(req: NextRequest) {
     },
   ]
 
+  const footerLine1: string = (session.locations as any)?.footer_line1 || ''
+  const footerLine2: string = (session.locations as any)?.footer_line2 || ''
+  const footerLine3: string = (session.locations as any)?.footer_line3 || ''
+  const hasFooter: boolean = !!(footerLine1 || footerLine2 || footerLine3)
+
   // Build HTML for all pages
+  function footerHtml(): string {
+    if (!hasFooter) return ""
+    return `<div style="text-align:center;margin-top:12px;padding-top:6px;border-top:0.5px solid #ccc;"><div style="font-size:8pt;color:#444;">${footerLine1}</div><div style="font-size:8pt;color:#444;">${footerLine2}</div><div style="font-size:8pt;font-weight:bold;color:#444;">${footerLine3}</div></div>`
+  }
+
   function studentPage(s: any, idx: number): string {
     const ciDoc = s.ci_series && s.ci_number
       ? `${s.ci_series} ${s.ci_number}`
@@ -138,7 +148,8 @@ export async function POST(req: NextRequest) {
         </tr>
       </table>
 
-      <div style="text-align:center;font-size:12pt;color:#666;margin-top:8px;">
+      ${footerHtml()}
+      <div style="text-align:center;font-size:6pt;color:#aaa;margin-top:4px;">
         SetSail Advertising SRL — ${session.locations?.name || ''} — ${sessionDate} — ${idx + 1}/${students.length}
       </div>
     </div>`
