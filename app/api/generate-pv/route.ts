@@ -76,8 +76,43 @@ export async function POST(req: NextRequest) {
   // Latime pagina A4: 11906 - 1080(stg) - 720(dr) = 10106 DXA
   const CONTENT_W = 10106
 
-  // Coloane tabel cursanti: Nr | Nume | Prenume | CNP | Clasa | Admis | Respins | Absent
-  const colW = [400, 1600, 3106, 2000, 650, 750, 750, 750]
+  // Coloane fixe
+  const COL_NR   = 320
+  const COL_CNP  = 2000
+  const COL_CLASA = 650
+  const COL_ADMIS = 750
+  const COL_RESP  = 750
+  const COL_ABS   = 750
+  const FIXED_TOTAL = COL_NR + COL_CNP + COL_CLASA + COL_ADMIS + COL_RESP + COL_ABS // 5220
+  const NAME_TOTAL = CONTENT_W - FIXED_TOTAL // 4786 DXA pentru Nume + Prenume
+
+  // Calculeaza latimea coloanei Nume bazat pe cel mai lung cuvant unic din lista
+  // Un cuvant DXA aprox: 1 caracter ~ 115 DXA la 11pt
+  const CHAR_WIDTH = 115
+  const CELL_PADDING = 200 // padding stanga+dreapta
+
+  function calcNumeWidth(students: any[]): number {
+    let maxSingleWordLen = 0
+    for (const s of students) {
+      const parts = (s.full_name || '').trim().split(' ')
+      // Primul cuvant = numele de familie
+      const numeLen = (parts[0] || '').length
+      // Daca sunt doua cuvinte si primul e mai scurt decat al doilea, comparam
+      const secondLen = parts.length > 1 ? parts[1].length : 0
+      // Numele preia dimensiunea celui mai lung cuvant UNIC (un singur cuvant)
+      const maxForThis = Math.max(numeLen, secondLen)
+      if (maxForThis > maxSingleWordLen) maxSingleWordLen = maxForThis
+    }
+    const numeW = Math.min(
+      Math.max(maxSingleWordLen * CHAR_WIDTH + CELL_PADDING, 1200), // minim 1200
+      NAME_TOTAL - 1200 // lasa cel putin 1200 pentru prenume
+    )
+    return numeW
+  }
+
+  const COL_NUME = calcNumeWidth(students)
+  const COL_PRENUME = NAME_TOTAL - COL_NUME
+  const colW = [COL_NR, COL_NUME, COL_PRENUME, COL_CNP, COL_CLASA, COL_ADMIS, COL_RESP, COL_ABS]
   // Total: 10006 ~ CONTENT_W
 
   function makeHeader(): any[] {
@@ -163,7 +198,7 @@ export async function POST(req: NextRequest) {
     })
 
     return new Table({
-      width: { size: CONTENT_W, type: WidthType.DXA },
+      width: { size: colW.reduce((a,b)=>a+b,0), type: WidthType.DXA },
       columnWidths: colW,
       rows: [headerRow, ...dataRows],
     })
