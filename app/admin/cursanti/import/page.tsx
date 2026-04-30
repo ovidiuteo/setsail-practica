@@ -34,6 +34,12 @@ export default function ImportCursantiPage() {
   const [importing, setImporting] = useState(false)
   const [done, setDone] = useState(false)
   const [importedCount, setImportedCount] = useState(0)
+  const [importReport, setImportReport] = useState<{
+    inserted: number
+    updated: number
+    unchanged: number
+    updatedFields: {name: string, fields: string[]}[]
+  } | null>(null)
   const [pasteText, setPasteText] = useState('')
   const [mode, setMode] = useState<'paste' | 'file'>('paste')
 
@@ -69,11 +75,17 @@ export default function ImportCursantiPage() {
     const lines = text.trim().split('\n').filter(l => l.trim())
     const parsed: StudentRow[] = []
 
-    // Sari headerul daca prima linie e header
+    // Sari randurile de titlu si header
     let startIdx = 0
-    if (lines[0]) {
-      const h = lines[0].toLowerCase()
-      if (h.includes('cursant') || h.includes('nr.') || (h.split('\t')[0].trim() === 'nr')) startIdx = 1
+    for (let hi = 0; hi < Math.min(3, lines.length); hi++) {
+      const hparts = lines[hi].split('\t').map(p => p.trim())
+      const h = lines[hi].toLowerCase()
+      // Header de tabel sau titlu de curs (un singur camp sau cuvinte cheie)
+      if (h.includes('cursant') || h.includes('nr.') ||
+          (hparts[0].toLowerCase() === 'nr') ||
+          (hparts.filter(p=>p).length <= 2 && !hparts[1] && hparts[0].length > 3 && !/^\d/.test(hparts[0]))) {
+        startIdx = hi + 1
+      }
     }
 
     for (let li = startIdx; li < lines.length; li++) {
@@ -83,8 +95,10 @@ export default function ImportCursantiPage() {
       const firstIsNumber = /^\d+$/.test(trimmed[0])
       const hasCNPLabel = trimmed.some(p => p.startsWith('CNP:'))
 
-      if (firstIsNumber && trimmed.length >= 3) {
-        // FORMAT 1: Nr | Cursant | CNP | DataNasterii | Email | Telefon | Adresa | Localitate | Sector/Judet | CI
+      const firstIsEmpty = trimmed[0] === ''
+
+      if ((firstIsNumber || firstIsEmpty) && trimmed.length >= 4 && trimmed[1] !== '') {
+        // FORMAT 1 (nr) sau FORMAT 2 (gol): [Nr/gol] | Cursant | CNP | DataNasterii | Email | ...
         const cursant = trimmed[1] || ''
         if (!cursant) continue
         const full_name = invertName(cursant)
@@ -146,11 +160,12 @@ export default function ImportCursantiPage() {
       for (let ri = startRow; ri < data.length; ri++) {
         const row = data[ri]
         const firstCell = String(row[0] || '').trim()
-        if (!firstCell) continue
+        // Nu sara randurile cu prima coloana goala (Format 2)
 
-        // Detectam Format 1: prima coloana e numar
-        if (/^\d+$/.test(firstCell)) {
+        // Detectam Format 1 sau 2: prima coloana e numar sau goala
+        if (/^\d+$/.test(firstCell) || firstCell === '') {
           const cursant = String(row[1] || '').trim()
+          if (!cursant) continue  // sarim randurile complet goale
           if (!cursant) continue
           const full_name = invertName(cursant)
           const cnpRaw = String(row[2] || '').replace(/\.0$/, '').trim()
@@ -212,30 +227,79 @@ export default function ImportCursantiPage() {
   async function doImport() {
     if (!selectedSession || rows.length === 0) return
     setImporting(true)
-    const { data: existing } = await supabase
-      .from('students').select('order_in_session')
+
+    // Fetch cursantii existenti din sesiune
+    const { data: existingStudents } = await supabase
+      .from('students').select('*')
       .eq('session_id', selectedSession)
-      .order('order_in_session', { ascending: false }).limit(1)
-    const maxOrder = existing?.[0]?.order_in_session || 0
+      .order('order_in_session', { ascending: false })
+    const existing = existingStudents || []
+    const maxOrder = existing[0]?.order_in_session || 0
 
-    const toInsert = rows.filter(r => r.full_name).map((r, i) => ({
-      session_id: selectedSession,
-      full_name: r.full_name,
-      cnp: r.cnp || null,
-      email: r.email || null,
-      phone: r.phone || null,
-      birth_date: r.birth_date || null,
-      ci_series: r.ci_series || null,
-      ci_number: r.ci_number || null,
-      address: r.address || null,
-      county: r.county || null,
-      class_caa: r.class_caa || defaultClass,
-      order_in_session: maxOrder + i + 1,
-      portal_status: 'pending',
-    }))
+    const report = { inserted: 0, updated: 0, unchanged: 0, updatedFields: [] as {name: string, fields: string[]}[] }
+    let orderCounter = maxOrder
 
-    const { error } = await supabase.from('students').insert(toInsert)
-    if (!error) { setImportedCount(toInsert.length); setDone(true) }
+    for (const row of rows.filter(r => r.full_name)) {
+      // Gaseste duplicate dupa nume (case-insensitive) sau email sau CNP
+      const match = existing.find(e =>
+        e.full_name?.toLowerCase() === row.full_name.toLowerCase() ||
+        (row.email && e.email?.toLowerCase() === row.email.toLowerCase()) ||
+        (row.cnp && row.cnp.length > 5 && e.cnp === row.cnp)
+      )
+
+      if (match) {
+        // Verifica ce campuri sunt in plus in import vs existente
+        const updatedF: string[] = []
+        const updateData: any = {}
+        const fields: [string, string, string][] = [
+          ['cnp', 'CNP', row.cnp],
+          ['email', 'Email', row.email],
+          ['phone', 'Telefon', row.phone],
+          ['birth_date', 'Data nașterii', row.birth_date],
+          ['address', 'Adresă', row.address],
+          ['county', 'Județ', row.county],
+          ['ci_series', 'Serie CI', row.ci_series],
+          ['ci_number', 'Nr CI', row.ci_number],
+        ]
+        for (const [key, label, newVal] of fields) {
+          if (newVal && !match[key]) {
+            updateData[key] = newVal
+            updatedF.push(label)
+          }
+        }
+        if (Object.keys(updateData).length > 0) {
+          await supabase.from('students').update(updateData).eq('id', match.id)
+          report.updated++
+          report.updatedFields.push({ name: match.full_name, fields: updatedF })
+        } else {
+          report.unchanged++
+        }
+      } else {
+        // Cursant nou - insereaza
+        orderCounter++
+        await supabase.from('students').insert({
+          session_id: selectedSession,
+          full_name: row.full_name,
+          cnp: row.cnp || null,
+          email: row.email || null,
+          phone: row.phone || null,
+          birth_date: row.birth_date || null,
+          ci_series: row.ci_series || null,
+          ci_number: row.ci_number || null,
+          address: row.address || null,
+          county: row.county || null,
+          class_caa: row.class_caa || defaultClass,
+          order_in_session: orderCounter,
+          portal_status: 'pending',
+          original_session_id: selectedSession,
+        })
+        report.inserted++
+      }
+    }
+
+    setImportReport(report)
+    setImportedCount(report.inserted)
+    setDone(true)
     setImporting(false)
   }
 
@@ -244,18 +308,52 @@ export default function ImportCursantiPage() {
 
   if (done) {
     return (
-      <div className="p-8 max-w-lg">
-        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-10 text-center">
-          <div className="w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4" style={{ background: '#d1fae5' }}>
-            <Check size={32} style={{ color: '#059669' }} />
+      <div className="p-8 max-w-2xl">
+        <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-8">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="w-12 h-12 rounded-full flex items-center justify-center shrink-0" style={{ background: '#d1fae5' }}>
+              <Check size={24} style={{ color: '#059669' }} />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">Import finalizat</h2>
+              <p className="text-gray-500 text-sm">{session ? new Date(session.session_date).toLocaleDateString('ro-RO', { day: '2-digit', month: 'long', year: 'numeric' }) : ''}</p>
+            </div>
           </div>
-          <h2 className="text-xl font-bold text-gray-900 mb-2">Import reușit!</h2>
-          <p className="text-gray-500 mb-6">
-            <span className="font-semibold text-gray-900">{importedCount} cursanți</span> adăugați la sesiunea din{' '}
-            <span className="font-semibold">{session ? new Date(session.session_date).toLocaleDateString('ro-RO', { day: '2-digit', month: 'long', year: 'numeric' }) : ''}</span>.
-          </p>
-          <div className="flex gap-3 justify-center">
-            <button onClick={() => { setDone(false); setRows([]); setPasteText('') }}
+
+          {/* Raport */}
+          <div className="grid grid-cols-3 gap-3 mb-6">
+            <div className="bg-green-50 rounded-xl p-4 text-center border border-green-100">
+              <div className="text-2xl font-bold text-green-700">{importReport?.inserted || 0}</div>
+              <div className="text-xs text-green-600 mt-1">Cursanți noi adăugați</div>
+            </div>
+            <div className="bg-amber-50 rounded-xl p-4 text-center border border-amber-100">
+              <div className="text-2xl font-bold text-amber-700">{importReport?.updated || 0}</div>
+              <div className="text-xs text-amber-600 mt-1">Actualizați cu info noi</div>
+            </div>
+            <div className="bg-gray-50 rounded-xl p-4 text-center border border-gray-100">
+              <div className="text-2xl font-bold text-gray-500">{importReport?.unchanged || 0}</div>
+              <div className="text-xs text-gray-400 mt-1">Identici — nicio schimbare</div>
+            </div>
+          </div>
+
+          {/* Detalii actualizari */}
+          {importReport?.updatedFields && importReport.updatedFields.length > 0 && (
+            <div className="mb-6">
+              <div className="text-xs font-medium text-gray-500 mb-2">Câmpuri actualizate:</div>
+              <div className="space-y-1.5 max-h-48 overflow-auto">
+                {importReport.updatedFields.map((u, i) => (
+                  <div key={i} className="flex items-center gap-2 text-xs bg-amber-50 rounded-lg px-3 py-2">
+                    <span className="font-medium text-gray-900">{u.name}</span>
+                    <span className="text-gray-400">→</span>
+                    <span className="text-amber-700">{u.fields.join(', ')}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="flex gap-3">
+            <button onClick={() => { setDone(false); setRows([]); setPasteText(''); setImportReport(null) }}
               className="px-4 py-2 rounded-lg text-sm border border-gray-200 text-gray-600 hover:bg-gray-50">
               Import nou
             </button>
@@ -318,7 +416,7 @@ export default function ImportCursantiPage() {
                   Copiați din Excel/email și lipiți. Detectează automat formatul cu CNP, email, telefon, dată naștere.
                 </p>
                 <textarea className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white resize-none"
-                  rows={10} placeholder={"Popescu Ion\tpopescu@email.ro\t0740000000\t\t01.01.1985\tCNP: 1850101..."}
+                  rows={10} placeholder={"Format 1: Nr\tNume Prenume\tCNP\tData nașterii\tEmail\t...\nFormat 2: \tNume Prenume\tCNP\tData nașterii\tEmail\t..."}
                   value={pasteText} onChange={e => setPasteText(e.target.value)} />
                 <button onClick={handlePaste} disabled={!pasteText.trim()}
                   className="w-full mt-2 py-2 rounded-lg text-xs font-medium text-white disabled:opacity-40"
