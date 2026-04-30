@@ -53,47 +53,70 @@ export default function ImportCursantiPage() {
   // Parse pasted text - detectează automat formatul din datele trimise
   // Format detectat: Nume\tEmail\tTelefon\tDataNastere\tCNP: XXXXX
   // sau: Nume\tCNP\tEmail\tCI\tClasa (format clasic)
+  function invertName(name: string): string {
+    const parts = name.trim().split(/\s+/)
+    if (parts.length <= 1) return name.toUpperCase()
+    return parts.slice(1).join(' ') + ' ' + parts[0]
+  }
+  function cleanCounty(val: string): string {
+    return val.trim().replace(/^jud\.\s*/i,'').replace(/^judet\s*/i,'').replace(/^județul\s*/i,'').trim()
+  }
+  function cleanPhone(val: string): string {
+    return val.replace(/^[^0-9+]/, '').trim()
+  }
+
   function parseText(text: string): StudentRow[] {
     const lines = text.trim().split('\n').filter(l => l.trim())
     const parsed: StudentRow[] = []
 
-    for (const line of lines) {
+    // Sari headerul daca prima linie e header
+    let startIdx = 0
+    if (lines[0]) {
+      const h = lines[0].toLowerCase()
+      if (h.includes('cursant') || h.includes('nr.') || (h.split('\t')[0].trim() === 'nr')) startIdx = 1
+    }
+
+    for (let li = startIdx; li < lines.length; li++) {
+      const line = lines[li]
       const parts = line.includes('\t') ? line.split('\t') : line.split(',')
       const trimmed = parts.map(p => p.trim())
-
-      // Detectează formatul cu "CNP: XXXXX" la final
+      const firstIsNumber = /^\d+$/.test(trimmed[0])
       const hasCNPLabel = trimmed.some(p => p.startsWith('CNP:'))
 
-      if (hasCNPLabel) {
-        // Format: Nume | Email | Telefon | (gol) | DataNastere | CNP: XXXXX
+      if (firstIsNumber && trimmed.length >= 3) {
+        // FORMAT 1: Nr | Cursant | CNP | DataNasterii | Email | Telefon | Adresa | Localitate | Sector/Judet | CI
+        const cursant = trimmed[1] || ''
+        if (!cursant) continue
+        const full_name = invertName(cursant)
+        const cnpRaw = trimmed[2].replace(/\.0$/, '')
+        const birthRaw = trimmed[3] || ''
+        const email = trimmed[4] || ''
+        const phone = cleanPhone(trimmed[5] || '')
+        const adresa = trimmed[6] || ''
+        const localitate = trimmed[7] || ''
+        const sectorJudet = trimmed[8] || ''
+        let address = adresa
+        if (localitate && !address.toLowerCase().includes(localitate.toLowerCase())) {
+          address = address + (address ? ', ' : '') + localitate
+        }
+        parsed.push({ ...EMPTY_ROW, full_name, cnp: cnpRaw, email, phone, birth_date: birthRaw,
+          address, county: cleanCounty(sectorJudet || localitate), class_caa: defaultClass })
+      } else if (hasCNPLabel) {
         const full_name = trimmed[0] || ''
         const email = trimmed[1] || ''
-        const phone = trimmed[2] || ''
-        let birth_date = ''
-        let cnp = ''
-
+        const phone = cleanPhone(trimmed[2] || '')
+        let birth_date = '', cnp = ''
         for (const part of trimmed) {
-          if (part.startsWith('CNP:')) {
-            cnp = part.replace('CNP:', '').trim()
-          } else if (/^\d{2}\.\d{2}\.\d{4}$/.test(part)) {
-            birth_date = part
-          }
+          if (part.startsWith('CNP:')) cnp = part.replace('CNP:', '').trim()
+          else if (/^\d{2}\.\d{2}\.\d{4}$/.test(part)) birth_date = part
         }
-
         if (!full_name) continue
         parsed.push({ ...EMPTY_ROW, full_name: full_name.toUpperCase(), email, phone, birth_date, cnp, class_caa: defaultClass })
       } else {
-        // Format clasic: Nume | CNP | Email | CI | Clasa
         const full_name = trimmed[0] || ''
-        if (!full_name) continue
-        parsed.push({
-          ...EMPTY_ROW,
-          full_name: full_name.toUpperCase(),
-          cnp: trimmed[1] || '',
-          email: trimmed[2] || '',
-          ci_series: trimmed[3] || '',
-          class_caa: trimmed[4] || defaultClass,
-        })
+        if (!full_name || full_name.toLowerCase() === 'nr') continue
+        parsed.push({ ...EMPTY_ROW, full_name: full_name.toUpperCase(), cnp: trimmed[1] || '',
+          email: trimmed[2] || '', ci_series: trimmed[3] || '', class_caa: trimmed[4] || defaultClass })
       }
     }
     return parsed
@@ -116,22 +139,55 @@ export default function ImportCursantiPage() {
       const ws = wb.Sheets[wb.SheetNames[0]]
       const data: any[][] = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' })
       const parsed: StudentRow[] = []
-      for (const row of data) {
-        const full_name = String(row[0] || '').trim()
-        if (!full_name || ['nume', 'name', 'nr'].includes(full_name.toLowerCase())) continue
-        const cnpRaw = String(row[1] || '').replace(/\.0$/, '').trim()
-        parsed.push({
-          full_name: full_name.toUpperCase(),
-          cnp: cnpRaw,
-          email: String(row[2] || '').trim(),
-          phone: String(row[3] || '').trim(),
-          birth_date: String(row[4] || '').trim(),
-          ci_series: String(row[5] || '').trim(),
-          ci_number: String(row[6] || '').trim(),
-          address: String(row[7] || '').trim(),
-          county: String(row[8] || '').trim(),
-          class_caa: String(row[9] || defaultClass).trim() || defaultClass,
-        })
+      let startRow = 0
+      // Sari headerul daca primul rand contine text
+      if (data[0] && typeof data[0][0] === 'string' && isNaN(Number(data[0][0]))) startRow = 1
+
+      for (let ri = startRow; ri < data.length; ri++) {
+        const row = data[ri]
+        const firstCell = String(row[0] || '').trim()
+        if (!firstCell) continue
+
+        // Detectam Format 1: prima coloana e numar
+        if (/^\d+$/.test(firstCell)) {
+          const cursant = String(row[1] || '').trim()
+          if (!cursant) continue
+          const full_name = invertName(cursant)
+          const cnpRaw = String(row[2] || '').replace(/\.0$/, '').trim()
+          const birthRaw = String(row[3] || '').trim()
+          const email = String(row[4] || '').trim()
+          const phone = cleanPhone(String(row[5] || '').trim())
+          const adresa = String(row[6] || '').trim()
+          const localitate = String(row[7] || '').trim()
+          const sectorJudet = String(row[8] || '').trim()
+          let address = adresa
+          if (localitate && !address.toLowerCase().includes(localitate.toLowerCase())) {
+            address = address + (address ? ', ' : '') + localitate
+          }
+          parsed.push({
+            full_name, cnp: cnpRaw, email, phone,
+            birth_date: birthRaw,
+            ci_series: '', ci_number: '',
+            address, county: cleanCounty(sectorJudet || localitate),
+            class_caa: defaultClass,
+          })
+        } else {
+          // Format clasic
+          if (['nume', 'name', 'nr'].includes(firstCell.toLowerCase())) continue
+          const cnpRaw = String(row[1] || '').replace(/\.0$/, '').trim()
+          parsed.push({
+            full_name: firstCell.toUpperCase(),
+            cnp: cnpRaw,
+            email: String(row[2] || '').trim(),
+            phone: String(row[3] || '').trim(),
+            birth_date: String(row[4] || '').trim(),
+            ci_series: String(row[5] || '').trim(),
+            ci_number: String(row[6] || '').trim(),
+            address: String(row[7] || '').trim(),
+            county: String(row[8] || '').trim(),
+            class_caa: String(row[9] || defaultClass).trim() || defaultClass,
+          })
+        }
       }
       setRows(parsed)
     } else {
