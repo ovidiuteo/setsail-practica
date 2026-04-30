@@ -289,7 +289,9 @@ export default function SesiuniPage() {
                           ))}
                         </div>
                       </div>
-                        <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">Clasa {s.class_caa}</span>
+                        <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+                          Clasa {s.class_caa.replace(',','+')} · {principalCount.total} cursanți
+                        </span>
                       {s.is_clone && <span className="text-xs bg-blue-100 text-blue-600 px-2 py-0.5 rounded">Clonă</span>}
                       </div>
                       <div className="text-sm text-gray-500 flex flex-wrap gap-x-4 gap-y-0.5">
@@ -383,7 +385,10 @@ export default function SesiuniPage() {
                 <div className="ml-6 mb-2">
                   <span className="text-xs text-gray-400">
                     Total: <strong>{totalAll}</strong> cursanți
-                    {clones.length > 0 && <> · {clones.length + 1} liste ({1 + clones.length})</>}
+                    {clones.length > 0 && <>
+                      {' · '}{clones.length + 1} liste ({principalCount.total}
+                      {clones.map((c:any,ci:number) => <span key={c.id}> – {cloneCounts[ci]?.total||0}</span>)})
+                    </>}
                     {absentCount && absentCount.total > 0 && <> · <span className="text-red-500">{absentCount.total} absenți</span></>}
                   </span>
                 </div>
