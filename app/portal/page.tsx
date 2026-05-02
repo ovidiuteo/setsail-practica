@@ -450,11 +450,11 @@ export default function PortalPage() {
                     className={ciFieldCls(form.ci_number, ciNumberValid)}
                     value={form.ci_number}
                     placeholder="123456 sau 1234567"
-                    maxLength={6}
+                    maxLength={7}
                     onChange={e => setForm(f => ({ ...f, ci_number: e.target.value.replace(/\D/g, '') }))}
                   />
                   {form.ci_number.trim() && !ciNumberValid && (
-                    <p className="text-xs text-red-500 mt-1">Exact 6 cifre</p>
+                    <p className="text-xs text-red-500 mt-1">Exact 6 cifre la CI vechi sau 7 cifre la CI nou.</p>
                   )}
                 </div>
               </div>
