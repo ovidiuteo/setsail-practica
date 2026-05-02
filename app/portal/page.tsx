@@ -31,7 +31,7 @@ export default function PortalPage() {
 
   // Validare CI
   const ciSeriesValid = /^[A-Z]{2}$/.test(form.ci_series.trim())
-  const ciNumberValid = /^\d{6}$/.test(form.ci_number.trim())
+  const ciNumberValid = /^\d{6,7}$/.test(form.ci_number.trim())
   const canSave = ciSeriesValid && ciNumberValid
 
   useEffect(() => {
@@ -449,7 +449,7 @@ export default function PortalPage() {
                   <input
                     className={ciFieldCls(form.ci_number, ciNumberValid)}
                     value={form.ci_number}
-                    placeholder="123456"
+                    placeholder="123456 sau 1234567"
                     maxLength={6}
                     onChange={e => setForm(f => ({ ...f, ci_number: e.target.value.replace(/\D/g, '') }))}
                   />
