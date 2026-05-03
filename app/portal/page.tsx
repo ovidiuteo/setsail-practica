@@ -235,30 +235,33 @@ export default function PortalPage() {
   }
 
 
-  // ─────────────────────────────────────────────────────
-  // COMPRESIE CI — ajusteaza QUALITY pentru calitate/marime
-  //   1.00 = original (100%, referinta)
-  //   0.80 = 80% calitate (recomandat stocare)
-  //   0.65 = 65% calitate (mai mic, lizibil)
-  //   0.50 = 50% calitate (minim acceptabil)
-  // MAX_PX = dimensiunea maxima pe orice latura in pixeli
-  // ─────────────────────────────────────────────────────
-  const COMPRESS_QUALITY = 0.80  // ← modifica aici
-  const COMPRESS_MAX_PX  = 1200  // ← modifica aici
-
+  // Comprima imaginea la max 800px lățime, sub 500KB base64
+  // Reduce calitatea iterativ pana atinge target-ul
   function compressImage(dataUrl: string): Promise<string> {
     return new Promise(resolve => {
       const img = new Image()
       img.onload = () => {
-        const scale = Math.min(1, COMPRESS_MAX_PX / img.width, COMPRESS_MAX_PX / img.height)
+        const TARGET_KB = 500        // target: sub 500KB base64
+        const MAX_WIDTH = 800        // max 800px latime
+        // Scaleaza proportional dupa latime
+        const scale = Math.min(1, MAX_WIDTH / img.width)
         const w = Math.round(img.width * scale)
         const h = Math.round(img.height * scale)
         const tmp = document.createElement('canvas')
         tmp.width = w; tmp.height = h
         tmp.getContext('2d')!.drawImage(img, 0, 0, w, h)
-        const result = tmp.toDataURL('image/jpeg', COMPRESS_QUALITY)
-        const sizeKB = Math.round(result.length / 1024)
-        console.log(`CI salvat: ${w}x${h}px @ Q${COMPRESS_QUALITY} → ${sizeKB}KB base64 (~${Math.round(sizeKB*0.75)}KB real)`)
+        // Incearca calitati descrescatoare pana sub TARGET_KB
+        const qualities = [0.85, 0.75, 0.65, 0.55, 0.45]
+        let result = tmp.toDataURL('image/jpeg', 0.85)
+        for (const q of qualities) {
+          result = tmp.toDataURL('image/jpeg', q)
+          const sizeKB = Math.round(result.length / 1024)
+          if (sizeKB <= TARGET_KB) {
+            console.log(`CI comprimat: ${w}x${h}px @ Q${q} → ${sizeKB}KB ✅`)
+            break
+          }
+          console.log(`CI @ Q${q} → ${sizeKB}KB (prea mare, incerc mai mic...)`)
+        }
         resolve(result)
       }
       img.src = dataUrl
