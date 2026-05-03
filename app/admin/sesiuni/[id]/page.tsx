@@ -692,8 +692,10 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange }:
           <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
             <button onClick={()=>{
               if(!showMail) {
-                const emails = students.filter(s=>s.email).map(s=>s.email).join(', ')
-                setMailTo(emails)
+                // Refresh la deschidere - doar cei cu communication_target=true
+                const commEmails = students.filter(s=>s.email && s.communication_target).map(s=>s.email)
+                setSelectedEmails(commEmails)
+                setMailTo(commEmails.join(', '))
               }
               setShowMail(!showMail)
             }} className="w-full flex items-center justify-between">
