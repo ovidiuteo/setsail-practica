@@ -20,12 +20,12 @@ const portalMap: Record<string, { label: string; color: string }> = {
 
 type Student = {
   id: string; full_name: string; cnp: string; email: string; phone: string
-  birth_date: string; ci_series: string; ci_number: string; address: string
-  county: string; class_caa: string; portal_status: string
-  order_in_session: number; signed_at: string; session_id: string
-  communication_target: boolean
-  city: string
-  country: string
+  birth_date: string; ci_series: string; ci_number: string; ci_image_data: string
+  address: string; county: string; city: string; country: string
+  class_caa: string; portal_status: string; signed_at: string; session_id: string
+  order_in_session: number; communication_target: boolean
+  expiry_date: string; nationality: string; signature_data: string
+  original_session_id: string; allocated_session_id: string
 }
 type Session = { id: string; session_date: string; status: string; session_type: string; access_code: string; class_caa: string; request_number?: string; location_detail?: string; parent_session_id?: string; is_clone?: boolean; locations?: any; boats?: any; evaluators?: any; instructors?: any }
 
@@ -301,18 +301,21 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
                 </th>
                 <th className="w-6 px-2 py-2.5 text-gray-400 text-xs font-medium text-right">#</th>
                 {[
-                  ['full_name','Nume'],['cnp','CNP'],['email','Email'],
-                  ['phone','Tel'],['ci_series','CI'],['class_caa','Cls'],['portal_status','Portal']
+                  ['full_name','Nume'],['email','Email'],['phone','Tel'],
+                  ['cnp','CNP'],['birth_date','Naștere'],['address','Adresă'],
+                  ['expiry_date','Exp. CI'],['class_caa','Cls'],['portal_status','Portal']
                 ].map(([col,label]) => (
-                  <th key={col} className="px-3 py-2.5 font-medium text-gray-500 text-left cursor-pointer select-none hover:text-blue-600 whitespace-nowrap"
+                  <th key={col} className="px-2 py-2.5 font-medium text-gray-500 text-left cursor-pointer select-none hover:text-blue-600 whitespace-nowrap"
                     onClick={()=>toggleSort(col)}>
-                    <span className="flex items-center gap-1">
+                    <span className="flex items-center gap-0.5">
                       {label}
-                      {sortCol===col ? (sortDir==='asc'?'↑':'↓') : <span className="text-gray-200">↕</span>}
+                      {sortCol===col ? (sortDir==='asc'?'↑':'↓') : <span className="text-gray-200 text-xs">↕</span>}
                     </span>
                   </th>
                 ))}
-                <th className="w-28 px-2 py-2.5"></th>
+                <th className="px-2 py-2.5 text-gray-400 text-xs font-medium text-center">CI</th>
+                <th className="px-2 py-2.5 text-gray-400 text-xs font-medium text-center">Sem.</th>
+                <th className="w-24 px-2 py-2.5"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -340,37 +343,97 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
                         <button onClick={()=>setEditingId(null)} className="p-1 rounded bg-gray-100 text-gray-500"><X size={12}/></button>
                       </div></td>
                     </>) : (<>
+                      {/* ✉ Communication target */}
                       <td className="px-2 py-2 text-center">
-                        <button
-                          onClick={async(e)=>{
-                            e.stopPropagation()
-                            if(!s.email) return
-                            const nv = !s.communication_target
-                            await supabase.from('students').update({communication_target:nv}).eq('id',s.id)
-                            setStudents(students.map(st=>st.id===s.id?{...st,communication_target:nv}:st))
-                          }}
-                          disabled={!s.email}
-                          title={s.email?(s.communication_target?'Email activ — click dezactivează':'Email inactiv — click activează'):'Fără email'}
+                        <button onClick={async(e)=>{e.stopPropagation();if(!s.email)return;const nv=!s.communication_target;await supabase.from('students').update({communication_target:nv}).eq('id',s.id);setStudents(students.map(st=>st.id===s.id?{...st,communication_target:nv}:st))}}
+                          disabled={!s.email} title={s.email?(s.communication_target?'Email activ':'Email inactiv'):'Fără email'}
                           className="p-1 rounded hover:bg-gray-100 disabled:opacity-20 transition-colors">
-                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" stroke={s.communication_target&&s.email?'#16a34a':'#d1d5db'}>
+                          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" stroke={s.communication_target&&s.email?'#16a34a':'#d1d5db'}>
                             <rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
                           </svg>
                         </button>
                       </td>
+                      {/* # */}
                       <td className="px-2 py-2 text-gray-300 text-xs text-right">{i+1}</td>
-                      <td className="px-3 py-2 font-medium text-gray-900">{s.full_name}</td>
-                      <td className="px-3 py-2 font-mono text-gray-400 text-xs">{trunc(s.cnp)}</td>
-                      <td className="px-3 py-2 text-gray-500">{s.email||'—'}</td>
-                      <td className="px-3 py-2 text-gray-500">{s.phone||'—'}</td>
-                      <td className="px-3 py-2">
-                        {s.ci_series && s.ci_number
-                          ? <span className="px-2 py-0.5 rounded text-xs font-mono font-semibold" style={{background:'#dcfce7',color:'#166534'}}>{s.ci_series} {s.ci_number}</span>
-                          : <span className="px-2 py-0.5 rounded text-xs" style={{background:'#fee2e2',color:'#991b1b'}}>lipsă</span>}
+                      {/* Nume — click deschide portal */}
+                      <td className="px-2 py-2">
+                        <a href={`/portal?cod=${sess.access_code}&email=${encodeURIComponent(s.email||'')}`}
+                          target="_blank" rel="noopener noreferrer"
+                          className="font-medium text-gray-900 hover:text-blue-600 hover:underline cursor-pointer text-xs">
+                          {s.full_name}
+                        </a>
                       </td>
-                      <td className="px-3 py-2 text-gray-500">{s.class_caa}</td>
-                      <td className="px-3 py-2">
+                      {/* Email cu buton copy */}
+                      <td className="px-2 py-2 text-gray-500 text-xs">
+                        {s.email ? (
+                          <span className="flex items-center gap-1 group">
+                            <span>{s.email}</span>
+                            <button onClick={e=>{e.stopPropagation();navigator.clipboard.writeText(s.email)}}
+                              title="Copiază email" className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-gray-200 transition-all">
+                              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                              </svg>
+                            </button>
+                          </span>
+                        ) : <span className="text-gray-300">—</span>}
+                      </td>
+                      {/* Telefon */}
+                      <td className="px-2 py-2 text-gray-500 text-xs">{trunc(s.phone)}</td>
+                      {/* CNP */}
+                      <td className="px-2 py-2 font-mono text-gray-400 text-xs">{trunc(s.cnp)}</td>
+                      {/* Data nasterii */}
+                      <td className="px-2 py-2 text-gray-400 text-xs">{trunc(s.birth_date)}</td>
+                      {/* Adresa */}
+                      <td className="px-2 py-2 text-gray-400 text-xs">{trunc(s.address)}</td>
+                      {/* Data expirare CI */}
+                      <td className="px-2 py-2 text-gray-400 text-xs">{trunc(s.expiry_date)}</td>
+                      {/* Clasa */}
+                      <td className="px-2 py-2 text-gray-500 text-xs">{(s.class_caa||'').replace(',','+')}</td>
+                      {/* Portal status */}
+                      <td className="px-2 py-2">
                         <span className="text-xs font-medium" style={{color:ps.color}}>{ps.label}</span>
                         {s.signed_at && <div className="text-gray-300 text-xs">{new Date(s.signed_at).toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'})}</div>}
+                      </td>
+                      {/* CI imagine - pictograma */}
+                      <td className="px-2 py-2 text-center">
+                        {s.ci_image_data ? (
+                          <button onClick={()=>{const w=window.open('','_blank');w?.document.write(`<img src="${s.ci_image_data}" style="max-width:100%;max-height:100vh;"/>`)}}
+                            title="CI scanat — click pentru previzualizare"
+                            className="p-1 rounded hover:bg-gray-100 transition-colors">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+                              <circle cx="12" cy="10" r="3"/>
+                            </svg>
+                          </button>
+                        ) : (
+                          <span title="CI lipsă" className="inline-flex items-center justify-center w-6 h-6 rounded border-2 border-red-300 text-red-400">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/>
+                              <circle cx="12" cy="10" r="3"/>
+                            </svg>
+                          </span>
+                        )}
+                        {s.ci_series && s.ci_number && (
+                          <div className="text-xs font-mono text-gray-400 mt-0.5">{s.ci_series} {s.ci_number}</div>
+                        )}
+                      </td>
+                      {/* Semnatura - pictograma */}
+                      <td className="px-2 py-2 text-center">
+                        {s.signature_data ? (
+                          <button onClick={()=>{const w=window.open('','_blank');w?.document.write(`<img src="${s.signature_data}" style="max-width:400px;border:1px solid #ccc;padding:10px;background:#fff;"/>`)}}
+                            title="Semnătură — click pentru previzualizare"
+                            className="p-1 rounded hover:bg-gray-100 transition-colors">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M3 17c3-3 6 3 9 0s6-3 9 0"/><line x1="3" y1="12" x2="21" y2="12" strokeDasharray="2 2"/>
+                            </svg>
+                          </button>
+                        ) : (
+                          <span title="Semnătură lipsă" className="inline-flex items-center justify-center w-6 h-6 rounded border-2 border-red-300 text-red-400">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M3 17c3-3 6 3 9 0s6-3 9 0"/><line x1="3" y1="12" x2="21" y2="12" strokeDasharray="2 2"/>
+                            </svg>
+                          </span>
+                        )}
                       </td>
                       <td className="px-2 py-2">
                         <div className="flex gap-1 items-center relative">
