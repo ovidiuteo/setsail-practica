@@ -50,20 +50,11 @@ export default function CIImageEditor({ file, onConfirm, onCancel }: Props) {
   async function loadPDFPage(pageNum: number) {
     setImageLoaded(false)
     try {
-      // Incarca PDF.js din CDN
-      if (!(window as any).pdfjsLib) {
-        await new Promise<void>((resolve, reject) => {
-          const script = document.createElement('script')
-          script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'
-          script.onload = () => resolve()
-          script.onerror = reject
-          document.head.appendChild(script)
-        })
-        ;(window as any).pdfjsLib.GlobalWorkerOptions.workerSrc =
-          'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js'
-      }
-
-      const pdfjsLib = (window as any).pdfjsLib
+      // Import PDF.js din pachetul instalat
+      const pdfjsLib = await import('pdfjs-dist')
+      // Workerul inline - evita probleme CSP/CORS
+      // Dezactiveaza workerul separat - foloseste modul fake worker (mai lent dar fara CORS)
+      pdfjsLib.GlobalWorkerOptions.workerSrc = ''
 
       // Incarca PDF daca nu e deja
       if (!pdfDocRef.current) {
@@ -85,7 +76,8 @@ export default function CIImageEditor({ file, onConfirm, onCancel }: Props) {
       const tmpCanvas = document.createElement('canvas')
       tmpCanvas.width = viewport.width
       tmpCanvas.height = viewport.height
-      await page.render({ canvasContext: tmpCanvas.getContext('2d')!, viewport }).promise
+      const renderContext = { canvasContext: tmpCanvas.getContext('2d')!, viewport }
+      await page.render(renderContext).promise
 
       // Convertim la imagine si o stocam in imgRef
       const dataUrl = tmpCanvas.toDataURL('image/jpeg', 0.95)
