@@ -20,7 +20,7 @@ export default function CIImageEditor({ file, onConfirm, onCancel }: Props) {
   const isPDF = file.type === 'application/pdf'
 
   // Crop state in procente 0-100
-  const [crop, setCrop] = useState({ x: 5, y: 5, w: 90, h: 90 })
+  const [crop, setCrop] = useState({ x: 0, y: 0, w: 100, h: 100 })
   const [isCropDefault, setIsCropDefault] = useState(true)
 
   const dragState = useRef<{
@@ -90,7 +90,7 @@ export default function CIImageEditor({ file, onConfirm, onCancel }: Props) {
       c.width = cw
       c.height = ch
       c.getContext('2d')!.drawImage(newImg, 0, 0)
-      setCrop({ x: 5, y: 5, w: 90, h: 90 })
+      setCrop({ x: 0, y: 0, w: 100, h: 100 })
       setIsCropDefault(true)
       setCropApplied(true)
     }
@@ -100,7 +100,7 @@ export default function CIImageEditor({ file, onConfirm, onCancel }: Props) {
   // Reset crop - revine la imaginea originala (inainte de orice crop)
   function resetCrop() {
     imgRef.current = originalImgRef.current
-    setCrop({ x: 5, y: 5, w: 90, h: 90 })
+    setCrop({ x: 0, y: 0, w: 100, h: 100 })
     setIsCropDefault(true)
     setCropApplied(false)
     setRotation(0)
@@ -109,13 +109,13 @@ export default function CIImageEditor({ file, onConfirm, onCancel }: Props) {
 
   function rotateLeft() {
     setRotation(r => r - 90)
-    setCrop({ x: 5, y: 5, w: 90, h: 90 })
+    setCrop({ x: 0, y: 0, w: 100, h: 100 })
     setIsCropDefault(true)
   }
 
   function rotateRight() {
     setRotation(r => r + 90)
-    setCrop({ x: 5, y: 5, w: 90, h: 90 })
+    setCrop({ x: 0, y: 0, w: 100, h: 100 })
     setIsCropDefault(true)
   }
 

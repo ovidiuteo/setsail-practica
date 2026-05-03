@@ -285,8 +285,6 @@ export default function PortalPage() {
       if (fullNameFromCI) sf.add('full_name')
       setScannedFields(sf)
       setOcrStatus('done')
-      // Autosave dupa OCR
-      setTimeout(autoSave, 500)
     } catch (err) {
       console.error('OCR error:', err)
       setOcrStatus('error')
@@ -328,6 +326,27 @@ export default function PortalPage() {
     setSaving(false)
   }
   // Stiluri câmpuri CI cu validare vizuală
+
+  function SaveDataButton({ onSave }: { onSave: () => Promise<void> }) {
+    const [st, setSt] = useState<'idle'|'saving'|'saved'>('idle')
+    return (
+      <button onClick={async()=>{
+        setSt('saving')
+        await onSave()
+        setSt('saved')
+        setTimeout(()=>setSt('idle'), 2500)
+      }} disabled={st==='saving'}
+        className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-medium transition-all border ${
+          st==='saved' ? 'border-green-400 text-green-600 bg-green-50'
+          : st==='saving' ? 'border-gray-200 text-gray-400'
+          : 'border-gray-200 text-gray-600 hover:bg-gray-50'
+        }`}>
+        {st==='saved' ? <><Check size={12}/> Salvat!</>
+         : st==='saving' ? <>⏳ Salvez...</>
+         : <><Check size={12}/> Salvează date</>}
+      </button>
+    )
+  }
 
   if (pendingFile) return (
     <CIImageEditor
