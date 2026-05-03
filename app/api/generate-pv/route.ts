@@ -121,7 +121,7 @@ export async function POST(req: NextRequest) {
       return [
         new Paragraph({
           alignment: AlignmentType.LEFT,
-          spacing: { after: 0 },
+          spacing: { before: 0, after: 0 },
           children: [
             new ImageRun({
               data: headerImageBuffer,
@@ -251,19 +251,19 @@ export async function POST(req: NextRequest) {
             ] }),
         ]}),
         new TableRow({ children: [
-          new TableCell({ borders: noBorders, width: { size: 4500, type: WidthType.DXA }, margins: { top: 300, bottom: 80, left: 100, right: 100 },
+          new TableCell({ borders: noBorders, width: { size: 4500, type: WidthType.DXA }, margins: { top: 240, bottom: 80, left: 100, right: 100 },
             children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: '............................  ...........................', size: 20 })] })] }),
           new TableCell({ borders: noBorders, width: { size: 1106, type: WidthType.DXA }, margins: cellM, children: [new Paragraph({ children: [] })] }),
-          new TableCell({ borders: noBorders, width: { size: 4500, type: WidthType.DXA }, margins: { top: 300, bottom: 80, left: 100, right: 100 },
+          new TableCell({ borders: noBorders, width: { size: 4500, type: WidthType.DXA }, margins: { top: 240, bottom: 80, left: 100, right: 100 },
             children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: '............................  ...........................', size: 20 })] })] }),
         ]}),
-        new TableRow({ children: [
+        ...(locName.includes('snagov') ? [new TableRow({ children: [
           new TableCell({ borders: noBorders, width: { size: 4500, type: WidthType.DXA }, margins: cellM,
             children: [new Paragraph({ spacing: { after: 0 }, alignment: AlignmentType.CENTER, children: [new TextRun({ text: '(Semnătură)', size: 16 })] })] }),
           new TableCell({ borders: noBorders, width: { size: 1106, type: WidthType.DXA }, margins: cellM, children: [new Paragraph({ children: [] })] }),
           new TableCell({ borders: noBorders, width: { size: 4500, type: WidthType.DXA }, margins: cellM,
             children: [new Paragraph({ spacing: { after: 0 }, alignment: AlignmentType.CENTER, children: [new TextRun({ text: '(Semnătură)', size: 16 })] })] }),
-        ]}),
+        ]})] : []),
       ]
     })
   }
@@ -359,7 +359,7 @@ export async function POST(req: NextRequest) {
       properties: {
         page: {
           size: { width: 11906, height: 16838 },
-          margin: { top: 284, right: 720, bottom: 113, left: 1080, footer: 113 }
+          margin: { top: 0, right: 720, bottom: 113, left: 1080, footer: 113 }
         }
       },
       footers: fl1 ? {
