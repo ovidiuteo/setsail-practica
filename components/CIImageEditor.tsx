@@ -320,65 +320,67 @@ export default function CIImageEditor({ file, onConfirm, onCancel }: Props) {
           )}
         </div>
 
-        {/* Toolbar */}
-        <div className="px-5 py-3 border-t border-gray-100 shrink-0 bg-white">
-          <div className="flex items-center justify-between gap-2">
+        {/* Toolbar — desktop: un rând, mobil portrait: două rânduri */}
+        <div className="px-3 py-2.5 border-t border-gray-100 shrink-0 bg-white">
 
-            {/* Stanga: Rotate + Reset */}
-            <div className="flex items-center gap-1.5">
-              <button onClick={rotateLeft}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 text-xs">
-                <RotateCcw size={12}/> -90°
+          {/* Rândul 1: Rotate + Reset (mereu vizibil) */}
+          <div className="flex items-center gap-1.5 mb-2">
+            <button onClick={rotateLeft}
+              className="flex items-center gap-1 px-2.5 py-2 rounded-lg border border-gray-200 text-gray-600 text-xs flex-1 justify-center sm:flex-none sm:justify-start">
+              <RotateCcw size={13}/> <span>-90°</span>
+            </button>
+            <button onClick={rotateRight}
+              className="flex items-center gap-1 px-2.5 py-2 rounded-lg border border-gray-200 text-gray-600 text-xs flex-1 justify-center sm:flex-none sm:justify-start">
+              <RotateCw size={13}/> <span>+90°</span>
+            </button>
+            {!isPDF && (
+              <button onClick={resetCrop}
+                className="flex items-center gap-1 px-2.5 py-2 rounded-lg border border-gray-200 text-gray-500 text-xs flex-1 justify-center sm:flex-none sm:justify-start"
+                title="Revine la imaginea originală">
+                <Crop size={13}/> <span>Reset</span>
               </button>
-              <button onClick={rotateRight}
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 text-xs">
-                <RotateCw size={12}/> +90°
-              </button>
-              {!isPDF && (
-                <button onClick={resetCrop}
-                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 text-xs"
-                  title="Revine la imaginea originală">
-                  <Crop size={12}/> Reset
-                </button>
-              )}
-            </div>
-
-            {/* Dreapta: Apply Crop + Save & Scan */}
-            <div className="flex items-center gap-2">
-              <button onClick={onCancel}
-                className="px-3 py-1.5 rounded-lg border border-gray-200 text-gray-500 text-xs hover:bg-gray-50">
-                Anulează
-              </button>
-              {!isPDF && (
-                <button onClick={applyCrop}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                    isCropDefault
-                      ? 'border border-gray-200 text-gray-400 cursor-default'
-                      : 'bg-amber-500 text-white hover:bg-amber-600'
-                  }`}
-                  disabled={isCropDefault}
-                  title="Taie imaginea la zona selectată">
-                  <Scissors size={12}/> Apply Crop
-                </button>
-              )}
-              <button onClick={handleConfirm}
-                disabled={!isCropDefault}
-                title={!isCropDefault ? 'Aplică sau resetează cropul înainte de scanare' : ''}
-                className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-                  !isCropDefault
-                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                    : 'text-white'
-                }`}
-                style={isCropDefault ? {background:'#0a1628'} : {}}>
-                <Check size={12}/> Save & Scan OCR
-              </button>
-            </div>
+            )}
+            {/* Anulează — vizibil pe desktop inline, ascuns pe mobil (apare jos) */}
+            <button onClick={onCancel}
+              className="hidden sm:flex items-center gap-1 px-2.5 py-2 rounded-lg border border-gray-200 text-gray-500 text-xs ml-auto">
+              <X size={12}/> Anulează
+            </button>
           </div>
 
-          {/* Status */}
+          {/* Rândul 2: Apply Crop + Save & Scan (+ Anulează pe mobil) */}
+          <div className="flex items-center gap-2">
+            {/* Anulează — doar pe mobil */}
+            <button onClick={onCancel}
+              className="flex sm:hidden items-center justify-center px-3 py-2.5 rounded-lg border border-gray-200 text-gray-500 text-xs flex-1">
+              Anulează
+            </button>
+            {!isPDF && (
+              <button onClick={applyCrop}
+                className={`flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium transition-colors flex-1 ${
+                  isCropDefault
+                    ? 'border border-gray-200 text-gray-400 cursor-default'
+                    : 'bg-amber-500 text-white'
+                }`}
+                disabled={isCropDefault}>
+                <Scissors size={13}/> Apply Crop
+              </button>
+            )}
+            <button onClick={handleConfirm}
+              disabled={!isCropDefault}
+              className={`flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium transition-colors flex-1 ${
+                !isCropDefault
+                  ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                  : 'text-white'
+              }`}
+              style={isCropDefault ? {background:'#0a1628'} : {}}>
+              <Check size={13}/> Save & Scan OCR
+            </button>
+          </div>
+
+          {/* Status crop aplicat */}
           {cropApplied && (
             <p className="text-xs text-green-600 mt-2 flex items-center gap-1">
-              <Check size={11}/> Crop aplicat — imaginea a fost decupată. Apasă <b className="mx-0.5">Save & Scan OCR</b> pentru a continua.
+              <Check size={11}/> Crop aplicat. Apasă <b className="mx-0.5">Save & Scan OCR</b>.
             </p>
           )}
         </div>
