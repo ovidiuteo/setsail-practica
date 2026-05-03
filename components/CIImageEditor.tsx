@@ -181,22 +181,14 @@ export default function CIImageEditor({ file, onConfirm, onCancel }: Props) {
     window.removeEventListener('mouseup', onMouseUp)
   }, [])
 
-  // Save & Scan: comprima imaginea la max 1200px latime si calitate 0.7
+  // Save & Scan: trimite imaginea la dimensiunea crop-ului, fara comprimare suplimentara
+  // Comprimarea se face in portal DUPA OCR, inainte de salvare in DB
   function handleConfirm() {
     const canvas = canvasRef.current!
-    const MAX_W = 1200
-    const MAX_H = 1600
-    let { width, height } = canvas
-    if (width > MAX_W || height > MAX_H) {
-      const scale = Math.min(MAX_W / width, MAX_H / height)
-      width = Math.round(width * scale)
-      height = Math.round(height * scale)
-    }
-    const tmp = document.createElement('canvas')
-    tmp.width = width; tmp.height = height
-    tmp.getContext('2d')!.drawImage(canvas, 0, 0, width, height)
-    const dataUrl = tmp.toDataURL('image/jpeg', 0.75)
-    console.log('Image size:', Math.round(dataUrl.length / 1024), 'KB')
+    // Calitate ridicata pentru OCR precis
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.92)
+    const sizeKB = Math.round(dataUrl.length / 1024)
+    console.log(`CI pentru OCR: ${canvas.width}x${canvas.height}px, ${sizeKB}KB`)
     onConfirm(dataUrl, 'image/jpeg')
   }
 

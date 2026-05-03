@@ -235,6 +235,32 @@ export default function PortalPage() {
   }
 
 
+  // Comprima imaginea la target <0.5MB pastrand dimensiunile originale
+  function compressImage(dataUrl: string): Promise<string> {
+    return new Promise(resolve => {
+      const img = new Image()
+      img.onload = () => {
+        // Calculeaza dimensiunile: scaleaza daca e mai mare de 1200px pe orice latura
+        const MAX = 1200
+        const scale = Math.min(1, MAX / img.width, MAX / img.height)
+        const w = Math.round(img.width * scale)
+        const h = Math.round(img.height * scale)
+        const tmp = document.createElement('canvas')
+        tmp.width = w; tmp.height = h
+        tmp.getContext('2d')!.drawImage(img, 0, 0, w, h)
+        // Comprima la calitate 0.80 - suficient pentru stocare
+        let result = tmp.toDataURL('image/jpeg', 0.80)
+        // Daca e inca prea mare (>600KB base64 ~0.45MB), comprima mai mult
+        if (result.length > 600 * 1024) {
+          result = tmp.toDataURL('image/jpeg', 0.65)
+        }
+        console.log(`CI comprimat: ${w}x${h}px, ${Math.round(result.length/1024)}KB base64`)
+        resolve(result)
+      }
+      img.src = dataUrl
+    })
+  }
+
   async function handleCIUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -244,9 +270,11 @@ export default function PortalPage() {
 
   async function processImageForOCR(dataUrl: string, mediaType: string) {
     setOcrStatus('loading')
-    // Salvam imaginea direct in Supabase INAINTE de OCR (evitam limita Vercel 4.5MB)
+    // Salvam imaginea comprimata direct in Supabase (inainte de OCR)
+    // Comprimarea se face aici, pe imaginea la dimensiunea crop-ului
     if (student?.id) {
-      await supabase.from('students').update({ ci_image_data: dataUrl }).eq('id', student.id)
+      const compressedForDb = await compressImage(dataUrl)
+      await supabase.from('students').update({ ci_image_data: compressedForDb }).eq('id', student.id)
     }
     try {
       const res = await fetch('/api/ocr-ci', {
@@ -273,9 +301,8 @@ export default function PortalPage() {
         ...(d.country    ? { country: d.country }     : {}),
         ...(fullNameFromCI ? { full_name: fullNameFromCI } : {}),
       }))
-      // Salveaza datele OCR (imaginea e deja salvata)
+      // Salveaza datele OCR (imaginea e deja salvata comprimat mai sus)
       const ocrSave: any = {
-        ci_image_data: dataUrl,  // suprascrie cu aceeasi imagine (confirmare)
         ...(d.ci_series    ? { ci_series: d.ci_series }     : {}),
         ...(d.ci_number    ? { ci_number: d.ci_number }     : {}),
         ...(d.cnp          ? { cnp: d.cnp }                 : {}),
@@ -289,7 +316,7 @@ export default function PortalPage() {
         ...(fullNameFromCI ? { full_name: fullNameFromCI }  : {}),
       }
       await supabase.from('students').update(ocrSave).eq('id', student.id)
-      // Actualizeaza studentul in state cu imaginea noua
+      // Actualizeaza studentul in state
       setStudent((prev: any) => prev ? { ...prev, ...ocrSave } : prev)
       // Marcam campurile venite din scan
       const sf = new Set<string>()
