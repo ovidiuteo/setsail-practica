@@ -88,6 +88,32 @@ export default function CursantAdminPage() {
     setSaving(false)
   }
 
+  // Comprima imaginea la 800px latime, sub 500KB — dupa OCR, inainte de salvare
+  function compressImage(dataUrl: string): Promise<string> {
+    return new Promise(resolve => {
+      const img = new Image()
+      img.onload = () => {
+        const MAX_W = 800
+        const scale = Math.min(1, MAX_W / img.width)
+        const w = Math.round(img.width * scale)
+        const h = Math.round(img.height * scale)
+        const tmp = document.createElement('canvas')
+        tmp.width = w; tmp.height = h
+        tmp.getContext('2d')!.drawImage(img, 0, 0, w, h)
+        const TARGET_KB = 500
+        const qualities = [0.85, 0.75, 0.65, 0.55, 0.45]
+        let result = tmp.toDataURL('image/jpeg', 0.85)
+        for (const q of qualities) {
+          result = tmp.toDataURL('image/jpeg', q)
+          if (Math.round(result.length / 1024) <= TARGET_KB) break
+        }
+        console.log(`CI admin comprimat: ${w}x${h}px → ${Math.round(result.length/1024)}KB`)
+        resolve(result)
+      }
+      img.src = dataUrl
+    })
+  }
+
   async function processOCR(dataUrl: string, mediaType: string) {
     setScanning(true)
     setScanStatus('idle')
@@ -102,7 +128,9 @@ export default function CursantAdminPage() {
         const d = json.data
         const fullName = (d.last_name && d.first_name)
           ? d.last_name.toUpperCase() + ' ' + d.first_name.toUpperCase() : ''
-        const updates: Partial<Student> = { ci_image_data: dataUrl }
+        // Comprima imaginea dupa OCR, inainte de salvare in DB
+        const compressedImg = await compressImage(dataUrl)
+        const updates: Partial<Student> = { ci_image_data: compressedImg }
         if (d.ci_series)   updates.ci_series = d.ci_series
         if (d.ci_number)   updates.ci_number = d.ci_number
         if (d.cnp)         updates.cnp = d.cnp

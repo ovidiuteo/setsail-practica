@@ -1206,6 +1206,7 @@ export default function SessionDetailPage() {
             isAbsent={false}
             selectedIds={getSelectedIds(mainSession.id, studentsMap[mainSession.id]||[])}
             setSelectedIds={(ids)=>setSelectedIds(mainSession.id, ids)}
+            onCiPreview={(name,img)=>setCiPreview({name,img})}
           />
         </div>
       </div>
@@ -1224,6 +1225,7 @@ export default function SessionDetailPage() {
                 isAbsent={false}
                 selectedIds={getSelectedIds(clone.id, studentsMap[clone.id]||[])}
                 setSelectedIds={(ids)=>setSelectedIds(clone.id, ids)}
+                onCiPreview={(name,img)=>setCiPreview({name,img})}
               />
             </div>
           </div>
