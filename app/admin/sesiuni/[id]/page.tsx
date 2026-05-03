@@ -444,6 +444,12 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange }:
     () => students.filter(s=>s.email).map(s=>s.email)
   )
 
+  // Sincronizeaza BCC automat cand se schimba communication_target la orice cursant
+  useEffect(()=>{
+    const commEmails = students.filter(s=>s.email && s.communication_target).map(s=>s.email)
+    setSelectedEmails(commEmails)
+  }, [students.map(s=>s.id+'_'+s.communication_target).join(',')])
+
   useEffect(()=>{
     setMailTo(selectedEmails.join(', '))
   }, [selectedEmails.join(',')])
