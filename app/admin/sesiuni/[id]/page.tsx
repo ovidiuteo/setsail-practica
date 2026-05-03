@@ -188,10 +188,12 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
           <table className="w-full text-xs">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="px-2 py-2.5 w-8">
-                  <div className="flex gap-1">
-                    <button onClick={selectAll} title="Selectează toți" className="text-xs text-blue-400 hover:text-blue-600 font-medium px-0.5">✓</button>
-                    <button onClick={selectNone} title="Deselectează toți" className="text-xs text-gray-300 hover:text-gray-500 font-medium px-0.5">✗</button>
+                <th className="px-3 py-2.5 w-12">
+                  <div className="flex flex-col gap-1">
+                    <button onClick={selectAll} title="Selectează toți"
+                      className="text-xs text-blue-500 hover:text-blue-700 font-semibold leading-none">All</button>
+                    <button onClick={selectNone} title="Deselectează toți"
+                      className="text-xs text-gray-400 hover:text-gray-600 font-semibold leading-none">None</button>
                   </div>
                 </th>
                 <th className="px-3 py-2.5 font-medium text-gray-400 w-6 text-left">#</th>
