@@ -19,6 +19,7 @@ export default function PortalPage() {
   const [pendingFile, setPendingFile] = useState<File|null>(null)
   const [signatureSaved, setSignatureSaved] = useState(false)
   const [existingSignature, setExistingSignature] = useState<string | null>(null)
+  const [scannedFields, setScannedFields] = useState<Set<string>>(new Set())
 
   const [form, setForm] = useState({
     phone: '', birth_date: '', ci_series: '', ci_number: '',
@@ -41,6 +42,13 @@ export default function PortalPage() {
 
   const labelCls = "block text-xs font-medium text-gray-600 mb-1.5"
   const inputCls = baseCls + ' border-gray-200 focus:ring-blue-400'
+
+  function fieldCls(key: string, value?: string) {
+    const val = value ?? (form as any)[key] ?? ''
+    if (!val.trim()) return baseCls + ' border-red-300 bg-red-50/40 focus:ring-red-300'
+    if (scannedFields.has(key)) return baseCls + ' border-green-500 bg-green-50 focus:ring-green-400'
+    return baseCls + ' border-blue-300 bg-blue-50/30 focus:ring-blue-400'
+  }
 
 
 
@@ -262,6 +270,20 @@ export default function PortalPage() {
         ...(fullNameFromCI ? { full_name: fullNameFromCI } : {}),
       }))
       await supabase.from('students').update({ ci_image_data: dataUrl }).eq('id', student.id)
+      // Marcam campurile venite din scan
+      const sf = new Set<string>()
+      if (d.ci_series)   sf.add('ci_series')
+      if (d.ci_number)   sf.add('ci_number')
+      if (d.cnp)         sf.add('cnp')
+      if (d.birth_date)  sf.add('birth_date')
+      if (d.address)     sf.add('address')
+      if (d.city)        sf.add('city')
+      if (d.county)      sf.add('county')
+      if (d.expiry_date) sf.add('expiry_date')
+      if (d.nationality) sf.add('nationality')
+      if (d.country)     sf.add('country')
+      if (fullNameFromCI) sf.add('full_name')
+      setScannedFields(sf)
       setOcrStatus('done')
       // Autosave dupa OCR
       setTimeout(autoSave, 500)
@@ -502,83 +524,109 @@ export default function PortalPage() {
                 </div>
               </div>
 
+              {/* Helper: indicator camp */}
               <div className="space-y-3">
-                {/* Nume si Prenume din CI */}
+                {ocrStatus === 'done' && (
+                  <div className="flex items-center gap-3 text-xs">
+                    <span className="flex items-center gap-1"><span className="w-3 h-3 rounded border-2 border-green-500 bg-green-50 inline-block"/><span className="text-white/60">Din CI</span></span>
+                    <span className="flex items-center gap-1"><span className="w-3 h-3 rounded border-2 border-blue-400 bg-blue-50/30 inline-block"/><span className="text-white/60">Completat manual</span></span>
+                    <span className="flex items-center gap-1"><span className="w-3 h-3 rounded border-2 border-red-300 bg-red-50/40 inline-block"/><span className="text-white/60">Lipsă</span></span>
+                  </div>
+                )}
+
+                {/* Nume / Prenume */}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className={labelCls}>Nume (din CI)</label>
-                    <input className={inputCls} value={form.full_name.split(' ')[0] || ''}
-                      placeholder="POPESCU"
+                    <input className={fieldCls('full_name', form.full_name.split(' ')[0])}
+                      value={form.full_name.split(' ')[0] || ''} placeholder="POPESCU"
                       onChange={e => {
                         const parts = form.full_name.split(' ')
                         parts[0] = e.target.value.toUpperCase()
                         setForm(f => ({ ...f, full_name: parts.join(' ') }))
+                        setScannedFields(s => { const n = new Set(s); n.delete('full_name'); return n })
                       }} />
                   </div>
                   <div>
                     <label className={labelCls}>Prenume (din CI)</label>
-                    <input className={inputCls}
-                      value={form.full_name.split(' ').slice(1).join(' ') || ''}
-                      placeholder="ION GABRIEL"
+                    <input className={fieldCls('full_name', form.full_name.split(' ').slice(1).join(' '))}
+                      value={form.full_name.split(' ').slice(1).join(' ') || ''} placeholder="ION GABRIEL"
                       onChange={e => {
                         const parts = form.full_name.split(' ')
-                        const newFull = (parts[0] || '') + ' ' + e.target.value.toUpperCase()
-                        setForm(f => ({ ...f, full_name: newFull.trim() }))
+                        setForm(f => ({ ...f, full_name: ((parts[0]||'')+' '+e.target.value.toUpperCase()).trim() }))
+                        setScannedFields(s => { const n = new Set(s); n.delete('full_name'); return n })
                       }} />
                   </div>
                 </div>
+
+                {/* CNP + Data nasterii */}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className={labelCls}>CNP</label>
-                    <input className={inputCls} value={form.cnp} placeholder="1234567890123" maxLength={13}
-                      onChange={e => setForm(f => ({ ...f, cnp: e.target.value.replace(/\D/g,'') }))} />
+                    <input className={fieldCls('cnp')} value={form.cnp} placeholder="1234567890123" maxLength={13}
+                      onChange={e => { setForm(f=>({...f,cnp:e.target.value.replace(/\D/g,'')})); setScannedFields(s=>{const n=new Set(s);n.delete('cnp');return n}) }} />
                   </div>
                   <div>
                     <label className={labelCls}>Data nașterii</label>
-                    <input className={inputCls} value={form.birth_date} placeholder="dd.mm.yyyy"
-                      onChange={e => setForm(f => ({ ...f, birth_date: e.target.value }))} />
+                    <input className={fieldCls('birth_date')} value={form.birth_date} placeholder="dd.mm.yyyy"
+                      onChange={e => { setForm(f=>({...f,birth_date:e.target.value})); setScannedFields(s=>{const n=new Set(s);n.delete('birth_date');return n}) }} />
                   </div>
                 </div>
+
+                {/* Adresa */}
                 <div>
-                  <label className={labelCls}>Adresă domiciliu</label>
-                  <input className={inputCls} value={form.address} placeholder="Str. Exemplu nr. 1, Bl. X, Ap. Y"
-                    onChange={e => setForm(f => ({ ...f, address: e.target.value }))} />
+                  <label className={labelCls}>Adresă domiciliu (stradă, număr, bloc, apartament)</label>
+                  <input className={fieldCls('address')} value={form.address} placeholder="Str. Exemplu nr. 1, Bl. X, Ap. Y"
+                    onChange={e => { setForm(f=>({...f,address:e.target.value})); setScannedFields(s=>{const n=new Set(s);n.delete('address');return n}) }} />
                 </div>
+
+                {/* Localitate + Judet */}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className={labelCls}>Localitate</label>
-                    <input className={inputCls} value={form.city} placeholder="ex: București"
-                      onChange={e => setForm(f => ({ ...f, city: e.target.value }))} />
+                    <input className={fieldCls('city')} value={form.city} placeholder="ex: București"
+                      onChange={e => { setForm(f=>({...f,city:e.target.value})); setScannedFields(s=>{const n=new Set(s);n.delete('city');return n}) }} />
                   </div>
                   <div>
                     <label className={labelCls}>Județ / Sector</label>
-                    <input className={inputCls} value={form.county} placeholder="ex: Sector 3 / Ilfov"
-                      onChange={e => setForm(f => ({ ...f, county: e.target.value }))} />
+                    <input className={fieldCls('county')} value={form.county} placeholder="ex: Sector 3 / Ilfov"
+                      onChange={e => { setForm(f=>({...f,county:e.target.value})); setScannedFields(s=>{const n=new Set(s);n.delete('county');return n}) }} />
                   </div>
                 </div>
+
+                {/* Tara + Expirare CI */}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className={labelCls}>Țară</label>
-                    <input className={inputCls} value={form.country} placeholder="Romania"
-                      onChange={e => setForm(f => ({ ...f, country: e.target.value }))} />
+                    <input className={fieldCls('country')} value={form.country} placeholder="Romania"
+                      onChange={e => { setForm(f=>({...f,country:e.target.value})); setScannedFields(s=>{const n=new Set(s);n.delete('country');return n}) }} />
                   </div>
                   <div>
                     <label className={labelCls}>Data expirării CI</label>
-                    <input className={inputCls} value={form.expiry_date} placeholder="dd.mm.yyyy"
-                      onChange={e => setForm(f => ({ ...f, expiry_date: e.target.value }))} />
+                    <input className={fieldCls('expiry_date')} value={form.expiry_date} placeholder="dd.mm.yyyy"
+                      onChange={e => { setForm(f=>({...f,expiry_date:e.target.value})); setScannedFields(s=>{const n=new Set(s);n.delete('expiry_date');return n}) }} />
                   </div>
                 </div>
+
+                {/* Cetatenie */}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className={labelCls}>Email</label>
-                    <input className={inputCls} type="email" value={form.email}
-                      onChange={e => setForm(f => ({ ...f, email: e.target.value }))} />
+                    <label className={labelCls}>Cetățenie</label>
+                    <input className={fieldCls('nationality')} value={form.nationality} placeholder="ROU"
+                      onChange={e => { setForm(f=>({...f,nationality:e.target.value.toUpperCase()})); setScannedFields(s=>{const n=new Set(s);n.delete('nationality');return n}) }} />
                   </div>
                   <div>
-                    <label className={labelCls}>Telefon</label>
-                    <input className={inputCls} type="tel" value={form.phone} placeholder="07XX XXX XXX"
-                      onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} />
+                    <label className={labelCls}>Email</label>
+                    <input className={fieldCls('email')} type="email" value={form.email}
+                      onChange={e => { setForm(f=>({...f,email:e.target.value})); setScannedFields(s=>{const n=new Set(s);n.delete('email');return n}) }} />
                   </div>
+                </div>
+
+                {/* Telefon */}
+                <div>
+                  <label className={labelCls}>Telefon</label>
+                  <input className={fieldCls('phone')} type="tel" value={form.phone} placeholder="07XX XXX XXX"
+                    onChange={e => { setForm(f=>({...f,phone:e.target.value})); setScannedFields(s=>{const n=new Set(s);n.delete('phone');return n}) }} />
                 </div>
               </div>
               {/* Buton Salvează date - compact, dreapta */}
