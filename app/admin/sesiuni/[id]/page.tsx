@@ -24,6 +24,8 @@ type Student = {
   county: string; class_caa: string; portal_status: string
   order_in_session: number; signed_at: string; session_id: string
   communication_target: boolean
+  city: string
+  country: string
 }
 type Session = { id: string; session_date: string; status: string; session_type: string; access_code: string; class_caa: string; request_number?: string; location_detail?: string; parent_session_id?: string; is_clone?: boolean; locations?: any; boats?: any; evaluators?: any; instructors?: any }
 
@@ -61,6 +63,8 @@ function CIAdminScan({ studentId, students, setStudents }: {
         if (d.address) updates.address = d.address
         if (d.county) updates.county = d.county
         if (d.expiry_date) updates.expiry_date = d.expiry_date
+        if (d.city) updates.city = d.city
+        if (d.country) updates.country = d.country
         if (d.last_name && d.first_name) updates.full_name = d.last_name.toUpperCase() + ' ' + d.first_name.toUpperCase()
         await supabase.from('students').update(updates).eq('id', studentId)
         setStudents(students.map(s => s.id === studentId ? {...s, ...updates} : s))

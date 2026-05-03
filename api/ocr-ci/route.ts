@@ -49,6 +49,12 @@ IMPORTANT:
 - Păstrează diacriticele și cratimele EXACT cum apar (Răzvan-Andrei, Căpățână)
 - Data expirării este ÎNTOTDEAUNA prezentă pe față — caută-o cu atenție
 
+REGULI IMPORTANTE pentru adresă:
+- "address" = DOAR strada + număr + bloc + scară + etaj + apartament (ex: "Str. Mihai Eminescu nr. 5, bl. A2, ap. 12")
+- "city" = localitatea (ex: "București", "Cluj-Napoca", "Constanța", "Chitila")
+- "county" = dacă city este București → "Sector X" (1-6); altfel județul fără prefix (ex: "Ilfov", "Prahova")
+- "country" = întotdeauna "Romania"
+
 Returnează DOAR JSON (fără markdown, fără explicații):
 {
   "ci_series": "2 litere",

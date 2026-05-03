@@ -22,7 +22,7 @@ export default function PortalPage() {
 
   const [form, setForm] = useState({
     phone: '', birth_date: '', ci_series: '', ci_number: '',
-    address: '', county: '', email: '', cnp: '', full_name: '', expiry_date: '', nationality: ''
+    address: '', county: '', city: '', country: 'Romania', email: '', cnp: '', full_name: '', expiry_date: '', nationality: ''
   })
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -123,6 +123,8 @@ export default function PortalPage() {
       full_name: st.full_name || '',
       expiry_date: st.expiry_date || '',
       nationality: st.nationality || '',
+      city: st.city || '',
+      country: st.country || 'Romania',
     })
     setExistingSignature(st.signature_data || null)
     setStep('confirm')
@@ -216,6 +218,8 @@ export default function PortalPage() {
       email: form.email,
       expiry_date: form.expiry_date.trim(),
       nationality: form.nationality.trim(),
+      city: form.city.trim(),
+      country: form.country.trim() || 'Romania',
       ...(form.full_name.trim() ? { full_name: form.full_name.trim() } : {}),
       ...extraData,
     }
@@ -253,6 +257,8 @@ export default function PortalPage() {
         ...(d.county      ? { county: d.county }           : {}),
         ...(d.expiry_date ? { expiry_date: d.expiry_date } : {}),
         ...(d.nationality ? { nationality: d.nationality } : {}),
+        ...(d.city       ? { city: d.city }           : {}),
+        ...(d.country    ? { country: d.country }     : {}),
         ...(fullNameFromCI ? { full_name: fullNameFromCI } : {}),
       }))
       await supabase.from('students').update({ ci_image_data: dataUrl }).eq('id', student.id)
@@ -288,6 +294,8 @@ export default function PortalPage() {
       email: form.email,
       expiry_date: form.expiry_date.trim(),
       nationality: form.nationality.trim(),
+      city: form.city.trim(),
+      country: form.country.trim() || 'Romania',
       id_document: `${form.ci_series.trim().toUpperCase()} ${form.ci_number.trim()}`,
     }
     if (sigData) updateData.signature_data = sigData
@@ -538,9 +546,21 @@ export default function PortalPage() {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className={labelCls}>Județ</label>
-                    <input className={inputCls} value={form.county} placeholder="ex: Constanța"
+                    <label className={labelCls}>Localitate</label>
+                    <input className={inputCls} value={form.city} placeholder="ex: București"
+                      onChange={e => setForm(f => ({ ...f, city: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Județ / Sector</label>
+                    <input className={inputCls} value={form.county} placeholder="ex: Sector 3 / Ilfov"
                       onChange={e => setForm(f => ({ ...f, county: e.target.value }))} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={labelCls}>Țară</label>
+                    <input className={inputCls} value={form.country} placeholder="Romania"
+                      onChange={e => setForm(f => ({ ...f, country: e.target.value }))} />
                   </div>
                   <div>
                     <label className={labelCls}>Data expirării CI</label>
