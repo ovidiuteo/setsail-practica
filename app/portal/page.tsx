@@ -53,8 +53,8 @@ export default function PortalPage() {
 
 
   // Validare CI
-  const ciSeriesValid = /^[A-Z]{2}$/.test(form.ci_series.trim())
-  const ciNumberValid = /^\d{6,7}$/.test(form.ci_number.trim())
+  const ciSeriesValid = /^[A-Z]{2}$/.test(form.ci_series.trim()) // PP pentru pasaport, sau serie CI
+  const ciNumberValid = /^\d{6,9}$/.test(form.ci_number.trim()) // 6-7 pentru CI, 9 pentru pasaport
   const canSave = ciSeriesValid && ciNumberValid
 
   useEffect(() => {
@@ -464,7 +464,7 @@ export default function PortalPage() {
                   <input
                     ref={ciInputRef}
                     type="file"
-                    accept="image/*"
+                    accept="image/*,application/pdf"
                     capture="environment"
                     className="hidden"
                     onChange={handleCIUpload}
@@ -480,11 +480,11 @@ export default function PortalPage() {
                 )}
               </div>
 
-              {/* Câmpuri CI — cu validare roșu/verde */}
+              {/* Câmpuri CI / Pașaport — cu validare */}
               <div className="grid grid-cols-2 gap-3 mb-3">
                 <div>
                   <label className={labelCls}>
-                    Serie CI *
+                    Serie CI / Tip doc *
                     {form.ci_series.trim() && (
                       ciSeriesValid
                         ? <span className="ml-1 text-green-600 font-semibold">✓</span>
@@ -494,17 +494,17 @@ export default function PortalPage() {
                   <input
                     className={ciFieldCls(form.ci_series, ciSeriesValid)}
                     value={form.ci_series}
-                    placeholder="AB"
+                    placeholder="AB sau PP"
                     maxLength={2}
                     onChange={e => setForm(f => ({ ...f, ci_series: e.target.value.toUpperCase() }))}
                   />
                   {form.ci_series.trim() && !ciSeriesValid && (
-                    <p className="text-xs text-red-500 mt-1">Exact 2 litere (ex: AB, CT, IF)</p>
+                    <p className="text-xs text-red-500 mt-1">2 litere (ex: AB, IF) sau PP pentru pașaport</p>
                   )}
                 </div>
                 <div>
                   <label className={labelCls}>
-                    Număr CI *
+                    Număr CI / Pașaport *
                     {form.ci_number.trim() && (
                       ciNumberValid
                         ? <span className="ml-1 text-green-600 font-semibold">✓</span>
@@ -514,12 +514,12 @@ export default function PortalPage() {
                   <input
                     className={ciFieldCls(form.ci_number, ciNumberValid)}
                     value={form.ci_number}
-                    placeholder="123456 sau 1234567"
+                    placeholder="123456 / 1234567 / 058339673"
                     maxLength={7}
                     onChange={e => setForm(f => ({ ...f, ci_number: e.target.value.replace(/\D/g, '') }))}
                   />
                   {form.ci_number.trim() && !ciNumberValid && (
-                    <p className="text-xs text-red-500 mt-1">6 sau 7 cifre</p>
+                    <p className="text-xs text-red-500 mt-1">6-7 cifre (CI) sau 9 cifre (pașaport)</p>
                   )}
                 </div>
               </div>
