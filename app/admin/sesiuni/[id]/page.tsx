@@ -27,10 +27,10 @@ type Session = { id: string; session_date: string; status: string; session_type:
 
 const EMPTY_ST = { full_name:'', cnp:'', email:'', phone:'', birth_date:'', ci_series:'', ci_number:'', address:'', county:'', class_caa:'C,D' }
 
-function StudentsTable({ sess, students, setStudents, allSessions, allStudents, setAllStudents, isAbsent }:
+function StudentsTable({ sess, students, setStudents, allSessions, allStudents, setAllStudents, isAbsent, onSelectionChange }:
   { sess: Session, students: Student[], setStudents:(s:Student[])=>void,
     allSessions: Session[], allStudents: Record<string,Student[]>, setAllStudents:(sid:string,s:Student[])=>void,
-    isAbsent: boolean }) {
+    isAbsent: boolean, onSelectionChange?: (emails: string[]) => void }) {
 
   const [editingId, setEditingId] = useState<string|null>(null)
   const [editValues, setEditValues] = useState<any>({})
@@ -40,6 +40,32 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
   const [adding, setAdding] = useState(false)
   const [moving, setMoving] = useState<string|null>(null)
   const [showMoveMenu, setShowMoveMenu] = useState<string|null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+
+  // Initializeaza selectia cu toti cursantii care au email
+  useEffect(() => {
+    const withEmail = new Set(students.filter(s => s.email).map(s => s.id))
+    setSelectedIds(withEmail)
+    if (onSelectionChange) onSelectionChange(students.filter(s=>s.email && withEmail.has(s.id)).map(s=>s.email))
+  }, [students.map(s=>s.id).join(',')])
+
+  function toggleSelect(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      if (onSelectionChange) onSelectionChange(students.filter(s=>s.email && next.has(s.id)).map(s=>s.email))
+      return next
+    })
+  }
+  function selectAll() {
+    const all = new Set(students.filter(s=>s.email).map(s=>s.id))
+    setSelectedIds(all)
+    if (onSelectionChange) onSelectionChange(students.filter(s=>s.email).map(s=>s.email))
+  }
+  function selectNone() {
+    setSelectedIds(new Set())
+    if (onSelectionChange) onSelectionChange([])
+  }
 
   // Sesiunile la care se poate muta (exclusiv absenti si sesiunea curenta)
   const movableToSessions = allSessions.filter(s => s.id !== sess.id && s.session_type !== 'absent')
@@ -122,10 +148,15 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
           <Users size={16} className="text-gray-400"/>
           <span className="font-semibold text-sm text-gray-900">Cursanți ({students.length})</span>
         </div>
-        <button onClick={() => {setShowAdd(true); setEditingId(null)}}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 hover:bg-gray-50">
-          <Plus size={12}/> Adaugă
-        </button>
+        <div className="flex items-center gap-2">
+          {selectedIds.size > 0 && (
+            <span className="text-xs text-blue-600 font-medium">{selectedIds.size} selectați</span>
+          )}
+          <button onClick={() => {setShowAdd(true); setEditingId(null)}}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 hover:bg-gray-50">
+            <Plus size={12}/> Adaugă
+          </button>
+        </div>
       </div>
 
       {showAdd && (
@@ -157,6 +188,12 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
           <table className="w-full text-xs">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
+                <th className="px-2 py-2.5 w-8">
+                  <div className="flex gap-1">
+                    <button onClick={selectAll} title="Selectează toți" className="text-xs text-blue-400 hover:text-blue-600 font-medium px-0.5">✓</button>
+                    <button onClick={selectNone} title="Deselectează toți" className="text-xs text-gray-300 hover:text-gray-500 font-medium px-0.5">✗</button>
+                  </div>
+                </th>
                 <th className="px-3 py-2.5 font-medium text-gray-400 w-6 text-left">#</th>
                 <th className="px-3 py-2.5 font-medium text-gray-500 text-left">Nume</th>
                 <th className="px-3 py-2.5 font-medium text-gray-500 text-left">CNP</th>
@@ -322,6 +359,13 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange }:
   const [mailSubject, setMailSubject] = useState('')
   const [mailBody, setMailBody] = useState('')
   const [mailCopied, setMailCopied] = useState<string|null>(null)
+  const [selectedEmails, setSelectedEmails] = useState<string[]>(
+    () => students.filter(s=>s.email).map(s=>s.email)
+  )
+
+  useEffect(()=>{
+    setMailTo(selectedEmails.join(', '))
+  }, [selectedEmails.join(',')])
 
   async function generateDoc(endpoint: string, filename: string) {
     const res = await fetch(endpoint, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id})})
@@ -511,6 +555,7 @@ export default function SessionDetailPage() {
   const [mainSession, setMainSession] = useState<Session|null>(null)
   const [sessions, setSessions] = useState<Session[]>([]) // principal + clone + absent
   const [studentsMap, setStudentsMap] = useState<Record<string,Student[]>>({})
+  const [mailEmailsMap, setMailEmailsMap] = useState<Record<string,string[]>>({})
   const [loading, setLoading] = useState(true)
   const [showRandomizer, setShowRandomizer] = useState(false)
   const [randomCounts, setRandomCounts] = useState<number[]>([])
@@ -519,6 +564,10 @@ export default function SessionDetailPage() {
   const [editSessionValues, setEditSessionValues] = useState<any>({})
   const [savingSession, setSavingSession] = useState(false)
   const [refs, setRefs] = useState<any>({locations:[], boats:[], evaluators:[], instructors:[]})
+
+  function setMailEmails(sessionId: string, emails: string[]) {
+    setMailEmailsMap(prev => ({...prev, [sessionId]: emails}))
+  }
 
   function setSessionStudents(sessionId: string, sts: Student[]) {
     setStudentsMap(prev => ({...prev, [sessionId]: sts}))
