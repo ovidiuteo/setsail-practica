@@ -249,6 +249,7 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
                   </div>
                 </th>
                 <th className="px-3 py-2.5 font-medium text-gray-500 text-left">Nume</th>
+                <th className="px-2 py-2.5 font-medium text-gray-500 text-center" title="Comunicare">📣</th>
                 <th className="px-3 py-2.5 font-medium text-gray-500 text-left">CNP</th>
                 <th className="px-3 py-2.5 font-medium text-gray-500 text-left">Email</th>
                 <th className="px-3 py-2.5 font-medium text-gray-500 text-left">Telefon</th>
@@ -267,6 +268,7 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
                     <td className="px-3 py-2 text-gray-300">{i+1}</td>
                     {isEditing ? (<>
                       <td className="px-1 py-1.5"><input className={inCls+' font-medium min-w-28'} value={editValues.full_name} onChange={e=>setEditValues((v:any)=>({...v,full_name:e.target.value.toUpperCase()}))}/></td>
+                      <td className="px-2 py-2 text-center"><span className="text-gray-300 text-xs">—</span></td>
                       <td className="px-1 py-1.5"><input className={inCls+' font-mono w-24'} value={editValues.cnp} onChange={e=>setEditValues((v:any)=>({...v,cnp:e.target.value}))}/></td>
                       <td className="px-1 py-1.5"><input className={inCls+' min-w-28'} value={editValues.email} onChange={e=>setEditValues((v:any)=>({...v,email:e.target.value}))}/></td>
                       <td className="px-1 py-1.5"><input className={inCls+' w-24'} value={editValues.phone} onChange={e=>setEditValues((v:any)=>({...v,phone:e.target.value}))}/></td>
@@ -283,6 +285,18 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
                       </div></td>
                     </>) : (<>
                       <td className="px-3 py-2 font-medium text-gray-900">{s.full_name}</td>
+                      <td className="px-2 py-2 text-center">
+                        <button
+                          onClick={async()=>{
+                            const newVal = !s.communication_target
+                            await supabase.from('students').update({communication_target: newVal}).eq('id', s.id)
+                            setStudents(students.map(st => st.id===s.id ? {...st, communication_target: newVal} : st))
+                          }}
+                          title={s.communication_target ? 'Activ — click dezactivează' : 'Inactiv — click activează'}
+                          className={`w-8 h-5 rounded-full transition-all relative inline-flex shrink-0 ${s.communication_target ? 'bg-green-500' : 'bg-gray-200'}`}>
+                          <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${s.communication_target ? 'left-3.5' : 'left-0.5'}`}/>
+                        </button>
+                      </td>
                       <td className="px-3 py-2 font-mono text-gray-400">{s.cnp||'—'}</td>
                       <td className="px-3 py-2 text-gray-500">{s.email||'—'}</td>
                       <td className="px-3 py-2 text-gray-500">{s.phone||'—'}</td>
