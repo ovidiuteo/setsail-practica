@@ -128,6 +128,61 @@ export default function CIImageEditor({ file, onConfirm, onCancel }: Props) {
     }
   }
 
+  // Touch helpers — doar pentru mobil, desktop foloseste mouse events
+  function toPercentTouch(touch: {clientX:number, clientY:number}) {
+    const canvas = canvasRef.current!
+    const rect = canvas.getBoundingClientRect()
+    return {
+      px: Math.max(0, Math.min(100, ((touch.clientX - rect.left) / rect.width) * 100)),
+      py: Math.max(0, Math.min(100, ((touch.clientY - rect.top) / rect.height) * 100)),
+    }
+  }
+
+  function onTouchStart(e: React.TouchEvent, handle: Handle | 'move') {
+    e.preventDefault()
+    e.stopPropagation()
+    const touch = e.touches[0]
+    const { px, py } = toPercentTouch(touch)
+    dragState.current = { handle, startX: px, startY: py, startCrop: { ...crop } }
+    window.addEventListener('touchmove', onTouchMove, { passive: false })
+    window.addEventListener('touchend', onTouchEnd)
+  }
+
+  const onTouchMove = useCallback((e: TouchEvent) => {
+    if (!dragState.current) return
+    e.preventDefault()
+    const touch = e.touches[0]
+    const { handle, startX, startY, startCrop: sc } = dragState.current
+    const canvas = canvasRef.current!
+    const rect = canvas.getBoundingClientRect()
+    const px = Math.max(0, Math.min(100, ((touch.clientX - rect.left) / rect.width) * 100))
+    const py = Math.max(0, Math.min(100, ((touch.clientY - rect.top) / rect.height) * 100))
+    const dx = px - startX
+    const dy = py - startY
+    const MIN = 5
+
+    setCrop(() => {
+      let { x, y, w, h } = sc
+      if (handle === 'move') {
+        x = Math.max(0, Math.min(100 - w, sc.x + dx))
+        y = Math.max(0, Math.min(100 - h, sc.y + dy))
+      } else {
+        if (handle.includes('l')) { const nx = Math.min(sc.x+sc.w-MIN, sc.x+dx); x=Math.max(0,nx); w=sc.x+sc.w-x }
+        if (handle.includes('r')) { w = Math.max(MIN, Math.min(100-sc.x, sc.w+dx)) }
+        if (handle.includes('t')) { const ny = Math.min(sc.y+sc.h-MIN, sc.y+dy); y=Math.max(0,ny); h=sc.y+sc.h-y }
+        if (handle.includes('b')) { h = Math.max(MIN, Math.min(100-sc.y, sc.h+dy)) }
+      }
+      return { x, y, w, h }
+    })
+    setIsCropDefault(false)
+  }, [])
+
+  const onTouchEnd = useCallback(() => {
+    dragState.current = null
+    window.removeEventListener('touchmove', onTouchMove)
+    window.removeEventListener('touchend', onTouchEnd)
+  }, [])
+
   const handles: { id: Handle; cx: number; cy: number; cursor: string }[] = [
     { id: 'tl', cx: crop.x,           cy: crop.y,           cursor: 'nw-resize' },
     { id: 't',  cx: crop.x+crop.w/2,  cy: crop.y,           cursor: 'n-resize'  },
@@ -237,24 +292,29 @@ export default function CIImageEditor({ file, onConfirm, onCancel }: Props) {
                 </svg>
               )}
 
-              {/* Handles interactive */}
+              {/* Handles interactive - touch-action none pe tot containerul */}
               {!isPDF && (
-                <>
+                <div style={{position:'absolute',inset:0,touchAction:'none',pointerEvents:'none'}}>
                   {/* Move zone */}
                   <div style={{position:'absolute', left:`${crop.x}%`, top:`${crop.y}%`, width:`${crop.w}%`, height:`${crop.h}%`, cursor:'move', pointerEvents:'all'}}
-                    onMouseDown={e=>onMouseDown(e,'move')}/>
+                    onMouseDown={e=>onMouseDown(e,'move')}
+                    onTouchStart={e=>onTouchStart(e,'move')}/>
                   {/* Resize handles */}
                   {handles.map(h=>(
                     <div key={h.id} style={{
                       position:'absolute',
-                      left:`calc(${h.cx}% - 7px)`, top:`calc(${h.cy}% - 7px)`,
-                      width:14, height:14,
-                      background:'white', border:'2.5px solid #3b82f6', borderRadius:3,
+                      left:`calc(${h.cx}% - 10px)`, top:`calc(${h.cy}% - 10px)`,
+                      width:20, height:20,  /* mai mare pe mobil pentru touch */
+                      background:'white', border:'2.5px solid #3b82f6', borderRadius:4,
                       cursor:h.cursor, pointerEvents:'all', zIndex:10,
                       boxShadow:'0 1px 4px rgba(0,0,0,0.3)',
-                    }} onMouseDown={e=>{e.stopPropagation();onMouseDown(e,h.id)}}/>
+                      touchAction:'none',
+                    }}
+                    onMouseDown={e=>{e.stopPropagation();onMouseDown(e,h.id)}}
+                    onTouchStart={e=>{e.stopPropagation();onTouchStart(e,h.id)}}
+                    />
                   ))}
-                </>
+                </div>
               )}
             </div>
           )}
