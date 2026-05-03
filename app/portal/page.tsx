@@ -280,13 +280,16 @@ export default function PortalPage() {
   async function processImageForOCR(dataUrl: string, mediaType: string) {
     setOcrStatus('loading')
     // Comprima imaginea la 800px/500KB si salveaza direct in Supabase
+    // Comprima imaginea INAINTE de OCR si salveaza in DB
+    let compressedImg = dataUrl
     if (student?.id) {
-      const compressedForDb = await compressImage(dataUrl)
-      const sizeKB = Math.round(compressedForDb.length / 1024)
+      compressedImg = await compressImage(dataUrl)
+      const sizeKB = Math.round(compressedImg.length / 1024)
       console.log(`Salvare CI: ${sizeKB}KB in Supabase`)
-      await supabase.from('students').update({ ci_image_data: compressedForDb }).eq('id', student.id)
+      await supabase.from('students').update({ ci_image_data: compressedImg }).eq('id', student.id)
     }
     try {
+      // Trimite imaginea originala la OCR (mai clara)
       const res = await fetch('/api/ocr-ci', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -311,9 +314,9 @@ export default function PortalPage() {
         ...(d.country    ? { country: d.country }     : {}),
         ...(fullNameFromCI ? { full_name: fullNameFromCI } : {}),
       }))
-      // Salveaza datele OCR (imaginea e deja salvata mai sus)
+      // Salveaza datele OCR - ci_image_data e deja comprimat in DB, folosim compressedImg pentru state
       const ocrSave: any = {
-        ci_image_data: dataUrl,  // pentru state local (afisare)
+        ci_image_data: compressedImg,  // imaginea comprimata pentru state local
         ...(d.ci_series    ? { ci_series: d.ci_series }     : {}),
         ...(d.ci_number    ? { ci_number: d.ci_number }     : {}),
         ...(d.cnp          ? { cnp: d.cnp }                 : {}),
