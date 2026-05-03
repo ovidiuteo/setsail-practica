@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Download, FileText, Users, Copy, Plus, Trash2, Check, X, Pencil, GitBranch, ArrowRight, UserX } from 'lucide-react'
+import { ArrowLeft, Download, FileText, Users, Copy, Plus, Trash2, Check, X, Pencil, GitBranch, ArrowRight, UserX, Mail, ChevronDown } from 'lucide-react'
 
 const statusMap: Record<string, { label: string; color: string; bg: string }> = {
   draft:     { label: 'Ciornă',     color: '#6b7280', bg: '#6b728020' },
@@ -286,12 +286,42 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
   )
 }
 
+const QUICK_TEMPLATES = [
+  {
+    label: '🔗 Link portal',
+    subject: 'Acces portal cursanți - SetSail Practică',
+    body: (sess: any) => `Stimate/Stimată cursant,\n\nVă rugăm să accesați portalul SetSail Practică și să completați datele personale (serie CI, număr CI, semnătură) înainte de data sesiunii.\n\nLink portal: ${typeof window !== 'undefined' ? window.location.origin : 'https://setsail-practica.vercel.app'}/portal?cod=${sess.access_code}\n\nData sesiunii: ${new Date(sess.session_date).toLocaleDateString('ro-RO', {day:'2-digit', month:'long', year:'numeric'})}\nLocația: ${sess.location_detail || sess.locations?.name || ''}\n\nVă mulțumim,\nEchipa SetSail`,
+  },
+  {
+    label: '⏰ Completați portalul',
+    subject: 'Reminder: date lipsă în portal - SetSail Practică',
+    body: (sess: any) => `Stimate/Stimată cursant,\n\nAm observat că nu ați completat încă datele personale în portalul SetSail Practică. Sesiunea de practică se apropie și avem nevoie de datele dvs. (serie CI, număr CI) pentru a putea emite documentele oficiale.\n\nVă rugăm să accesați portalul cât mai curând:\n${typeof window !== 'undefined' ? window.location.origin : 'https://setsail-practica.vercel.app'}/portal?cod=${sess.access_code}\n\nData sesiunii: ${new Date(sess.session_date).toLocaleDateString('ro-RO', {day:'2-digit', month:'long', year:'numeric'})}\n\nVă mulțumim,\nEchipa SetSail`,
+  },
+  {
+    label: '📅 Reminder sesiune',
+    subject: 'Reminder: sesiunea de practică are loc mâine',
+    body: (sess: any) => `Stimate/Stimată cursant,\n\nVă reamintim că sesiunea de practică de conducere a ambarcațiunii de agrement are loc mâine.\n\nData: ${new Date(sess.session_date).toLocaleDateString('ro-RO', {day:'2-digit', month:'long', year:'numeric'})}\nLocația: ${sess.location_detail || sess.locations?.name || ''}\nAmbarcațiunea: ${sess.boats?.name || ''}\n\nVă rugăm să fiți prezenți cu 15 minute înainte și să aveți cartea de identitate la dumneavoastră.\n\nSucces!\nEchipa SetSail`,
+  },
+]
+
+const DROPDOWN_TEMPLATES = [
+  { label: 'Modificare dată sesiune', subject: 'Modificare dată sesiune de practică', body: 'Stimate/Stimată cursant,\n\nVă informăm că sesiunea de practică a suferit modificări de dată.\n\nNoua dată: [data nouă]\nLocația: [locație]\n\nVă rugăm să confirmați participarea.\n\nCu stimă,\nEchipa SetSail' },
+  { label: 'Documente necesare', subject: 'Documente necesare pentru examenul practic', body: 'Stimate/Stimată cursant,\n\nVă rugăm să aveți asupra dvs. la prezentare:\n- Cartea de identitate (original)\n- Adeverința de curs\n- Chitanța de plată taxă examen\n\nCu stimă,\nEchipa SetSail' },
+  { label: 'Felicitări promovare', subject: 'Felicitări pentru promovarea examenului practic!', body: 'Stimate/Stimată cursant,\n\nVă felicităm pentru promovarea cu succes a examenului practic!\n\nCertificatul dumneavoastră va fi emis în cel mai scurt timp.\n\nCu stimă,\nEchipa SetSail' },
+  { label: 'Informații locație', subject: 'Informații locație examen practic', body: 'Stimate/Stimată cursant,\n\nVă transmitem detalii despre locația sesiunii de practică:\n\n[adresa locației]\n\nVă recomandăm să sosiți cu 15 minute înainte.\n\nCu stimă,\nEchipa SetSail' },
+]
+
 function SidebarCard({ sess, students, allStatuses, onStatusChange }:
   { sess: Session, students: Student[], allStatuses: string[], onStatusChange:(sid:string,status:string)=>void }) {
   const [gPV, setGPV] = useState(false)
   const [gFise, setGFise] = useState(false)
   const [gPDF, setGPDF] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [showMail, setShowMail] = useState(false)
+  const [mailTo, setMailTo] = useState('')
+  const [mailSubject, setMailSubject] = useState('')
+  const [mailBody, setMailBody] = useState('')
+  const [mailCopied, setMailCopied] = useState<string|null>(null)
 
   async function generateDoc(endpoint: string, filename: string) {
     const res = await fetch(endpoint, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id})})
@@ -376,6 +406,99 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange }:
                 <Download size={13}/>{gPDF?'Se generează...':'Fișe PDF cu semnături'}
               </button>
             </div>
+          </div>
+
+          {/* Mailing */}
+          <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+            <button onClick={()=>{
+              if(!showMail) {
+                const emails = students.filter(s=>s.email).map(s=>s.email).join(', ')
+                setMailTo(emails)
+              }
+              setShowMail(!showMail)
+            }} className="w-full flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Mail size={14} className="text-gray-400"/>
+                <h3 className="font-semibold text-sm text-gray-900">Mailing cursanți</h3>
+              </div>
+              <ChevronDown size={14} className={`text-gray-400 transition-transform ${showMail?'rotate-180':''}`}/>
+            </button>
+
+            {showMail && (
+              <div className="mt-4 space-y-3">
+                {/* BCC */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs text-gray-400">BCC (toți cursanții)</label>
+                    <button onClick={()=>{navigator.clipboard.writeText(mailTo);setMailCopied('bcc');setTimeout(()=>setMailCopied(null),2000)}}
+                      className="text-xs text-blue-500 hover:text-blue-700 flex items-center gap-1">
+                      <Copy size={11}/>{mailCopied==='bcc'?'Copiat!':'Copiază'}
+                    </button>
+                  </div>
+                  <textarea rows={2} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400 resize-none font-mono"
+                    value={mailTo} onChange={e=>setMailTo(e.target.value)}/>
+                </div>
+
+                {/* Subiect */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs text-gray-400">Subiect</label>
+                    <button onClick={()=>{navigator.clipboard.writeText(mailSubject);setMailCopied('subj');setTimeout(()=>setMailCopied(null),2000)}}
+                      className="text-xs text-blue-500 hover:text-blue-700 flex items-center gap-1">
+                      <Copy size={11}/>{mailCopied==='subj'?'Copiat!':'Copiază'}
+                    </button>
+                  </div>
+                  <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+                    value={mailSubject} onChange={e=>setMailSubject(e.target.value)} placeholder="Subiect email..."/>
+                </div>
+
+                {/* Mesaj */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs text-gray-400">Mesaj</label>
+                    <button onClick={()=>{navigator.clipboard.writeText(mailBody);setMailCopied('body');setTimeout(()=>setMailCopied(null),2000)}}
+                      className="text-xs text-blue-500 hover:text-blue-700 flex items-center gap-1">
+                      <Copy size={11}/>{mailCopied==='body'?'Copiat!':'Copiază tot'}
+                    </button>
+                  </div>
+                  <textarea rows={6} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400 resize-y font-mono"
+                    value={mailBody} onChange={e=>setMailBody(e.target.value)} placeholder="Scrie sau selectează un template..."/>
+                </div>
+
+                {/* Template-uri rapide */}
+                <div>
+                  <div className="text-xs text-gray-400 mb-1.5">Template-uri rapide:</div>
+                  <div className="flex flex-col gap-1.5">
+                    {QUICK_TEMPLATES.map((t,i) => (
+                      <button key={i} onClick={()=>{setMailSubject(t.subject);setMailBody(t.body(sess))}}
+                        className="text-left px-3 py-2 rounded-lg text-xs border border-gray-200 hover:bg-blue-50 hover:border-blue-200 transition-colors">
+                        {t.label}
+                      </button>
+                    ))}
+                    {/* Dropdown template-uri extra */}
+                    <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none bg-white"
+                      onChange={e=>{
+                        const t = DROPDOWN_TEMPLATES[parseInt(e.target.value)]
+                        if(t){setMailSubject(t.subject);setMailBody(t.body)}
+                        e.target.value = ''
+                      }} defaultValue="">
+                      <option value="" disabled>+ Alte template-uri...</option>
+                      {DROPDOWN_TEMPLATES.map((t,i)=>(
+                        <option key={i} value={i}>{t.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                {/* Buton deschide Gmail */}
+                <a href={`https://mail.google.com/mail/?view=cm&bcc=${encodeURIComponent(mailTo)}&su=${encodeURIComponent(mailSubject)}&body=${encodeURIComponent(mailBody)}`}
+                  target="_blank" rel="noopener noreferrer"
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-medium text-white"
+                  style={{background:'#0a1628'}}>
+                  <Mail size={13}/> Deschide în Gmail
+                </a>
+              </div>
+            )}
           </div>
         </>
       )}
