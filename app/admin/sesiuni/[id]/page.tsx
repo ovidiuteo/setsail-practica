@@ -67,8 +67,9 @@ function CIAdminScan({ studentId, students, setStudents }: {
         if (d.country) updates.country = d.country
         if (d.last_name && d.first_name) updates.full_name = d.last_name.toUpperCase() + ' ' + d.first_name.toUpperCase()
         await supabase.from('students').update(updates).eq('id', studentId)
-        // Re-fetch cursantul din DB pentru a obtine datele actuale
-        setStudents(students.map(s => s.id === studentId ? {...s, ...updates} : s))
+        // Re-fetch din DB pentru a garanta ca avem imaginea noua, nu cea din cache
+        const { data: fresh } = await supabase.from('students').select('*').eq('id', studentId).single()
+        setStudents(students.map(s => s.id === studentId ? (fresh || {...s, ...updates}) : s))
         setDone(true)
         setTimeout(() => setDone(false), 3000)
       }

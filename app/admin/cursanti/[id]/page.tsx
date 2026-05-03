@@ -57,6 +57,7 @@ export default function CursantAdminPage() {
   const [scanStatus, setScanStatus] = useState<'idle' | 'ok' | 'error'>('idle')
   const [copied, setCopied] = useState<string | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [imgKey, setImgKey] = useState(Date.now())
   const ciInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -115,7 +116,12 @@ export default function CursantAdminPage() {
         if (fullName)      updates.full_name = fullName
         setForm(f => ({ ...f, ...updates }))
         await supabase.from('students').update(updates).eq('id', id)
-        setStudent(s => s ? { ...s, ...updates } : s)
+        // Re-fetch din DB pentru a garanta ca avem imaginea corecta
+        const { data: fresh } = await supabase.from('students').select('*').eq('id', id).single()
+        if (fresh) setStudent(fresh)
+        else setStudent(s => s ? { ...s, ...updates } : s)
+        setForm(f => ({ ...f, ...updates }))
+        setImgKey(Date.now()) // forteaza re-render imagine
         setScanStatus('ok')
       } else { setScanStatus('error') }
     } catch { setScanStatus('error') }
@@ -306,7 +312,7 @@ export default function CursantAdminPage() {
               <div>
                 <div className="relative group rounded-xl overflow-hidden border border-gray-100 cursor-pointer"
                   onClick={() => { const w = window.open('', '_blank'); w?.document.write(`<img src="${student.ci_image_data}" style="max-width:100%;"/>`) }}>
-                  <img src={student.ci_image_data} alt="CI" className="w-full object-cover" style={{ maxHeight: 160 }}/>
+                  <img key={imgKey} src={student.ci_image_data} alt="CI" className="w-full object-cover" style={{ maxHeight: 160 }}/>
                   <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all flex items-center justify-center">
                     <ExternalLink size={20} className="text-white opacity-0 group-hover:opacity-100 transition-all"/>
                   </div>
