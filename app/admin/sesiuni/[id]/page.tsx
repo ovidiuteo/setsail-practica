@@ -42,18 +42,16 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
   const [moving, setMoving] = useState<string|null>(null)
   const [showMoveMenu, setShowMoveMenu] = useState<string|null>(null)
   function toggleSelect(id: string) {
+    const s = students.find(st=>st.id===id)
+    if (!s?.email) return
     const next = new Set(selectedIds)
     next.has(id) ? next.delete(id) : next.add(id)
-    if (onSelectionChange) onSelectionChange(students.filter(s=>s.email && next.has(s.id)).map(s=>s.email))
     setSelectedIds(next)
   }
   function selectAll() {
-    const all = new Set(students.filter(s=>s.email).map(s=>s.id))
-    if (onSelectionChange) onSelectionChange(students.filter(s=>s.email).map(s=>s.email))
-    setSelectedIds(all)
+    setSelectedIds(new Set(students.filter(s=>s.email).map(s=>s.id)))
   }
   function selectNone() {
-    if (onSelectionChange) onSelectionChange([])
     setSelectedIds(new Set())
   }
 
@@ -178,15 +176,14 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
           <table className="w-full text-xs">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="px-3 py-2.5 w-12">
-                  <div className="flex flex-col gap-1">
-                    <button onClick={selectAll} title="Selectează toți"
-                      className="text-xs text-blue-500 hover:text-blue-700 font-semibold leading-none">All</button>
-                    <button onClick={selectNone} title="Deselectează toți"
-                      className="text-xs text-gray-400 hover:text-gray-600 font-semibold leading-none">None</button>
+                <th className="px-3 py-2.5 font-medium text-gray-400 w-6 text-left">#</th>
+                <th className="px-2 py-2.5 w-10">
+                  <div className="flex gap-1.5 items-center">
+                    <button onClick={selectAll} className="text-xs text-blue-500 hover:text-blue-700 font-semibold">All</button>
+                    <span className="text-gray-300 text-xs">/</span>
+                    <button onClick={selectNone} className="text-xs text-gray-400 hover:text-gray-600 font-semibold">None</button>
                   </div>
                 </th>
-                <th className="px-3 py-2.5 font-medium text-gray-400 w-6 text-left">#</th>
                 <th className="px-3 py-2.5 font-medium text-gray-500 text-left">Nume</th>
                 <th className="px-3 py-2.5 font-medium text-gray-500 text-left">CNP</th>
                 <th className="px-3 py-2.5 font-medium text-gray-500 text-left">Email</th>
