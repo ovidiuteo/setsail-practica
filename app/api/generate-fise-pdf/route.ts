@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { getHeaderImage } from '@/lib/antete'
 
 export async function POST(req: NextRequest) {
   const { session_id } = await req.json()
@@ -11,147 +10,119 @@ export async function POST(req: NextRequest) {
   )
 
   const { data: session } = await supabase
-    .from('sessions')
-    .select('*, locations(*), boats(*), evaluators(*), instructors(*)')
-    .eq('id', session_id)
-    .single()
+    .from('sessions').select('*, locations(*), boats(*), evaluators(*), instructors(*)')
+    .eq('id', session_id).single()
 
   const { data: students } = await supabase
-    .from('students')
-    .select('*')
-    .eq('session_id', session_id)
-    .order('order_in_session')
+    .from('students').select('*').eq('session_id', session_id).order('order_in_session')
 
-  if (!session || !students) {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  }
-
-  const headerImageBuffer = getHeaderImage(session.locations?.header_image || null)
-  const headerB64 = headerImageBuffer ? headerImageBuffer.toString('base64') : null
+  if (!session || !students) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const sessionDate = new Date(session.session_date).toLocaleDateString('ro-RO', {
     day: '2-digit', month: 'long', year: 'numeric'
   })
-  const dateStr = session.session_date.replace(/-/g, '_')
 
+  // Exact aceleasi texte ca in DOCX
   const evalRows = [
     {
-      req: 'Verificarea inițială a ambarcațiunii înainte de plecare de la cheu, a situației traficului din jurul ambarcațiunii, a condițiilor meteo.',
-      apt: 'Verificare stare tehnică a echipamentelor din dotare și a echipamentelor de siguranță (colaci salvare, veste salvare, echipament comunicații, VHF, etc.)',
+      req: 'Verificarea iniţială a ambarcaţiunii înainte de plecare de la cheu, a situaţiei traficului din jurul ambarcaţiunii, a condiţiilor meteo.',
+      apt: 'Verificare stare tehnică a echipamentelor din dotare şi a echipamentelor de siguranţă (colaci salvare, veste salvare, echipament comunicaţii, aparatura/echipamente ambarcaţiune, mod funcţionare motor/instalaţie guvernare, VHF, etc.)',
     },
     {
-      req: 'Demonstrare cunoștințe de marinărie.',
-      apt: 'Recunoaștere/folosire accesorii punte, parâme, recunoaștere/executare noduri marinărești, volte, etc.',
+      req: 'Demonstrare cunostinţe de marinărie.',
+      apt: 'Recunoaştere/folosire accesorii punte, parâme, recunoaştere/executare noduri marinăreşti, volte, etc.',
     },
     {
-      req: 'Demonstrare cunoștințe de manevră a ambarcațiunii.',
-      apt: 'Operarea ambarcației (plecare de la cheu/acostare la cheu/ancorare, modul de molare a parâmelor, darea parâmelor și mod de luare a voltelor), conduita la întâlnirea și/sau depășirea altei nave.',
+      req: 'Demonstrare cunostinţe de manevră a ambarcaţiunii.',
+      apt: 'Operarea ambarcaţiunii (plecare de la cheu/acostare la cheu/ancorare, modul de molare a parâmelor, darea parâmelor şi mod de luare a voltelor), conduita la întâlnirea şi/sau depăşirea altei nave.',
     },
     {
-      req: 'Demonstrare cunoștințe de salvare/prevenire poluare.',
-      apt: 'Manevra de om la apă (recuperarea în siguranță a unui colac de salvare aflat la apă), folosirea dispozitivelor și a echipamentelor de salvare a vieții, prevenirea și combaterea incendiilor, evitarea poluării.',
+      req: 'Demonstrare cunostinţe de salvare/prevenire poluare.',
+      apt: 'Manevra de om la apă (recuperarea în siguranţă a unui colac de salvare aflat la apă), folosirea dispozitivelor şi a echipamentelor de salvare a vieţii, prevenirea şi combaterea incendiilor, evitarea poluării.',
     },
   ]
 
-  const footerLine1: string = (session.locations as any)?.footer_line1 || ''
-  const footerLine2: string = (session.locations as any)?.footer_line2 || ''
-  const footerLine3: string = (session.locations as any)?.footer_line3 || ''
-  const hasFooter: boolean = !!(footerLine1 || footerLine2 || footerLine3)
-
-  // Build HTML for all pages
-  function footerHtml(): string {
-    if (!hasFooter) return ""
-    return `<div style="text-align:center;margin-top:12px;padding-top:6px;border-top:0.5px solid #ccc;"><div style="font-size:8pt;color:#444;">${footerLine1}</div><div style="font-size:8pt;color:#444;">${footerLine2}</div><div style="font-size:8pt;font-weight:bold;color:#444;">${footerLine3}</div></div>`
+  function dot(val: string | null | undefined) {
+    return val || '___________________________________'
   }
 
-  function studentPage(s: any, idx: number): string {
+  function studentPage(s: any): string {
     const ciDoc = s.ci_series && s.ci_number
       ? `${s.ci_series} ${s.ci_number}`
-      : (s.id_document || '')
-
-    const domiciliu = [s.address, s.county].filter(Boolean).join(', ')
+      : (s.id_document || '___________________________')
 
     const sigHtml = s.signature_data
-      ? `<img src="${s.signature_data}" style="height:45px;max-width:160px;display:block;margin-top:4px;" />`
-      : `<div style="border-bottom:1px solid #000;width:160px;height:45px;"></div>`
+      ? `<img src="${s.signature_data}" style="height:55px;max-width:160px;display:block;margin-top:2px;" />`
+      : `<div style="height:40px;"></div>`
 
     const evalRowsHtml = evalRows.map(r => `
       <tr>
-        <td style="border:1px solid #000;padding:5px 6px;font-size:12pt;vertical-align:top;">${r.req}</td>
-        <td style="border:1px solid #000;padding:5px 6px;font-size:12pt;vertical-align:top;">${r.apt}</td>
-        <td style="border:1px solid #000;padding:5px 6px;font-size:12pt;vertical-align:top;"></td>
+        <td style="border:1px solid #000;padding:5px 6px;font-size:10pt;vertical-align:top;font-weight:bold;width:33%;">${r.req}</td>
+        <td style="border:1px solid #000;padding:5px 6px;font-size:10pt;vertical-align:top;width:49%;">${r.apt}</td>
+        <td style="border:1px solid #000;padding:5px 6px;font-size:10pt;vertical-align:top;width:18%;"></td>
       </tr>`).join('')
 
-    const headerHtml = ''  // fara antet
+    return `<div style="
+      width:210mm; height:297mm;
+      padding:14mm 13mm 10mm 15mm;
+      box-sizing:border-box;
+      font-family:Arial,sans-serif;
+      font-size:11pt;
+      color:#000;
+      page-break-after:always;
+      overflow:hidden;
+    ">
 
-    return `
-    <div style="page-break-after:${idx < students.length - 1 ? 'always' : 'auto'};padding:14mm 14mm 10mm 14mm;font-family:Arial,sans-serif;font-size:12pt;color:#000;">
-
-      ${headerHtml}
-
-      <div style="font-weight:bold;font-size:16pt;margin-bottom:2px;">Fișă de verificare aptitudini</div>
-      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:28px;">
-        <div style="font-weight:bold;font-size:15pt;">pentru conducerea și manevra ambarcațiunii de agrement</div>
-        <div style="font-size:12pt;white-space:nowrap;padding-left:24px;">Anexa 10</div>
+      <!-- TITLU -->
+      <p style="font-size:15pt;font-weight:bold;margin:0 0 2px 0;">Fișă de verificare aptitudini</p>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px;">
+        <span style="font-size:15pt;font-weight:bold;">pentru conducerea și manevra ambarcațiunii de agrement</span>
+        <span style="font-size:11pt;white-space:nowrap;padding-left:20px;">Anexa 10</span>
       </div>
-      <div style="font-size:12pt;margin-bottom:8px;">Pentru obținerea Certificatului Internațional de Conducător de ambarcațiune de agrement</div>
 
-      <table style="width:100%;border-collapse:collapse;margin-bottom:6px;">
-        <tr>
-          <td style="padding:2px 0;width:50%;"><b>CLASA:</b> ${(s.class_caa || session.class_caa || '').replace(',', '+')}</td>
-          <td style="padding:2px 0;"><b>Perioada:</b> ${sessionDate}</td>
-        </tr>
-        <tr>
-          <td colspan="2" style="padding:2px 0;"><b>Numele și prenumele:</b> ${s.full_name || ''}</td>
-        </tr>
-        <tr>
-          <td style="padding:2px 0;"><b>CNP:</b> ${s.cnp || '.............................'}</td>
-          <td style="padding:2px 0;"><b>Document identitate:</b> ${ciDoc || '...............'}</td>
-        </tr>
-        ${domiciliu ? `<tr><td colspan="2" style="padding:2px 0;"><b>Domiciliu:</b> ${domiciliu}</td></tr>` : ''}
-        ${s.email || s.phone ? `<tr>
-          <td style="padding:2px 0;">${s.email ? `<b>Email:</b> ${s.email}` : ''}</td>
-          <td style="padding:2px 0;">${s.phone ? `<b>Tel:</b> ${s.phone}` : ''}</td>
-        </tr>` : ''}
-      </table>
+      <!-- DATE CANDIDAT -->
+      <p style="font-size:11pt;font-weight:bold;margin:0 0 5px 0;">Pentru obţinerea Certificatului Internaţional de Conducător de ambarcațiune de agrement</p>
+      <p style="margin:0 0 4px 0;font-size:11pt;"><b>CLASA:</b> ${(s.class_caa || session.class_caa || '').replace(',', '+') || '___________'}</p>
+      <p style="margin:0 0 4px 0;font-size:11pt;"><b>Perioada de desfăşurare curs:</b> ${sessionDate}</p>
+      <p style="margin:0 0 6px 0;font-size:11pt;"><b>Numele şi prenumele candidatului:</b> ${s.full_name || '_______________________________________________'}</p>
+      <p style="margin:0 0 4px 0;font-size:11pt;"><b>CNP:</b> ${dot(s.cnp)}</p>
+      <p style="margin:0 0 10px 0;font-size:11pt;"><b>Document de identitate:</b> ${ciDoc}</p>
 
-      <div style="font-weight:bold;margin-bottom:4px;">Verificări:</div>
+      <!-- TABEL VERIFICĂRI -->
+      <p style="font-weight:bold;font-size:11pt;margin:0 0 4px 0;">Verificări:</p>
       <table style="width:100%;border-collapse:collapse;margin-bottom:8px;">
         <thead>
-          <tr style="background:#e0e0e0;">
-            <th style="border:1px solid #000;padding:4px 6px;font-size:12pt;width:35%;text-align:center;">Cerințe</th>
-            <th style="border:1px solid #000;padding:4px 6px;font-size:12pt;width:48%;text-align:center;">Aptitudini</th>
-            <th style="border:1px solid #000;padding:4px 6px;font-size:12pt;width:17%;text-align:center;">Obs. (admis/respins)</th>
+          <tr>
+            <th style="border:1px solid #000;padding:4px 6px;font-size:11pt;width:33%;text-align:center;">Cerinţe</th>
+            <th style="border:1px solid #000;padding:4px 6px;font-size:11pt;width:49%;text-align:center;font-style:italic;">Aptitudini</th>
+            <th style="border:1px solid #000;padding:4px 6px;font-size:11pt;width:18%;text-align:center;font-style:italic;">Observaţii (admis / respins)</th>
           </tr>
         </thead>
         <tbody>${evalRowsHtml}</tbody>
       </table>
 
-      <div style="margin-bottom:10px;font-size:12pt;">
-        Rezultat evaluare finală .............................................................................(admis/respins)
+      <!-- REZULTAT -->
+      <p style="margin:8px 0 10px 0;font-size:11pt;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Rezultat evaluare finală .......................................................................(admis/respins)</p>
+
+      <!-- SEMNĂTURI -->
+      <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+        <span style="font-size:11pt;"><b>Data:</b> ${sessionDate}</span>
+        <span style="font-size:11pt;">Intocmit,</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:2px;">
+        <span></span>
+        <span style="font-size:11pt;">Nume şi prenume/semnătura</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;margin-bottom:14px;">
+        <span></span>
+        <span style="font-size:11pt;font-weight:bold;">${session.evaluators?.full_name || '............................'}</span>
       </div>
 
-      <table style="width:100%;border-collapse:collapse;">
-        <tr>
-          <td style="width:50%;padding:2px 0;font-size:12pt;"><b>Data:</b> ${sessionDate}</td>
-          <td style="text-align:right;font-size:12pt;"><b>Întocmit,</b></td>
-        </tr>
-        <tr>
-          <td style="padding-top:4px;">
-            <div style="font-size:12pt;font-weight:bold;margin-bottom:2px;">Semnătura cursant: ${s.full_name || ''}</div>
-            ${sigHtml}
-          </td>
-          <td style="vertical-align:bottom;text-align:right;padding-top:4px;">
-            <div style="font-size:12pt;">Nume și prenume / semnătura evaluator</div>
-            <div style="border-bottom:1px solid #000;width:160px;height:30px;display:inline-block;margin-top:4px;"></div>
-          </td>
-        </tr>
-      </table>
-
-      ${footerHtml()}
-      <div style="text-align:center;font-size:6pt;color:#aaa;margin-top:4px;">
-        SetSail Advertising SRL — ${session.locations?.name || ''} — ${sessionDate} — ${idx + 1}/${students.length}
-      </div>
+      <!-- SEMNĂTURĂ CURSANT -->
+      <p style="font-size:11pt;margin:0 0 2px 0;">Nume şi prenume/semnătura cursant</p>
+      <p style="font-size:11pt;font-weight:bold;margin:0 0 4px 0;">${s.full_name || '............................'}</p>
+      ${sigHtml}
+      <p style="font-size:11pt;margin:4px 0 0 0;">............................ .............................</p>
     </div>`
   }
 
@@ -161,16 +132,16 @@ export async function POST(req: NextRequest) {
 <meta charset="UTF-8">
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
-  body { background:#fff; }
+  html, body { background:#fff; }
+  @page { size:A4 portrait; margin:0; }
   @media print { body { margin:0; } }
 </style>
 </head>
 <body>
-${students.map((s: any, i: number) => studentPage(s, i)).join('\n')}
+${students.map((s: any) => studentPage(s)).join('\n')}
 </body>
 </html>`
 
-  // Return HTML optimizat pentru print / salvare ca PDF
   return new NextResponse(fullHtml, {
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
