@@ -355,13 +355,12 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
                       </td>
                       {/* # */}
                       <td className="px-2 py-2 text-gray-300 text-xs text-right">{i+1}</td>
-                      {/* Nume — click deschide portal */}
+                      {/* Nume — click deschide pagina admin cursant */}
                       <td className="px-2 py-2">
-                        <a href={`/portal?cod=${sess.access_code}&email=${encodeURIComponent(s.email||'')}`}
-                          target="_blank" rel="noopener noreferrer"
-                          className="font-medium text-gray-900 hover:text-blue-600 hover:underline cursor-pointer text-xs">
+                        <Link href={`/admin/cursanti/${s.id}`}
+                          className="font-medium text-gray-900 hover:text-blue-600 hover:underline cursor-pointer text-xs block">
                           {s.full_name}
-                        </a>
+                        </Link>
                       </td>
                       {/* Email cu buton copy */}
                       <td className="px-2 py-2 text-gray-500 text-xs">
