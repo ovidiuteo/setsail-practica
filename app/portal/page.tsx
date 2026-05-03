@@ -244,6 +244,10 @@ export default function PortalPage() {
 
   async function processImageForOCR(dataUrl: string, mediaType: string) {
     setOcrStatus('loading')
+    // Salvam imaginea direct in Supabase INAINTE de OCR (evitam limita Vercel 4.5MB)
+    if (student?.id) {
+      await supabase.from('students').update({ ci_image_data: dataUrl }).eq('id', student.id)
+    }
     try {
       const res = await fetch('/api/ocr-ci', {
         method: 'POST',
@@ -269,9 +273,9 @@ export default function PortalPage() {
         ...(d.country    ? { country: d.country }     : {}),
         ...(fullNameFromCI ? { full_name: fullNameFromCI } : {}),
       }))
-      // Salveaza imaginea SI toate datele OCR intr-un singur update
+      // Salveaza datele OCR (imaginea e deja salvata)
       const ocrSave: any = {
-        ci_image_data: dataUrl,
+        ci_image_data: dataUrl,  // suprascrie cu aceeasi imagine (confirmare)
         ...(d.ci_series    ? { ci_series: d.ci_series }     : {}),
         ...(d.ci_number    ? { ci_number: d.ci_number }     : {}),
         ...(d.cnp          ? { cnp: d.cnp }                 : {}),
