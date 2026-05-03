@@ -27,10 +27,11 @@ type Session = { id: string; session_date: string; status: string; session_type:
 
 const EMPTY_ST = { full_name:'', cnp:'', email:'', phone:'', birth_date:'', ci_series:'', ci_number:'', address:'', county:'', class_caa:'C,D' }
 
-function StudentsTable({ sess, students, setStudents, allSessions, allStudents, setAllStudents, isAbsent, onSelectionChange }:
+function StudentsTable({ sess, students, setStudents, allSessions, allStudents, setAllStudents, isAbsent, onSelectionChange, selectedIds, setSelectedIds }:
   { sess: Session, students: Student[], setStudents:(s:Student[])=>void,
     allSessions: Session[], allStudents: Record<string,Student[]>, setAllStudents:(sid:string,s:Student[])=>void,
-    isAbsent: boolean, onSelectionChange?: (emails: string[]) => void }) {
+    isAbsent: boolean, onSelectionChange?: (emails: string[]) => void,
+    selectedIds: Set<string>, setSelectedIds: (s: Set<string>) => void }) {
 
   const [editingId, setEditingId] = useState<string|null>(null)
   const [editValues, setEditValues] = useState<any>({})
@@ -40,34 +41,20 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
   const [adding, setAdding] = useState(false)
   const [moving, setMoving] = useState<string|null>(null)
   const [showMoveMenu, setShowMoveMenu] = useState<string|null>(null)
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-
-  // Initializeaza selectia DOAR la montare (nu la fiecare re-render)
-  const initializedRef = useRef(false)
-  useEffect(() => {
-    if (initializedRef.current) return
-    initializedRef.current = true
-    const withEmail = new Set(students.filter(s => s.email).map(s => s.id))
-    setSelectedIds(withEmail)
-    if (onSelectionChange) onSelectionChange(students.filter(s=>s.email && withEmail.has(s.id)).map(s=>s.email))
-  }, [])
-
   function toggleSelect(id: string) {
-    setSelectedIds(prev => {
-      const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
-      if (onSelectionChange) onSelectionChange(students.filter(s=>s.email && next.has(s.id)).map(s=>s.email))
-      return next
-    })
+    const next = new Set(selectedIds)
+    next.has(id) ? next.delete(id) : next.add(id)
+    if (onSelectionChange) onSelectionChange(students.filter(s=>s.email && next.has(s.id)).map(s=>s.email))
+    setSelectedIds(next)
   }
   function selectAll() {
     const all = new Set(students.filter(s=>s.email).map(s=>s.id))
-    setSelectedIds(all)
     if (onSelectionChange) onSelectionChange(students.filter(s=>s.email).map(s=>s.email))
+    setSelectedIds(all)
   }
   function selectNone() {
-    setSelectedIds(new Set())
     if (onSelectionChange) onSelectionChange([])
+    setSelectedIds(new Set())
   }
 
   // Sesiunile la care se poate muta (exclusiv absenti si sesiunea curenta)
@@ -561,6 +548,22 @@ export default function SessionDetailPage() {
   const [sessions, setSessions] = useState<Session[]>([]) // principal + clone + absent
   const [studentsMap, setStudentsMap] = useState<Record<string,Student[]>>({})
   const [mailEmailsMap, setMailEmailsMap] = useState<Record<string,string[]>>({})
+  const [selectedIdsMap, setSelectedIdsMap] = useState<Record<string,Set<string>>>({})
+
+  function getSelectedIds(sessionId: string, sts: Student[]): Set<string> {
+    if (selectedIdsMap[sessionId]) return selectedIdsMap[sessionId]
+    // Default: toti cu email selectati
+    return new Set(sts.filter(s=>s.email).map(s=>s.id))
+  }
+  function setSelectedIds(sessionId: string, ids: Set<string>) {
+    setSelectedIdsMap(prev => ({...prev, [sessionId]: ids}))
+    // Actualizeaza emailurile
+    const emails = Array.from(ids).map(id => {
+      const allSts = Object.values(studentsMap).flat()
+      return allSts.find(s=>s.id===id)?.email || ''
+    }).filter(Boolean)
+    setMailEmailsMap(prev => ({...prev, [sessionId]: emails}))
+  }
   const [loading, setLoading] = useState(true)
   const [showRandomizer, setShowRandomizer] = useState(false)
   const [randomCounts, setRandomCounts] = useState<number[]>([])
@@ -898,6 +901,8 @@ export default function SessionDetailPage() {
             setStudents={(sts)=>setSessionStudents(mainSession.id,sts)}
             allSessions={sessions} allStudents={studentsMap} setAllStudents={setSessionStudents}
             isAbsent={false}
+            selectedIds={getSelectedIds(mainSession.id, studentsMap[mainSession.id]||[])}
+            setSelectedIds={(ids)=>setSelectedIds(mainSession.id, ids)}
           />
         </div>
       </div>
@@ -914,6 +919,8 @@ export default function SessionDetailPage() {
                 setStudents={(sts)=>setSessionStudents(clone.id,sts)}
                 allSessions={sessions} allStudents={studentsMap} setAllStudents={setSessionStudents}
                 isAbsent={false}
+                selectedIds={getSelectedIds(clone.id, studentsMap[clone.id]||[])}
+                setSelectedIds={(ids)=>setSelectedIds(clone.id, ids)}
               />
             </div>
           </div>
@@ -940,6 +947,8 @@ export default function SessionDetailPage() {
                 setStudents={(sts)=>setSessionStudents(absentSession.id,sts)}
                 allSessions={sessions} allStudents={studentsMap} setAllStudents={setSessionStudents}
                 isAbsent={true}
+                selectedIds={getSelectedIds(absentSession.id, studentsMap[absentSession.id]||[])}
+                setSelectedIds={(ids)=>setSelectedIds(absentSession.id, ids)}
               />
             </div>
           </div>
