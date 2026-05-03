@@ -197,7 +197,7 @@ export default function CursantAdminPage() {
           onCancel={() => setPendingFile(null)}
         />
       )}
-      <input ref={ciInputRef} type="file" accept="image/*" className="hidden"
+      <input ref={ciInputRef} type="file" accept="image/*,application/pdf" className="hidden"
         onChange={e => { if (e.target.files?.[0]) { setPendingFile(e.target.files[0]); e.target.value = '' } }}
       />
 
