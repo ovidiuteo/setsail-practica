@@ -20,7 +20,7 @@ export default function PortalPage() {
 
   const [form, setForm] = useState({
     phone: '', birth_date: '', ci_series: '', ci_number: '',
-    address: '', county: '', email: ''
+    address: '', county: '', email: '', cnp: '', full_name: ''
   })
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -104,6 +104,8 @@ export default function PortalPage() {
       address: st.address || '',
       county: st.county || '',
       email: st.email || emailInput.trim(),
+      cnp: st.cnp || '',
+      full_name: st.full_name || '',
     })
     setExistingSignature(st.signature_data || null)
     setStep('confirm')
@@ -209,13 +211,19 @@ export default function PortalPage() {
         }
 
         const d = json.data
+        // Construieste full_name din last+first daca ambele sunt prezente si formularul e gol
+        const fullNameFromCI = (d.last_name && d.first_name)
+          ? d.last_name.toUpperCase() + ' ' + d.first_name.toUpperCase()
+          : ''
         setForm(f => ({
           ...f,
           ci_series: d.ci_series || f.ci_series,
           ci_number: d.ci_number || f.ci_number,
+          cnp: d.cnp || f.cnp,
           birth_date: d.birth_date || f.birth_date,
           address: d.address || f.address,
           county: d.county || f.county,
+          full_name: fullNameFromCI || f.full_name,
         }))
 
         // Salvează imaginea CI
@@ -454,7 +462,7 @@ export default function PortalPage() {
                     onChange={e => setForm(f => ({ ...f, ci_number: e.target.value.replace(/\D/g, '') }))}
                   />
                   {form.ci_number.trim() && !ciNumberValid && (
-                    <p className="text-xs text-red-500 mt-1">Exact 6 cifre la CI vechi sau 7 cifre la CI nou.</p>
+                    <p className="text-xs text-red-500 mt-1">6 sau 7 cifre</p>
                   )}
                 </div>
               </div>

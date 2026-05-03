@@ -1,5 +1,6 @@
 'use client'
 import React, { useEffect, useState, useRef } from 'react'
+import CIScanButton, { type CIScanResult } from '@/components/CIScanButton'
 import { supabase } from '@/lib/supabase'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
@@ -26,6 +27,62 @@ type Student = {
 type Session = { id: string; session_date: string; status: string; session_type: string; access_code: string; class_caa: string; request_number?: string; location_detail?: string; parent_session_id?: string; is_clone?: boolean; locations?: any; boats?: any; evaluators?: any; instructors?: any }
 
 const EMPTY_ST = { full_name:'', cnp:'', email:'', phone:'', birth_date:'', ci_series:'', ci_number:'', address:'', county:'', class_caa:'C,D' }
+
+
+function CIAdminScan({ studentId, students, setStudents }: {
+  studentId: string, students: any[], setStudents: (s: any[]) => void
+}) {
+  const [scanning, setScanning] = useState(false)
+  const [done, setDone] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  async function handleFile(file: File) {
+    setScanning(true)
+    const reader = new FileReader()
+    reader.onload = async (ev) => {
+      const imageData = ev.target?.result as string
+      try {
+        const res = await fetch('/api/ocr-ci', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ imageData, mediaType: file.type })
+        })
+        const json = await res.json()
+        if (json.success && json.data) {
+          const d = json.data
+          const updates: any = {}
+          if (d.ci_series) updates.ci_series = d.ci_series
+          if (d.ci_number) updates.ci_number = d.ci_number
+          if (d.cnp) updates.cnp = d.cnp
+          if (d.birth_date) updates.birth_date = d.birth_date
+          if (d.address) updates.address = d.address
+          if (d.county) updates.county = d.county
+          updates.ci_image_data = imageData
+
+          await supabase.from('students').update(updates).eq('id', studentId)
+          setStudents(students.map(s => s.id === studentId ? {...s, ...updates} : s))
+          setDone(true)
+          setTimeout(() => setDone(false), 3000)
+        }
+      } catch {}
+      setScanning(false)
+      if (inputRef.current) inputRef.current.value = ''
+    }
+    reader.readAsDataURL(file)
+  }
+
+  return (
+    <>
+      <input ref={inputRef} type="file" accept="image/*" className="hidden"
+        onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])}/>
+      <button onClick={()=>inputRef.current?.click()} disabled={scanning}
+        title="Scan CI — completare automată date"
+        className={`p-1.5 rounded border transition-colors text-xs ${done ? 'border-green-200 text-green-600 bg-green-50' : 'border-blue-100 text-blue-400 hover:text-blue-600 hover:bg-blue-50'}`}>
+        {scanning ? '⏳' : done ? '✓' : '🪪'}
+      </button>
+    </>
+  )
+}
 
 function StudentsTable({ sess, students, setStudents, allSessions, allStudents, setAllStudents, isAbsent, onSelectionChange, selectedIds, setSelectedIds }:
   { sess: Session, students: Student[], setStudents:(s:Student[])=>void,
