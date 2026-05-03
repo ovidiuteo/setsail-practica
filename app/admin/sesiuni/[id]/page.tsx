@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState } from 'react'
+import React, { useEffect, useState, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
@@ -42,12 +42,15 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
   const [showMoveMenu, setShowMoveMenu] = useState<string|null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
-  // Initializeaza selectia cu toti cursantii care au email
+  // Initializeaza selectia DOAR la montare (nu la fiecare re-render)
+  const initializedRef = useRef(false)
   useEffect(() => {
+    if (initializedRef.current) return
+    initializedRef.current = true
     const withEmail = new Set(students.filter(s => s.email).map(s => s.id))
     setSelectedIds(withEmail)
     if (onSelectionChange) onSelectionChange(students.filter(s=>s.email && withEmail.has(s.id)).map(s=>s.email))
-  }, [students.map(s=>s.id).join(',')])
+  }, [])
 
   function toggleSelect(id: string) {
     setSelectedIds(prev => {
