@@ -235,26 +235,30 @@ export default function PortalPage() {
   }
 
 
-  // Comprima imaginea la target <0.5MB pastrand dimensiunile originale
+  // ─────────────────────────────────────────────────────
+  // COMPRESIE CI — ajusteaza QUALITY pentru calitate/marime
+  //   1.00 = original (100%, referinta)
+  //   0.80 = 80% calitate (recomandat stocare)
+  //   0.65 = 65% calitate (mai mic, lizibil)
+  //   0.50 = 50% calitate (minim acceptabil)
+  // MAX_PX = dimensiunea maxima pe orice latura in pixeli
+  // ─────────────────────────────────────────────────────
+  const COMPRESS_QUALITY = 0.80  // ← modifica aici
+  const COMPRESS_MAX_PX  = 1200  // ← modifica aici
+
   function compressImage(dataUrl: string): Promise<string> {
     return new Promise(resolve => {
       const img = new Image()
       img.onload = () => {
-        // Calculeaza dimensiunile: scaleaza daca e mai mare de 1200px pe orice latura
-        const MAX = 1200
-        const scale = Math.min(1, MAX / img.width, MAX / img.height)
+        const scale = Math.min(1, COMPRESS_MAX_PX / img.width, COMPRESS_MAX_PX / img.height)
         const w = Math.round(img.width * scale)
         const h = Math.round(img.height * scale)
         const tmp = document.createElement('canvas')
         tmp.width = w; tmp.height = h
         tmp.getContext('2d')!.drawImage(img, 0, 0, w, h)
-        // Comprima la calitate 0.80 - suficient pentru stocare
-        let result = tmp.toDataURL('image/jpeg', 0.80)
-        // Daca e inca prea mare (>600KB base64 ~0.45MB), comprima mai mult
-        if (result.length > 600 * 1024) {
-          result = tmp.toDataURL('image/jpeg', 0.65)
-        }
-        console.log(`CI comprimat: ${w}x${h}px, ${Math.round(result.length/1024)}KB base64`)
+        const result = tmp.toDataURL('image/jpeg', COMPRESS_QUALITY)
+        const sizeKB = Math.round(result.length / 1024)
+        console.log(`CI salvat: ${w}x${h}px @ Q${COMPRESS_QUALITY} → ${sizeKB}KB base64 (~${Math.round(sizeKB*0.75)}KB real)`)
         resolve(result)
       }
       img.src = dataUrl
