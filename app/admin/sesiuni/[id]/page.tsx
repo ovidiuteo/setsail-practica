@@ -22,6 +22,7 @@ type Student = {
   birth_date: string; ci_series: string; ci_number: string; address: string
   county: string; class_caa: string; portal_status: string
   order_in_session: number; signed_at: string; session_id: string
+  communication_target: boolean
 }
 type Session = { id: string; session_date: string; status: string; session_type: string; access_code: string; class_caa: string; request_number?: string; location_detail?: string; parent_session_id?: string; is_clone?: boolean; locations?: any; boats?: any; evaluators?: any; instructors?: any }
 
@@ -287,6 +288,18 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
                       <td className="px-3 py-2">
                         <span className="text-xs font-medium" style={{color:ps.color}}>{ps.label}</span>
                         {s.signed_at && <div className="text-gray-300 text-xs">{new Date(s.signed_at).toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'})}</div>}
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        <button
+                          onClick={async()=>{
+                            const newVal = !s.communication_target
+                            await supabase.from('students').update({communication_target: newVal}).eq('id', s.id)
+                            setStudents(students.map(st => st.id===s.id ? {...st, communication_target: newVal} : st))
+                          }}
+                          title={s.communication_target ? 'Activ pentru comunicare — click pentru a dezactiva' : 'Inactiv pentru comunicare — click pentru a activa'}
+                          className={`w-8 h-5 rounded-full transition-all relative ${s.communication_target ? 'bg-green-500' : 'bg-gray-200'}`}>
+                          <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${s.communication_target ? 'left-3.5' : 'left-0.5'}`}/>
+                        </button>
                       </td>
                       <td className="px-2 py-2">
                         <div className="flex gap-1 items-center relative">
