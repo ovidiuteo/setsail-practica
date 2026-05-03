@@ -518,12 +518,40 @@ const QUICK_TEMPLATES = [
   {
     label: '🔗 Link portal',
     subject: 'Acces portal cursanți - SetSail Practică',
-    body: (sess: any) => `Stimate/Stimată cursant,\n\nVă rugăm să accesați portalul SetSail Practică și să completați datele personale (serie CI, număr CI, semnătură) înainte de data sesiunii.\n\nLink portal: ${typeof window !== 'undefined' ? window.location.origin : 'https://setsail-practica.vercel.app'}/portal?cod=${sess.access_code}\n\nData sesiunii: ${new Date(sess.session_date).toLocaleDateString('ro-RO', {day:'2-digit', month:'long', year:'numeric'})}\nLocația: ${sess.location_detail || sess.locations?.name || ''}\n\nVă mulțumim,\nEchipa SetSail`,
+    body: (sess: any) => {
+      const origin = typeof window !== 'undefined' ? window.location.origin : 'https://setsail-practica.vercel.app'
+      const link = `${origin}/portal?cod=${sess.access_code}`
+      return `Stimate/Stimată cursant,
+
+Vă rugăm să accesați portalul SetSail Practică și să completați datele personale (serie CI, număr CI, semnătură) înainte de data sesiunii.
+
+Link portal: ${link}
+
+Data sesiunii: ${new Date(sess.session_date).toLocaleDateString('ro-RO', {day:'2-digit', month:'long', year:'numeric'})}
+Locația: ${sess.location_detail || sess.locations?.name || ''}
+
+Vă mulțumim,
+Echipa SetSail`
+    },
   },
   {
     label: '⏰ Completați portalul',
     subject: 'Reminder: date lipsă în portal - SetSail Practică',
-    body: (sess: any) => `Stimate/Stimată cursant,\n\nAm observat că nu ați completat încă datele personale în portalul SetSail Practică. Sesiunea de practică se apropie și avem nevoie de datele dvs. (serie CI, număr CI) pentru a putea emite documentele oficiale.\n\nVă rugăm să accesați portalul cât mai curând:\n${typeof window !== 'undefined' ? window.location.origin : 'https://setsail-practica.vercel.app'}/portal?cod=${sess.access_code}\n\nData sesiunii: ${new Date(sess.session_date).toLocaleDateString('ro-RO', {day:'2-digit', month:'long', year:'numeric'})}\n\nVă mulțumim,\nEchipa SetSail`,
+    body: (sess: any) => {
+      const origin = typeof window !== 'undefined' ? window.location.origin : 'https://setsail-practica.vercel.app'
+      const link = `${origin}/portal?cod=${sess.access_code}`
+      return `Stimate/Stimată cursant,
+
+Am observat că nu ați completat încă datele personale în portalul SetSail Practică. Sesiunea de practică se apropie și avem nevoie de datele dvs. (serie CI, număr CI) pentru a putea emite documentele oficiale.
+
+Vă rugăm să accesați portalul cât mai curând:
+${link}
+
+Data sesiunii: ${new Date(sess.session_date).toLocaleDateString('ro-RO', {day:'2-digit', month:'long', year:'numeric'})}
+
+Vă mulțumim,
+Echipa SetSail`
+    },
   },
   {
     label: '📅 Reminder sesiune',
@@ -616,7 +644,18 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange }:
       {!isAbsent && (
         <>
           <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-            <h3 className="font-semibold text-sm text-gray-900 mb-3">Link portal</h3>
+            <h3 className="font-semibold text-sm text-gray-900 mb-2">Link portal</h3>
+            {sess.status === 'draft' ? (
+              <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+                Sesiunea nu este activă. Portal inaccesibil.
+              </div>
+            ) : (sess.status === 'active' || sess.status === 'focus') ? (
+              <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                Portal accesibil
+              </div>
+            ) : null}
             <div className="bg-gray-50 rounded-lg p-3 font-mono text-xs text-gray-600 break-all mb-3">/portal?cod=<strong>{sess.access_code}</strong></div>
             <button onClick={()=>{navigator.clipboard.writeText(`${window.location.origin}/portal?cod=${sess.access_code}`);setCopied(true);setTimeout(()=>setCopied(false),2000)}}
               className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-medium border border-gray-200 hover:bg-gray-50">
