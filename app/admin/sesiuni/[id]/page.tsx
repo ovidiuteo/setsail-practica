@@ -224,6 +224,11 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
   }
 
   const inCls = "border border-blue-100 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white w-full"
+  function trunc(val: string|null|undefined, full?: boolean): React.ReactNode {
+    if (!val) return <span className="text-gray-300">—</span>
+    if (full || val.length <= 5) return <>{val}</>
+    return <span title={val} className="cursor-help border-b border-dotted border-gray-300">{val.slice(0,5)}…</span>
+  }
   const addCls = "border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-1 focus:ring-blue-500 bg-white w-full"
 
   return (
@@ -234,9 +239,10 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
           <span className="font-semibold text-sm text-gray-900">Cursanți ({students.length})</span>
         </div>
         <div className="flex items-center gap-2">
-          {selectedIds.size > 0 && (
-            <span className="text-xs text-blue-600 font-medium">{selectedIds.size} selectați</span>
-          )}
+          <button onClick={recount} title="Re-numerotează conform ordinii curente"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border border-gray-200 text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors">
+            ↺ Nr. crt.
+          </button>
           <button onClick={() => {setShowAdd(true); setEditingId(null)}}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 hover:bg-gray-50">
             <Plus size={12}/> Adaugă
@@ -289,9 +295,7 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
                     }} className="text-xs text-gray-400 hover:text-gray-600 font-bold leading-tight">None</button>
                   </div>
                 </th>
-                <th className="w-6 px-2 py-2.5 text-gray-400 text-xs font-medium text-right">
-                  <button onClick={recount} title="Re-numerotează conform ordinii curente" className="text-gray-300 hover:text-blue-500 transition-colors text-xs">↺</button>
-                </th>
+                <th className="w-6 px-2 py-2.5 text-gray-400 text-xs font-medium text-right">#</th>
                 {[
                   ['full_name','Nume'],['cnp','CNP'],['email','Email'],
                   ['phone','Tel'],['ci_series','CI'],['class_caa','Cls'],['portal_status','Portal']
@@ -308,7 +312,7 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {students.map((s,i) => {
+              {getSorted(students).map((s,i) => {
                 const ps = portalMap[s.portal_status] || portalMap.pending
                 const isEditing = editingId === s.id
                 return (
@@ -351,7 +355,7 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
                       </td>
                       <td className="px-2 py-2 text-gray-300 text-xs text-right">{i+1}</td>
                       <td className="px-3 py-2 font-medium text-gray-900">{s.full_name}</td>
-                      <td className="px-3 py-2 font-mono text-gray-400 text-xs">{s.cnp||'—'}</td>
+                      <td className="px-3 py-2 font-mono text-gray-400 text-xs">{trunc(s.cnp)}</td>
                       <td className="px-3 py-2 text-gray-500">{s.email||'—'}</td>
                       <td className="px-3 py-2 text-gray-500">{s.phone||'—'}</td>
                       <td className="px-3 py-2">
