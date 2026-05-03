@@ -3,10 +3,7 @@ import { NextRequest, NextResponse } from 'next/server'
 export async function POST(req: NextRequest) {
   try {
     const { imageData, mediaType } = await req.json()
-
-    if (!imageData) {
-      return NextResponse.json({ error: 'No image data' }, { status: 400 })
-    }
+    if (!imageData) return NextResponse.json({ error: 'No image data' }, { status: 400 })
 
     const base64 = imageData.includes(',') ? imageData.split(',')[1] : imageData
     const imgType = mediaType || 'image/jpeg'
@@ -30,17 +27,25 @@ export async function POST(req: NextRequest) {
             },
             {
               type: 'text',
-              text: `Acesta este un buletin/carte de identitate românesc. Extrage EXACT câmpurile vizibile și returnează DOAR un JSON valid, fără text adițional, fără markdown:
+              text: `Acesta este un buletin/carte de identitate românesc (poate fi rotit, fotografiat din orice unghi, model vechi sau nou).
+Extrage EXACT câmpurile vizibile și returnează DOAR un JSON valid, fără text adițional, fără markdown:
 {
-  "ci_series": "seria CI (2 litere majuscule, ex: AB, CT, IF)",
-  "ci_number": "numărul CI (6 cifre, ex: 123456)",
+  "ci_series": "seria CI (2 litere majuscule, ex: AB, CT, IF, RK, KV, TC, MB, KZ)",
+  "ci_number": "numărul CI (6 sau 7 cifre - modelul nou are 7 cifre, ex: 1026449)",
+  "cnp": "CNP-ul (13 cifre, câmpul CNP/PIN)",
   "birth_date": "data nașterii în format dd.mm.yyyy",
-  "address": "adresa completă de domiciliu (strada, număr, bloc, apartament - fără județ)",
-  "county": "județul de domiciliu (fără cuvântul Județul sau JUD.)",
-  "last_name": "numele de familie",
-  "first_name": "prenumele complet"
+  "last_name": "numele de familie (câmpul Nume/Surname)",
+  "first_name": "prenumele complet (câmpul Prenume/Given names)",
+  "address": "adresa completă de domiciliu dacă e vizibilă (strada, număr, bloc, apartament)",
+  "county": "județul de domiciliu dacă e vizibil (fără cuvântul Județul sau JUD.)",
+  "expiry_date": "data expirării în format dd.mm.yyyy dacă e vizibilă"
 }
-Dacă un câmp nu este vizibil sau lizibil, folosește string gol "". Returnează DOAR JSON-ul, nimic altceva.`
+IMPORTANT:
+- Seria și numărul CI sunt de obicei în colțul stânga-sus (ex: IF1026449 = serie IF, număr 1026449)
+- Modelul nou de CI are numărul din 7 cifre
+- Dacă documentul e rotit/întors, rotește-l mental și citește
+- Dacă un câmp nu e vizibil, returnează string gol ""
+- Returnează DOAR JSON-ul, nimic altceva`
             }
           ]
         }]
