@@ -74,21 +74,30 @@ export default function CIImageEditor({ file, onConfirm, onCancel }: Props) {
 
       // Rendereza pagina selectata
       const page = await pdfDocRef.current.getPage(pageNum)
-      const viewport = page.getViewport({ scale: 2.0 }) // scale 2x pentru calitate
 
-      const canvas = canvasRef.current!
-      canvas.width = viewport.width
-      canvas.height = viewport.height
-      const ctx = canvas.getContext('2d')!
+      // Forteaza portrait: daca pagina e landscape, rotim 90 grade
+      const vpNatural = page.getViewport({ scale: 1.0 })
+      const isLandscape = vpNatural.width > vpNatural.height
+      const pdfRotation = isLandscape ? 90 : 0
+      const viewport = page.getViewport({ scale: 2.0, rotation: pdfRotation })
 
-      await page.render({ canvasContext: ctx, viewport }).promise
+      // Randarea pe canvas temporar (nu cel din UI ca sa evitam conflicte)
+      const tmpCanvas = document.createElement('canvas')
+      tmpCanvas.width = viewport.width
+      tmpCanvas.height = viewport.height
+      await page.render({ canvasContext: tmpCanvas.getContext('2d')!, viewport }).promise
 
-      // Salveaza ca imagine pentru crop/rotate
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.95)
+      // Convertim la imagine si o stocam in imgRef
+      const dataUrl = tmpCanvas.toDataURL('image/jpeg', 0.95)
       const img = new Image()
       img.onload = () => {
         imgRef.current = img
         originalImgRef.current = img
+        // Desenam direct pe canvas-ul din UI
+        const uiCanvas = canvasRef.current!
+        uiCanvas.width = img.width
+        uiCanvas.height = img.height
+        uiCanvas.getContext('2d')!.drawImage(img, 0, 0)
         setCrop({ x: 0, y: 0, w: 100, h: 100 })
         setIsCropDefault(true)
         setCropApplied(false)
@@ -110,7 +119,7 @@ export default function CIImageEditor({ file, onConfirm, onCancel }: Props) {
 
   useEffect(() => {
     if (!imageLoaded) return
-    drawCanvas()
+    if (!isPDF || rotation !== 0) drawCanvas()
   }, [imageLoaded, rotation])
 
   function drawCanvas(sourceImg?: HTMLImageElement) {
