@@ -38,12 +38,16 @@ Extrage EXACT câmpurile vizibile și returnează DOAR un JSON valid, fără tex
   "first_name": "prenumele complet (câmpul Prenume/Given names)",
   "address": "adresa completă de domiciliu dacă e vizibilă (strada, număr, bloc, apartament)",
   "county": "județul de domiciliu dacă e vizibil (fără cuvântul Județul sau JUD.)",
-  "expiry_date": "data expirării în format dd.mm.yyyy dacă e vizibilă"
+  "expiry_date": "data expirării în format dd.mm.yyyy dacă e vizibilă",
+  "nationality": "cetățenia (ex: ROU)"
 }
 IMPORTANT:
-- Seria și numărul CI sunt de obicei în colțul stânga-sus (ex: IF1026449 = serie IF, număr 1026449)
-- Modelul nou de CI are numărul din 7 cifre
-- Dacă documentul e rotit/întors, rotește-l mental și citește
+- Seria și numărul CI sunt în colțul stânga-sus (ex: IF1026449 = serie IF, număr 1026449; RK892004 = serie RK, număr 892004)
+- Modelul nou de CI are numărul din 7 cifre (ex: 1026449)
+- Modelul vechi are 6 cifre
+- Dacă documentul e rotit/întors/fotografiat oblic, citește-l mental corect
+- Câmpul Nume/Surname = numele de familie, Prenume/Given names = prenumele
+- Păstrează exact diacriticele și cratimele din CI (ex: Răzvan-Andrei, Căpățână, Vasile-Manoilă)
 - Dacă un câmp nu e vizibil, returnează string gol ""
 - Returnează DOAR JSON-ul, nimic altceva`
             }

@@ -20,7 +20,7 @@ export default function PortalPage() {
 
   const [form, setForm] = useState({
     phone: '', birth_date: '', ci_series: '', ci_number: '',
-    address: '', county: '', email: '', cnp: '', full_name: ''
+    address: '', county: '', email: '', cnp: '', full_name: '', expiry_date: '', nationality: ''
   })
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
@@ -106,6 +106,8 @@ export default function PortalPage() {
       email: st.email || emailInput.trim(),
       cnp: st.cnp || '',
       full_name: st.full_name || '',
+      expiry_date: st.expiry_date || '',
+      nationality: st.nationality || '',
     })
     setExistingSignature(st.signature_data || null)
     setStep('confirm')
@@ -211,19 +213,21 @@ export default function PortalPage() {
         }
 
         const d = json.data
-        // Construieste full_name din last+first daca ambele sunt prezente si formularul e gol
+        // CI are prioritate absoluta - suprascrie orice camp existent
         const fullNameFromCI = (d.last_name && d.first_name)
           ? d.last_name.toUpperCase() + ' ' + d.first_name.toUpperCase()
           : ''
         setForm(f => ({
           ...f,
-          ci_series: d.ci_series || f.ci_series,
-          ci_number: d.ci_number || f.ci_number,
-          cnp: d.cnp || f.cnp,
-          birth_date: d.birth_date || f.birth_date,
-          address: d.address || f.address,
-          county: d.county || f.county,
-          full_name: fullNameFromCI || f.full_name,
+          ...(d.ci_series    ? { ci_series: d.ci_series }       : {}),
+          ...(d.ci_number    ? { ci_number: d.ci_number }       : {}),
+          ...(d.cnp          ? { cnp: d.cnp }                   : {}),
+          ...(d.birth_date   ? { birth_date: d.birth_date }     : {}),
+          ...(d.address      ? { address: d.address }           : {}),
+          ...(d.county       ? { county: d.county }             : {}),
+          ...(d.expiry_date  ? { expiry_date: d.expiry_date }   : {}),
+          ...(d.nationality  ? { nationality: d.nationality }   : {}),
+          ...(fullNameFromCI ? { full_name: fullNameFromCI }    : {}),
         }))
 
         // Salvează imaginea CI
@@ -468,20 +472,34 @@ export default function PortalPage() {
               </div>
 
               <div className="space-y-3">
-                <div>
-                  <label className={labelCls}>Data nașterii</label>
-                  <input className={inputCls} value={form.birth_date} placeholder="dd.mm.yyyy"
-                    onChange={e => setForm(f => ({ ...f, birth_date: e.target.value }))} />
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={labelCls}>CNP</label>
+                    <input className={inputCls} value={form.cnp} placeholder="1234567890123" maxLength={13}
+                      onChange={e => setForm(f => ({ ...f, cnp: e.target.value.replace(/\D/g,'') }))} />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Data nașterii</label>
+                    <input className={inputCls} value={form.birth_date} placeholder="dd.mm.yyyy"
+                      onChange={e => setForm(f => ({ ...f, birth_date: e.target.value }))} />
+                  </div>
                 </div>
                 <div>
                   <label className={labelCls}>Adresă domiciliu</label>
                   <input className={inputCls} value={form.address} placeholder="Str. Exemplu nr. 1, Bl. X, Ap. Y"
                     onChange={e => setForm(f => ({ ...f, address: e.target.value }))} />
                 </div>
-                <div>
-                  <label className={labelCls}>Județ</label>
-                  <input className={inputCls} value={form.county} placeholder="ex: Constanța"
-                    onChange={e => setForm(f => ({ ...f, county: e.target.value }))} />
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={labelCls}>Județ</label>
+                    <input className={inputCls} value={form.county} placeholder="ex: Constanța"
+                      onChange={e => setForm(f => ({ ...f, county: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Data expirării CI</label>
+                    <input className={inputCls} value={form.expiry_date} placeholder="dd.mm.yyyy"
+                      onChange={e => setForm(f => ({ ...f, expiry_date: e.target.value }))} />
+                  </div>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
