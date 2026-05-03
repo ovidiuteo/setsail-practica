@@ -105,6 +105,39 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
   const [adding, setAdding] = useState(false)
   const [moving, setMoving] = useState<string|null>(null)
   const [showMoveMenu, setShowMoveMenu] = useState<string|null>(null)
+  const [sortCol, setSortCol] = useState<string|null>(null)
+  const [sortDir, setSortDir] = useState<'asc'|'desc'>('asc')
+
+  function toggleSort(col: string) {
+    if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortCol(col); setSortDir('asc') }
+  }
+
+  function getSorted(list: Student[]) {
+    if (!sortCol) return list
+    return [...list].sort((a, b) => {
+      const av = (a as any)[sortCol] || ''
+      const bv = (b as any)[sortCol] || ''
+      return sortDir === 'asc' ? av.localeCompare(bv, 'ro') : bv.localeCompare(av, 'ro')
+    })
+  }
+
+  async function recount() {
+    const sorted = getSorted(students)
+    for (let i = 0; i < sorted.length; i++) {
+      await supabase.from('students').update({ order_in_session: i + 1 }).eq('id', sorted[i].id)
+    }
+    setStudents(sorted.map((s, i) => ({ ...s, order_in_session: i + 1 })))
+    setSortCol(null)
+  }
+
+  // Helper trunchere cu tooltip
+  function T({ val, full }: { val?: string|null, full?: boolean }) {
+    if (!val) return <span className="text-gray-300">—</span>
+    const short = full ? val : (val.length > 5 ? val.slice(0, 5) + '…' : val)
+    if (full || val.length <= 5) return <span>{val}</span>
+    return <span title={val} className="cursor-help border-b border-dotted border-gray-300">{short}</span>
+  }
   function toggleSelect(id: string) {
     const s = students.find(st=>st.id===id)
     if (!s?.email) return
@@ -256,14 +289,21 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
                     }} className="text-xs text-gray-400 hover:text-gray-600 font-bold leading-tight">None</button>
                   </div>
                 </th>
-                <th className="w-6 px-2 py-2.5 text-gray-400 text-xs font-medium text-right">#</th>
-                <th className="px-3 py-2.5 font-medium text-gray-500 text-left">Nume</th>
-                <th className="px-3 py-2.5 font-medium text-gray-500 text-left">CNP</th>
-                <th className="px-3 py-2.5 font-medium text-gray-500 text-left">Email</th>
-                <th className="px-3 py-2.5 font-medium text-gray-500 text-left">Telefon</th>
-                <th className="px-3 py-2.5 font-medium text-gray-500 text-left">CI</th>
-                <th className="px-3 py-2.5 font-medium text-gray-500 text-left">Clasa</th>
-                <th className="px-3 py-2.5 font-medium text-gray-500 text-left">Portal</th>
+                <th className="w-6 px-2 py-2.5 text-gray-400 text-xs font-medium text-right">
+                  <button onClick={recount} title="Re-numerotează conform ordinii curente" className="text-gray-300 hover:text-blue-500 transition-colors text-xs">↺</button>
+                </th>
+                {[
+                  ['full_name','Nume'],['cnp','CNP'],['email','Email'],
+                  ['phone','Tel'],['ci_series','CI'],['class_caa','Cls'],['portal_status','Portal']
+                ].map(([col,label]) => (
+                  <th key={col} className="px-3 py-2.5 font-medium text-gray-500 text-left cursor-pointer select-none hover:text-blue-600 whitespace-nowrap"
+                    onClick={()=>toggleSort(col)}>
+                    <span className="flex items-center gap-1">
+                      {label}
+                      {sortCol===col ? (sortDir==='asc'?'↑':'↓') : <span className="text-gray-200">↕</span>}
+                    </span>
+                  </th>
+                ))}
                 <th className="w-28 px-2 py-2.5"></th>
               </tr>
             </thead>
@@ -560,14 +600,34 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange }:
                 {/* BCC */}
                 <div>
                   <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs text-gray-400">BCC (toți cursanții)</label>
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs text-gray-400">BCC</label>
+                      <button
+                        onClick={()=>{
+                          const emails = students.filter(s=>s.email && s.communication_target).map(s=>s.email)
+                          setSelectedEmails(emails)
+                          setMailTo(emails.join(', '))
+                        }}
+                        title="Reîncarcă emailurile active"
+                        className="text-xs text-gray-400 hover:text-blue-600 flex items-center gap-0.5 transition-colors">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>
+                        </svg>
+                        Refresh
+                      </button>
+                    </div>
                     <button onClick={()=>{navigator.clipboard.writeText(mailTo);setMailCopied('bcc');setTimeout(()=>setMailCopied(null),2000)}}
                       className="text-xs text-blue-500 hover:text-blue-700 flex items-center gap-1">
                       <Copy size={11}/>{mailCopied==='bcc'?'Copiat!':'Copiază'}
                     </button>
                   </div>
                   <textarea rows={2} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400 resize-none font-mono"
-                    value={mailTo} onChange={e=>setMailTo(e.target.value)}/>
+                    value={mailTo} onChange={e=>setMailTo(e.target.value)}
+                    onFocus={()=>{
+                      const emails = students.filter(s=>s.email && s.communication_target).map(s=>s.email)
+                      setMailTo(emails.join(', '))
+                    }}
+                  />
                 </div>
 
                 {/* Subiect */}
