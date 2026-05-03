@@ -302,8 +302,14 @@ export default function CIImageEditor({ file, onConfirm, onCancel }: Props) {
                 </button>
               )}
               <button onClick={handleConfirm}
-                className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-medium text-white"
-                style={{background:'#0a1628'}}>
+                disabled={!isCropDefault}
+                title={!isCropDefault ? 'Aplică sau resetează cropul înainte de scanare' : ''}
+                className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  !isCropDefault
+                    ? 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                    : 'text-white'
+                }`}
+                style={isCropDefault ? {background:'#0a1628'} : {}}>
                 <Check size={12}/> Save & Scan OCR
               </button>
             </div>
