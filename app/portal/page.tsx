@@ -274,11 +274,27 @@ export default function PortalPage() {
 
   async function processImageForOCR(dataUrl: string, mediaType: string) {
     setOcrStatus('loading')
-    // Salvam imaginea comprimata direct in Supabase (inainte de OCR)
-    // Comprimarea se face aici, pe imaginea la dimensiunea crop-ului
+    // Comprima si salveaza imaginea via Edge Function (ocoleste limita PostgREST 2MB)
     if (student?.id) {
       const compressedForDb = await compressImage(dataUrl)
-      await supabase.from('students').update({ ci_image_data: compressedForDb }).eq('id', student.id)
+      const sizeKB = Math.round(compressedForDb.length / 1024)
+      console.log(`Salvare CI: ${sizeKB}KB via Edge Function`)
+      try {
+        const saveRes = await fetch(
+          `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/save-ci-image`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ student_id: student.id, ci_image_data: compressedForDb })
+          }
+        )
+        const saveJson = await saveRes.json()
+        if (!saveJson.success) console.error('Edge fn error:', saveJson.error)
+        else console.log(`CI salvat: ${saveJson.sizeKB}KB`)
+      } catch (e) {
+        console.error('Edge function failed, fallback PostgREST:', e)
+        await supabase.from('students').update({ ci_image_data: compressedForDb }).eq('id', student.id)
+      }
     }
     try {
       const res = await fetch('/api/ocr-ci', {
@@ -306,7 +322,9 @@ export default function PortalPage() {
         ...(fullNameFromCI ? { full_name: fullNameFromCI } : {}),
       }))
       // Salveaza datele OCR (imaginea e deja salvata comprimat mai sus)
+      const compressedRef = await compressImage(dataUrl) // pentru state update local
       const ocrSave: any = {
+        ci_image_data: compressedRef,  // pentru state local
         ...(d.ci_series    ? { ci_series: d.ci_series }     : {}),
         ...(d.ci_number    ? { ci_number: d.ci_number }     : {}),
         ...(d.cnp          ? { cnp: d.cnp }                 : {}),
