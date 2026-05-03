@@ -67,6 +67,7 @@ function CIAdminScan({ studentId, students, setStudents }: {
         if (d.country) updates.country = d.country
         if (d.last_name && d.first_name) updates.full_name = d.last_name.toUpperCase() + ' ' + d.first_name.toUpperCase()
         await supabase.from('students').update(updates).eq('id', studentId)
+        // Re-fetch cursantul din DB pentru a obtine datele actuale
         setStudents(students.map(s => s.id === studentId ? {...s, ...updates} : s))
         setDone(true)
         setTimeout(() => setDone(false), 3000)
@@ -1022,6 +1023,35 @@ export default function SessionDetailPage() {
 
   return (
     <div className="p-8" onClick={()=>{}}>
+      {/* Modal previzualizare CI */}
+      {ciPreview && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={()=>setCiPreview(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden" onClick={e=>e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+              <div>
+                <h3 className="font-semibold text-gray-900 text-sm">CI — {ciPreview.name}</h3>
+                <p className="text-xs text-gray-400 mt-0.5">Click în afară pentru a închide</p>
+              </div>
+              <button onClick={()=>setCiPreview(null)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">
+                <X size={16}/>
+              </button>
+            </div>
+            <div className="p-4 bg-gray-50">
+              <img src={ciPreview.img} alt="CI" className="w-full rounded-xl shadow-sm object-contain" style={{maxHeight:'70vh'}}/>
+            </div>
+            <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-2">
+              <a href={ciPreview.img} download={`CI_${ciPreview.name.replace(/ /g,'_')}.jpg`}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs border border-gray-200 text-gray-600 hover:bg-gray-50">
+                ⬇ Descarcă
+              </a>
+              <button onClick={()=>setCiPreview(null)}
+                className="px-4 py-2 rounded-lg text-xs font-medium text-white" style={{background:'#0a1628'}}>
+                Închide
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
         <Link href="/admin/sesiuni" className="text-gray-400 hover:text-gray-700"><ArrowLeft size={20}/></Link>
@@ -1052,35 +1082,7 @@ export default function SessionDetailPage() {
         </Link>
       </div>
 
-      {/* Modal previzualizare CI */}
-      {ciPreview && (
-        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={()=>setCiPreview(null)}>
-          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden" onClick={e=>e.stopPropagation()}>
-            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
-              <div>
-                <h3 className="font-semibold text-gray-900 text-sm">CI — {ciPreview.name}</h3>
-                <p className="text-xs text-gray-400 mt-0.5">Click în afară pentru a închide</p>
-              </div>
-              <button onClick={()=>setCiPreview(null)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">
-                <X size={16}/>
-              </button>
-            </div>
-            <div className="p-4 bg-gray-50">
-              <img src={ciPreview.img} alt="CI" className="w-full rounded-xl shadow-sm object-contain" style={{maxHeight:'70vh'}}/>
-            </div>
-            <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-2">
-              <a href={ciPreview.img} download={`CI_${ciPreview.name.replace(/ /g,'_')}.jpg`}
-                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs border border-gray-200 text-gray-600 hover:bg-gray-50">
-                ⬇ Descarcă
-              </a>
-              <button onClick={()=>setCiPreview(null)}
-                className="px-4 py-2 rounded-lg text-xs font-medium text-white" style={{background:'#0a1628'}}>
-                Închide
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+
 
       {/* Modal randomizator */}
       {showRandomizer && (() => {
