@@ -269,7 +269,24 @@ export default function PortalPage() {
         ...(d.country    ? { country: d.country }     : {}),
         ...(fullNameFromCI ? { full_name: fullNameFromCI } : {}),
       }))
-      await supabase.from('students').update({ ci_image_data: dataUrl }).eq('id', student.id)
+      // Salveaza imaginea SI toate datele OCR intr-un singur update
+      const ocrSave: any = {
+        ci_image_data: dataUrl,
+        ...(d.ci_series    ? { ci_series: d.ci_series }     : {}),
+        ...(d.ci_number    ? { ci_number: d.ci_number }     : {}),
+        ...(d.cnp          ? { cnp: d.cnp }                 : {}),
+        ...(d.birth_date   ? { birth_date: d.birth_date }   : {}),
+        ...(d.address      ? { address: d.address }         : {}),
+        ...(d.county       ? { county: d.county }           : {}),
+        ...(d.expiry_date  ? { expiry_date: d.expiry_date } : {}),
+        ...(d.nationality  ? { nationality: d.nationality } : {}),
+        ...(d.city         ? { city: d.city }               : {}),
+        ...(d.country      ? { country: d.country }         : {}),
+        ...(fullNameFromCI ? { full_name: fullNameFromCI }  : {}),
+      }
+      await supabase.from('students').update(ocrSave).eq('id', student.id)
+      // Actualizeaza studentul in state cu imaginea noua
+      setStudent((prev: any) => prev ? { ...prev, ...ocrSave } : prev)
       // Marcam campurile venite din scan
       const sf = new Set<string>()
       if (d.ci_series)   sf.add('ci_series')
