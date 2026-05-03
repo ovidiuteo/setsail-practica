@@ -74,23 +74,23 @@ export async function POST(req: NextRequest) {
     ">
 
       <!-- TITLU -->
-      <p style="font-size:15pt;font-weight:bold;margin:0 0 2px 0;">Fișă de verificare aptitudini</p>
-      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:12px;">
+      <p style="font-size:15pt;font-weight:bold;margin:0 0 3px 0;">Fișă de verificare aptitudini</p>
+      <div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:20px;">
         <span style="font-size:15pt;font-weight:bold;">pentru conducerea și manevra ambarcațiunii de agrement</span>
         <span style="font-size:11pt;white-space:nowrap;padding-left:20px;">Anexa 10</span>
       </div>
 
       <!-- DATE CANDIDAT -->
-      <p style="font-size:11pt;font-weight:bold;margin:0 0 5px 0;">Pentru obţinerea Certificatului Internaţional de Conducător de ambarcațiune de agrement</p>
-      <p style="margin:0 0 4px 0;font-size:11pt;"><b>CLASA:</b> ${(s.class_caa || session.class_caa || '').replace(',', '+') || '___________'}</p>
-      <p style="margin:0 0 4px 0;font-size:11pt;"><b>Perioada de desfăşurare curs:</b> ${sessionDate}</p>
-      <p style="margin:0 0 6px 0;font-size:11pt;"><b>Numele şi prenumele candidatului:</b> ${s.full_name || '_______________________________________________'}</p>
-      <p style="margin:0 0 4px 0;font-size:11pt;"><b>CNP:</b> ${dot(s.cnp)}</p>
-      <p style="margin:0 0 10px 0;font-size:11pt;"><b>Document de identitate:</b> ${ciDoc}</p>
+      <p style="font-size:11pt;font-weight:bold;margin:0 0 9px 0;">Pentru obţinerea Certificatului Internaţional de Conducător de ambarcațiune de agrement</p>
+      <p style="margin:0 0 7px 0;font-size:11pt;"><b>CLASA:</b> ${(s.class_caa || session.class_caa || '').replace(',', '+') || '___________'}</p>
+      <p style="margin:0 0 7px 0;font-size:11pt;"><b>Perioada de desfăşurare curs:</b> ${sessionDate}</p>
+      <p style="margin:0 0 10px 0;font-size:11pt;"><b>Numele şi prenumele candidatului:</b> ${s.full_name || '_______________________________________________'}</p>
+      <p style="margin:0 0 7px 0;font-size:11pt;"><b>CNP:</b> ${dot(s.cnp)}</p>
+      <p style="margin:0 0 17px 0;font-size:11pt;"><b>Document de identitate:</b> ${ciDoc}</p>
 
       <!-- TABEL VERIFICĂRI -->
-      <p style="font-weight:bold;font-size:11pt;margin:0 0 4px 0;">Verificări:</p>
-      <table style="width:100%;border-collapse:collapse;margin-bottom:8px;">
+      <p style="font-weight:bold;font-size:11pt;margin:0 0 7px 0;">Verificări:</p>
+      <table style="width:100%;border-collapse:collapse;margin-bottom:24px;">
         <thead>
           <tr>
             <th style="border:1px solid #000;padding:4px 6px;font-size:11pt;width:33%;text-align:center;">Cerinţe</th>
@@ -102,27 +102,27 @@ export async function POST(req: NextRequest) {
       </table>
 
       <!-- REZULTAT -->
-      <p style="margin:8px 0 10px 0;font-size:11pt;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Rezultat evaluare finală .......................................................................(admis/respins)</p>
+      <p style="margin:14px 0 17px 0;font-size:11pt;">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Rezultat evaluare finală .......................................................................(admis/respins)</p>
 
       <!-- SEMNĂTURI -->
-      <div style="display:flex;justify-content:space-between;margin-bottom:4px;">
+      <div style="display:flex;justify-content:space-between;margin-bottom:7px;">
         <span style="font-size:11pt;"><b>Data:</b> ${sessionDate}</span>
         <span style="font-size:11pt;">Intocmit,</span>
       </div>
-      <div style="display:flex;justify-content:space-between;margin-bottom:2px;">
+      <div style="display:flex;justify-content:space-between;margin-bottom:3px;">
         <span></span>
         <span style="font-size:11pt;">Nume şi prenume/semnătura</span>
       </div>
-      <div style="display:flex;justify-content:space-between;margin-bottom:14px;">
+      <div style="display:flex;justify-content:space-between;margin-bottom:24px;">
         <span></span>
         <span style="font-size:11pt;font-weight:bold;">${session.evaluators?.full_name || '............................'}</span>
       </div>
 
       <!-- SEMNĂTURĂ CURSANT -->
-      <p style="font-size:11pt;margin:0 0 2px 0;">Nume şi prenume/semnătura cursant</p>
-      <p style="font-size:11pt;font-weight:bold;margin:0 0 4px 0;">${s.full_name || '............................'}</p>
+      <p style="font-size:11pt;margin:0 0 4px 0;">Nume şi prenume/semnătura cursant</p>
+      <p style="font-size:11pt;font-weight:bold;margin:0 0 7px 0;">${s.full_name || '............................'}</p>
       ${sigHtml}
-      <p style="font-size:11pt;margin:4px 0 0 0;">............................ .............................</p>
+      <p style="font-size:11pt;margin:7px 0 0 0;">............................ .............................</p>
     </div>`
   }
 
