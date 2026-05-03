@@ -408,7 +408,10 @@ export default function PortalPage() {
   if (pendingFile) return (
     <CIImageEditor
       file={pendingFile}
-      onConfirm={(dataUrl, mediaType) => { setPendingFile(null); setOcrStatus('loading'); fetch('/api/ocr-ci', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({imageData:dataUrl,mediaType})}).then(r=>r.json()).then(json=>{if(json.success&&json.data){const d=json.data;const fn=(d.last_name&&d.first_name)?d.last_name.toUpperCase()+' '+d.first_name.toUpperCase():'';setForm(f=>({...f,...(d.ci_series?{ci_series:d.ci_series}:{}),...(d.ci_number?{ci_number:d.ci_number}:{}),...(d.cnp?{cnp:d.cnp}:{}),...(d.birth_date?{birth_date:d.birth_date}:{}),...(d.address?{address:d.address}:{}),...(d.county?{county:d.county}:{}),...(d.expiry_date?{expiry_date:d.expiry_date}:{}),...(d.nationality?{nationality:d.nationality}:{}),...(fn?{full_name:fn}:{})}));setOcrStatus('done')}else{setOcrStatus('error')}}).catch(()=>setOcrStatus('error')) }}
+      onConfirm={(dataUrl, mediaType) => {
+        setPendingFile(null)
+        processImageForOCR(dataUrl, mediaType)
+      }}
       onCancel={() => setPendingFile(null)}
     />
   )
