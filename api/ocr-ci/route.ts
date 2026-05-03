@@ -27,29 +27,36 @@ export async function POST(req: NextRequest) {
             },
             {
               type: 'text',
-              text: `Acesta este un buletin/carte de identitate românesc (poate fi rotit, fotografiat din orice unghi, model vechi sau nou).
-Extrage EXACT câmpurile vizibile și returnează DOAR un JSON valid, fără text adițional, fără markdown:
+              text: `Ești un expert în citirea documentelor de identitate românești. Analizează imaginea și extrage toate datele vizibile.
+
+STRUCTURA CĂRȚII DE IDENTITATE ROMÂNEȘTI:
+- Colț stânga-sus: SERIA și NUMĂRUL (ex: "IF1026449" = serie "IF", număr "1026449")
+- Câmpul "Nume / Surname": NUMELE DE FAMILIE
+- Câmpul "Prenume / Given names": PRENUMELE
+- Câmpul "CNP / PIN": cele 13 cifre ale CNP-ului
+- Câmpul "Data nașterii / Date of birth": data nașterii
+- Câmpul "Data expirării / Date of expiry": data expirării
+- Câmpul "Cetățenie / Nationality": ex ROU
+- Pe modelul vechi: adresa de domiciliu (pe modelul nou cu chip NU există adresă pe față)
+
+MODELE:
+- Model NOU (cu chip auriu pe spate): serie 2 litere + număr 7 cifre, fără adresă pe față
+- Model VECHI (fără chip): serie 2 litere + număr 6 cifre, cu adresă pe față
+
+Returnează DOAR acest JSON valid, fără text adițional:
 {
-  "ci_series": "seria CI (2 litere majuscule, ex: AB, CT, IF, RK, KV, TC, MB, KZ)",
-  "ci_number": "numărul CI (6 sau 7 cifre - modelul nou are 7 cifre, ex: 1026449)",
-  "cnp": "CNP-ul (13 cifre, câmpul CNP/PIN)",
-  "birth_date": "data nașterii în format dd.mm.yyyy",
-  "last_name": "numele de familie (câmpul Nume/Surname)",
-  "first_name": "prenumele complet (câmpul Prenume/Given names)",
-  "address": "adresa completă de domiciliu dacă e vizibilă (strada, număr, bloc, apartament)",
-  "county": "județul de domiciliu dacă e vizibil (fără cuvântul Județul sau JUD.)",
-  "expiry_date": "data expirării în format dd.mm.yyyy dacă e vizibilă",
-  "nationality": "cetățenia (ex: ROU)"
+  "ci_series": "2 litere majuscule din colțul stânga-sus",
+  "ci_number": "6 sau 7 cifre din colțul stânga-sus",
+  "cnp": "exact 13 cifre din câmpul CNP/PIN",
+  "last_name": "din câmpul Nume/Surname - păstrează diacritice și cratime",
+  "first_name": "din câmpul Prenume/Given names - păstrează diacritice și cratime",
+  "birth_date": "dd.mm.yyyy din Data nașterii",
+  "expiry_date": "dd.mm.yyyy din Data expirării",
+  "nationality": "din Cetățenie ex: ROU",
+  "address": "adresa dacă e vizibilă, altfel string gol",
+  "county": "județul dacă e vizibil, altfel string gol"
 }
-IMPORTANT:
-- Seria și numărul CI sunt în colțul stânga-sus (ex: IF1026449 = serie IF, număr 1026449; RK892004 = serie RK, număr 892004)
-- Modelul nou de CI are numărul din 7 cifre (ex: 1026449)
-- Modelul vechi are 6 cifre
-- Dacă documentul e rotit/întors/fotografiat oblic, citește-l mental corect
-- Câmpul Nume/Surname = numele de familie, Prenume/Given names = prenumele
-- Păstrează exact diacriticele și cratimele din CI (ex: Răzvan-Andrei, Căpățână, Vasile-Manoilă)
-- Dacă un câmp nu e vizibil, returnează string gol ""
-- Returnează DOAR JSON-ul, nimic altceva`
+Dacă documentul e rotit sau fotografiat din unghi, rotește-l mental și citește corect. Dacă un câmp nu e vizibil returnează "".`
             }
           ]
         }]

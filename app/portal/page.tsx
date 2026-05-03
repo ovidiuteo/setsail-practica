@@ -472,6 +472,30 @@ export default function PortalPage() {
               </div>
 
               <div className="space-y-3">
+                {/* Nume si Prenume din CI */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className={labelCls}>Nume (din CI)</label>
+                    <input className={inputCls} value={form.full_name.split(' ')[0] || ''}
+                      placeholder="POPESCU"
+                      onChange={e => {
+                        const parts = form.full_name.split(' ')
+                        parts[0] = e.target.value.toUpperCase()
+                        setForm(f => ({ ...f, full_name: parts.join(' ') }))
+                      }} />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Prenume (din CI)</label>
+                    <input className={inputCls}
+                      value={form.full_name.split(' ').slice(1).join(' ') || ''}
+                      placeholder="ION GABRIEL"
+                      onChange={e => {
+                        const parts = form.full_name.split(' ')
+                        const newFull = (parts[0] || '') + ' ' + e.target.value.toUpperCase()
+                        setForm(f => ({ ...f, full_name: newFull.trim() }))
+                      }} />
+                  </div>
+                </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className={labelCls}>CNP</label>
