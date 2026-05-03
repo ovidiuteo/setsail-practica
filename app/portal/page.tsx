@@ -241,26 +241,28 @@ export default function PortalPage() {
     return new Promise(resolve => {
       const img = new Image()
       img.onload = () => {
-        const TARGET_KB = 500        // target: sub 500KB base64
-        const MAX_WIDTH = 800        // max 800px latime
-        // Scaleaza proportional dupa latime
-        const scale = Math.min(1, MAX_WIDTH / img.width)
+        // Pas 1: scale la 800px latime (proportional cu height)
+        const MAX_W = 800
+        const scale = Math.min(1, MAX_W / img.width)
         const w = Math.round(img.width * scale)
         const h = Math.round(img.height * scale)
         const tmp = document.createElement('canvas')
         tmp.width = w; tmp.height = h
         tmp.getContext('2d')!.drawImage(img, 0, 0, w, h)
-        // Incearca calitati descrescatoare pana sub TARGET_KB
-        const qualities = [0.85, 0.75, 0.65, 0.55, 0.45]
+        // Pas 2: verifica la calitate 0.85 - daca e sub 450KB, gata
         let result = tmp.toDataURL('image/jpeg', 0.85)
+        const sizeAt85 = Math.round(result.length / 1024)
+        if (sizeAt85 <= 450) {
+          console.log(`CI: ${w}x${h}px @ Q0.85 → ${sizeAt85}KB ✅`)
+          resolve(result); return
+        }
+        // Pas 3: scade calitatea iterativ pana sub 450KB
+        const qualities = [0.75, 0.65, 0.55, 0.45, 0.35]
         for (const q of qualities) {
           result = tmp.toDataURL('image/jpeg', q)
           const sizeKB = Math.round(result.length / 1024)
-          if (sizeKB <= TARGET_KB) {
-            console.log(`CI comprimat: ${w}x${h}px @ Q${q} → ${sizeKB}KB ✅`)
-            break
-          }
-          console.log(`CI @ Q${q} → ${sizeKB}KB (prea mare, incerc mai mic...)`)
+          console.log(`CI: ${w}x${h}px @ Q${q} → ${sizeKB}KB`)
+          if (sizeKB <= 450) { console.log('✅'); break }
         }
         resolve(result)
       }
