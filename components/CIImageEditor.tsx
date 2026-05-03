@@ -1,6 +1,6 @@
 'use client'
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { RotateCcw, RotateCw, Crop, Check, X } from 'lucide-react'
+import { RotateCcw, RotateCw, Crop, Check, X, Scissors } from 'lucide-react'
 
 type Props = {
   file: File
@@ -12,14 +12,17 @@ type Handle = 'tl'|'t'|'tr'|'r'|'br'|'b'|'bl'|'l'
 
 export default function CIImageEditor({ file, onConfirm, onCancel }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
   const imgRef = useRef<HTMLImageElement | null>(null)
+  const originalImgRef = useRef<HTMLImageElement | null>(null) // imaginea originala pt reset
   const [rotation, setRotation] = useState(0)
   const [imageLoaded, setImageLoaded] = useState(false)
+  const [cropApplied, setCropApplied] = useState(false)
   const isPDF = file.type === 'application/pdf'
 
-  // Crop state — in percentaje (0-100) relativ la canvas
-  const [crop, setCrop] = useState({ x: 0, y: 0, w: 100, h: 100 })
+  // Crop state in procente 0-100
+  const [crop, setCrop] = useState({ x: 5, y: 5, w: 90, h: 90 })
+  const [isCropDefault, setIsCropDefault] = useState(true)
+
   const dragState = useRef<{
     handle: Handle | 'move' | null
     startX: number; startY: number
@@ -29,21 +32,24 @@ export default function CIImageEditor({ file, onConfirm, onCancel }: Props) {
   // Incarca imaginea
   useEffect(() => {
     const img = new Image()
-    img.onload = () => { imgRef.current = img; setImageLoaded(true) }
+    img.onload = () => {
+      imgRef.current = img
+      originalImgRef.current = img
+      setImageLoaded(true)
+    }
     const reader = new FileReader()
     reader.onload = e => { img.src = e.target?.result as string }
     reader.readAsDataURL(file)
   }, [file])
 
-  // Redeseneaza canvas cand rotatie/imagine se schimba
   useEffect(() => {
     if (!imageLoaded) return
     drawCanvas()
   }, [imageLoaded, rotation])
 
-  function drawCanvas() {
+  function drawCanvas(sourceImg?: HTMLImageElement) {
     const canvas = canvasRef.current
-    const img = imgRef.current
+    const img = sourceImg || imgRef.current
     if (!canvas || !img) return
     const ctx = canvas.getContext('2d')!
     const rad = (rotation * Math.PI) / 180
@@ -58,7 +64,61 @@ export default function CIImageEditor({ file, onConfirm, onCancel }: Props) {
     ctx.restore()
   }
 
-  // Coordonate mouse relative la canvas, in procente
+  // Aplica crop - taie imaginea si actualizeaza imgRef
+  function applyCrop() {
+    const canvas = canvasRef.current
+    if (!canvas) return
+
+    const cx = Math.round((crop.x / 100) * canvas.width)
+    const cy = Math.round((crop.y / 100) * canvas.height)
+    const cw = Math.round((crop.w / 100) * canvas.width)
+    const ch = Math.round((crop.h / 100) * canvas.height)
+
+    // Creeaza canvas temporar cu zona selectata
+    const tmp = document.createElement('canvas')
+    tmp.width = cw
+    tmp.height = ch
+    const tmpCtx = tmp.getContext('2d')!
+    tmpCtx.drawImage(canvas, cx, cy, cw, ch, 0, 0, cw, ch)
+
+    // Actualizeaza imaginea si redeseneaza
+    const newImg = new Image()
+    newImg.onload = () => {
+      imgRef.current = newImg
+      // Reset canvas la imaginea cropped
+      const c = canvasRef.current!
+      c.width = cw
+      c.height = ch
+      c.getContext('2d')!.drawImage(newImg, 0, 0)
+      setCrop({ x: 5, y: 5, w: 90, h: 90 })
+      setIsCropDefault(true)
+      setCropApplied(true)
+    }
+    newImg.src = tmp.toDataURL('image/jpeg', 0.95)
+  }
+
+  // Reset crop - revine la imaginea originala (inainte de orice crop)
+  function resetCrop() {
+    imgRef.current = originalImgRef.current
+    setCrop({ x: 5, y: 5, w: 90, h: 90 })
+    setIsCropDefault(true)
+    setCropApplied(false)
+    setRotation(0)
+    drawCanvas(originalImgRef.current!)
+  }
+
+  function rotateLeft() {
+    setRotation(r => r - 90)
+    setCrop({ x: 5, y: 5, w: 90, h: 90 })
+    setIsCropDefault(true)
+  }
+
+  function rotateRight() {
+    setRotation(r => r + 90)
+    setCrop({ x: 5, y: 5, w: 90, h: 90 })
+    setIsCropDefault(true)
+  }
+
   function toPercent(e: React.MouseEvent | MouseEvent) {
     const canvas = canvasRef.current!
     const rect = canvas.getBoundingClientRect()
@@ -68,7 +128,6 @@ export default function CIImageEditor({ file, onConfirm, onCancel }: Props) {
     }
   }
 
-  // Handle-uri: pozitii relative la crop box (in %)
   const handles: { id: Handle; cx: number; cy: number; cursor: string }[] = [
     { id: 'tl', cx: crop.x,           cy: crop.y,           cursor: 'nw-resize' },
     { id: 't',  cx: crop.x+crop.w/2,  cy: crop.y,           cursor: 'n-resize'  },
@@ -82,6 +141,7 @@ export default function CIImageEditor({ file, onConfirm, onCancel }: Props) {
 
   function onMouseDown(e: React.MouseEvent, handle: Handle | 'move') {
     e.preventDefault()
+    e.stopPropagation()
     const { px, py } = toPercent(e)
     dragState.current = { handle, startX: px, startY: py, startCrop: { ...crop } }
     window.addEventListener('mousemove', onMouseMove)
@@ -97,11 +157,10 @@ export default function CIImageEditor({ file, onConfirm, onCancel }: Props) {
     const py = Math.max(0, Math.min(100, ((e.clientY - rect.top) / rect.height) * 100))
     const dx = px - startX
     const dy = py - startY
+    const MIN = 5
 
-    setCrop(prev => {
+    setCrop(() => {
       let { x, y, w, h } = sc
-      const MIN = 5 // minim 5%
-
       if (handle === 'move') {
         x = Math.max(0, Math.min(100 - w, sc.x + dx))
         y = Math.max(0, Math.min(100 - h, sc.y + dy))
@@ -113,6 +172,7 @@ export default function CIImageEditor({ file, onConfirm, onCancel }: Props) {
       }
       return { x, y, w, h }
     })
+    setIsCropDefault(false)
   }, [])
 
   const onMouseUp = useCallback(() => {
@@ -121,37 +181,11 @@ export default function CIImageEditor({ file, onConfirm, onCancel }: Props) {
     window.removeEventListener('mouseup', onMouseUp)
   }, [])
 
-  function applyCrop() {
-    const canvas = canvasRef.current!
-    const tmp = document.createElement('canvas')
-    const cx = (crop.x / 100) * canvas.width
-    const cy = (crop.y / 100) * canvas.height
-    const cw = (crop.w / 100) * canvas.width
-    const ch = (crop.h / 100) * canvas.height
-    tmp.width = cw; tmp.height = ch
-    tmp.getContext('2d')!.drawImage(canvas, cx, cy, cw, ch, 0, 0, cw, ch)
-    const newImg = new Image()
-    newImg.onload = () => { imgRef.current = newImg; setCrop({ x:0, y:0, w:100, h:100 }); drawCanvas() }
-    newImg.src = tmp.toDataURL('image/jpeg', 0.95)
-  }
-
+  // Save & Scan: trimite imaginea curenta (cu crop aplicat deja)
   function handleConfirm() {
-    // Applica crop daca nu e full
-    const isFullCrop = crop.x < 0.5 && crop.y < 0.5 && crop.w > 99.5 && crop.h > 99.5
-    if (!isFullCrop) {
-      applyCrop()
-      setTimeout(() => {
-        const dataUrl = canvasRef.current!.toDataURL('image/jpeg', 0.92)
-        onConfirm(dataUrl, 'image/jpeg')
-      }, 100)
-    } else {
-      const dataUrl = canvasRef.current!.toDataURL('image/jpeg', 0.92)
-      onConfirm(dataUrl, 'image/jpeg')
-    }
-  }
-
-  const getCursor = () => {
-    return 'default'
+    const canvas = canvasRef.current!
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.92)
+    onConfirm(dataUrl, 'image/jpeg')
   }
 
   return (
@@ -160,135 +194,123 @@ export default function CIImageEditor({ file, onConfirm, onCancel }: Props) {
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 shrink-0">
-          <h3 className="font-semibold text-gray-900 text-sm">
-            {isPDF ? 'Rotire document' : 'Editare document înainte de scanare'}
-          </h3>
+          <div>
+            <h3 className="font-semibold text-gray-900 text-sm">
+              {isPDF ? 'Rotire document' : 'Editare document'}
+            </h3>
+            {!isPDF && (
+              <p className="text-xs text-gray-400 mt-0.5">Rotiți și decupați, apoi apăsați <b>Apply Crop</b>, apoi <b>Save & Scan OCR</b></p>
+            )}
+          </div>
           <button onClick={onCancel} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><X size={16}/></button>
         </div>
 
-        {/* Canvas area */}
-        <div ref={containerRef} className="relative bg-gray-100 flex items-center justify-center overflow-hidden"
-          style={{ flex: 1, minHeight: 200, maxHeight: '60vh' }}>
+        {/* Canvas */}
+        <div className="relative bg-gray-900 flex items-center justify-center overflow-hidden" style={{flex:1, minHeight:200, maxHeight:'58vh'}}>
           {!imageLoaded ? (
             <div className="text-gray-400 text-sm">Se încarcă...</div>
           ) : (
-            <div className="relative inline-block select-none" style={{ cursor: 'default', maxWidth: '100%', maxHeight: '100%' }}>
-              {/* Canvas */}
+            <div className="relative inline-block select-none" style={{maxWidth:'100%', maxHeight:'58vh'}}>
               <canvas
                 ref={canvasRef}
-                style={{ display: 'block', maxWidth: '100%', maxHeight: '60vh', objectFit: 'contain' }}
+                style={{display:'block', maxWidth:'100%', maxHeight:'58vh', objectFit:'contain'}}
               />
 
-              {/* Overlay SVG pentru crop */}
+              {/* Overlay SVG crop */}
               {!isPDF && (
-                <svg
-                  className="absolute inset-0 w-full h-full"
-                  style={{ pointerEvents: 'none' }}
-                  viewBox="0 0 100 100"
-                  preserveAspectRatio="none"
-                >
-                  {/* Zona intunecata in afara crop */}
-                  <path
-                    fillRule="evenodd"
-                    fill="rgba(0,0,0,0.45)"
+                <svg className="absolute inset-0 w-full h-full" style={{pointerEvents:'none'}} viewBox="0 0 100 100" preserveAspectRatio="none">
+                  <path fillRule="evenodd" fill="rgba(0,0,0,0.5)"
                     d={`M0 0 L100 0 L100 100 L0 100 Z M${crop.x} ${crop.y} L${crop.x+crop.w} ${crop.y} L${crop.x+crop.w} ${crop.y+crop.h} L${crop.x} ${crop.y+crop.h} Z`}
-                    style={{ pointerEvents: 'none' }}
-                  />
-                  {/* Border crop box */}
-                  <rect
-                    x={crop.x} y={crop.y} width={crop.w} height={crop.h}
-                    fill="none" stroke="white" strokeWidth="0.5"
-                    style={{ pointerEvents: 'none' }}
-                  />
-                  {/* Grid lines */}
-                  <line x1={crop.x+crop.w/3} y1={crop.y} x2={crop.x+crop.w/3} y2={crop.y+crop.h} stroke="rgba(255,255,255,0.4)" strokeWidth="0.3" style={{pointerEvents:'none'}}/>
-                  <line x1={crop.x+crop.w*2/3} y1={crop.y} x2={crop.x+crop.w*2/3} y2={crop.y+crop.h} stroke="rgba(255,255,255,0.4)" strokeWidth="0.3" style={{pointerEvents:'none'}}/>
-                  <line x1={crop.x} y1={crop.y+crop.h/3} x2={crop.x+crop.w} y2={crop.y+crop.h/3} stroke="rgba(255,255,255,0.4)" strokeWidth="0.3" style={{pointerEvents:'none'}}/>
-                  <line x1={crop.x} y1={crop.y+crop.h*2/3} x2={crop.x+crop.w} y2={crop.y+crop.h*2/3} stroke="rgba(255,255,255,0.4)" strokeWidth="0.3" style={{pointerEvents:'none'}}/>
+                    style={{pointerEvents:'none'}}/>
+                  <rect x={crop.x} y={crop.y} width={crop.w} height={crop.h} fill="none" stroke="white" strokeWidth="0.4" style={{pointerEvents:'none'}}/>
+                  {/* Grid */}
+                  {[1,2].map(n=>(
+                    <g key={n}>
+                      <line x1={crop.x+crop.w*n/3} y1={crop.y} x2={crop.x+crop.w*n/3} y2={crop.y+crop.h} stroke="rgba(255,255,255,0.3)" strokeWidth="0.25" style={{pointerEvents:'none'}}/>
+                      <line x1={crop.x} y1={crop.y+crop.h*n/3} x2={crop.x+crop.w} y2={crop.y+crop.h*n/3} stroke="rgba(255,255,255,0.3)" strokeWidth="0.25" style={{pointerEvents:'none'}}/>
+                    </g>
+                  ))}
                 </svg>
               )}
 
-              {/* Handle-uri interactive - pozitionate absolut */}
-              {!isPDF && (() => {
-                const canvas = canvasRef.current
-                if (!canvas) return null
-                const rect = canvas.getBoundingClientRect()
-                const W = rect.width
-                const H = rect.height
-
-                return (
-                  <>
-                    {/* Zona interioara - drag pentru move */}
-                    <div
-                      style={{
-                        position: 'absolute',
-                        left: `${crop.x}%`, top: `${crop.y}%`,
-                        width: `${crop.w}%`, height: `${crop.h}%`,
-                        cursor: 'move',
-                        pointerEvents: 'all',
-                      }}
-                      onMouseDown={e => onMouseDown(e, 'move')}
-                    />
-                    {/* Handle-uri pe colturi si margini */}
-                    {handles.map(h => (
-                      <div
-                        key={h.id}
-                        style={{
-                          position: 'absolute',
-                          left: `calc(${h.cx}% - 7px)`,
-                          top: `calc(${h.cy}% - 7px)`,
-                          width: 14, height: 14,
-                          background: 'white',
-                          border: '2px solid #3b82f6',
-                          borderRadius: 3,
-                          cursor: h.cursor,
-                          pointerEvents: 'all',
-                          zIndex: 10,
-                        }}
-                        onMouseDown={e => { e.stopPropagation(); onMouseDown(e, h.id) }}
-                      />
-                    ))}
-                  </>
-                )
-              })()}
+              {/* Handles interactive */}
+              {!isPDF && (
+                <>
+                  {/* Move zone */}
+                  <div style={{position:'absolute', left:`${crop.x}%`, top:`${crop.y}%`, width:`${crop.w}%`, height:`${crop.h}%`, cursor:'move', pointerEvents:'all'}}
+                    onMouseDown={e=>onMouseDown(e,'move')}/>
+                  {/* Resize handles */}
+                  {handles.map(h=>(
+                    <div key={h.id} style={{
+                      position:'absolute',
+                      left:`calc(${h.cx}% - 7px)`, top:`calc(${h.cy}% - 7px)`,
+                      width:14, height:14,
+                      background:'white', border:'2.5px solid #3b82f6', borderRadius:3,
+                      cursor:h.cursor, pointerEvents:'all', zIndex:10,
+                      boxShadow:'0 1px 4px rgba(0,0,0,0.3)',
+                    }} onMouseDown={e=>{e.stopPropagation();onMouseDown(e,h.id)}}/>
+                  ))}
+                </>
+              )}
             </div>
           )}
         </div>
 
         {/* Toolbar */}
-        <div className="px-5 py-3 border-t border-gray-100 shrink-0">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <button onClick={() => { setRotation(r => r - 90); setCrop({ x:0,y:0,w:100,h:100 }) }}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 text-xs font-medium">
-                <RotateCcw size={13}/> -90°
+        <div className="px-5 py-3 border-t border-gray-100 shrink-0 bg-white">
+          <div className="flex items-center justify-between gap-2">
+
+            {/* Stanga: Rotate + Reset */}
+            <div className="flex items-center gap-1.5">
+              <button onClick={rotateLeft}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 text-xs">
+                <RotateCcw size={12}/> -90°
               </button>
-              <button onClick={() => { setRotation(r => r + 90); setCrop({ x:0,y:0,w:100,h:100 }) }}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 text-xs font-medium">
-                <RotateCw size={13}/> +90°
+              <button onClick={rotateRight}
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 text-xs">
+                <RotateCw size={12}/> +90°
               </button>
               {!isPDF && (
-                <button onClick={() => setCrop({ x:0, y:0, w:100, h:100 })}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 text-xs">
-                  <Crop size={13}/> Reset crop
+                <button onClick={resetCrop}
+                  className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 text-xs"
+                  title="Revine la imaginea originală">
+                  <Crop size={12}/> Reset
                 </button>
               )}
             </div>
+
+            {/* Dreapta: Apply Crop + Save & Scan */}
             <div className="flex items-center gap-2">
               <button onClick={onCancel}
-                className="px-4 py-1.5 rounded-lg border border-gray-200 text-gray-500 text-xs hover:bg-gray-50">
+                className="px-3 py-1.5 rounded-lg border border-gray-200 text-gray-500 text-xs hover:bg-gray-50">
                 Anulează
               </button>
+              {!isPDF && (
+                <button onClick={applyCrop}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                    isCropDefault
+                      ? 'border border-gray-200 text-gray-400 cursor-default'
+                      : 'bg-amber-500 text-white hover:bg-amber-600'
+                  }`}
+                  disabled={isCropDefault}
+                  title="Taie imaginea la zona selectată">
+                  <Scissors size={12}/> Apply Crop
+                </button>
+              )}
               <button onClick={handleConfirm}
-                className="px-5 py-1.5 rounded-lg text-xs font-medium text-white flex items-center gap-1.5"
-                style={{ background: '#0a1628' }}>
-                <Check size={13}/> Trimite la scanare
+                className="flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-xs font-medium text-white"
+                style={{background:'#0a1628'}}>
+                <Check size={12}/> Save & Scan OCR
               </button>
             </div>
           </div>
-          <p className="text-xs text-gray-400 mt-2">
-            {isPDF ? 'Rotiți dacă e cazul, apoi trimiteți.' : 'Trageți colțurile/marginile albe pentru a decupa. Trageți din interior pentru a muta zona.'}
-          </p>
+
+          {/* Status */}
+          {cropApplied && (
+            <p className="text-xs text-green-600 mt-2 flex items-center gap-1">
+              <Check size={11}/> Crop aplicat — imaginea a fost decupată. Apasă <b className="mx-0.5">Save & Scan OCR</b> pentru a continua.
+            </p>
+          )}
         </div>
       </div>
     </div>
