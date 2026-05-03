@@ -2,6 +2,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Ship, RotateCcw, Check, Upload, Loader2, CheckCircle, AlertCircle, Camera } from 'lucide-react'
+import CIImageEditor from '@/components/CIImageEditor'
 
 type Step = 'login' | 'confirm' | 'done'
 
@@ -15,6 +16,7 @@ export default function PortalPage() {
   const [saving, setSaving] = useState(false)
   const [ocrLoading, setOcrLoading] = useState(false)
   const [ocrStatus, setOcrStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
+  const [pendingFile, setPendingFile] = useState<File|null>(null)
   const [signatureSaved, setSignatureSaved] = useState(false)
   const [existingSignature, setExistingSignature] = useState<string | null>(null)
 
@@ -191,59 +193,43 @@ export default function PortalPage() {
   async function handleCIUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
-    setOcrStatus('loading')
-
-    const reader = new FileReader()
-    reader.onload = async (ev) => {
-      const imageData = ev.target?.result as string
-      const mediaType = file.type || 'image/jpeg'
-
-      try {
-        const res = await fetch('/api/ocr-ci', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageData, mediaType })
-        })
-
-        const json = await res.json()
-
-        if (!res.ok || !json.success) {
-          setOcrStatus('error')
-          return
-        }
-
-        const d = json.data
-        // CI are prioritate absoluta - suprascrie orice camp existent
-        const fullNameFromCI = (d.last_name && d.first_name)
-          ? d.last_name.toUpperCase() + ' ' + d.first_name.toUpperCase()
-          : ''
-        setForm(f => ({
-          ...f,
-          ...(d.ci_series    ? { ci_series: d.ci_series }       : {}),
-          ...(d.ci_number    ? { ci_number: d.ci_number }       : {}),
-          ...(d.cnp          ? { cnp: d.cnp }                   : {}),
-          ...(d.birth_date   ? { birth_date: d.birth_date }     : {}),
-          ...(d.address      ? { address: d.address }           : {}),
-          ...(d.county       ? { county: d.county }             : {}),
-          ...(d.expiry_date  ? { expiry_date: d.expiry_date }   : {}),
-          ...(d.nationality  ? { nationality: d.nationality }   : {}),
-          ...(fullNameFromCI ? { full_name: fullNameFromCI }    : {}),
-        }))
-
-        // Salvează imaginea CI
-        await supabase.from('students')
-          .update({ ci_image_data: imageData })
-          .eq('id', student.id)
-
-        setOcrStatus('done')
-      } catch (err) {
-        console.error('OCR error:', err)
-        setOcrStatus('error')
-      }
-    }
-    reader.readAsDataURL(file)
+    setPendingFile(file)
     if (ciInputRef.current) ciInputRef.current.value = ''
   }
+
+  async function processImageForOCR(dataUrl: string, mediaType: string) {
+    setOcrStatus('loading')
+    try {
+      const res = await fetch('/api/ocr-ci', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageData: dataUrl, mediaType: mediaType || 'image/jpeg' })
+      })
+      const json = await res.json()
+      if (!res.ok || !json.success) { setOcrStatus('error'); return }
+      const d = json.data
+      const fullNameFromCI = (d.last_name && d.first_name)
+        ? d.last_name.toUpperCase() + ' ' + d.first_name.toUpperCase() : ''
+      setForm(f => ({
+        ...f,
+        ...(d.ci_series   ? { ci_series: d.ci_series }     : {}),
+        ...(d.ci_number   ? { ci_number: d.ci_number }     : {}),
+        ...(d.cnp         ? { cnp: d.cnp }                 : {}),
+        ...(d.birth_date  ? { birth_date: d.birth_date }   : {}),
+        ...(d.address     ? { address: d.address }         : {}),
+        ...(d.county      ? { county: d.county }           : {}),
+        ...(d.expiry_date ? { expiry_date: d.expiry_date } : {}),
+        ...(d.nationality ? { nationality: d.nationality } : {}),
+        ...(fullNameFromCI ? { full_name: fullNameFromCI } : {}),
+      }))
+      await supabase.from('students').update({ ci_image_data: dataUrl }).eq('id', student.id)
+      setOcrStatus('done')
+    } catch (err) {
+      console.error('OCR error:', err)
+      setOcrStatus('error')
+    }
+  }
+
 
   async function saveAll() {
     setSaving(true)
@@ -283,6 +269,14 @@ export default function PortalPage() {
 
   const labelCls = "block text-xs font-medium text-gray-600 mb-1.5"
   const inputCls = baseCls + ' border-gray-200 focus:ring-blue-400'
+
+  if (pendingFile) return (
+    <CIImageEditor
+      file={pendingFile}
+      onConfirm={(dataUrl, mediaType) => { setPendingFile(null); processImageForOCR(dataUrl, mediaType) }}
+      onCancel={() => setPendingFile(null)}
+    />
+  )
 
   return (
     <div className="min-h-screen flex flex-col items-center justify-start p-4 pb-16"

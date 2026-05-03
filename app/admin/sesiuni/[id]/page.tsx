@@ -1,5 +1,6 @@
 'use client'
 import React, { useEffect, useState, useRef } from 'react'
+import CIImageEditor from '@/components/CIImageEditor'
 import { supabase } from '@/lib/supabase'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
@@ -34,45 +35,51 @@ function CIAdminScan({ studentId, students, setStudents }: {
 }) {
   const [scanning, setScanning] = useState(false)
   const [done, setDone] = useState(false)
+  const [pendingFile, setPendingFile] = useState<File|null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  async function handleFile(file: File) {
-    setScanning(true)
-    const reader = new FileReader()
-    reader.onload = async (ev) => {
-      const imageData = ev.target?.result as string
-      try {
-        const res = await fetch('/api/ocr-ci', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ imageData, mediaType: file.type })
-        })
-        const json = await res.json()
-        if (json.success && json.data) {
-          const d = json.data
-          const updates: any = {}
-          if (d.ci_series) updates.ci_series = d.ci_series
-          if (d.ci_number) updates.ci_number = d.ci_number
-          if (d.cnp) updates.cnp = d.cnp
-          if (d.birth_date) updates.birth_date = d.birth_date
-          if (d.address) updates.address = d.address
-          if (d.county) updates.county = d.county
-          updates.ci_image_data = imageData
+  function handleFile(file: File) {
+    setPendingFile(file)
+  }
 
-          await supabase.from('students').update(updates).eq('id', studentId)
-          setStudents(students.map(s => s.id === studentId ? {...s, ...updates} : s))
-          setDone(true)
-          setTimeout(() => setDone(false), 3000)
-        }
-      } catch {}
-      setScanning(false)
-      if (inputRef.current) inputRef.current.value = ''
-    }
-    reader.readAsDataURL(file)
+  async function processFile(dataUrl: string, mediaType: string) {
+    setScanning(true)
+    try {
+      const res = await fetch('/api/ocr-ci', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageData: dataUrl, mediaType: mediaType || 'image/jpeg' })
+      })
+      const json = await res.json()
+      if (json.success && json.data) {
+        const d = json.data
+        const updates: any = { ci_image_data: dataUrl }
+        if (d.ci_series) updates.ci_series = d.ci_series
+        if (d.ci_number) updates.ci_number = d.ci_number
+        if (d.cnp) updates.cnp = d.cnp
+        if (d.birth_date) updates.birth_date = d.birth_date
+        if (d.address) updates.address = d.address
+        if (d.county) updates.county = d.county
+        if (d.expiry_date) updates.expiry_date = d.expiry_date
+        if (d.last_name && d.first_name) updates.full_name = d.last_name.toUpperCase() + ' ' + d.first_name.toUpperCase()
+        await supabase.from('students').update(updates).eq('id', studentId)
+        setStudents(students.map(s => s.id === studentId ? {...s, ...updates} : s))
+        setDone(true)
+        setTimeout(() => setDone(false), 3000)
+      }
+    } catch (e) { console.error(e) }
+    finally { setScanning(false) }
   }
 
   return (
     <>
+      {pendingFile && (
+        <CIImageEditor
+          file={pendingFile}
+          onConfirm={(dataUrl, mediaType) => { setPendingFile(null); processFile(dataUrl, mediaType) }}
+          onCancel={() => setPendingFile(null)}
+        />
+      )}
       <input ref={inputRef} type="file" accept="image/*" className="hidden"
         onChange={e => e.target.files?.[0] && handleFile(e.target.files[0])}/>
       <button onClick={()=>inputRef.current?.click()} disabled={scanning}
