@@ -31,6 +31,19 @@ export default function PortalPage() {
   const hasDrawn = useRef(false)
   const ciInputRef = useRef<HTMLInputElement>(null)
 
+  const baseCls = "w-full rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 border-2 bg-white transition-colors"
+
+  function ciFieldCls(value: string, isValid: boolean) {
+    if (!value.trim()) return baseCls + ' border-gray-200 focus:ring-blue-400'
+    if (isValid) return baseCls + ' border-green-500 bg-green-50 focus:ring-green-400'
+    return baseCls + ' border-red-400 bg-red-50 focus:ring-red-400'
+  }
+
+  const labelCls = "block text-xs font-medium text-gray-600 mb-1.5"
+  const inputCls = baseCls + ' border-gray-200 focus:ring-blue-400'
+
+
+
   // Validare CI
   const ciSeriesValid = /^[A-Z]{2}$/.test(form.ci_series.trim())
   const ciNumberValid = /^\d{6,7}$/.test(form.ci_number.trim())
@@ -190,6 +203,26 @@ export default function PortalPage() {
   }
 
   // OCR via server-side API
+  async function autoSave(extraData?: any) {
+    if (!student?.id) return
+    const data: any = {
+      phone: form.phone,
+      birth_date: form.birth_date,
+      ci_series: form.ci_series.trim().toUpperCase(),
+      ci_number: form.ci_number.trim(),
+      cnp: form.cnp.trim(),
+      address: form.address,
+      county: form.county,
+      email: form.email,
+      expiry_date: form.expiry_date.trim(),
+      nationality: form.nationality.trim(),
+      ...(form.full_name.trim() ? { full_name: form.full_name.trim() } : {}),
+      ...extraData,
+    }
+    await supabase.from('students').update(data).eq('id', student.id)
+  }
+
+
   async function handleCIUpload(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (!file) return
@@ -224,12 +257,13 @@ export default function PortalPage() {
       }))
       await supabase.from('students').update({ ci_image_data: dataUrl }).eq('id', student.id)
       setOcrStatus('done')
+      // Autosave dupa OCR
+      setTimeout(autoSave, 500)
     } catch (err) {
       console.error('OCR error:', err)
       setOcrStatus('error')
     }
   }
-
 
   async function saveAll() {
     setSaving(true)
@@ -240,40 +274,35 @@ export default function PortalPage() {
       sigData = canvasRef.current!.toDataURL('image/png')
     }
 
-    await supabase.from('students').update({
+
+    const updateData: any = {
       portal_status: 'signed',
       signed_at: new Date().toISOString(),
       phone: form.phone,
       birth_date: form.birth_date,
       ci_series: form.ci_series.trim().toUpperCase(),
       ci_number: form.ci_number.trim(),
+      cnp: form.cnp.trim(),
       address: form.address,
       county: form.county,
       email: form.email,
+      expiry_date: form.expiry_date.trim(),
+      nationality: form.nationality.trim(),
       id_document: `${form.ci_series.trim().toUpperCase()} ${form.ci_number.trim()}`,
-      ...(sigData ? { signature_data: sigData } : {}),
-    }).eq('id', student.id)
+    }
+    if (sigData) updateData.signature_data = sigData
+    if (form.full_name.trim()) updateData.full_name = form.full_name.trim()
 
+    await supabase.from('students').update(updateData).eq('id', student.id)
     setStep('done')
     setSaving(false)
   }
-
   // Stiluri câmpuri CI cu validare vizuală
-  const baseCls = "w-full rounded-xl px-4 py-3 text-sm focus:outline-none focus:ring-2 border-2 bg-white transition-colors"
-
-  function ciFieldCls(value: string, isValid: boolean) {
-    if (!value.trim()) return baseCls + ' border-gray-200 focus:ring-blue-400'
-    if (isValid) return baseCls + ' border-green-500 bg-green-50 focus:ring-green-400'
-    return baseCls + ' border-red-400 bg-red-50 focus:ring-red-400'
-  }
-
-  const labelCls = "block text-xs font-medium text-gray-600 mb-1.5"
-  const inputCls = baseCls + ' border-gray-200 focus:ring-blue-400'
 
   if (pendingFile) return (
     <CIImageEditor
       file={pendingFile}
-      onConfirm={(dataUrl, mediaType) => { setPendingFile(null); processImageForOCR(dataUrl, mediaType) }}
+      onConfirm={(dataUrl, mediaType) => { setPendingFile(null); setOcrStatus('loading'); fetch('/api/ocr-ci', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({imageData:dataUrl,mediaType})}).then(r=>r.json()).then(json=>{if(json.success&&json.data){const d=json.data;const fn=(d.last_name&&d.first_name)?d.last_name.toUpperCase()+' '+d.first_name.toUpperCase():'';setForm(f=>({...f,...(d.ci_series?{ci_series:d.ci_series}:{}),...(d.ci_number?{ci_number:d.ci_number}:{}),...(d.cnp?{cnp:d.cnp}:{}),...(d.birth_date?{birth_date:d.birth_date}:{}),...(d.address?{address:d.address}:{}),...(d.county?{county:d.county}:{}),...(d.expiry_date?{expiry_date:d.expiry_date}:{}),...(d.nationality?{nationality:d.nationality}:{}),...(fn?{full_name:fn}:{})}));setOcrStatus('done')}else{setOcrStatus('error')}}).catch(()=>setOcrStatus('error')) }}
       onCancel={() => setPendingFile(null)}
     />
   )
@@ -532,6 +561,13 @@ export default function PortalPage() {
                   </div>
                 </div>
               </div>
+              {/* Buton Salvează date - compact, dreapta */}
+              <div className="flex justify-end mt-3">
+                <button onClick={async () => { await autoSave(); }}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-medium border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors">
+                  <Check size={12}/> Salvează date
+                </button>
+              </div>
             </div>
 
             {/* Semnătură */}
@@ -570,24 +606,26 @@ export default function PortalPage() {
                   <CheckCircle size={11} /> Semnătura a fost salvată în baza de date
                 </p>
               )}
+
+              {/* Buton final Salvează și finalizează */}
+              <div className="mt-4">
+                <button onClick={saveAll} disabled={saving || !canSave}
+                  className={`w-full py-3.5 rounded-xl text-sm font-bold text-white shadow-lg transition-all ${
+                    canSave ? 'opacity-100 hover:opacity-90' : 'opacity-50 cursor-not-allowed'
+                  }`}
+                  style={{ background: canSave ? '#0a1628' : '#6b7280' }}>
+                  {saving ? 'Se salvează...' : student?.portal_status === 'signed' ? '✓ Actualizează datele' : '✓ Salvează și finalizează'}
+                </button>
+                {!canSave && (
+                  <p className="text-amber-600 text-xs text-center mt-2 flex items-center justify-center gap-1.5">
+                    <AlertCircle size={12} />
+                    Seria și numărul CI sunt obligatorii
+                  </p>
+                )}
+              </div>
             </div>
 
-            {/* Buton final */}
-            <div>
-              <button onClick={saveAll} disabled={saving || !canSave}
-                className={`w-full py-4 rounded-2xl text-sm font-bold text-white shadow-xl transition-all ${
-                  canSave ? 'opacity-100 hover:opacity-90' : 'opacity-50 cursor-not-allowed'
-                }`}
-                style={{ background: canSave ? '#0a1628' : '#6b7280' }}>
-                {saving ? 'Se salvează...' : student?.portal_status === 'signed' ? '✓ Actualizează datele' : '✓ Salvează și finalizează'}
-              </button>
-              {!canSave && (
-                <p className="text-amber-200 text-xs text-center mt-2 flex items-center justify-center gap-1.5">
-                  <AlertCircle size={12} />
-                  Seria și numărul CI sunt obligatorii pentru a continua
-                </p>
-              )}
-            </div>
+
           </div>
         )}
 
