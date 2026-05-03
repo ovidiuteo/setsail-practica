@@ -559,7 +559,7 @@ export default function PortalPage() {
                   <button
                     onClick={() => { setOcrStatus('idle'); if (ciInputRef.current) ciInputRef.current.click() }}
                     className="mt-2 text-xs text-blue-500 hover:text-blue-700 underline">
-                    Înlocuiește cu alt CI
+                    Vă rugăm upload CI — ANR verifică corectitudinea numelui (cratime, diacritice) și a CNP-ului față de documentul scanat.
                   </button>
                 )}
               </div>
