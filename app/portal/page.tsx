@@ -277,27 +277,12 @@ export default function PortalPage() {
 
   async function processImageForOCR(dataUrl: string, mediaType: string) {
     setOcrStatus('loading')
-    // Comprima si salveaza imaginea via Edge Function (ocoleste limita PostgREST 2MB)
+    // Comprima imaginea la 800px/500KB si salveaza direct in Supabase
     if (student?.id) {
       const compressedForDb = await compressImage(dataUrl)
       const sizeKB = Math.round(compressedForDb.length / 1024)
-      console.log(`Salvare CI: ${sizeKB}KB via Edge Function`)
-      try {
-        const saveRes = await fetch(
-          `${process.env.NEXT_PUBLIC_SUPABASE_URL}/functions/v1/save-ci-image`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ student_id: student.id, ci_image_data: compressedForDb })
-          }
-        )
-        const saveJson = await saveRes.json()
-        if (!saveJson.success) console.error('Edge fn error:', saveJson.error)
-        else console.log(`CI salvat: ${saveJson.sizeKB}KB`)
-      } catch (e) {
-        console.error('Edge function failed, fallback PostgREST:', e)
-        await supabase.from('students').update({ ci_image_data: compressedForDb }).eq('id', student.id)
-      }
+      console.log(`Salvare CI: ${sizeKB}KB in Supabase`)
+      await supabase.from('students').update({ ci_image_data: compressedForDb }).eq('id', student.id)
     }
     try {
       const res = await fetch('/api/ocr-ci', {
@@ -324,10 +309,9 @@ export default function PortalPage() {
         ...(d.country    ? { country: d.country }     : {}),
         ...(fullNameFromCI ? { full_name: fullNameFromCI } : {}),
       }))
-      // Salveaza datele OCR (imaginea e deja salvata comprimat mai sus)
-      const compressedRef = await compressImage(dataUrl) // pentru state update local
+      // Salveaza datele OCR (imaginea e deja salvata mai sus)
       const ocrSave: any = {
-        ci_image_data: compressedRef,  // pentru state local
+        ci_image_data: dataUrl,  // pentru state local (afisare)
         ...(d.ci_series    ? { ci_series: d.ci_series }     : {}),
         ...(d.ci_number    ? { ci_number: d.ci_number }     : {}),
         ...(d.cnp          ? { cnp: d.cnp }                 : {}),
