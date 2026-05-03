@@ -95,11 +95,12 @@ function CIAdminScan({ studentId, students, setStudents }: {
   )
 }
 
-function StudentsTable({ sess, students, setStudents, allSessions, allStudents, setAllStudents, isAbsent, onSelectionChange, selectedIds, setSelectedIds }:
+function StudentsTable({ sess, students, setStudents, allSessions, allStudents, setAllStudents, isAbsent, onSelectionChange, selectedIds, setSelectedIds, onCiPreview }:
   { sess: Session, students: Student[], setStudents:(s:Student[])=>void,
     allSessions: Session[], allStudents: Record<string,Student[]>, setAllStudents:(sid:string,s:Student[])=>void,
     isAbsent: boolean, onSelectionChange?: (emails: string[]) => void,
-    selectedIds: Set<string>, setSelectedIds: (s: Set<string>) => void }) {
+    selectedIds: Set<string>, setSelectedIds: (s: Set<string>) => void,
+    onCiPreview?: (name:string, img:string) => void }) {
 
   const [editingId, setEditingId] = useState<string|null>(null)
   const [editValues, setEditValues] = useState<any>({})
@@ -396,7 +397,7 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
                       {/* CI imagine - pictograma */}
                       <td className="px-2 py-2 text-center">
                         {s.ci_image_data ? (
-                          <button onClick={()=>{const w=window.open('','_blank');w?.document.write(`<img src="${s.ci_image_data}" style="max-width:100%;max-height:100vh;"/>`)}}
+                          <button onClick={()=>onCiPreview?.(s.full_name, s.ci_image_data)}
                             title="CI scanat — click pentru previzualizare"
                             className="p-1 rounded hover:bg-gray-100 transition-colors">
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -834,6 +835,7 @@ export default function SessionDetailPage() {
   }
   const [loading, setLoading] = useState(true)
   const [showRandomizer, setShowRandomizer] = useState(false)
+  const [ciPreview, setCiPreview] = useState<{name:string, img:string}|null>(null)
   const [randomCounts, setRandomCounts] = useState<number[]>([])
   const [randomizing, setRandomizing] = useState(false)
   const [editingSession, setEditingSession] = useState<string|null>(null)
@@ -1050,6 +1052,36 @@ export default function SessionDetailPage() {
         </Link>
       </div>
 
+      {/* Modal previzualizare CI */}
+      {ciPreview && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4" onClick={()=>setCiPreview(null)}>
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full overflow-hidden" onClick={e=>e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+              <div>
+                <h3 className="font-semibold text-gray-900 text-sm">CI — {ciPreview.name}</h3>
+                <p className="text-xs text-gray-400 mt-0.5">Click în afară pentru a închide</p>
+              </div>
+              <button onClick={()=>setCiPreview(null)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400">
+                <X size={16}/>
+              </button>
+            </div>
+            <div className="p-4 bg-gray-50">
+              <img src={ciPreview.img} alt="CI" className="w-full rounded-xl shadow-sm object-contain" style={{maxHeight:'70vh'}}/>
+            </div>
+            <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-2">
+              <a href={ciPreview.img} download={`CI_${ciPreview.name.replace(/ /g,'_')}.jpg`}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs border border-gray-200 text-gray-600 hover:bg-gray-50">
+                ⬇ Descarcă
+              </a>
+              <button onClick={()=>setCiPreview(null)}
+                className="px-4 py-2 rounded-lg text-xs font-medium text-white" style={{background:'#0a1628'}}>
+                Închide
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal randomizator */}
       {showRandomizer && (() => {
         const activeSess = sessions.filter(s => s.session_type !== 'absent')
@@ -1217,6 +1249,7 @@ export default function SessionDetailPage() {
                 isAbsent={true}
                 selectedIds={getSelectedIds(absentSession.id, studentsMap[absentSession.id]||[])}
                 setSelectedIds={(ids)=>setSelectedIds(absentSession.id, ids)}
+                onCiPreview={(name,img)=>setCiPreview({name,img})}
               />
             </div>
           </div>
