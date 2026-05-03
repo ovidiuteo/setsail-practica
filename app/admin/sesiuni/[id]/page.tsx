@@ -240,23 +240,31 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
           <table className="w-full text-xs">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
-                <th className="px-3 py-2.5 font-medium text-gray-400 w-6 text-left">#</th>
-                <th className="px-2 py-2.5 w-10">
-                  <div className="flex gap-1.5 items-center">
-                    <button onClick={selectAll} className="text-xs text-blue-500 hover:text-blue-700 font-semibold">All</button>
-                    <span className="text-gray-300 text-xs">/</span>
-                    <button onClick={selectNone} className="text-xs text-gray-400 hover:text-gray-600 font-semibold">None</button>
+                <th className="w-16 px-2 py-2.5 text-center">
+                  <div className="flex flex-col gap-0 items-center">
+                    <button onClick={async()=>{
+                      for(const st of students.filter(s=>s.email)){
+                        await supabase.from('students').update({communication_target:true}).eq('id',st.id)
+                      }
+                      setStudents(students.map(st=>({...st,communication_target:st.email?true:st.communication_target})))
+                    }} className="text-xs text-green-600 hover:text-green-800 font-bold leading-tight">All</button>
+                    <button onClick={async()=>{
+                      for(const st of students){
+                        await supabase.from('students').update({communication_target:false}).eq('id',st.id)
+                      }
+                      setStudents(students.map(st=>({...st,communication_target:false})))
+                    }} className="text-xs text-gray-400 hover:text-gray-600 font-bold leading-tight">None</button>
                   </div>
                 </th>
+                <th className="w-6 px-2 py-2.5 text-gray-400 text-xs font-medium text-right">#</th>
                 <th className="px-3 py-2.5 font-medium text-gray-500 text-left">Nume</th>
-                <th className="px-2 py-2.5 font-medium text-gray-500 text-center" title="Comunicare">📣</th>
                 <th className="px-3 py-2.5 font-medium text-gray-500 text-left">CNP</th>
                 <th className="px-3 py-2.5 font-medium text-gray-500 text-left">Email</th>
                 <th className="px-3 py-2.5 font-medium text-gray-500 text-left">Telefon</th>
                 <th className="px-3 py-2.5 font-medium text-gray-500 text-left">CI</th>
                 <th className="px-3 py-2.5 font-medium text-gray-500 text-left">Clasa</th>
                 <th className="px-3 py-2.5 font-medium text-gray-500 text-left">Portal</th>
-                <th className="w-32"></th>
+                <th className="w-28 px-2 py-2.5"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -265,10 +273,10 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
                 const isEditing = editingId === s.id
                 return (
                   <tr key={s.id} className={isEditing?'bg-blue-50/40':'hover:bg-gray-50 transition-colors'}>
-                    <td className="px-3 py-2 text-gray-300">{i+1}</td>
                     {isEditing ? (<>
+                      <td className="px-2 py-2 text-center"><span className="text-gray-200">✉</span></td>
+                      <td className="px-2 py-2 text-gray-300 text-xs text-right">{i+1}</td>
                       <td className="px-1 py-1.5"><input className={inCls+' font-medium min-w-28'} value={editValues.full_name} onChange={e=>setEditValues((v:any)=>({...v,full_name:e.target.value.toUpperCase()}))}/></td>
-                      <td className="px-2 py-2 text-center"><span className="text-gray-300 text-xs">—</span></td>
                       <td className="px-1 py-1.5"><input className={inCls+' font-mono w-24'} value={editValues.cnp} onChange={e=>setEditValues((v:any)=>({...v,cnp:e.target.value}))}/></td>
                       <td className="px-1 py-1.5"><input className={inCls+' min-w-28'} value={editValues.email} onChange={e=>setEditValues((v:any)=>({...v,email:e.target.value}))}/></td>
                       <td className="px-1 py-1.5"><input className={inCls+' w-24'} value={editValues.phone} onChange={e=>setEditValues((v:any)=>({...v,phone:e.target.value}))}/></td>
@@ -284,20 +292,26 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
                         <button onClick={()=>setEditingId(null)} className="p-1 rounded bg-gray-100 text-gray-500"><X size={12}/></button>
                       </div></td>
                     </>) : (<>
-                      <td className="px-3 py-2 font-medium text-gray-900">{s.full_name}</td>
                       <td className="px-2 py-2 text-center">
                         <button
-                          onClick={async()=>{
-                            const newVal = !s.communication_target
-                            await supabase.from('students').update({communication_target: newVal}).eq('id', s.id)
-                            setStudents(students.map(st => st.id===s.id ? {...st, communication_target: newVal} : st))
+                          onClick={async(e)=>{
+                            e.stopPropagation()
+                            if(!s.email) return
+                            const nv = !s.communication_target
+                            await supabase.from('students').update({communication_target:nv}).eq('id',s.id)
+                            setStudents(students.map(st=>st.id===s.id?{...st,communication_target:nv}:st))
                           }}
-                          title={s.communication_target ? 'Activ — click dezactivează' : 'Inactiv — click activează'}
-                          className={`w-8 h-5 rounded-full transition-all relative inline-flex shrink-0 ${s.communication_target ? 'bg-green-500' : 'bg-gray-200'}`}>
-                          <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${s.communication_target ? 'left-3.5' : 'left-0.5'}`}/>
+                          disabled={!s.email}
+                          title={s.email?(s.communication_target?'Email activ — click dezactivează':'Email inactiv — click activează'):'Fără email'}
+                          className="p-1 rounded hover:bg-gray-100 disabled:opacity-20 transition-colors">
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" stroke={s.communication_target&&s.email?'#16a34a':'#d1d5db'}>
+                            <rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+                          </svg>
                         </button>
                       </td>
-                      <td className="px-3 py-2 font-mono text-gray-400">{s.cnp||'—'}</td>
+                      <td className="px-2 py-2 text-gray-300 text-xs text-right">{i+1}</td>
+                      <td className="px-3 py-2 font-medium text-gray-900">{s.full_name}</td>
+                      <td className="px-3 py-2 font-mono text-gray-400 text-xs">{s.cnp||'—'}</td>
                       <td className="px-3 py-2 text-gray-500">{s.email||'—'}</td>
                       <td className="px-3 py-2 text-gray-500">{s.phone||'—'}</td>
                       <td className="px-3 py-2">
@@ -309,18 +323,6 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
                       <td className="px-3 py-2">
                         <span className="text-xs font-medium" style={{color:ps.color}}>{ps.label}</span>
                         {s.signed_at && <div className="text-gray-300 text-xs">{new Date(s.signed_at).toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'})}</div>}
-                      </td>
-                      <td className="px-3 py-2 text-center">
-                        <button
-                          onClick={async()=>{
-                            const newVal = !s.communication_target
-                            await supabase.from('students').update({communication_target: newVal}).eq('id', s.id)
-                            setStudents(students.map(st => st.id===s.id ? {...st, communication_target: newVal} : st))
-                          }}
-                          title={s.communication_target ? 'Activ pentru comunicare — click pentru a dezactiva' : 'Inactiv pentru comunicare — click pentru a activa'}
-                          className={`w-8 h-5 rounded-full transition-all relative ${s.communication_target ? 'bg-green-500' : 'bg-gray-200'}`}>
-                          <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${s.communication_target ? 'left-3.5' : 'left-0.5'}`}/>
-                        </button>
                       </td>
                       <td className="px-2 py-2">
                         <div className="flex gap-1 items-center relative">
