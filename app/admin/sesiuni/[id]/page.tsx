@@ -1344,7 +1344,8 @@ export default function SessionDetailPage() {
             <h3 className="font-semibold text-gray-900 mb-4">Editează sesiunea</h3>
             <div className="grid grid-cols-2 gap-3">
               {[
-                ['Data', 'session_date', 'date'],
+                ['Data start curs', 'course_start_date', 'date'],
+                ['Data practică', 'session_date', 'date'],
                 ['Nr. solicitare', 'request_number', 'text'],
                 ['Locație detaliată', 'location_detail', 'text'],
                 ['Clasa CAA', 'class_caa', 'select-class'],

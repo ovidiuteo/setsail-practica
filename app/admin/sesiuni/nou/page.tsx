@@ -10,6 +10,7 @@ export default function NouaSesiunePage() {
   const [refs, setRefs] = useState({ locations: [], boats: [], evaluators: [], instructors: [] } as any)
   const [form, setForm] = useState({
     session_date: new Date().toISOString().split('T')[0],
+    course_start_date: '',
     location_id: '', boat_id: '', evaluator_id: '', instructor_id: '',
     class_caa: 'C,D', status: 'draft', notes: '', request_number: '',
     location_detail: ''
@@ -90,7 +91,12 @@ export default function NouaSesiunePage() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 space-y-5">
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className={labelClass}>Data sesiunii *</label>
+            <label className={labelClass}>Data start curs</label>
+            <input type="date" className={inputClass} value={form.course_start_date||''}
+              onChange={e => setForm(f => ({ ...f, course_start_date: e.target.value }))} />
+          </div>
+          <div>
+            <label className={labelClass}>Data practică *</label>
             <input type="date" className={inputClass} value={form.session_date}
               onChange={e => setForm(f => ({ ...f, session_date: e.target.value }))} />
           </div>
