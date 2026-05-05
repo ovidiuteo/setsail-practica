@@ -170,6 +170,7 @@ export default function ConfigurarePage() {
           fields={[
             { key: 'name', label: 'Localitate', placeholder: 'ex: Limanu' },
             { key: 'county', label: 'Județ', placeholder: 'ex: Constanța' },
+            { key: 'location_detail', label: 'Adresă detaliată', placeholder: 'ex: Lac Snagov – complex Delta Snagov, str. Nicolae Grigorescu, sat Izvorani, comuna Ciolpani' },
           ]} />
         <Section title="⛵ Ambarcațiuni" table="boats"
           fields={[
@@ -179,8 +180,14 @@ export default function ConfigurarePage() {
         <Section title="🏛️ Evaluatori ANR" table="evaluators"
           fields={[
             { key: 'full_name', label: 'Nume complet', placeholder: 'POPESCU ION' },
-            { key: 'title', label: 'Funcție', placeholder: 'Director CZC' },
+            { key: 'title', label: 'Functie', placeholder: 'Director CZC' },
             { key: 'decision_number', label: 'Nr. decizie', placeholder: '1565/16.09.2024' },
+            { key: 'email_oficial', label: 'Email oficial comunicari', placeholder: 'autorizari@rna.ro' },
+            { key: 'email_personal', label: 'Email personal', placeholder: 'nume@email.ro' },
+            { key: 'address_serviciu', label: 'Adresa serviciu', placeholder: 'Str. Portului nr. 1' },
+            { key: 'address_personal', label: 'Adresa personala', placeholder: 'Str. Exemplu nr. 1' },
+            { key: 'phone_serviciu', label: 'Telefon serviciu', placeholder: '0241 123 456' },
+            { key: 'phone_personal', label: 'Telefon personal', placeholder: '07XX XXX XXX' },
           ]} />
         <Section title="👤 Instructori SetSail" table="instructors"
           fields={[
