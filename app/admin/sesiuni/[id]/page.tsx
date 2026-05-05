@@ -580,6 +580,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange }:
   const [notifScanFile, setNotifScanFile] = useState<string|null>(null)
   const [showNotif, setShowNotif] = useState(false)
   const [gNotif, setGNotif] = useState(false)
+  const [notifSaved, setNotifSaved] = useState(false)
   const notifScanRef = useRef<HTMLInputElement|null>(null)
 
   const [copied, setCopied] = useState(false)
@@ -625,24 +626,27 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange }:
     }))
   }, [sess?.id, (sess as any)?.locations?.name])
 
-  async function saveNotification() {
+  async function saveNotification(): Promise<string|null> {
     const payload = { session_id: sess.id, ...notifForm, scanned_file_data: notifScanFile }
-    if (notif) {
-      await supabase.from('notifications').update(payload).eq('id', notif.id)
+    if (notif?.id) {
+      const { error } = await supabase.from('notifications').update(payload).eq('id', notif.id)
+      if (error) { console.error('Update error:', error); return null }
+      return notif.id
     } else {
-      const { data } = await supabase.from('notifications').insert({ ...payload, data_notificare: new Date().toISOString().split('T')[0] }).select().single()
-      if (data) setNotif(data)
+      const { data, error } = await supabase.from('notifications')
+        .insert({ ...payload, data_notificare: new Date().toISOString().split('T')[0] })
+        .select().single()
+      if (error) { console.error('Insert error:', error); return null }
+      if (data) { setNotif(data); return data.id }
+      return null
     }
   }
 
   async function generateNotificare(cuStampila: boolean) {
-    if (!notif?.id && !sess) return
     setGNotif(true)
     try {
-      // Salveaza inainte de generare
-      await saveNotification()
-      const notifId = notif?.id
-      if (!notifId) { alert('Salvați notificarea mai întâi'); setGNotif(false); return }
+      const notifId = await saveNotification()
+      if (!notifId) { alert('Eroare la salvarea notificării. Verificați consola.'); setGNotif(false); return }
       const res = await fetch('/api/generate-notificare', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -798,16 +802,28 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange }:
                     onChange={e=>setNotifForm(f=>({...f,nr_notificare:e.target.value}))}/>
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-gray-500 mb-1 block">Ora examinare</label>
+                  <label className="text-xs font-medium text-gray-500 mb-1 block">
+                    Ora examinare <span className="text-gray-300 font-normal">(dublu-click = reset)</span>
+                  </label>
                   <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
                     value={notifForm.ora_examinare} placeholder="10:00"
-                    onChange={e=>setNotifForm(f=>({...f,ora_examinare:e.target.value}))}/>
+                    onChange={e=>setNotifForm(f=>({...f,ora_examinare:e.target.value}))}
+                    onDoubleClick={()=>setNotifForm(f=>({...f,ora_examinare:'10:00'}))}
+                    title="Dublu-click pentru a reseta la 10:00"/>
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-gray-500 mb-1 block">Clasă</label>
+                  <label className="text-xs font-medium text-gray-500 mb-1 block">
+                    Clasă <span className="text-gray-300 font-normal">(dublu-click = reset)</span>
+                  </label>
                   <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
                     value={notifForm.clasa} placeholder="C,D"
-                    onChange={e=>setNotifForm(f=>({...f,clasa:e.target.value}))}/>
+                    onChange={e=>setNotifForm(f=>({...f,clasa:e.target.value}))}
+                    onDoubleClick={()=>{
+                      const locName = ((sess as any).locations?.name||'').toLowerCase()
+                      const isClassB = sess.class_caa?.includes('B')
+                      setNotifForm(f=>({...f, clasa: isClassB ? 'B' : 'C,D'}))
+                    }}
+                    title="Dublu-click pentru a reseta la valoarea default"/>
                 </div>
                 <div>
                   <label className="text-xs font-medium text-gray-500 mb-1 block">Ambarcațiuni</label>
@@ -899,9 +915,12 @@ Set Sail NauticSchool
                   </div>
                 )}
 
-                <button onClick={saveNotification}
-                  className="w-full py-2 rounded-lg text-xs border border-gray-200 text-gray-500 hover:bg-gray-50">
-                  💾 Salvează notificarea
+                <button onClick={async()=>{
+                    const id = await saveNotification()
+                    if(id){ setNotifSaved(true); setTimeout(()=>setNotifSaved(false),2500) }
+                  }}
+                  className={`w-full py-2 rounded-lg text-xs border transition-colors ${notifSaved?'border-green-300 text-green-600 bg-green-50':'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
+                  {notifSaved ? '✓ Salvat!' : '💾 Salvează info'}
                 </button>
               </div>
             )}
