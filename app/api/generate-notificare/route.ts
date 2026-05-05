@@ -61,6 +61,20 @@ export async function POST(req: NextRequest) {
     : `${ziuaSesiune} ${lunaSesiune}`
 
   const barci = (notif.barci_selectate || []).join(' și ')
+  const locName2 = (loc?.name || '').toLowerCase()
+  const locatieCurs = notif.locatie_curs || (() => {
+    if (locName2.includes('snagov')) return `${info['adresa'] || 'str. Virgiliu nr. 15, etaj 3, Sector 1, București'}/Lacul Snagov`
+    if (locName2.includes('limanu')) return `${info['adresa'] || 'str. Virgiliu nr. 15, etaj 3, Sector 1, București'}/Marina Limanu`
+    if (locName2.includes('mangalia')) return `${info['adresa'] || 'str. Virgiliu nr. 15, etaj 3, Sector 1, București'}/Marina Mangalia`
+    return `${info['adresa'] || 'str. Virgiliu nr. 15, etaj 3, Sector 1, București'}/${loc?.name || ''}`
+  })()
+  const locatieExaminare = notif.locatie_examinare || (() => {
+    if (locName2.includes('snagov')) return 'de pe Lacul Snagov'
+    if (locName2.includes('limanu')) return 'din Marina Limanu'
+    if (locName2.includes('mangalia')) return 'din Marina Mangalia'
+    return `din ${loc?.name || ''}`
+  })()
+
   const clasaRaw: string = notif.clasa || sess.class_caa || ''
   // C,D  -> "C/D/Manevra ambarcatiunii cu vele"
   // B    -> "B/Manevra ambarcatiunii cu vele"
@@ -108,7 +122,7 @@ export async function POST(req: NextRequest) {
     indent: { firstLine: 720 },
     alignment: AlignmentType.JUSTIFIED,
     children: [new TextRun({
-      text: `Solicităm totodată participarea unui reprezentant al Autorității Navale Române pentru examinarea practică de promovare a cursului pregătire în vederea obținerii certificatului internațional de conducător ambarcațiune de agrement pentru clasele ${clasaRaw.replace(',', '/')}, în locația aprobată din ${adresaLoc}, cu ambarcațiunile declarate ${barci} la data de ${ziuaSesiune} ${lunaSesiune}, începând cu ora ${ora}.`,
+      text: `Solicităm totodată participarea unui reprezentant al Autorității Navale Române pentru examinarea practică de promovare a cursului pregătire în vederea obținerii certificatului internațional de conducător ambarcațiune de agrement pentru clasele ${clasaRaw.replace(',', '/')}, în locația aprobată ${locatieExaminare}, cu ambarcațiunile declarate ${barci} la data de ${ziuaSesiune} ${lunaSesiune}, începând cu ora ${ora}.`,
       size: 22, font: 'Arial'
     })]
   }))

@@ -576,7 +576,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange }:
   const [gFise, setGFise] = useState(false)
   const [gPDF, setGPDF] = useState(false)
   const [notif, setNotif] = useState<any>(null)
-  const [notifForm, setNotifForm] = useState({ nr_notificare:'', ora_examinare:'10:00', barci_selectate:[] as string[], clasa:'' })
+  const [notifForm, setNotifForm] = useState({ nr_notificare:'', ora_examinare:'10:00', barci_selectate:[] as string[], clasa:'', locatie_curs:'', locatie_examinare:'' })
   const [notifScanFile, setNotifScanFile] = useState<string|null>(null)
   const [showNotif, setShowNotif] = useState(false)
   const [gNotif, setGNotif] = useState(false)
@@ -619,10 +619,32 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange }:
     // "B/Manevra ambarcatiunii cu vele" -> stocat ca "B"
     const clasaDefault = isClassB ? 'B' : 'C,D'
 
+    // Locatie default bazata pe locatia sesiunii
+    const locName2 = ((sess as any).locations?.name || '').toLowerCase()
+    const adresaSetsail = 'str. Virgiliu nr. 15, etaj 3, Sector 1, București'
+    let locatieCursDefault = ''
+    let locatieExaminareDefault = ''
+    if (locName2.includes('snagov')) {
+      locatieCursDefault = `${adresaSetsail}/Lacul Snagov`
+      locatieExaminareDefault = 'de pe Lacul Snagov'
+    } else if (locName2.includes('limanu')) {
+      locatieCursDefault = `${adresaSetsail}/Marina Limanu`
+      locatieExaminareDefault = 'din Marina Limanu'
+    } else if (locName2.includes('mangalia')) {
+      locatieCursDefault = `${adresaSetsail}/Marina Mangalia`
+      locatieExaminareDefault = 'din Marina Mangalia'
+    } else {
+      const displayName = (sess as any).locations?.name || ''
+      locatieCursDefault = `${adresaSetsail}/${displayName}`
+      locatieExaminareDefault = `din ${displayName}`
+    }
+
     setNotifForm(f => ({
       ...f,
       clasa: f.clasa || clasaDefault,
       barci_selectate: isSnagov ? ['Trainer 1', 'Trainer 2'] : ['SetSail', 'Trainer 2'],
+      locatie_curs: f.locatie_curs || locatieCursDefault,
+      locatie_examinare: f.locatie_examinare || locatieExaminareDefault,
     }))
   }, [sess?.id, (sess as any)?.locations?.name])
 
@@ -819,9 +841,37 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange }:
                     value={notifForm.clasa} placeholder="C,D"
                     onChange={e=>setNotifForm(f=>({...f,clasa:e.target.value}))}
                     onDoubleClick={()=>{
-                      const locName = ((sess as any).locations?.name||'').toLowerCase()
                       const isClassB = sess.class_caa?.includes('B')
                       setNotifForm(f=>({...f, clasa: isClassB ? 'B' : 'C,D'}))
+                    }}
+                    title="Dublu-click pentru a reseta la valoarea default"/>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-500 mb-1 block">
+                    Cursuri în locația aprobată din <span className="text-gray-300 font-normal">(dublu-click = reset)</span>
+                  </label>
+                  <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+                    value={notifForm.locatie_curs} placeholder="str. Virgiliu nr. 15.../Marina Limanu"
+                    onChange={e=>setNotifForm(f=>({...f,locatie_curs:e.target.value}))}
+                    onDoubleClick={()=>{
+                      const ln = ((sess as any).locations?.name||'').toLowerCase()
+                      const adr = 'str. Virgiliu nr. 15, etaj 3, Sector 1, București'
+                      const def = ln.includes('snagov') ? `${adr}/Lacul Snagov` : ln.includes('limanu') ? `${adr}/Marina Limanu` : ln.includes('mangalia') ? `${adr}/Marina Mangalia` : `${adr}/${(sess as any).locations?.name||''}`
+                      setNotifForm(f=>({...f,locatie_curs:def}))
+                    }}
+                    title="Dublu-click pentru a reseta la valoarea default"/>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-500 mb-1 block">
+                    Examinare practică în locația aprobată <span className="text-gray-300 font-normal">(dublu-click = reset)</span>
+                  </label>
+                  <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+                    value={notifForm.locatie_examinare} placeholder="din Marina Limanu"
+                    onChange={e=>setNotifForm(f=>({...f,locatie_examinare:e.target.value}))}
+                    onDoubleClick={()=>{
+                      const ln = ((sess as any).locations?.name||'').toLowerCase()
+                      const def = ln.includes('snagov') ? 'de pe Lacul Snagov' : ln.includes('limanu') ? 'din Marina Limanu' : ln.includes('mangalia') ? 'din Marina Mangalia' : `din ${(sess as any).locations?.name||''}`
+                      setNotifForm(f=>({...f,locatie_examinare:def}))
                     }}
                     title="Dublu-click pentru a reseta la valoarea default"/>
                 </div>
