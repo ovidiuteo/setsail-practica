@@ -101,10 +101,10 @@ export async function POST(req: NextRequest) {
 
   const children: any[] = [
     // Nr. notificare
-    para(`Nr. ${nrNotif}`, { size: SIZE_NR, spacing_before: 0, spacing_after: 2400, align: AlignmentType.LEFT }),
+    para(`Nr. ${nrNotif}`, { size: SIZE_NR, spacing_before: 0, spacing_after: 1200, align: AlignmentType.LEFT }),
 
     // Către
-    para('Către: Autoritatea Navală Română', { spacing_before: 0, spacing_after: 2400, align: AlignmentType.LEFT }),
+    para('Către: Autoritatea Navală Română', { spacing_before: 0, spacing_after: 800, align: AlignmentType.LEFT }),
 
     // Paragraf 1 — corp
     new Paragraph({
@@ -129,8 +129,8 @@ export async function POST(req: NextRequest) {
     }),
 
     // Reprezentant
-    para('Reprezentant,', { spacing_before: 0, spacing_after: 160, align: AlignmentType.LEFT }),
-    para(reprezentant, { spacing_before: 0, spacing_after: 200, align: AlignmentType.LEFT }),
+    para('Reprezentant,', { spacing_before: 0, spacing_after: 60, align: AlignmentType.LEFT }),
+    para(reprezentant, { spacing_before: 0, spacing_after: 60, align: AlignmentType.LEFT }),
   ]
 
   // Stampila
