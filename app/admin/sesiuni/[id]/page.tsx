@@ -603,60 +603,92 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange }:
     setMailTo(selectedEmails.join(', '))
   }, [selectedEmails.join(',')])
 
-  // Seteaza barci si clasa default bazat pe locatie si clasa sesiunii
-  useEffect(() => {
-    if (notifForm.barci_selectate.length > 0) return // deja setate din DB
+
+
+  function calcNotifDefaults() {
     const locName = ((sess as any).locations?.name || '').toLowerCase()
     const isSnagov = locName.includes('snagov')
-    const clasaSession = sess.class_caa || ''
-    const isClassB = clasaSession.includes('B')
+    const isClassB = sess.class_caa?.includes('B')
+    const adr = 'str. Virgiliu nr. 15, etaj 3, Sector 1, București'
+    const locatieCurs = isSnagov ? `${adr}/Lacul Snagov`
+      : locName.includes('limanu') ? `${adr}/Marina Limanu`
+      : locName.includes('mangalia') ? `${adr}/Marina Mangalia`
+      : `${adr}/${(sess as any).locations?.name || ''}`
+    const locatieExaminare = isSnagov ? 'de pe Lacul Snagov'
+      : locName.includes('limanu') ? 'din Marina Limanu'
+      : locName.includes('mangalia') ? 'din Marina Mangalia'
+      : `din ${(sess as any).locations?.name || ''}`
+    return {
+      nr_notificare: '',
+      ora_examinare: '10:00',
+      clasa: isClassB ? 'B' : 'C,D',
+      barci_selectate: isSnagov ? ['Trainer 1', 'Trainer 2'] : ['SetSail', 'Trainer 2'],
+      locatie_curs: locatieCurs,
+      locatie_examinare: locatieExaminare,
+    }
+  }
 
-    // Clasa default:
-    // - Snagov: C/D/Manevra ambarcatiunii (indiferent de clasa sesiunii)
-    // - Alte locatii cu clasa B: B/C/D/Manevra ambarcatiunii
-    // - Alte locatii fara B: C/D/Manevra ambarcatiunii
-    // "C/D/Manevra ambarcatiunii cu vele" -> stocat ca "C,D"
-    // "B/Manevra ambarcatiunii cu vele" -> stocat ca "B"
-    const clasaDefault = isClassB ? 'B' : 'C,D'
+  async function ensureNotification(): Promise<string|null> {
+    // Folosim upsert cu on_conflict=session_id — creaza daca nu exista, nu face nimic daca exista
+    const { data: existing } = await supabase
+      .from('notifications').select('*')
+      .eq('session_id', sess.id).single()
 
-    // Locatie default bazata pe locatia sesiunii
-    const locName2 = ((sess as any).locations?.name || '').toLowerCase()
-    const adresaSetsail = 'str. Virgiliu nr. 15, etaj 3, Sector 1, București'
-    let locatieCursDefault = ''
-    let locatieExaminareDefault = ''
-    if (locName2.includes('snagov')) {
-      locatieCursDefault = `${adresaSetsail}/Lacul Snagov`
-      locatieExaminareDefault = 'de pe Lacul Snagov'
-    } else if (locName2.includes('limanu')) {
-      locatieCursDefault = `${adresaSetsail}/Marina Limanu`
-      locatieExaminareDefault = 'din Marina Limanu'
-    } else if (locName2.includes('mangalia')) {
-      locatieCursDefault = `${adresaSetsail}/Marina Mangalia`
-      locatieExaminareDefault = 'din Marina Mangalia'
-    } else {
-      const displayName = (sess as any).locations?.name || ''
-      locatieCursDefault = `${adresaSetsail}/${displayName}`
-      locatieExaminareDefault = `din ${displayName}`
+    if (existing?.id) {
+      // Exista deja — actualizeaza state-ul si returneaza id-ul
+      setNotif(existing)
+      setNotifForm({
+        nr_notificare: existing.nr_notificare || '',
+        ora_examinare: existing.ora_examinare || '10:00',
+        clasa: existing.clasa || '',
+        barci_selectate: existing.barci_selectate || [],
+        locatie_curs: existing.locatie_curs || '',
+        locatie_examinare: existing.locatie_examinare || '',
+      })
+      setNotifScanFile(existing.scanned_file_data || null)
+      return existing.id
     }
 
-    setNotifForm(f => ({
-      ...f,
-      clasa: f.clasa || clasaDefault,
-      barci_selectate: isSnagov ? ['Trainer 1', 'Trainer 2'] : ['SetSail', 'Trainer 2'],
-      locatie_curs: f.locatie_curs || locatieCursDefault,
-      locatie_examinare: f.locatie_examinare || locatieExaminareDefault,
-    }))
-  }, [sess?.id, (sess as any)?.locations?.name])
+    // Nu exista — creaza cu valorile default
+    const defaults = calcNotifDefaults()
+    const { data, error } = await supabase.from('notifications')
+      .insert({ session_id: sess.id, ...defaults, data_notificare: new Date().toISOString().split('T')[0] })
+      .select().single()
+    if (error) { console.error('Insert error:', error); return null }
+    if (data) {
+      setNotif(data)
+      setNotifForm({
+        nr_notificare: data.nr_notificare || '',
+        ora_examinare: data.ora_examinare || '10:00',
+        clasa: data.clasa || '',
+        barci_selectate: data.barci_selectate || [],
+        locatie_curs: data.locatie_curs || '',
+        locatie_examinare: data.locatie_examinare || '',
+      })
+      return data.id
+    }
+    return null
+  }
 
   async function saveNotification(): Promise<string|null> {
-    const payload = { session_id: sess.id, ...notifForm, scanned_file_data: notifScanFile }
-    if (notif?.id) {
-      const { error } = await supabase.from('notifications').update(payload).eq('id', notif.id)
+    // Gasim id-ul (din state sau din DB)
+    let notifId = notif?.id
+    if (!notifId) {
+      const { data: existing } = await supabase
+        .from('notifications').select('id').eq('session_id', sess.id).single()
+      notifId = existing?.id
+    }
+
+    const payload = { ...notifForm, scanned_file_data: notifScanFile }
+
+    if (notifId) {
+      const { error } = await supabase.from('notifications').update(payload).eq('id', notifId)
       if (error) { console.error('Update error:', error); return null }
-      return notif.id
+      return notifId
     } else {
+      // Fallback: creaza cu upsert
       const { data, error } = await supabase.from('notifications')
-        .insert({ ...payload, data_notificare: new Date().toISOString().split('T')[0] })
+        .insert({ session_id: sess.id, ...payload, data_notificare: new Date().toISOString().split('T')[0] })
         .select().single()
       if (error) { console.error('Insert error:', error); return null }
       if (data) { setNotif(data); return data.id }
@@ -783,7 +815,10 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange }:
 
           {/* Notificare ANR */}
           <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-            <button onClick={()=>setShowNotif(s=>!s)} className="w-full flex items-center justify-between">
+            <button onClick={async()=>{
+              if(!showNotif) await ensureNotification()
+              setShowNotif(s=>!s)
+            }} className="w-full flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400">
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
