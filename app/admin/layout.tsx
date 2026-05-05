@@ -1,13 +1,14 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Ship, Calendar, Users, Settings, Anchor } from 'lucide-react'
+import { Ship, Calendar, Users, Settings, Anchor, Building2 } from 'lucide-react'
 
 const nav = [
-  { href: '/admin',           label: 'Dashboard',        icon: Anchor },
-  { href: '/admin/sesiuni',   label: 'Sesiuni Practică', icon: Calendar },
-  { href: '/admin/cursanti',  label: 'Cursanți',         icon: Users },
-  { href: '/admin/configurare', label: 'Configurare',    icon: Settings },
+  { href: '/admin',             label: 'Dashboard',        icon: Anchor },
+  { href: '/admin/sesiuni',     label: 'Sesiuni Practică', icon: Calendar },
+  { href: '/admin/cursanti',    label: 'Cursanți',         icon: Users },
+  { href: '/admin/setsail',     label: 'SetSail Firmă',    icon: Building2 },
+  { href: '/admin/configurare', label: 'Configurare',      icon: Settings },
 ]
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

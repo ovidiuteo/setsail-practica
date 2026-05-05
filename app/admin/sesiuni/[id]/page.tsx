@@ -1,5 +1,5 @@
 'use client'
-import React, { useEffect, useState, useRef } from 'react'
+import React, { useEffect, useState, useRef, useCallback } from 'react'
 import CIImageEditor from '@/components/CIImageEditor'
 import { supabase } from '@/lib/supabase'
 import { useParams } from 'next/navigation'
@@ -360,7 +360,7 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
                       <td className="px-2 py-2 text-gray-300 text-xs text-right">{i+1}</td>
                       {/* Nume — click deschide pagina admin cursant */}
                       <td className="px-2 py-2">
-                        <Link href={`/admin/cursanti/${s.id}`}
+                        <Link href={`/admin/cursanti/${s.id}`} target="_blank" rel="noopener noreferrer"
                           className="font-medium text-gray-900 hover:text-blue-600 hover:underline cursor-pointer text-xs block">
                           {s.full_name}
                         </Link>
@@ -575,6 +575,13 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange }:
   const [gPV, setGPV] = useState(false)
   const [gFise, setGFise] = useState(false)
   const [gPDF, setGPDF] = useState(false)
+  const [notif, setNotif] = useState<any>(null)
+  const [notifForm, setNotifForm] = useState({ nr_notificare:'', ora_examinare:'10:00', barci_selectate:[] as string[], clasa:'' })
+  const [notifScanFile, setNotifScanFile] = useState<string|null>(null)
+  const [showNotif, setShowNotif] = useState(false)
+  const [gNotif, setGNotif] = useState(false)
+  const notifScanRef = useRef<HTMLInputElement|null>(null)
+
   const [copied, setCopied] = useState(false)
   const [showMail, setShowMail] = useState(false)
   const [mailTo, setMailTo] = useState('')
@@ -594,6 +601,38 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange }:
   useEffect(()=>{
     setMailTo(selectedEmails.join(', '))
   }, [selectedEmails.join(',')])
+
+  async function saveNotification() {
+    const payload = { session_id: sess.id, ...notifForm, scanned_file_data: notifScanFile }
+    if (notif) {
+      await supabase.from('notifications').update(payload).eq('id', notif.id)
+    } else {
+      const { data } = await supabase.from('notifications').insert({ ...payload, data_notificare: new Date().toISOString().split('T')[0] }).select().single()
+      if (data) setNotif(data)
+    }
+  }
+
+  async function generateNotificare(cuStampila: boolean) {
+    if (!notif?.id && !sess) return
+    setGNotif(true)
+    try {
+      // Salveaza inainte de generare
+      await saveNotification()
+      const notifId = notif?.id
+      if (!notifId) { alert('Salvați notificarea mai întâi'); setGNotif(false); return }
+      const res = await fetch('/api/generate-notificare', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ notification_id: notifId, cu_stampila: cuStampila })
+      })
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const cd = res.headers.get('Content-Disposition') || ''
+      const fn = cd.match(/filename="(.+)"/)?.[1] || 'notificare.docx'
+      const a = document.createElement('a'); a.href = url; a.download = fn; a.click()
+    } catch(e: any) { alert(e.message) }
+    setGNotif(false)
+  }
 
   async function generateDoc(endpoint: string, filename: string) {
     const res = await fetch(endpoint, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id})})
@@ -689,6 +728,145 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange }:
                 <Download size={13}/>{gPDF?'Se generează...':'Fișe PDF cu semnături'}
               </button>
             </div>
+          </div>
+
+          {/* Notificare ANR */}
+          <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+            <button onClick={()=>setShowNotif(s=>!s)} className="w-full flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
+                </svg>
+                <h3 className="font-semibold text-sm text-gray-900">Notificare ANR</h3>
+              </div>
+              <ChevronDown size={14} className={`text-gray-400 transition-transform ${showNotif?'rotate-180':''}`}/>
+            </button>
+            {showNotif && (
+              <div className="mt-4 space-y-3">
+                {/* Avertizare termen */}
+                {sess && (() => {
+                  const sessDt = new Date(sess.session_date)
+                  const today = new Date()
+                  const diffDays = Math.floor((sessDt.getTime() - today.getTime()) / 86400000)
+                  if (diffDays > 30) return <div className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">⚠ Notificarea poate fi trimisă cel mai devreme cu 30 zile înainte ({new Date(sessDt.getTime()-30*86400000).toLocaleDateString('ro-RO')})</div>
+                  if (diffDays < 15) return <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">⛔ Termenul minim de 15 zile a fost depășit! Sesiunea e pe {sessDt.toLocaleDateString('ro-RO')}</div>
+                  return <div className="text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">✓ În termen — {diffDays} zile până la sesiune</div>
+                })()}
+
+                <div>
+                  <label className="text-xs font-medium text-gray-500 mb-1 block">Nr. notificare</label>
+                  <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+                    value={notifForm.nr_notificare} placeholder="ex: 6/21.04.2026"
+                    onChange={e=>setNotifForm(f=>({...f,nr_notificare:e.target.value}))}/>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-500 mb-1 block">Ora examinare</label>
+                  <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+                    value={notifForm.ora_examinare} placeholder="10:00"
+                    onChange={e=>setNotifForm(f=>({...f,ora_examinare:e.target.value}))}/>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-500 mb-1 block">Clasă</label>
+                  <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+                    value={notifForm.clasa} placeholder="C,D"
+                    onChange={e=>setNotifForm(f=>({...f,clasa:e.target.value}))}/>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-500 mb-1 block">Ambarcațiuni</label>
+                  <div className="space-y-1">
+                    {['SetSail','Trainer 1','Trainer 2'].map(b=>(
+                      <label key={b} className="flex items-center gap-2 text-xs cursor-pointer">
+                        <input type="checkbox" checked={notifForm.barci_selectate.includes(b)}
+                          onChange={e=>setNotifForm(f=>({...f,barci_selectate:e.target.checked?[...f.barci_selectate,b]:f.barci_selectate.filter(x=>x!==b)}))}
+                          className="rounded"/>
+                        {b}
+                      </label>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Butoane generare */}
+                <div className="space-y-1.5 pt-1">
+                  <button onClick={()=>generateNotificare(false)} disabled={gNotif}
+                    className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs border border-gray-200 hover:bg-gray-50 disabled:opacity-50">
+                    📄 Generează fără ștampilă
+                  </button>
+                  <button onClick={()=>generateNotificare(true)} disabled={gNotif}
+                    className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#0a1628'}}>
+                    🖊 Generează cu ștampilă + semnătură
+                  </button>
+                </div>
+
+                {/* Upload notificare scanata */}
+                <div className="border-t border-gray-100 pt-3">
+                  <label className="text-xs font-medium text-gray-500 mb-2 block">Notificare scanată (pentru email ANR)</label>
+                  <input type="file" accept="image/*,application/pdf" className="hidden"
+                    ref={notifScanRef}
+                    onChange={async e=>{
+                      const f=e.target.files?.[0];if(!f)return
+                      const reader=new FileReader()
+                      reader.onload=async ev=>{
+                        const data=ev.target?.result as string
+                        setNotifScanFile(data)
+                        if(notif?.id) await supabase.from('notifications').update({scanned_file_data:data,scanned_file_name:f.name}).eq('id',notif.id)
+                      }
+                      reader.readAsDataURL(f)
+                    }}
+                  />
+                  {notifScanFile ? (
+                    <div className="rounded-lg border border-green-200 bg-green-50 px-3 py-2 flex items-center justify-between">
+                      <span className="text-xs text-green-700">✓ Fișier încărcat</span>
+                      <button onClick={()=>notifScanRef.current?.click()} className="text-xs text-blue-500 hover:underline">Înlocuiește</button>
+                    </div>
+                  ) : (
+                    <button onClick={()=>notifScanRef.current?.click()}
+                      className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs border border-dashed border-gray-300 text-gray-500 hover:bg-gray-50">
+                      ⬆ Încarcă notificare scanată
+                    </button>
+                  )}
+                </div>
+
+                {/* Email ANR */}
+                {notifScanFile && (
+                  <div className="border-t border-gray-100 pt-3">
+                    <label className="text-xs font-medium text-gray-500 mb-2 block">Email către ANR</label>
+                    <div className="text-xs text-gray-400 mb-2">
+                      Destinatar: <span className="font-mono text-gray-600">autorizari@rna.ro</span>
+                    </div>
+                    <button onClick={()=>{
+                      const sessDt = new Date(sess.session_date)
+                      const zi = sessDt.getDate()
+                      const luna = sessDt.toLocaleDateString('ro-RO',{month:'long'})
+                      const locName = sess.locations?.name||'locatie'
+                      const subject = encodeURIComponent(`Notificare privind cursuri si examene practice SetSail ${locName}`)
+                      const body = encodeURIComponent(`Bună ziua,
+
+Vă trimitem atașata notificarea privind următorul curs și examinare practică SetSail, în vederea alocării unui reprezentant ANR:
+
+${zi} ${luna} - ${locName} ora ${notifForm.ora_examinare}
+
+Vă mulțumim!
+
+Cu stimă,
+
+Ruxandra Taloș
+Set Sail NauticSchool
+0727387245`)
+                      window.open(`https://mail.google.com/mail/?view=cm&to=autorizari@rna.ro&su=${subject}&body=${body}`)
+                    }}
+                      className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs bg-blue-600 text-white hover:bg-blue-700">
+                      ✉ Deschide în Gmail
+                    </button>
+                    <p className="text-xs text-gray-400 mt-1 text-center">Atașează manual notificarea scanată</p>
+                  </div>
+                )}
+
+                <button onClick={saveNotification}
+                  className="w-full py-2 rounded-lg text-xs border border-gray-200 text-gray-500 hover:bg-gray-50">
+                  💾 Salvează notificarea
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Mailing */}
@@ -952,6 +1130,7 @@ export default function SessionDetailPage() {
   }
 
   useEffect(() => { load() }, [id])
+
 
   // Randomizare cursanti pe liste
   async function doRandomize() {
