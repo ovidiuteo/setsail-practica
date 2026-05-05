@@ -716,7 +716,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange }:
     }
   }
 
-  async function generateNotificare(cuStampila: boolean) {
+  async function generateNotificare(cuStampila: boolean, format: 'docx'|'pdf') {
     setGNotif(true)
     try {
       const notifId = await saveNotification()
@@ -724,13 +724,20 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange }:
       const res = await fetch('/api/generate-notificare', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ notification_id: notifId, cu_stampila: cuStampila })
+        body: JSON.stringify({ notification_id: notifId, cu_stampila: cuStampila, format })
       })
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      const cd = res.headers.get('Content-Disposition') || ''
-      const fn = cd.match(/filename="(.+)"/)?.[1] || 'notificare.docx'
-      const a = document.createElement('a'); a.href = url; a.download = fn; a.click()
+      if (format === 'pdf') {
+        // PDF - deschidem HTML-ul intr-o fereastra noua pentru print
+        const html = await res.text()
+        const w = window.open('', '_blank')
+        if (w) { w.document.write(html); w.document.close(); setTimeout(()=>w.print(), 800) }
+      } else {
+        const blob = await res.blob()
+        const url = URL.createObjectURL(blob)
+        const cd = res.headers.get('Content-Disposition') || ''
+        const fn = cd.match(/filename="(.+)"/)?.[1] || 'notificare.docx'
+        const a = document.createElement('a'); a.href = url; a.download = fn; a.click()
+      }
     } catch(e: any) { alert(e.message) }
     setGNotif(false)
   }
@@ -944,16 +951,37 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange }:
                   </div>
                 </div>
 
-                {/* Butoane generare */}
+                {/* Butoane generare — 2 randuri x 2 */}
                 <div className="space-y-1.5 pt-1">
-                  <button onClick={()=>generateNotificare(false)} disabled={gNotif}
-                    className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs border border-gray-200 hover:bg-gray-50 disabled:opacity-50">
-                    📄 Generează fără ștampilă
-                  </button>
-                  <button onClick={()=>generateNotificare(true)} disabled={gNotif}
-                    className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#0a1628'}}>
-                    🖊 Generează cu ștampilă + semnătură
-                  </button>
+                  <div className="flex gap-1.5">
+                    <button onClick={()=>generateNotificare(false,'docx')} disabled={gNotif}
+                      className="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-medium text-white disabled:opacity-50 transition-colors"
+                      style={{background:'#1e40af'}} title="Descarcă DOCX fără ștampilă">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8" fill="none" stroke="currentColor" strokeWidth="2"/></svg>
+                      DOCX
+                    </button>
+                    <button onClick={()=>generateNotificare(false,'pdf')} disabled={gNotif}
+                      className="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-medium text-white disabled:opacity-50 transition-colors"
+                      style={{background:'#dc2626'}} title="Descarcă PDF fără ștampilă">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8" fill="none" stroke="currentColor" strokeWidth="2"/></svg>
+                      PDF
+                    </button>
+                  </div>
+                  <div className="flex gap-1.5">
+                    <button onClick={()=>generateNotificare(true,'docx')} disabled={gNotif}
+                      className="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-medium text-white disabled:opacity-50 transition-colors"
+                      style={{background:'#1d4ed8'}} title="Descarcă DOCX cu ștampilă + semnătură">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M10 13l2 2 4-4"/></svg>
+                      DOCX + ștampilă
+                    </button>
+                    <button onClick={()=>generateNotificare(true,'pdf')} disabled={gNotif}
+                      className="flex-1 flex items-center justify-center gap-1 py-2 rounded-lg text-xs font-medium text-white disabled:opacity-50 transition-colors"
+                      style={{background:'#b91c1c'}} title="Descarcă PDF cu ștampilă + semnătură">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M10 13l2 2 4-4"/></svg>
+                      PDF + ștampilă
+                    </button>
+                  </div>
+                  {gNotif && <p className="text-xs text-center text-gray-400">Se generează...</p>}
                 </div>
 
                 {/* Upload notificare scanata */}

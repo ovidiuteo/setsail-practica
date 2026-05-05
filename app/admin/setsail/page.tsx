@@ -52,11 +52,21 @@ export default function SetSailPage() {
 
   async function saveInfo() {
     setSaving(true)
-    for (const [key, value] of Object.entries(info)) {
-      await supabase.from('setsail_info').upsert({ key, value }, { onConflict: 'key' })
-    }
-    setSaved(true)
-    setTimeout(() => setSaved(false), 2500)
+    try {
+      // Update toate campurile existente
+      for (const [key, value] of Object.entries(info)) {
+        const { error } = await supabase
+          .from('setsail_info')
+          .update({ value })
+          .eq('key', key)
+        if (error) {
+          // Daca nu exista randul, il inseram
+          await supabase.from('setsail_info').insert({ key, value })
+        }
+      }
+      setSaved(true)
+      setTimeout(() => setSaved(false), 2500)
+    } catch(e) { console.error('Save error:', e) }
     setSaving(false)
   }
 

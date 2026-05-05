@@ -6,7 +6,7 @@ import {
 } from 'docx'
 
 export async function POST(req: NextRequest) {
-  const { notification_id, cu_stampila } = await req.json()
+  const { notification_id, cu_stampila, format } = await req.json()
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -101,10 +101,10 @@ export async function POST(req: NextRequest) {
 
   const children: any[] = [
     // Nr. notificare
-    para(`Nr. ${nrNotif}`, { size: SIZE_NR, spacing_before: 0, spacing_after: 1200, align: AlignmentType.LEFT }),
+    para(`Nr. ${nrNotif}`, { size: SIZE_NR, spacing_before: 0, spacing_after: 2400, align: AlignmentType.LEFT }),
 
     // Către
-    para('Către: Autoritatea Navală Română', { spacing_before: 0, spacing_after: 600, align: AlignmentType.LEFT }),
+    para('Către: Autoritatea Navală Română', { spacing_before: 0, spacing_after: 2400, align: AlignmentType.LEFT }),
 
     // Paragraf 1 — corp
     new Paragraph({
@@ -121,7 +121,7 @@ export async function POST(req: NextRequest) {
     new Paragraph({
       alignment: AlignmentType.JUSTIFIED,
       indent: { firstLine: INDENT },
-      spacing: { before: 0, after: 500, line: 276 },
+      spacing: { before: 0, after: 2400, line: 276 },
       children: [new TextRun({
         text: `Solicităm totodată participarea unui reprezentant al Autorității Navale Române pentru examinarea practică de promovare a cursului pregătire în vederea obținerii certificatului internațional de conducător ambarcațiune de agrement pentru clasele ${clasa}, în locația aprobată ${locatieExaminare}, cu ambarcațiunile declarate ${barci} la data de ${ziuaSesiune} ${lunaSesiune}, începând cu ora ${ora}.`,
         font: FONT, size: SIZE,
@@ -130,7 +130,7 @@ export async function POST(req: NextRequest) {
 
     // Reprezentant
     para('Reprezentant,', { spacing_before: 0, spacing_after: 160, align: AlignmentType.LEFT }),
-    para(reprezentant, { spacing_before: 0, spacing_after: 100, align: AlignmentType.LEFT }),
+    para(reprezentant, { spacing_before: 0, spacing_after: 200, align: AlignmentType.LEFT }),
   ]
 
   // Stampila
@@ -170,6 +170,36 @@ export async function POST(req: NextRequest) {
       children
     }]
   })
+
+  // Generam HTML pentru PDF daca format=pdf
+  if (format === 'pdf') {
+    const stampHtml = (cu_stampila && docStampila?.file_data)
+      ? `<img src="${docStampila.file_data}" style="width:120px;height:120px;display:block;margin-top:8px;">`
+      : ''
+    const html = `<!DOCTYPE html>
+<html><head><meta charset="UTF-8">
+<style>
+  @page { size: A4 portrait; margin: 2.5cm 2cm 2cm 3cm; }
+  body { font-family: Arial, sans-serif; font-size: 12pt; line-height: 1.15; color: #000; }
+  .nr { font-size: 10pt; margin-bottom: 3.5em; }
+  .catre { margin-bottom: 2.5em; }
+  .para { text-align: justify; text-indent: 1.27cm; margin-bottom: 0.8em; }
+  .para-last { text-align: justify; text-indent: 1.27cm; margin-bottom: 3.5em; }
+  .repr { margin-bottom: 0.3em; }
+</style>
+</head><body>
+<p class="nr">Nr. ${nrNotif}</p>
+<p class="catre">Către: Autoritatea Navală Română</p>
+<p class="para">Subscrisa ${numeFirma}, în calitate de furnizor de educație, formare profesională și perfecționare pentru cursurile de pregătire în vederea obținerii certificatelor internaționale de conducător de ambarcațiune de agrement/Manevra ambarcațiunii cu vele, vă notific prin prezenta că în perioada ${intervalCurs} vom desfășura cursuri de pregătire teoretică/practică în vederea obținerii certificatelor internaționale de conducator ambarcațiune de agrement pentru clasele ${clasa} în locația aprobată din ${locatieCurs}.</p>
+<p class="para-last">Solicităm totodată participarea unui reprezentant al Autorității Navale Române pentru examinarea practică de promovare a cursului pregătire în vederea obținerii certificatului internațional de conducător ambarcațiune de agrement pentru clasele ${clasa}, în locația aprobată ${locatieExaminare}, cu ambarcațiunile declarate ${barci} la data de ${ziuaSesiune} ${lunaSesiune}, începând cu ora ${ora}.</p>
+<p class="repr">Reprezentant,</p>
+<p class="repr">${reprezentant}</p>
+${stampHtml}
+</body></html>`
+    return new NextResponse(html, {
+      headers: { 'Content-Type': 'text/html; charset=utf-8' }
+    })
+  }
 
   const buffer = await Packer.toBuffer(doc)
   const filename = `Notificare_${locNameDisplay}_${ziuaSesiune}_${lunaSesiune}_${anulSesiune}${cu_stampila ? '_semnat' : ''}.docx`
