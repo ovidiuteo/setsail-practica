@@ -27,7 +27,7 @@ type Student = {
   expiry_date: string; nationality: string; signature_data: string
   original_session_id: string; allocated_session_id: string
 }
-type Session = { id: string; session_date: string; status: string; session_type: string; access_code: string; class_caa: string; request_number?: string; location_detail?: string; parent_session_id?: string; is_clone?: boolean; locations?: any; boats?: any; evaluators?: any; instructors?: any }
+type Session = { id: string; session_date: string; course_start_date?: string; status: string; session_type: string; access_code: string; class_caa: string; request_number?: string; location_detail?: string; parent_session_id?: string; is_clone?: boolean; locations?: any; boats?: any; evaluators?: any; instructors?: any }
 
 const EMPTY_ST = { full_name:'', cnp:'', email:'', phone:'', birth_date:'', ci_series:'', ci_number:'', address:'', county:'', class_caa:'C,D' }
 
@@ -650,6 +650,8 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange }:
         <h3 className="font-semibold text-sm text-gray-900 mb-3">Detalii sesiune</h3>
         <div className="space-y-2">
           {([
+            ['Data start curs', sess.course_start_date ? new Date(sess.course_start_date).toLocaleDateString('ro-RO', {day:'2-digit',month:'long',year:'numeric'}) : '—'],
+            ['Data practică', new Date(sess.session_date).toLocaleDateString('ro-RO', {day:'2-digit',month:'long',year:'numeric'})],
             ['Instructor', sess.instructors?.full_name],
             ['Evaluator ANR', sess.evaluators?.full_name],
             ['Decizie ANR', sess.evaluators?.decision_number],
@@ -748,9 +750,22 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange }:
                   const sessDt = new Date(sess.session_date)
                   const today = new Date()
                   const diffDays = Math.floor((sessDt.getTime() - today.getTime()) / 86400000)
-                  if (diffDays > 30) return <div className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">⚠ Notificarea poate fi trimisă cel mai devreme cu 30 zile înainte ({new Date(sessDt.getTime()-30*86400000).toLocaleDateString('ro-RO')})</div>
-                  if (diffDays < 15) return <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">⛔ Termenul minim de 15 zile a fost depășit! Sesiunea e pe {sessDt.toLocaleDateString('ro-RO')}</div>
-                  return <div className="text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">✓ În termen — {diffDays} zile până la sesiune</div>
+                  const startDt = sess.course_start_date ? new Date(sess.course_start_date) : null
+                  return (
+                    <div>
+                      {startDt && (
+                        <div className="text-xs text-gray-500 bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 mb-2">
+                          📅 Perioadă curs: <b>{startDt.getDate()} {startDt.toLocaleDateString('ro-RO',{month:'long'})}</b> — <b>{sessDt.getDate()} {sessDt.toLocaleDateString('ro-RO',{month:'long',year:'numeric'})}</b>
+                        </div>
+                      )}
+                      {diffDays > 30
+                        ? <div className="text-xs text-amber-600 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">⚠ Notificarea poate fi trimisă cel mai devreme cu 30 zile înainte ({new Date(sessDt.getTime()-30*86400000).toLocaleDateString('ro-RO')})</div>
+                        : diffDays < 15
+                        ? <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">⛔ Termenul minim de 15 zile a fost depășit! Sesiunea e pe {sessDt.toLocaleDateString('ro-RO')}</div>
+                        : <div className="text-xs text-green-700 bg-green-50 border border-green-200 rounded-lg px-3 py-2">✓ În termen — {diffDays} zile până la sesiune</div>
+                      }
+                    </div>
+                  )
                 })()}
 
                 <div>

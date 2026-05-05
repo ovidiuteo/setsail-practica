@@ -54,6 +54,12 @@ export async function POST(req: NextRequest) {
   const lunaSesiune = dataSesiune.toLocaleDateString('ro-RO', { month: 'long' })
   const anulSesiune = dataSesiune.getFullYear()
 
+  // Intervalul curs: data_start - data_practica
+  const courseStartDate = sess.course_start_date ? new Date(sess.course_start_date) : null
+  const intervalCurs = courseStartDate
+    ? `${courseStartDate.getDate()} - ${ziuaSesiune} ${lunaSesiune}`
+    : `${ziuaSesiune} ${lunaSesiune}`
+
   const barci = (notif.barci_selectate || []).join(' și ')
   const clasaRaw: string = notif.clasa || sess.class_caa || ''
   const clasa = clasaRaw.replace(',', '/') + (clasaRaw ? '/Manevra ambarcatiunii cu vele' : '')
