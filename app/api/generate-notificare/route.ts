@@ -62,7 +62,12 @@ export async function POST(req: NextRequest) {
 
   const barci = (notif.barci_selectate || []).join(' și ')
   const clasaRaw: string = notif.clasa || sess.class_caa || ''
-  const clasa = clasaRaw.replace(',', '/') + (clasaRaw ? '/Manevra ambarcatiunii cu vele' : '')
+  // C,D  -> "C/D/Manevra ambarcatiunii cu vele"
+  // B    -> "B/Manevra ambarcatiunii cu vele"
+  const clasaParts = clasaRaw.split(',').map((c: string) => c.trim()).filter(Boolean)
+  const clasa = clasaParts.length > 0
+    ? clasaParts.join('/') + '/Manevra ambarcatiunii cu vele'
+    : ''
   const ora = notif.ora_examinare || '10:00'
   const nrNotif = notif.nr_notificare || ''
   const adresaLoc = loc?.location_detail || `Marina ${locName}`

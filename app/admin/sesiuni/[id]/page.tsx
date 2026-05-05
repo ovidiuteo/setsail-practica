@@ -602,6 +602,29 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange }:
     setMailTo(selectedEmails.join(', '))
   }, [selectedEmails.join(',')])
 
+  // Seteaza barci si clasa default bazat pe locatie si clasa sesiunii
+  useEffect(() => {
+    if (notifForm.barci_selectate.length > 0) return // deja setate din DB
+    const locName = ((sess as any).locations?.name || '').toLowerCase()
+    const isSnagov = locName.includes('snagov')
+    const clasaSession = sess.class_caa || ''
+    const isClassB = clasaSession.includes('B')
+
+    // Clasa default:
+    // - Snagov: C/D/Manevra ambarcatiunii (indiferent de clasa sesiunii)
+    // - Alte locatii cu clasa B: B/C/D/Manevra ambarcatiunii
+    // - Alte locatii fara B: C/D/Manevra ambarcatiunii
+    // "C/D/Manevra ambarcatiunii cu vele" -> stocat ca "C,D"
+    // "B/Manevra ambarcatiunii cu vele" -> stocat ca "B"
+    const clasaDefault = isClassB ? 'B' : 'C,D'
+
+    setNotifForm(f => ({
+      ...f,
+      clasa: f.clasa || clasaDefault,
+      barci_selectate: isSnagov ? ['Trainer 1', 'Trainer 2'] : ['SetSail', 'Trainer 2'],
+    }))
+  }, [sess?.id, (sess as any)?.locations?.name])
+
   async function saveNotification() {
     const payload = { session_id: sess.id, ...notifForm, scanned_file_data: notifScanFile }
     if (notif) {
