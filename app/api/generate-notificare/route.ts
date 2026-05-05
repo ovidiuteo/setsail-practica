@@ -46,11 +46,8 @@ export async function POST(req: NextRequest) {
     : `${ziuaSesiune} ${lunaSesiune}`
 
   const barci = (notif.barci_selectate || []).join(' și ')
-  const clasaRaw: string = notif.clasa || sess.class_caa || ''
-  const clasaParts = clasaRaw.split(',').map((c: string) => c.trim()).filter(Boolean)
-  const clasa = clasaParts.length > 0
-    ? clasaParts.join('/') + '/Manevra ambarcatiunii cu vele'
-    : ''
+  // clasa e stocata ca text complet editabil ex: "C/D/Manevra ambarcatiunii cu vele"
+  const clasa: string = notif.clasa || sess.class_caa || ''
 
   const locName2 = (loc?.name || '').toLowerCase()
   const adresaSetsail = info['adresa'] || 'str. Virgiliu nr. 15, etaj 3, Sector 1, București'
@@ -112,7 +109,7 @@ export async function POST(req: NextRequest) {
       indent: { firstLine: INDENT },
       spacing: { before: 0, after: 240, line: 276 },
       children: [new TextRun({
-        text: `Subscrisa ${numeFirma}, în calitate de furnizor de educație, formare profesională și perfecționare pentru cursurile de pregătire în vederea obținerii certificatelor internaționale de conducător de ambarcațiune de agrement/Manevra ambarcațiunii cu vele, vă notific prin prezenta că în perioada ${intervalCurs} vom desfășura cursuri de pregătire teoretică/practică în vederea obținerii certificatelor internaționale de conducator ambarcațiune de agrement pentru clasele ${clasa} în locația aprobată din ${locatieCurs}.`,
+        text: `Subscrisa ${numeFirma}, în calitate de furnizor de educație, formare profesională și perfecționare pentru cursurile de pregătire în vederea obținerii certificatelor internaționale de conducător de ambarcațiune de agrement, vă notific prin prezenta că în perioada ${intervalCurs} vom desfășura cursuri de pregătire teoretică/practică în vederea obținerii certificatelor internaționale de conducator ambarcațiune de agrement pentru clasele ${clasa} în locația aprobată din ${locatieCurs}.`,
         font: FONT, size: SIZE,
       })]
     }),
@@ -240,7 +237,7 @@ export async function POST(req: NextRequest) {
 <body>
   <p class="nr">Nr. ${nrNotif}</p>
   <p class="catre">Către: Autoritatea Navală Română</p>
-  <p class="para">Subscrisa ${numeFirma}, în calitate de furnizor de educație, formare profesională și perfecționare pentru cursurile de pregătire în vederea obținerii certificatelor internaționale de conducător de ambarcațiune de agrement/Manevra ambarcațiunii cu vele, vă notific prin prezenta că în perioada ${intervalCurs} vom desfășura cursuri de pregătire teoretică/practică în vederea obținerii certificatelor internaționale de conducator ambarcațiune de agrement pentru clasele ${clasa} în locația aprobată din ${locatieCurs}.</p>
+  <p class="para">Subscrisa ${numeFirma}, în calitate de furnizor de educație, formare profesională și perfecționare pentru cursurile de pregătire în vederea obținerii certificatelor internaționale de conducător de ambarcațiune de agrement, vă notific prin prezenta că în perioada ${intervalCurs} vom desfășura cursuri de pregătire teoretică/practică în vederea obținerii certificatelor internaționale de conducator ambarcațiune de agrement pentru clasele ${clasa} în locația aprobată din ${locatieCurs}.</p>
   <p class="para-last">Solicităm totodată participarea unui reprezentant al Autorității Navale Române pentru examinarea practică de promovare a cursului pregătire în vederea obținerii certificatului internațional de conducător ambarcațiune de agrement pentru clasele ${clasa}, în locația aprobată ${locatieExaminare}, cu ambarcațiunile declarate ${barci} la data de ${ziuaSesiune} ${lunaSesiune}, începând cu ora ${ora}.</p>
   <p class="repr">Reprezentant,</p>
   <p class="repr">${reprezentant}</p>
