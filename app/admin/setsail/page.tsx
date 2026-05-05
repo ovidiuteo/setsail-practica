@@ -20,6 +20,9 @@ const INFO_FIELDS: InfoRow[] = [
   { key: 'banca_1',              label: 'Bancă 1',                  placeholder: 'Banca Transilvania', value: '' },
   { key: 'cont_banca_2',         label: 'Cont bancă 2 (IBAN)',      placeholder: 'RO49 BBBB ...', value: '' },
   { key: 'banca_2',              label: 'Bancă 2',                  placeholder: 'ING Bank', value: '' },
+  { key: 'adresa_punct_lucru',   label: 'Adresă punct de lucru',    placeholder: 'Str. Exemplu nr. 1, București', value: '' },
+  { key: 'adresa_baza_limanu',   label: 'Adresă bază Limanu',       placeholder: 'Marina Limanu, jud. Constanța', value: '' },
+  { key: 'adresa_marina',        label: 'Adresă marinǎ/bază',       placeholder: 'Marina ...', value: '' },
 ]
 
 const DOC_TIPS = [
@@ -112,6 +115,55 @@ export default function SetSailPage() {
                   onChange={e => setInfo(prev => ({ ...prev, [f.key]: e.target.value }))}/>
               </div>
             ))}
+          </div>
+        </div>
+
+        {/* Adresa corespondenta */}
+        <div className="col-span-2 bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
+          <h2 className="font-semibold text-gray-900 mb-5 flex items-center gap-2">
+            <span className="w-2 h-2 rounded-full bg-amber-500 inline-block"/>
+            Adresă de corespondență
+          </h2>
+          <p className="text-xs text-gray-400 mb-4">Adresa folosită în documente oficiale și corespondență. Selectați din adresele definite sau introduceți una nouă.</p>
+          <div className="space-y-3">
+            {[
+              { val: 'sediu',       label: 'Sediu social', desc: info['adresa'] },
+              { val: 'punct_lucru', label: 'Punct de lucru', desc: info['adresa_punct_lucru'] },
+              { val: 'limanu',      label: 'Bază Limanu', desc: info['adresa_baza_limanu'] },
+              { val: 'marina',      label: 'Marină/Bază', desc: info['adresa_marina'] },
+              { val: 'alta',        label: 'Altă adresă', desc: null },
+            ].map(opt => (
+              <label key={opt.val} className={`flex items-start gap-3 p-3 rounded-xl border cursor-pointer transition-colors ${
+                info['adresa_corespondenta_tip'] === opt.val ? 'border-blue-400 bg-blue-50' : 'border-gray-100 hover:bg-gray-50'
+              }`}>
+                <input type="radio" name="adresa_corespondenta" value={opt.val}
+                  checked={info['adresa_corespondenta_tip'] === opt.val}
+                  onChange={() => setInfo(prev => ({ ...prev, adresa_corespondenta_tip: opt.val }))}
+                  className="mt-0.5"/>
+                <div className="flex-1">
+                  <div className="text-sm font-medium text-gray-800">{opt.label}</div>
+                  {opt.desc ? (
+                    <div className="text-xs text-gray-400 mt-0.5">{opt.desc || <span className="italic">necompletată</span>}</div>
+                  ) : null}
+                  {opt.val === 'alta' && info['adresa_corespondenta_tip'] === 'alta' && (
+                    <input className="mt-2 w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-400"
+                      value={info['adresa_corespondenta_custom'] || ''}
+                      placeholder="Introduceți adresa de corespondență"
+                      onChange={e => setInfo(prev => ({ ...prev, adresa_corespondenta_custom: e.target.value }))}/>
+                  )}
+                </div>
+              </label>
+            ))}
+          </div>
+          <div className="mt-4 p-3 bg-gray-50 rounded-xl border border-gray-100">
+            <div className="text-xs text-gray-500 mb-1 font-medium">Adresă de corespondență selectată:</div>
+            <div className="text-sm font-medium text-gray-800">
+              {info['adresa_corespondenta_tip'] === 'sediu' ? info['adresa'] :
+               info['adresa_corespondenta_tip'] === 'punct_lucru' ? info['adresa_punct_lucru'] :
+               info['adresa_corespondenta_tip'] === 'limanu' ? info['adresa_baza_limanu'] :
+               info['adresa_corespondenta_tip'] === 'marina' ? info['adresa_marina'] :
+               info['adresa_corespondenta_custom'] || '—'}
+            </div>
           </div>
         </div>
 
