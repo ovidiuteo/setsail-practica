@@ -101,10 +101,10 @@ export async function POST(req: NextRequest) {
 
   const children: any[] = [
     // Nr. notificare
-    para(`Nr. ${nrNotif}`, { size: SIZE_NR, spacing_before: 0, spacing_after: 2400, align: AlignmentType.LEFT }),
+    para(`Nr. ${nrNotif}`, { size: SIZE_NR, spacing_before: 0, spacing_after: 1200, align: AlignmentType.LEFT }),
 
     // Către
-    para('Către: Autoritatea Navală Română', { spacing_before: 0, spacing_after: 2400, align: AlignmentType.LEFT }),
+    para('Către: Autoritatea Navală Română', { spacing_before: 0, spacing_after: 600, align: AlignmentType.LEFT }),
 
     // Paragraf 1 — corp
     new Paragraph({
@@ -121,7 +121,7 @@ export async function POST(req: NextRequest) {
     new Paragraph({
       alignment: AlignmentType.JUSTIFIED,
       indent: { firstLine: INDENT },
-      spacing: { before: 0, after: 2400, line: 276 },
+      spacing: { before: 0, after: 500, line: 276 },
       children: [new TextRun({
         text: `Solicităm totodată participarea unui reprezentant al Autorității Navale Române pentru examinarea practică de promovare a cursului pregătire în vederea obținerii certificatului internațional de conducător ambarcațiune de agrement pentru clasele ${clasa}, în locația aprobată ${locatieExaminare}, cu ambarcațiunile declarate ${barci} la data de ${ziuaSesiune} ${lunaSesiune}, începând cu ora ${ora}.`,
         font: FONT, size: SIZE,
@@ -130,7 +130,7 @@ export async function POST(req: NextRequest) {
 
     // Reprezentant
     para('Reprezentant,', { spacing_before: 0, spacing_after: 160, align: AlignmentType.LEFT }),
-    para(reprezentant, { spacing_before: 0, spacing_after: 200, align: AlignmentType.LEFT }),
+    para(reprezentant, { spacing_before: 0, spacing_after: 100, align: AlignmentType.LEFT }),
   ]
 
   // Stampila
