@@ -605,22 +605,6 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange }:
 
 
 
-  // Conversie: 'C,D' -> 'C/D/Manevra ambarcatiunii cu vele', 'B' -> 'B/Manevra ambarcatiunii cu vele'
-  function clasaToDisplay(raw: string): string {
-    if (!raw) return ''
-    const parts = raw.split(',').map(c => c.trim()).filter(Boolean)
-    return parts.join('/') + '/Manevra ambarcatiunii cu vele'
-  }
-  // Conversie inversa: 'C/D/Manevra ambarcatiunii cu vele' -> 'C,D'
-  function clasaToDb(display: string): string {
-    return display
-      .replace('/Manevra ambarcatiunii cu vele', '')
-      .split('/')
-      .map(c => c.trim())
-      .filter(c => ['A','B','C','D','Radio'].includes(c))
-      .join(',')
-  }
-
   function calcNotifDefaults() {
     const locName = ((sess as any).locations?.name || '').toLowerCase()
     const isSnagov = locName.includes('snagov')
@@ -637,7 +621,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange }:
     return {
       nr_notificare: '',
       ora_examinare: '10:00',
-      clasa: clasaToDisplay(isClassB ? 'B' : 'C,D'),
+      clasa: isClassB ? 'B/Manevra ambarcatiunii cu vele' : 'C/D/Manevra ambarcatiunii cu vele',
       barci_selectate: isSnagov ? ['Trainer 1', 'Trainer 2'] : ['SetSail', 'Trainer 2'],
       locatie_curs: locatieCurs,
       locatie_examinare: locatieExaminare,
@@ -656,7 +640,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange }:
       setNotifForm({
         nr_notificare: existing.nr_notificare || '',
         ora_examinare: existing.ora_examinare || '10:00',
-        clasa: clasaToDisplay(existing.clasa || ''),
+        clasa: existing.clasa || '',
         barci_selectate: existing.barci_selectate || [],
         locatie_curs: existing.locatie_curs || '',
         locatie_examinare: existing.locatie_examinare || '',
@@ -676,7 +660,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange }:
       setNotifForm({
         nr_notificare: data.nr_notificare || '',
         ora_examinare: data.ora_examinare || '10:00',
-        clasa: clasaToDisplay(data.clasa || ''),
+        clasa: data.clasa || '',
         barci_selectate: data.barci_selectate || [],
         locatie_curs: data.locatie_curs || '',
         locatie_examinare: data.locatie_examinare || '',
@@ -904,7 +888,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange }:
                     onChange={e=>setNotifForm(f=>({...f,clasa:e.target.value}))}
                     onDoubleClick={()=>{
                       const isClassB = sess.class_caa?.includes('B')
-                      setNotifForm(f=>({...f, clasa: clasaToDisplay(isClassB ? 'B' : 'C,D')}))
+                      setNotifForm(f=>({...f, clasa: isClassB ? 'B/Manevra ambarcatiunii cu vele' : 'C/D/Manevra ambarcatiunii cu vele'}))
                     }}
                     title="Dublu-click pentru a reseta la valoarea default"/>
                 </div>
