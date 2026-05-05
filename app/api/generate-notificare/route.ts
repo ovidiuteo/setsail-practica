@@ -101,10 +101,10 @@ export async function POST(req: NextRequest) {
 
   const children: any[] = [
     // Nr. notificare
-    para(`Nr. ${nrNotif}`, { size: SIZE_NR, spacing_before: 0, spacing_after: 600, align: AlignmentType.LEFT }),
+    para(`Nr. ${nrNotif}`, { size: SIZE_NR, spacing_before: 0, spacing_after: 1200, align: AlignmentType.LEFT }),
 
     // Către
-    para('Către: Autoritatea Navală Română', { spacing_before: 0, spacing_after: 480, align: AlignmentType.LEFT }),
+    para('Către: Autoritatea Navală Română', { spacing_before: 0, spacing_after: 700, align: AlignmentType.LEFT }),
 
     // Paragraf 1 — corp
     new Paragraph({
@@ -121,7 +121,7 @@ export async function POST(req: NextRequest) {
     new Paragraph({
       alignment: AlignmentType.JUSTIFIED,
       indent: { firstLine: INDENT },
-      spacing: { before: 0, after: 480, line: 276 },
+      spacing: { before: 0, after: 600, line: 276 },
       children: [new TextRun({
         text: `Solicităm totodată participarea unui reprezentant al Autorității Navale Române pentru examinarea practică de promovare a cursului pregătire în vederea obținerii certificatului internațional de conducător ambarcațiune de agrement pentru clasele ${clasa}, în locația aprobată ${locatieExaminare}, cu ambarcațiunile declarate ${barci} la data de ${ziuaSesiune} ${lunaSesiune}, începând cu ora ${ora}.`,
         font: FONT, size: SIZE,
@@ -204,12 +204,20 @@ export async function POST(req: NextRequest) {
     position: relative;
   }
 
-  /* La print: elimina background-ul gri si umbra */
+  /* La print: @page preia marginile, body fara padding si fara dimensiuni fixe */
+  @page {
+    size: A4 portrait;
+    margin: 25mm 20mm 20mm 30mm;
+  }
   @media print {
-    html { background: white; padding: 0; }
-    body { box-shadow: none; margin: 0; }
-    @page { size: A4 portrait; margin: 25mm 20mm 20mm 30mm; }
-    body { padding: 0; width: auto; min-height: auto; }
+    html { background: white !important; padding: 0 !important; }
+    body {
+      box-shadow: none !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      width: auto !important;
+      min-height: auto !important;
+    }
   }
 
   .nr { font-size: 10pt; margin-bottom: 4em; }
