@@ -26,6 +26,7 @@ type Student = {
   order_in_session: number; communication_target: boolean
   expiry_date: string; nationality: string; signature_data: string
   original_session_id: string; allocated_session_id: string
+  only_sailing: boolean
 }
 type Session = { id: string; session_date: string; course_start_date?: string; status: string; session_type: string; access_code: string; class_caa: string; request_number?: string; location_detail?: string; parent_session_id?: string; is_clone?: boolean; locations?: any; boats?: any; evaluators?: any; instructors?: any }
 
@@ -1165,6 +1166,89 @@ Set Sail NauticSchool
   )
 }
 
+function OnlySailingSection({ sessions, studentsMap, setStudentsMap }: {
+  sessions: Session[], studentsMap: Record<string,Student[]>, setStudentsMap: (fn: any) => void
+}) {
+  const allSailors = sessions
+    .filter(s => s.session_type !== 'absent')
+    .flatMap(s => (studentsMap[s.id]||[]).filter((st:Student) => st.only_sailing))
+
+  async function revoke(s: Student) {
+    await supabase.from('students').update({only_sailing:false}).eq('id',s.id)
+    setStudentsMap((prev:any) => {
+      const upd = {...prev}
+      for (const sid of Object.keys(upd)) {
+        upd[sid] = upd[sid].map((st:Student)=>st.id===s.id?{...st,only_sailing:false}:st)
+      }
+      return upd
+    })
+  }
+
+  const ps = {pending:{label:'Neconectat',color:'#9ca3af'},signed:{label:'Semnat',color:'#16a34a'},absent:{label:'Absent',color:'#dc2626'}}
+
+  return (
+    <div className="mt-6 mb-2">
+      <div className="flex items-center gap-3 my-4">
+        <div className="flex-1 border-t-2 border-dashed border-blue-200"/>
+        <div className="flex items-center gap-2 px-4 py-1.5 rounded-full border-2 border-blue-200 bg-blue-50">
+          <span className="text-sm">⛵</span>
+          <span className="text-sm font-semibold text-blue-700">Only Sailing ({allSailors.length})</span>
+        </div>
+        <div className="flex-1 border-t-2 border-dashed border-blue-200"/>
+      </div>
+      <div className="grid grid-cols-3 gap-6">
+        <div className="bg-blue-50 rounded-xl p-5 border border-blue-100">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-blue-400 text-lg">⛵</span>
+            <h3 className="font-semibold text-sm text-blue-700">Cursanți Only Sailing</h3>
+          </div>
+          <p className="text-xs text-blue-400">Categoria S — excluși din randomizare. Rămân ficși. Apasă ⛵ pe un cursant pentru a-l muta aici.</p>
+        </div>
+        <div className="col-span-2 bg-white rounded-xl border border-blue-100 shadow-sm overflow-hidden">
+          {allSailors.length > 0 ? (
+            <table className="w-full">
+              <thead>
+                <tr className="bg-blue-50 border-b border-blue-100 text-xs font-medium text-blue-600">
+                  <th className="px-3 py-2 text-left w-8">#</th>
+                  <th className="px-3 py-2 text-left">Nume</th>
+                  <th className="px-3 py-2 text-left">Email</th>
+                  <th className="px-3 py-2 text-left">CNP</th>
+                  <th className="px-3 py-2 text-left">Portal</th>
+                  <th className="px-3 py-2 w-20"/>
+                </tr>
+              </thead>
+              <tbody>
+                {allSailors.map((s:Student, i:number) => {
+                  const pst = ps[s.portal_status as keyof typeof ps]||ps.pending
+                  return (
+                    <tr key={s.id} className="border-b border-gray-50 hover:bg-blue-50/20">
+                      <td className="px-3 py-2 text-xs text-gray-300">{i+1}</td>
+                      <td className="px-3 py-2 text-xs font-medium text-blue-900">
+                        <Link href={`/admin/cursanti/${s.id}`} target="_blank" className="hover:underline">{s.full_name}</Link>
+                      </td>
+                      <td className="px-3 py-2 text-xs text-gray-500">{s.email||'—'}</td>
+                      <td className="px-3 py-2 text-xs font-mono text-gray-400">{s.cnp||'—'}</td>
+                      <td className="px-3 py-2 text-xs font-medium" style={{color:pst.color}}>{pst.label}</td>
+                      <td className="px-3 py-2 text-right">
+                        <button onClick={()=>revoke(s)} className="text-xs text-blue-400 hover:text-red-500 hover:bg-red-50 px-2 py-1 rounded transition-colors">✕ Revocă</button>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          ) : (
+            <div className="px-4 py-8 text-center text-xs text-gray-400">
+              <div className="text-3xl mb-2">⛵</div>
+              Niciun cursant Only Sailing
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function SessionDetailPage() {
   const { id } = useParams() as { id: string }
   const [mainSession, setMainSession] = useState<Session|null>(null)
@@ -1585,6 +1669,13 @@ export default function SessionDetailPage() {
           </div>
         </div>
       ))}
+
+      {/* Only Sailing — sectiune permanenta, deasupra absentilor */}
+      <OnlySailingSection
+        sessions={sessions}
+        studentsMap={studentsMap}
+        setStudentsMap={setStudentsMap}
+      />
 
       {/* Absenti */}
       {absentSession && (
