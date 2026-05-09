@@ -90,6 +90,7 @@ export default function CloneSessionPage() {
     // Creează sesiunea clonată
     const { data: newSession, error } = await supabase.from('sessions').insert({
       ...form,
+      session_type: 'clone',
       parent_session_id: id,
       is_clone: true,
     }).select().single()
@@ -100,27 +101,13 @@ export default function CloneSessionPage() {
       return
     }
 
-    // Copiază cursanții selectați în noua sesiune
-    const studentsToClone = allStudents
-      .filter(s => selectedIds.has(s.id))
-      .map((s, i) => ({
-        session_id: newSession.id,
-        full_name: s.full_name,
-        cnp: s.cnp,
-        email: s.email,
-        phone: s.phone,
-        birth_date: s.birth_date,
-        ci_series: s.ci_series,
-        ci_number: s.ci_number,
-        address: s.address,
-        county: s.county,
-        class_caa: s.class_caa,
-        id_document: s.id_document,
-        order_in_session: i + 1,
-        portal_status: 'pending',
-      }))
-
-    await supabase.from('students').insert(studentsToClone)
+    // Muta cursanții selectați în noua sesiune (nu copie - update session_id)
+    const selectedStudents = allStudents.filter(s => selectedIds.has(s.id))
+    for (let i = 0; i < selectedStudents.length; i++) {
+      await supabase.from('students')
+        .update({ session_id: newSession.id, order_in_session: i + 1, portal_status: 'pending' })
+        .eq('id', selectedStudents[i].id)
+    }
 
     router.push(`/admin/sesiuni/${newSession.id}`)
   }
