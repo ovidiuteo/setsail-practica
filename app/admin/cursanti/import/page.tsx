@@ -14,6 +14,7 @@ type StudentRow = {
   ci_series: string
   ci_number: string
   address: string
+  city: string
   county: string
   class_caa: string
 }
@@ -21,7 +22,7 @@ type StudentRow = {
 const EMPTY_ROW: StudentRow = {
   full_name: '', cnp: '', email: '', phone: '',
   birth_date: '', ci_series: '', ci_number: '',
-  address: '', county: '', class_caa: 'C,D'
+  address: '', city: '', county: '', class_caa: 'C,D'
 }
 
 export default function ImportCursantiPage() {
@@ -44,15 +45,21 @@ export default function ImportCursantiPage() {
   const [mode, setMode] = useState<'paste' | 'file'>('paste')
 
   useEffect(() => {
+    const today = new Date().toISOString().split('T')[0]
     supabase.from('sessions')
-      .select('id, session_date, access_code, locations(name), class_caa')
+      .select('id, session_date, access_code, locations(name), class_caa, status')
       .eq('session_type', 'principal')
-      .order('session_date', { ascending: false })
+      .gte('session_date', today)
+      .order('session_date', { ascending: true })
       .then(({ data }) => {
         setSessions(data || [])
-        if (data && data.length > 0) {
-          setSelectedSession(data[0].id)
-          setDefaultClass(data[0].class_caa || 'C,D')
+        // Default: Focus intai, apoi prima activa, altfel prima din lista
+        const focusSess = data?.find((s: any) => s.status === 'focus')
+        const activeSess = data?.find((s: any) => s.status === 'active')
+        const defaultSess = focusSess || activeSess || data?.[0]
+        if (defaultSess) {
+          setSelectedSession(defaultSess.id)
+          setDefaultClass(defaultSess.class_caa || 'C,D')
         }
       })
   }, [])
@@ -63,7 +70,10 @@ export default function ImportCursantiPage() {
   function invertName(name: string): string {
     const parts = name.trim().split(/\s+/)
     if (parts.length <= 1) return name.toUpperCase()
-    return parts.slice(1).join(' ') + ' ' + parts[0]
+    // Ultimul cuvant = numele de familie, restul = prenumele
+    const lastName = parts[parts.length - 1]
+    const firstName = parts.slice(0, parts.length - 1).join(' ')
+    return (lastName + ' ' + firstName).toUpperCase()
   }
   function cleanCounty(val: string): string {
     return val.trim().replace(/^jud\.\s*/i,'').replace(/^judet\s*/i,'').replace(/^județul\s*/i,'').trim()
@@ -110,12 +120,9 @@ export default function ImportCursantiPage() {
         const adresa = trimmed[6] || ''
         const localitate = trimmed[7] || ''
         const sectorJudet = trimmed[8] || ''
-        let address = adresa
-        if (localitate && !address.toLowerCase().includes(localitate.toLowerCase())) {
-          address = address + (address ? ', ' : '') + localitate
-        }
+        // address = doar strada, city = localitate, county = sector/judet
         parsed.push({ ...EMPTY_ROW, full_name, cnp: cnpRaw, email, phone, birth_date: birthRaw,
-          address, county: cleanCounty(sectorJudet || localitate), class_caa: defaultClass })
+          address: adresa, city: localitate, county: cleanCounty(sectorJudet || ''), class_caa: defaultClass })
       } else if (hasCNPLabel) {
         const full_name = trimmed[0] || ''
         const email = trimmed[1] || ''
@@ -126,12 +133,12 @@ export default function ImportCursantiPage() {
           else if (/^\d{2}\.\d{2}\.\d{4}$/.test(part)) birth_date = part
         }
         if (!full_name) continue
-        parsed.push({ ...EMPTY_ROW, full_name: full_name.toUpperCase(), email, phone, birth_date, cnp, class_caa: defaultClass })
+        parsed.push({ ...EMPTY_ROW, full_name: full_name.toUpperCase(), email, phone, birth_date, cnp, city: '', class_caa: defaultClass })
       } else {
         const full_name = trimmed[0] || ''
         if (!full_name || full_name.toLowerCase() === 'nr') continue
         parsed.push({ ...EMPTY_ROW, full_name: full_name.toUpperCase(), cnp: trimmed[1] || '',
-          email: trimmed[2] || '', ci_series: trimmed[3] || '', class_caa: trimmed[4] || defaultClass })
+          email: trimmed[2] || '', ci_series: trimmed[3] || '', city: '', class_caa: trimmed[4] || defaultClass })
       }
     }
     return parsed
@@ -176,15 +183,11 @@ export default function ImportCursantiPage() {
           const adresa = String(row[6] || '').trim()
           const localitate = String(row[7] || '').trim()
           const sectorJudet = String(row[8] || '').trim()
-          let address = adresa
-          if (localitate && !address.toLowerCase().includes(localitate.toLowerCase())) {
-            address = address + (address ? ', ' : '') + localitate
-          }
           parsed.push({
             full_name, cnp: cnpRaw, email, phone,
             birth_date: birthRaw,
             ci_series: '', ci_number: '',
-            address, county: cleanCounty(sectorJudet || localitate),
+            address: adresa, city: localitate, county: cleanCounty(sectorJudet || ''),
             class_caa: defaultClass,
           })
         } else {
@@ -200,6 +203,7 @@ export default function ImportCursantiPage() {
             ci_series: String(row[5] || '').trim(),
             ci_number: String(row[6] || '').trim(),
             address: String(row[7] || '').trim(),
+            city: '',
             county: String(row[8] || '').trim(),
             class_caa: String(row[9] || defaultClass).trim() || defaultClass,
           })
