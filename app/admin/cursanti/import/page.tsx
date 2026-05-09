@@ -68,12 +68,8 @@ export default function ImportCursantiPage() {
   // Format detectat: Nume\tEmail\tTelefon\tDataNastere\tCNP: XXXXX
   // sau: Nume\tCNP\tEmail\tCI\tClasa (format clasic)
   function invertName(name: string): string {
-    const parts = name.trim().split(/\s+/)
-    if (parts.length <= 1) return name.toUpperCase()
-    // Ultimul cuvant = numele de familie, restul = prenumele
-    const lastName = parts[parts.length - 1]
-    const firstName = parts.slice(0, parts.length - 1).join(' ')
-    return (lastName + ' ' + firstName).toUpperCase()
+    // Numele vine deja in format "Nume Prenume" din liste oficiale - doar uppercase
+    return name.trim().toUpperCase()
   }
   function cleanCounty(val: string): string {
     return val.trim().replace(/^jud\.\s*/i,'').replace(/^judet\s*/i,'').replace(/^județul\s*/i,'').trim()
