@@ -206,6 +206,11 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
     setMoving(null)
   }
 
+  async function markSailing(s: Student) {
+    await supabase.from('students').update({ only_sailing: true }).eq('id', s.id)
+    setStudents(students.filter(st => st.id !== s.id))
+  }
+
   function startEdit(s: Student) {
     setEditingId(s.id)
     setEditValues({ full_name: s.full_name||'', cnp: s.cnp||'', email: s.email||'', phone: s.phone||'', birth_date: s.birth_date||'', ci_series: s.ci_series||'', ci_number: s.ci_number||'', address: s.address||'', county: s.county||'', class_caa: s.class_caa||'C,D' })
@@ -323,7 +328,7 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {getSorted(students).map((s,i) => {
+              {getSorted(students.filter((s:Student)=>!s.only_sailing)).map((s,i) => {
                 const ps = portalMap[s.portal_status] || portalMap.pending
                 const isEditing = editingId === s.id
                 return (
@@ -477,23 +482,9 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
                           )}
                           {/* Muta la Sailing */}
                           {!isAbsent && !s.only_sailing && (
-                            <button onClick={async()=>{
-                              await supabase.from('students').update({only_sailing:true}).eq('id',s.id)
-                              setStudents(students.map(st=>st.id===s.id?{...st,only_sailing:true}:st))
-                            }}
+                            <button onClick={()=>markSailing(s)}
                               className="p-1.5 rounded border border-orange-100 text-orange-400 hover:text-orange-600 hover:bg-orange-50 transition-colors font-bold text-xs w-7 h-7 flex items-center justify-center"
-                              title="Mută la Sailing (categoria S)">
-                              S
-                            </button>
-                          )}
-                          {/* Revoca Sailing */}
-                          {!isAbsent && s.only_sailing && (
-                            <button onClick={async()=>{
-                              await supabase.from('students').update({only_sailing:false}).eq('id',s.id)
-                              setStudents(students.map(st=>st.id===s.id?{...st,only_sailing:false}:st))
-                            }}
-                              className="p-1.5 rounded border border-orange-300 bg-orange-100 text-orange-600 hover:bg-orange-200 transition-colors font-bold text-xs w-7 h-7 flex items-center justify-center"
-                              title="Revocă Sailing — cursantul revine în sesiune">
+                              title="Mută la Sailing (categoria S) — dispare din liste și PV">
                               S
                             </button>
                           )}
@@ -1196,11 +1187,22 @@ function OnlySailingSection({ sessions, studentsMap, setStudentsMap }: {
     .flatMap(s => (studentsMap[s.id]||[]).filter((st:Student) => st.only_sailing))
 
   async function revoke(s: Student) {
-    await supabase.from('students').update({only_sailing:false}).eq('id',s.id)
+    await supabase.from('students').update({ only_sailing: false }).eq('id', s.id)
+    // Cursantul revine vizibil in sesiunea lui (only_sailing=false)
+    // Il readaugam in lista sesiunii lui cu ordinea la final
     setStudentsMap((prev:any) => {
       const upd = {...prev}
       for (const sid of Object.keys(upd)) {
-        upd[sid] = upd[sid].map((st:Student)=>st.id===s.id?{...st,only_sailing:false}:st)
+        const list = upd[sid]
+        const exists = list.find((st:Student) => st.id === s.id)
+        if (exists) {
+          // Deja e in lista (cu only_sailing=true) - doar updatam flag
+          upd[sid] = list.map((st:Student) => st.id===s.id ? {...st, only_sailing:false} : st)
+        } else if (sid === s.session_id) {
+          // Nu e in lista (a fost scos) - il readaugam
+          const maxOrder = Math.max(0, ...list.map((st:Student) => st.order_in_session || 0))
+          upd[sid] = [...list, {...s, only_sailing:false, order_in_session: maxOrder+1}]
+        }
       }
       return upd
     })
@@ -1418,11 +1420,11 @@ export default function SessionDetailPage() {
     setRandomizing(true)
     // Colectam toate sesiunile active (principal + clone, fara absent)
     const activeSessions = sessions.filter(s => s.session_type !== 'absent')
-    // Colectam TOTI cursantii de pe toate listele active
+    // Colectam TOTI cursantii de pe toate listele active - EXCLUS only_sailing
     const allActiveStudents: Student[] = []
     for (const sess of activeSessions) {
       const sts = studentsMap[sess.id] || []
-      allActiveStudents.push(...sts)
+      allActiveStudents.push(...sts.filter((s: Student) => !s.only_sailing))
     }
     // Shuffle Fisher-Yates
     const shuffled = [...allActiveStudents]
@@ -1531,7 +1533,7 @@ export default function SessionDetailPage() {
         </button>
         <button onClick={()=>{
           const activeSess = sessions.filter(s=>s.session_type!=='absent')
-          setRandomCounts(activeSess.map(s=>(studentsMap[s.id]||[]).length))
+          setRandomCounts(activeSess.map(s=>(studentsMap[s.id]||[]).filter((st:Student)=>!st.only_sailing).length))
           setShowRandomizer(true)
         }}
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-purple-200 text-purple-700 hover:bg-purple-50">
@@ -1548,7 +1550,7 @@ export default function SessionDetailPage() {
       {/* Modal randomizator */}
       {showRandomizer && (() => {
         const activeSess = sessions.filter(s => s.session_type !== 'absent')
-        const totalStudents = activeSess.reduce((sum, s) => sum + (studentsMap[s.id]||[]).length, 0)
+        const totalStudents = activeSess.reduce((sum, s) => sum + (studentsMap[s.id]||[]).filter((st:Student)=>!st.only_sailing).length, 0)
         const totalAllocated = randomCounts.reduce((a,b)=>a+b,0)
         const isValid = totalAllocated === totalStudents && randomCounts.every(c=>c>=0)
         return (
