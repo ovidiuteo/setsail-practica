@@ -644,8 +644,8 @@ const DROPDOWN_TEMPLATES = [
   { label: 'Informații locație', subject: 'Informații locație examen practic', body: 'Stimate/Stimată cursant,\n\nVă transmitem detalii despre locația sesiunii de practică:\n\n[adresa locației]\n\nVă recomandăm să sosiți cu 15 minute înainte.\n\nCu stimă,\nEchipa SetSail' },
 ]
 
-function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions, allStudents }:
-  { sess: Session, students: Student[], allStatuses: string[], onStatusChange:(sid:string,status:string)=>void, allSessions: Session[], allStudents: Record<string,Student[]> }) {
+function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions, allStudents, onEditSession }:
+  { sess: Session, students: Student[], allStatuses: string[], onStatusChange:(sid:string,status:string)=>void, allSessions: Session[], allStudents: Record<string,Student[]>, onEditSession:(s:Session)=>void }) {
   const [gPV, setGPV] = useState(false)
   const [gFise, setGFise] = useState(false)
   const [gPDF, setGPDF] = useState(false)
@@ -891,6 +891,15 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                   {sess.status===sv && '✓ '}{statusMap[sv].label}
                 </button>
               ))}
+              {(sess.session_type === 'clone' || sess.is_clone) && (
+                <button onClick={()=>{
+                  // Deschide modalul de editare sesiune (reutilizam startEditSession)
+                  onEditSession(sess)
+                }}
+                  className="px-2.5 py-1.5 rounded-lg text-xs font-medium border-2 border-blue-200 text-blue-600 hover:bg-blue-50 transition-all">
+                  ✎ Editează
+                </button>
+              )}
               {(sess.session_type === 'clone' || sess.is_clone) && (
                 <button onClick={async()=>{
                   if (!window.confirm('Ștergi clona?\n\nCursanții vor fi mutați înapoi la sesiunea principală.')) return
@@ -1825,7 +1834,7 @@ export default function SessionDetailPage() {
 
       {/* Sesiunea principala */}
       <div className="grid grid-cols-3 gap-6">
-        <SidebarCard sess={mainSession} students={studentsMap[mainSession.id]||[]} allStatuses={[]} onStatusChange={updateStatus} allSessions={sessions} allStudents={studentsMap}/>
+        <SidebarCard sess={mainSession} students={studentsMap[mainSession.id]||[]} allStatuses={[]} onStatusChange={updateStatus} allSessions={sessions} allStudents={studentsMap} onEditSession={startEditSession}/>
         <div className="col-span-2">
           <StudentsTable
             sess={mainSession} students={studentsMap[mainSession.id]||[]}
@@ -1844,7 +1853,7 @@ export default function SessionDetailPage() {
         <div key={clone.id}>
           <SectionDivider sess={clone}/>
           <div className="grid grid-cols-3 gap-6">
-            <SidebarCard sess={clone} students={studentsMap[clone.id]||[]} allStatuses={[]} onStatusChange={updateStatus} allSessions={sessions} allStudents={studentsMap}/>
+            <SidebarCard sess={clone} students={studentsMap[clone.id]||[]} allStatuses={[]} onStatusChange={updateStatus} allSessions={sessions} allStudents={studentsMap} onEditSession={startEditSession}/>
             <div className="col-span-2">
               <StudentsTable
                 sess={clone} students={studentsMap[clone.id]||[]}

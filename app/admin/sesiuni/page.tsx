@@ -332,13 +332,54 @@ export default function SesiuniPage() {
                 {clones.map((clone: any, ci: number) => {
                   const cloneCount = cloneCounts[ci] || {total:0, absenti:0}
                   const cloneSt = statusMap[clone.status] || statusMap.draft
+                  const isEditingClone = editingId === clone.id
                   return (
                     <div key={clone.id} className="ml-6 flex gap-0">
                       <div className="flex flex-col items-center mr-2 pt-4">
                         <div className="w-px h-4 bg-blue-200"/>
                         <div className="w-3 h-px bg-blue-200"/>
                       </div>
-                      <div className="flex-1 bg-white rounded-xl shadow-sm border border-blue-100 mb-1">
+                      <div className={`flex-1 bg-white rounded-xl shadow-sm border mb-1 transition-colors ${isEditingClone ? 'border-blue-300' : 'border-blue-100'}`}>
+                        {isEditingClone ? (
+                          <div className="p-4">
+                            <div className="text-xs font-medium text-blue-600 mb-3">✎ Editare clonă</div>
+                            <div className="grid grid-cols-2 gap-2 mb-3">
+                              <div><label className="text-xs text-gray-400 mb-1 block">Data practică</label>
+                                <input type="date" className={inputCls} value={editValues.session_date||''} onChange={e=>setEditValues((v:any)=>({...v,session_date:e.target.value}))}/></div>
+                              <div><label className="text-xs text-gray-400 mb-1 block">Locație</label>
+                                <select className={selectCls} value={editValues.location_id||''} onChange={e=>setEditValues((v:any)=>({...v,location_id:e.target.value}))}>
+                                  <option value="">—</option>
+                                  {refs.locations.map((l:any)=><option key={l.id} value={l.id}>{l.name}</option>)}
+                                </select></div>
+                              <div><label className="text-xs text-gray-400 mb-1 block">Ambarcațiune</label>
+                                <select className={selectCls} value={editValues.boat_id||''} onChange={e=>setEditValues((v:any)=>({...v,boat_id:e.target.value}))}>
+                                  <option value="">—</option>
+                                  {refs.boats.map((b:any)=><option key={b.id} value={b.id}>{b.name}</option>)}
+                                </select></div>
+                              <div><label className="text-xs text-gray-400 mb-1 block">Instructor</label>
+                                <select className={selectCls} value={editValues.instructor_id||''} onChange={e=>setEditValues((v:any)=>({...v,instructor_id:e.target.value}))}>
+                                  <option value="">—</option>
+                                  {refs.instructors.map((i:any)=><option key={i.id} value={i.id}>{i.full_name}</option>)}
+                                </select></div>
+                              <div><label className="text-xs text-gray-400 mb-1 block">Evaluator ANR</label>
+                                <select className={selectCls} value={editValues.evaluator_id||''} onChange={e=>setEditValues((v:any)=>({...v,evaluator_id:e.target.value}))}>
+                                  <option value="">—</option>
+                                  {refs.evaluators.map((e:any)=><option key={e.id} value={e.id}>{e.full_name}</option>)}
+                                </select></div>
+                              <div><label className="text-xs text-gray-400 mb-1 block">Clasă CAA</label>
+                                <select className={selectCls} value={editValues.class_caa||''} onChange={e=>setEditValues((v:any)=>({...v,class_caa:e.target.value}))}>
+                                  {['C,D','B','C','D','B,C,D'].map(c=><option key={c} value={c}>{c.replace(',','+')}</option>)}
+                                </select></div>
+                            </div>
+                            <div className="flex justify-end gap-2">
+                              <button onClick={cancelEdit} className="px-3 py-1.5 text-xs rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50">Anulează</button>
+                              <button onClick={()=>saveEdit(clone.id)} disabled={saving}
+                                className="px-3 py-1.5 text-xs rounded-lg font-medium text-white disabled:opacity-50" style={{background:'#059669'}}>
+                                {saving?'Se salvează...':'✓ Salvează'}
+                              </button>
+                            </div>
+                          </div>
+                        ) : (
                         <div className="p-3 flex items-center justify-between">
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-0.5">
@@ -403,6 +444,7 @@ export default function SesiuniPage() {
                             </button>
                           </div>
                         </div>
+                        )}
                       </div>
                     </div>
                   )
