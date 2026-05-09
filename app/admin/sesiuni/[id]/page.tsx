@@ -309,7 +309,7 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
       <div className="p-4 border-b border-gray-100 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <Users size={16} className="text-gray-400"/>
-          <span className="font-semibold text-sm text-gray-900">Cursanți ({students.length})</span>
+          <span className="font-semibold text-sm text-gray-900">Cursanți ({students.filter((s:Student)=>!s.only_sailing).length})</span>
         </div>
         <div className="flex items-center gap-2">
           <button onClick={recount} title="Re-numerotează conform ordinii curente"
@@ -644,8 +644,8 @@ const DROPDOWN_TEMPLATES = [
   { label: 'Informații locație', subject: 'Informații locație examen practic', body: 'Stimate/Stimată cursant,\n\nVă transmitem detalii despre locația sesiunii de practică:\n\n[adresa locației]\n\nVă recomandăm să sosiți cu 15 minute înainte.\n\nCu stimă,\nEchipa SetSail' },
 ]
 
-function SidebarCard({ sess, students, allStatuses, onStatusChange }:
-  { sess: Session, students: Student[], allStatuses: string[], onStatusChange:(sid:string,status:string)=>void }) {
+function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions, allStudents }:
+  { sess: Session, students: Student[], allStatuses: string[], onStatusChange:(sid:string,status:string)=>void, allSessions: Session[], allStudents: Record<string,Student[]> }) {
   const [gPV, setGPV] = useState(false)
   const [gFise, setGFise] = useState(false)
   const [gPDF, setGPDF] = useState(false)
@@ -832,6 +832,51 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange }:
             </div>
           ))}
         </div>
+        {/* Statistici cursanti */}
+        {!isAbsent && (
+          <div className="mt-4 p-3 bg-gray-50 rounded-xl border border-gray-100">
+            {(() => {
+              const activeSessions2 = allSessions.filter((s:any) => s.session_type !== 'absent' && s.session_type !== 'clone' && !s.is_clone)
+              const cloneSessions2 = allSessions.filter((s:any) => s.session_type === 'clone' || s.is_clone)
+              const absentSess2 = allSessions.find((s:any) => s.session_type === 'absent')
+              const sailingAll = allSessions.filter((s:any)=>s.session_type!=='absent').flatMap((s:any)=>(allStudents[s.id]||[]).filter((st:Student)=>st.only_sailing))
+              const absentAll = absentSess2 ? (allStudents[absentSess2.id]||[]) : []
+              const principalCount = (allStudents[allSessions.find((s:any)=>s.session_type==='principal'&&!s.parent_session_id)?.id||'']||[]).filter((s:Student)=>!s.only_sailing).length
+              const total = allSessions.filter((s:any)=>s.session_type!=='absent').flatMap((s:any)=>(allStudents[s.id]||[])).length
+              return (
+                <div className="space-y-1">
+                  <div className="flex justify-between text-xs">
+                    <span className="font-medium text-gray-700">Total cursanți:</span>
+                    <span className="font-bold text-gray-900">{total}</span>
+                  </div>
+                  <div className="flex justify-between text-xs text-gray-500">
+                    <span>Lista 1 (principal):</span>
+                    <span className="font-medium">{principalCount}</span>
+                  </div>
+                  {cloneSessions2.map((cl:any, ci:number) => (
+                    <div key={cl.id} className="flex justify-between text-xs text-gray-500">
+                      <span>Lista {ci+2} ({cl.session_date ? new Date(cl.session_date).toLocaleDateString('ro-RO',{day:'2-digit',month:'short'}) : 'clonă'}):</span>
+                      <span className="font-medium">{(allStudents[cl.id]||[]).filter((s:Student)=>!s.only_sailing).length}</span>
+                    </div>
+                  ))}
+                  {sailingAll.length > 0 && (
+                    <div className="flex justify-between text-xs text-orange-600">
+                      <span>⛵ Sailing:</span>
+                      <span className="font-medium">{sailingAll.length}</span>
+                    </div>
+                  )}
+                  {absentAll.length > 0 && (
+                    <div className="flex justify-between text-xs text-red-500">
+                      <span>Absenți:</span>
+                      <span className="font-medium">{absentAll.length}</span>
+                    </div>
+                  )}
+                </div>
+              )
+            })()}
+          </div>
+        )}
+
         {/* Status buttons */}
         {!isAbsent && (
           <div className="mt-4">
@@ -894,7 +939,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange }:
               className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-medium border border-gray-200 hover:bg-gray-50">
               <Copy size={12}/>{copied?'✓ Copiat!':'Copiază link'}
             </button>
-            <div className="mt-3 text-xs text-gray-400 text-center">{students.filter(s=>s.portal_status==='signed').length}/{students.length} cursanți au semnat</div>
+            <div className="mt-3 text-xs text-gray-400 text-center">{students.filter(s=>s.portal_status==='signed').length}/{students.filter(s=>!s.only_sailing).length} cursanți au semnat</div>
           </div>
 
           <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
@@ -1780,7 +1825,7 @@ export default function SessionDetailPage() {
 
       {/* Sesiunea principala */}
       <div className="grid grid-cols-3 gap-6">
-        <SidebarCard sess={mainSession} students={studentsMap[mainSession.id]||[]} allStatuses={[]} onStatusChange={updateStatus}/>
+        <SidebarCard sess={mainSession} students={studentsMap[mainSession.id]||[]} allStatuses={[]} onStatusChange={updateStatus} allSessions={sessions} allStudents={studentsMap}/>
         <div className="col-span-2">
           <StudentsTable
             sess={mainSession} students={studentsMap[mainSession.id]||[]}
@@ -1799,7 +1844,7 @@ export default function SessionDetailPage() {
         <div key={clone.id}>
           <SectionDivider sess={clone}/>
           <div className="grid grid-cols-3 gap-6">
-            <SidebarCard sess={clone} students={studentsMap[clone.id]||[]} allStatuses={[]} onStatusChange={updateStatus}/>
+            <SidebarCard sess={clone} students={studentsMap[clone.id]||[]} allStatuses={[]} onStatusChange={updateStatus} allSessions={sessions} allStudents={studentsMap}/>
             <div className="col-span-2">
               <StudentsTable
                 sess={clone} students={studentsMap[clone.id]||[]}
