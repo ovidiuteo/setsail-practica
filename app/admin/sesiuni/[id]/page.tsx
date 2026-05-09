@@ -207,8 +207,26 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
   }
 
   async function markSailing(s: Student) {
-    await supabase.from('students').update({ only_sailing: true }).eq('id', s.id)
+    // Gasim sesiunea principala (parent) pentru a muta cursantul acolo
+    const mainSess = allSessions.find(sess => sess.session_type === 'principal' && !sess.parent_session_id)
+      || allSessions.find(sess => sess.session_type === 'principal')
+    const targetSessionId = mainSess?.id || s.session_id
+
+    // Mutam cursantul la sesiunea principala cu only_sailing=true
+    const maxOrder = Math.max(0, ...(allStudents[targetSessionId]||[]).map(st => st.order_in_session || 0))
+    await supabase.from('students').update({
+      only_sailing: true,
+      session_id: targetSessionId,
+      order_in_session: maxOrder + 1,
+    }).eq('id', s.id)
+
+    // Scoatem din lista curenta
     setStudents(students.filter(st => st.id !== s.id))
+    // Adaugam la sesiunea principala in state
+    if (targetSessionId !== sess.id) {
+      const updated = { ...s, only_sailing: true, session_id: targetSessionId, order_in_session: maxOrder + 1 }
+      setAllStudents(targetSessionId, [...(allStudents[targetSessionId]||[]), updated])
+    }
   }
 
   function startEdit(s: Student) {
