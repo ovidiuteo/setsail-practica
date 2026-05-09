@@ -91,12 +91,26 @@ export default function ImportCursantiPage() {
     for (let hi = 0; hi < Math.min(3, lines.length); hi++) {
       const hparts = lines[hi].split('\t').map(p => p.trim())
       const h = lines[hi].toLowerCase()
-      // Header de tabel sau titlu de curs (un singur camp sau cuvinte cheie)
       if (h.includes('cursant') || h.includes('nr.') ||
           (hparts[0].toLowerCase() === 'nr') ||
           (hparts.filter(p=>p).length <= 2 && !hparts[1] && hparts[0].length > 3 && !/^\d/.test(hparts[0]))) {
         startIdx = hi + 1
       }
+    }
+
+    // Judete cunoscute - pentru detectarea inversarii localitate/judet
+    const JUDETE = ['ilfov','prahova','constanta','constanța','brasov','brașov','covasna',
+      'tulcea','iasi','iași','cluj','timis','timiș','arges','argeș','dambovita','dâmbovița',
+      'giurgiu','calarasi','călărași','ialomita','ialomița','buzau','buzău','vrancea',
+      'galati','galați','braila','brăila','suceava','neamt','neamț','bacau','bacău',
+      'vaslui','botosani','botoșani','dorohoi','alba','hunedoara','caras','caraș','bihor',
+      'satu mare','salaj','sălaj','bistrita','bistrița','mures','mureș','harghita',
+      'maramures','maramureș','sibiu','valcea','vâlcea','olt','gorj','dolj','mehedinti',
+      'mehedinți','teleorman']
+
+    function isJudet(val: string): boolean {
+      const v = val.toLowerCase().replace(/^jud\.\s*/,'').replace(/^judet\s*/,'').trim()
+      return JUDETE.includes(v) || v.startsWith('sector') || /^sector\s*\d/.test(v)
     }
 
     for (let li = startIdx; li < lines.length; li++) {
@@ -105,24 +119,37 @@ export default function ImportCursantiPage() {
       const trimmed = parts.map(p => p.trim())
       const firstIsNumber = /^\d+$/.test(trimmed[0])
       const hasCNPLabel = trimmed.some(p => p.startsWith('CNP:'))
-
       const firstIsEmpty = trimmed[0] === ''
 
-      if ((firstIsNumber || firstIsEmpty) && trimmed.length >= 4 && trimmed[1] !== '') {
-        // FORMAT 1 (nr) sau FORMAT 2 (gol): [Nr/gol] | Cursant | CNP | DataNasterii | Email | ...
-        const cursant = trimmed[1] || ''
-        if (!cursant) continue
+      if ((firstIsNumber || firstIsEmpty) && trimmed[1] && trimmed[1] !== '') {
+        // FORMAT: [Nr/gol] | Cursant | CNP | DataNasterii | Email | Telefon | Adresa | Localitate | Sector/Judet | CI
+        const cursant = trimmed[1]
         const full_name = invertName(cursant)
-        const cnpRaw = trimmed[2].replace(/\.0$/, '')
+        const cnpRaw = (trimmed[2] || '').replace(/\.0$/, '')
         const birthRaw = trimmed[3] || ''
         const email = trimmed[4] || ''
         const phone = cleanPhone(trimmed[5] || '')
         const adresa = trimmed[6] || ''
-        const localitate = trimmed[7] || ''
-        const sectorJudet = trimmed[8] || ''
-        // address = doar strada, city = localitate, county = sector/judet
+        let localitate = trimmed[7] || ''
+        let sectorJudet = trimmed[8] || ''
+
+        // Detectam daca localitate si judet sunt inversate
+        // ex: "Sector 1" | "Bucuresti" -> inversat
+        if (localitate && sectorJudet) {
+          if (isJudet(localitate) && !isJudet(sectorJudet)) {
+            // Inversate - swap
+            ;[localitate, sectorJudet] = [sectorJudet, localitate]
+          }
+        } else if (localitate && !sectorJudet) {
+          // Doar un camp - daca e judet, il punem la county
+          if (isJudet(localitate)) {
+            sectorJudet = localitate
+            localitate = ''
+          }
+        }
+
         parsed.push({ ...EMPTY_ROW, full_name, cnp: cnpRaw, email, phone, birth_date: birthRaw,
-          address: adresa, city: localitate, county: cleanCounty(sectorJudet || ''), class_caa: defaultClass })
+          address: adresa, city: localitate, county: cleanCounty(sectorJudet), class_caa: defaultClass })
       } else if (hasCNPLabel) {
         const full_name = trimmed[0] || ''
         const email = trimmed[1] || ''
