@@ -475,6 +475,28 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
                               <UserX size={12}/>
                             </button>
                           )}
+                          {/* Muta la Sailing */}
+                          {!isAbsent && !s.only_sailing && (
+                            <button onClick={async()=>{
+                              await supabase.from('students').update({only_sailing:true}).eq('id',s.id)
+                              setStudents(students.map(st=>st.id===s.id?{...st,only_sailing:true}:st))
+                            }}
+                              className="p-1.5 rounded border border-orange-100 text-orange-400 hover:text-orange-600 hover:bg-orange-50 transition-colors font-bold text-xs w-7 h-7 flex items-center justify-center"
+                              title="Mută la Sailing (categoria S)">
+                              S
+                            </button>
+                          )}
+                          {/* Revoca Sailing */}
+                          {!isAbsent && s.only_sailing && (
+                            <button onClick={async()=>{
+                              await supabase.from('students').update({only_sailing:false}).eq('id',s.id)
+                              setStudents(students.map(st=>st.id===s.id?{...st,only_sailing:false}:st))
+                            }}
+                              className="p-1.5 rounded border border-orange-300 bg-orange-100 text-orange-600 hover:bg-orange-200 transition-colors font-bold text-xs w-7 h-7 flex items-center justify-center"
+                              title="Revocă Sailing — cursantul revine în sesiune">
+                              S
+                            </button>
+                          )}
                           {/* Muta inapoi din absenti */}
                           {isAbsent && movableToSessions.length > 0 && (
                             <div className="relative">
