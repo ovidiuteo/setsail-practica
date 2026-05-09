@@ -27,6 +27,7 @@ type Student = {
   expiry_date: string; nationality: string; signature_data: string
   original_session_id: string; allocated_session_id: string
   only_sailing: boolean
+  notes?: string
 }
 type Session = { id: string; session_date: string; course_start_date?: string; status: string; session_type: string; access_code: string; class_caa: string; request_number?: string; location_detail?: string; parent_session_id?: string; is_clone?: boolean; locations?: any; boats?: any; evaluators?: any; instructors?: any }
 
@@ -185,11 +186,52 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
     setMoving(s.id); setShowMoveMenu(null)
     const targetStudents = allStudents[targetSessionId] || []
     const maxOrder = targetStudents.reduce((m,ts) => Math.max(m, ts.order_in_session||0), 0)
-    await supabase.from('students').update({ session_id: targetSessionId, order_in_session: maxOrder+1 }).eq('id', s.id)
-    const remaining = students.filter(st => st.id !== s.id)
-    const reordered = await reorder(remaining)
-    setStudents(reordered)
-    setAllStudents(targetSessionId, [...targetStudents, {...s, session_id: targetSessionId, order_in_session: maxOrder+1}])
+
+    // Gasim label sesiunea tinta pentru nota
+    const targetSess = allSessions.find(sess => sess.id === targetSessionId)
+    const targetLabel = targetSess
+      ? `${new Date(targetSess.session_date).toLocaleDateString('ro-RO',{day:'2-digit',month:'long',year:'numeric'})} — ${(targetSess as any).locations?.name||''}`
+      : targetSessionId
+
+    // Gasim label sesiunea curenta (de unde vine absentul)
+    const originSess = allSessions.find(sess => sess.id === s.session_id) || sess
+    const originLabel = `${new Date(originSess.session_date).toLocaleDateString('ro-RO',{day:'2-digit',month:'long',year:'numeric'})} — ${(originSess as any).locations?.name||''}`
+
+    if (isAbsent) {
+      // Absent -> alta sesiune: cream profil nou cu toate datele + nota
+      const noteNou = [s.notes, `Absent de la sesiunea ${originLabel}`].filter(Boolean).join(' | ')
+      await supabase.from('students').insert({
+        session_id: targetSessionId,
+        full_name: s.full_name,
+        cnp: s.cnp,
+        email: s.email,
+        phone: s.phone,
+        birth_date: s.birth_date,
+        ci_series: s.ci_series,
+        ci_number: s.ci_number,
+        ci_image_data: s.ci_image_data,
+        address: s.address,
+        city: (s as any).city,
+        county: s.county,
+        class_caa: s.class_caa,
+        order_in_session: maxOrder + 1,
+        portal_status: 'pending',
+        original_session_id: targetSessionId,
+        notes: noteNou,
+      })
+      // Pe profilul vechi (sesiunea absent) adaugam nota si il lasam acolo
+      const noteVechi = [s.notes, `A făcut practica la sesiunea ${targetLabel}`].filter(Boolean).join(' | ')
+      await supabase.from('students').update({ notes: noteVechi }).eq('id', s.id)
+      // Scoatem din lista de absenti in UI
+      setStudents(students.filter(st => st.id !== s.id))
+    } else {
+      // Mutare normala (non-absent) -> alt slot
+      await supabase.from('students').update({ session_id: targetSessionId, order_in_session: maxOrder+1 }).eq('id', s.id)
+      const remaining = students.filter(st => st.id !== s.id)
+      const reordered = await reorder(remaining)
+      setStudents(reordered)
+      setAllStudents(targetSessionId, [...targetStudents, {...s, session_id: targetSessionId, order_in_session: maxOrder+1}])
+    }
     setMoving(null)
   }
 

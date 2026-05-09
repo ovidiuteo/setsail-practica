@@ -256,55 +256,131 @@ export default function ImportCursantiPage() {
     if (!selectedSession || rows.length === 0) return
     setImporting(true)
 
-    // Fetch cursantii existenti din sesiune
-    const { data: existingStudents } = await supabase
+    // Sesiunea tinta
+    const targetSess = sessions.find(s => s.id === selectedSession)
+    const targetDate = targetSess?.session_date || ''
+    const targetLabel = targetSess ? `${new Date(targetDate).toLocaleDateString('ro-RO', {day:'2-digit',month:'long',year:'numeric'})} — ${(targetSess as any).locations?.name || ''}` : selectedSession
+
+    // Cursantii existenti in sesiunea tinta
+    const { data: existingInTarget } = await supabase
       .from('students').select('*')
       .eq('session_id', selectedSession)
       .order('order_in_session', { ascending: false })
-    const existing = existingStudents || []
+    const existing = existingInTarget || []
     const maxOrder = existing[0]?.order_in_session || 0
 
     const report = { inserted: 0, updated: 0, unchanged: 0, updatedFields: [] as {name: string, fields: string[]}[] }
     let orderCounter = maxOrder
 
     for (const row of rows.filter(r => r.full_name)) {
-      // Gaseste duplicate dupa nume (case-insensitive) sau email sau CNP
-      const match = existing.find(e =>
+      // 1. Cauta in sesiunea tinta
+      const matchInTarget = existing.find(e =>
         e.full_name?.toLowerCase() === row.full_name.toLowerCase() ||
         (row.email && e.email?.toLowerCase() === row.email.toLowerCase()) ||
         (row.cnp && row.cnp.length > 5 && e.cnp === row.cnp)
       )
 
-      if (match) {
-        // Verifica ce campuri sunt in plus in import vs existente
-        const updatedF: string[] = []
+      if (matchInTarget) {
+        // Exista deja in sesiunea tinta - update campuri goale
         const updateData: any = {}
+        const updatedF: string[] = []
         const fields: [string, string, string][] = [
-          ['cnp', 'CNP', row.cnp],
-          ['email', 'Email', row.email],
-          ['phone', 'Telefon', row.phone],
-          ['birth_date', 'Data nașterii', row.birth_date],
-          ['address', 'Adresă', row.address],
-          ['county', 'Județ', row.county],
-          ['ci_series', 'Serie CI', row.ci_series],
-          ['ci_number', 'Nr CI', row.ci_number],
+          ['cnp','CNP',row.cnp], ['email','Email',row.email], ['phone','Telefon',row.phone],
+          ['birth_date','Data nașterii',row.birth_date], ['address','Adresă',row.address],
+          ['city','Localitate',row.city], ['county','Județ',row.county],
+          ['ci_series','Serie CI',row.ci_series], ['ci_number','Nr CI',row.ci_number],
         ]
         for (const [key, label, newVal] of fields) {
-          if (newVal && !match[key]) {
-            updateData[key] = newVal
-            updatedF.push(label)
-          }
+          if (newVal && !matchInTarget[key]) { updateData[key] = newVal; updatedF.push(label) }
         }
         if (Object.keys(updateData).length > 0) {
-          await supabase.from('students').update(updateData).eq('id', match.id)
+          await supabase.from('students').update(updateData).eq('id', matchInTarget.id)
           report.updated++
-          report.updatedFields.push({ name: match.full_name, fields: updatedF })
+          report.updatedFields.push({ name: matchInTarget.full_name, fields: updatedF })
         } else {
           report.unchanged++
         }
+        continue
+      }
+
+      // 2. Cauta in TOATE sesiunile (absenti sau alte sesiuni)
+      const { data: matchElsewhere } = await supabase
+        .from('students').select('*, sessions!session_id(id, session_date, session_type, locations(name))')
+        .or(`cnp.eq.${row.cnp || 'null'},email.eq.${row.email || 'null'}`)
+        .neq('session_id', selectedSession)
+        .limit(5)
+
+      // Filtram rezultate valide (nu cautam dupa null/gol)
+      const validMatches = (matchElsewhere || []).filter(m =>
+        (row.cnp && row.cnp.length > 5 && m.cnp === row.cnp) ||
+        (row.email && m.email?.toLowerCase() === row.email.toLowerCase()) ||
+        m.full_name?.toLowerCase() === row.full_name.toLowerCase()
+      )
+
+      const absentMatch = validMatches.find(m => m.portal_status === 'absent')
+      const otherMatch = validMatches.find(m => m.portal_status !== 'absent')
+
+      orderCounter++
+
+      if (absentMatch) {
+        // A fost absent la alta sesiune — il aducem cu nota
+        const absentSess = (absentMatch as any).sessions
+        const absentLabel = absentSess ? `${new Date(absentSess.session_date).toLocaleDateString('ro-RO', {day:'2-digit',month:'long',year:'numeric'})} — ${absentSess.locations?.name || ''}` : 'sesiune anterioară'
+        const noteNou = `Absent de la sesiunea ${absentLabel}`
+
+        // Inseram cursant nou in sesiunea tinta cu nota
+        await supabase.from('students').insert({
+          session_id: selectedSession,
+          full_name: absentMatch.full_name,
+          cnp: absentMatch.cnp || row.cnp || null,
+          email: absentMatch.email || row.email || null,
+          phone: absentMatch.phone || row.phone || null,
+          birth_date: absentMatch.birth_date || row.birth_date || null,
+          ci_series: absentMatch.ci_series || row.ci_series || null,
+          ci_number: absentMatch.ci_number || row.ci_number || null,
+          address: absentMatch.address || row.address || null,
+          city: absentMatch.city || row.city || null,
+          county: absentMatch.county || row.county || null,
+          class_caa: row.class_caa || defaultClass,
+          order_in_session: orderCounter,
+          portal_status: 'pending',
+          original_session_id: selectedSession,
+          notes: noteNou,
+        })
+
+        // Pe profilul vechi (sesiunea absent) adaugam nota ca a venit la sesiunea tinta
+        const noteVechi = [absentMatch.notes, `A făcut practica la sesiunea ${targetLabel}`].filter(Boolean).join(' | ')
+        await supabase.from('students').update({ notes: noteVechi }).eq('id', absentMatch.id)
+        report.inserted++
+
+      } else if (otherMatch) {
+        // A participat la alta sesiune — inseram cu nota informativa
+        const otherSess = (otherMatch as any).sessions
+        const otherLabel = otherSess ? `${new Date(otherSess.session_date).toLocaleDateString('ro-RO', {day:'2-digit',month:'long',year:'numeric'})} — ${otherSess.locations?.name || ''}` : 'altă sesiune'
+        const noteNou = `A fost prezent și la sesiunea ${otherLabel}`
+
+        await supabase.from('students').insert({
+          session_id: selectedSession,
+          full_name: otherMatch.full_name,
+          cnp: otherMatch.cnp || row.cnp || null,
+          email: otherMatch.email || row.email || null,
+          phone: otherMatch.phone || row.phone || null,
+          birth_date: otherMatch.birth_date || row.birth_date || null,
+          ci_series: otherMatch.ci_series || row.ci_series || null,
+          ci_number: otherMatch.ci_number || row.ci_number || null,
+          address: otherMatch.address || row.address || null,
+          city: otherMatch.city || row.city || null,
+          county: otherMatch.county || row.county || null,
+          class_caa: row.class_caa || defaultClass,
+          order_in_session: orderCounter,
+          portal_status: 'pending',
+          original_session_id: selectedSession,
+          notes: noteNou,
+        })
+        report.inserted++
+
       } else {
-        // Cursant nou - insereaza
-        orderCounter++
+        // Cursant complet nou
         await supabase.from('students').insert({
           session_id: selectedSession,
           full_name: row.full_name,
@@ -315,6 +391,7 @@ export default function ImportCursantiPage() {
           ci_series: row.ci_series || null,
           ci_number: row.ci_number || null,
           address: row.address || null,
+          city: row.city || null,
           county: row.county || null,
           class_caa: row.class_caa || defaultClass,
           order_in_session: orderCounter,
