@@ -804,6 +804,27 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange }:
                   {sess.status===sv && '✓ '}{statusMap[sv].label}
                 </button>
               ))}
+              {(sess.session_type === 'clone' || sess.is_clone) && (
+                <button onClick={async()=>{
+                  if (!window.confirm('Ștergi clona?\n\nCursanții vor fi mutați înapoi la sesiunea principală.')) return
+                  // parent_session_id e sesiunea principala
+                  const principalId = sess.parent_session_id
+                  if (principalId && students.length > 0) {
+                    const { data: pSts } = await supabase.from('students').select('order_in_session').eq('session_id', principalId).order('order_in_session',{ascending:false}).limit(1)
+                    const maxOrder = pSts?.[0]?.order_in_session || 0
+                    for (let i = 0; i < students.length; i++) {
+                      await supabase.from('students').update({ session_id: principalId, order_in_session: maxOrder + i + 1, only_sailing: false }).eq('id', students[i].id)
+                    }
+                  }
+                  // Stergem sesiunea absent a clonei
+                  await supabase.from('sessions').delete().eq('parent_session_id', sess.id).eq('session_type','absent')
+                  await supabase.from('sessions').delete().eq('id', sess.id)
+                  window.location.reload()
+                }}
+                  className="px-2.5 py-1.5 rounded-lg text-xs font-medium border-2 border-red-200 text-red-500 hover:bg-red-50 transition-all">
+                  🗑 Șterge clona
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -813,6 +834,8 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange }:
         <>
           <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
             <h3 className="font-semibold text-sm text-gray-900 mb-2">Link portal</h3>
+            {/* Clona: optiune portal propriu sau impartit cu principala */}
+            <ClonePortalOption sess={sess} />
             {sess.status === 'draft' ? (
               <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
                 <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
@@ -1193,6 +1216,43 @@ Set Sail NauticSchool
           </div>
         </>
       )}
+    </div>
+  )
+}
+
+function ClonePortalOption({ sess }: { sess: Session }) {
+  const [parentCode, setParentCode] = useState<string|null>(null)
+  const isClone = sess.session_type === 'clone' || sess.is_clone
+
+  useEffect(() => {
+    if (!isClone || !sess.parent_session_id) return
+    supabase.from('sessions').select('access_code').eq('id', sess.parent_session_id).single()
+      .then(({ data }) => setParentCode(data?.access_code || null))
+  }, [sess.parent_session_id])
+
+  if (!isClone) return null
+
+  const sharesPortal = parentCode !== null && sess.access_code === parentCode
+
+  return (
+    <div className="mb-3 p-3 bg-blue-50 border border-blue-100 rounded-lg">
+      <div className="text-xs font-medium text-blue-700 mb-2">Portal clonă</div>
+      <label className="flex items-center gap-2 text-xs text-blue-600 cursor-pointer mb-1.5">
+        <input type="radio" name={`portal-${sess.id}`} checked={sharesPortal}
+          onChange={async()=>{
+            if (!parentCode) return
+            await supabase.from('sessions').update({access_code: parentCode}).eq('id', sess.id)
+            window.location.reload()
+          }}/> Partajat cu sesiunea principală
+      </label>
+      <label className="flex items-center gap-2 text-xs text-blue-600 cursor-pointer">
+        <input type="radio" name={`portal-${sess.id}`} checked={!sharesPortal}
+          onChange={async()=>{
+            const newCode = Math.random().toString(36).substring(2, 8).toUpperCase()
+            await supabase.from('sessions').update({access_code: newCode}).eq('id', sess.id)
+            window.location.reload()
+          }}/> Portal propriu (cod separat)
+      </label>
     </div>
   )
 }

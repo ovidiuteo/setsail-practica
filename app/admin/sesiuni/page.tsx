@@ -379,6 +379,28 @@ export default function SesiuniPage() {
                               className="p-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 text-gray-400 hover:text-gray-700 transition-colors">
                               <ExternalLink size={13}/>
                             </Link>
+                            <button onClick={async()=>{
+                              if (!window.confirm('Ștergi clona?\n\nCursanții vor fi mutați înapoi la sesiunea principală.')) return
+                              // Mutam cursantii la principal
+                              const { data: cloneStudents } = await supabase.from('students').select('*').eq('session_id', clone.id)
+                              if (cloneStudents && cloneStudents.length > 0) {
+                                const { data: principalStudents } = await supabase.from('students').select('order_in_session').eq('session_id', principal.id).order('order_in_session', {ascending:false}).limit(1)
+                                const maxOrder = principalStudents?.[0]?.order_in_session || 0
+                                for (let i = 0; i < cloneStudents.length; i++) {
+                                  await supabase.from('students').update({ session_id: principal.id, order_in_session: maxOrder + i + 1 }).eq('id', cloneStudents[i].id)
+                                }
+                              }
+                              // Stergem sesiunea absent a clonei
+                              const cloneAbsent = sessions.find((s:any) => s.parent_session_id === clone.id && s.session_type === 'absent')
+                              if (cloneAbsent) await supabase.from('sessions').delete().eq('id', cloneAbsent.id)
+                              // Stergem clona
+                              await supabase.from('sessions').delete().eq('id', clone.id)
+                              await load()
+                            }}
+                              className="p-1.5 rounded-lg border border-red-200 hover:bg-red-50 text-red-400 hover:text-red-600 transition-colors"
+                              title="Șterge clona">
+                              <Trash2 size={13}/>
+                            </button>
                           </div>
                         </div>
                       </div>
