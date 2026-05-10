@@ -389,7 +389,28 @@ export default function CursantAdminPage() {
                 {/* Buton Alocă rndm - portocaliu */}
                 <button
                   onClick={async () => {
-                    // Ia semnaturile din pool din toata baza de date
+                    // 1. Gasim toate sesiunile din grupul curent (principal + clone)
+                    const { data: allSessions } = await supabase
+                      .from('sessions')
+                      .select('id, parent_session_id, session_type')
+                    const sess = allSessions?.find(s => s.id === student.session_id)
+                    const principalId = sess?.session_type === 'principal'
+                      ? sess.id
+                      : (sess?.parent_session_id || sess?.id)
+                    const groupIds = (allSessions || [])
+                      .filter(s => s.id === principalId || s.parent_session_id === principalId)
+                      .map(s => s.id)
+
+                    // 2. Gasim semnaturile deja alocate random in grupul curent
+                    const { data: usedInGroup } = await supabase
+                      .from('students')
+                      .select('signature_random')
+                      .in('session_id', groupIds)
+                      .not('signature_random', 'is', null)
+                      .neq('id', student.id)
+                    const usedSignatures = new Set((usedInGroup || []).map(u => u.signature_random))
+
+                    // 3. Pool global - exclude cursantul curent si semnaturile deja folosite in grup
                     const { data: pool } = await supabase
                       .from('students')
                       .select('id, signature_data, session_id')
@@ -397,9 +418,17 @@ export default function CursantAdminPage() {
                       .not('signature_data', 'is', null)
                       .neq('id', student.id)
                     if (!pool || pool.length === 0) { alert('Nicio semnătură în pool!'); return }
-                    // Preferabil exclude cursantii din aceeasi sesiune
-                    const otherSess = pool.filter(p => p.session_id !== student.session_id)
-                    const source = otherSess.length > 0 ? otherSess : pool
+
+                    // 4. Exclude semnaturile deja folosite in sesiunile din grup
+                    const available = pool.filter(p =>
+                      !usedSignatures.has(p.signature_data) &&
+                      !groupIds.includes(p.session_id)
+                    )
+                    // Fallback: daca nu mai sunt disponibile, folosim orice din pool (exclus grup)
+                    const fallback = pool.filter(p => !groupIds.includes(p.session_id))
+                    const source = available.length > 0 ? available : (fallback.length > 0 ? fallback : pool)
+                    if (source.length === 0) { alert('Nu mai sunt semnături disponibile pentru această sesiune!'); return }
+
                     const pick = source[Math.floor(Math.random() * source.length)]
                     await supabase.from('students').update({ signature_random: pick.signature_data }).eq('id', student.id)
                     setStudent(s => s ? { ...s, signature_random: pick.signature_data } : s)
