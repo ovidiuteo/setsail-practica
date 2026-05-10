@@ -2,13 +2,12 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import {
-  Mail, CheckCircle, Clock, Ban, Search, RefreshCw, Inbox,
+  Mail, CheckCircle, Clock, Ban, Search, RefreshCw,
   ChevronDown, ChevronUp, Send, Sparkles, Pin, PinOff,
-  Filter, X, Check, ChevronRight, CheckSquare, Square
+  Filter, X, Check, ChevronRight, CheckSquare, Square,
+  Download, Calendar
 } from 'lucide-react'
 import Link from 'next/link'
-
-// ─── Types ───────────────────────────────────────────────────────────────────
 
 type Email = {
   id: string
@@ -58,65 +57,98 @@ export default function EmailuriPage() {
   const [analyzingId, setAnalyzingId] = useState<string | null>(null)
 
   // Whitelist checkboxes
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-
-  // Pending checkboxes
+  const [selectedIds, setSelectedIds]         = useState<Set<string>>(new Set())
   const [pendingSelected, setPendingSelected] = useState<Set<string>>(new Set())
 
   // Pending AI proposals
-  const [proposals, setProposals]           = useState<Record<string, 'whitelist' | 'blacklist'>>({})
+  const [proposals, setProposals]             = useState<Record<string, 'whitelist' | 'blacklist'>>({})
   const [proposalReasons, setProposalReasons] = useState<Record<string, string>>({})
-  const [classifying, setClassifying]       = useState(false)
-  const [committing, setCommitting]         = useState(false)
-
-  // Fetch modal
-  const [showFetch, setShowFetch]       = useState(false)
-  const [fetchMode, setFetchMode]       = useState<'new' | 'last' | 'interval'>('new')
-  const [fetchLimit, setFetchLimit]     = useState(50)
-  const [fetchDateFrom, setFetchDateFrom] = useState('')
-  const [fetchDateTo, setFetchDateTo]   = useState('')
-  const [fetching, setFetching]         = useState(false)
-  const [fetchResult, setFetchResult]   = useState<any>(null)
+  const [classifying, setClassifying]         = useState(false)
+  const [committing, setCommitting]           = useState(false)
 
   // Batch Query
-  const [showBatch, setShowBatch]             = useState(false)
-  const [batchPrompt, setBatchPrompt]         = useState('')
-  const [batchQuerying, setBatchQuerying]     = useState(false)
-  const [batchResults, setBatchResults]       = useState<{ id: string; relevance: string }[]>([])
-  const [selectedBatches, setSelectedBatches] = useState<number[]>([])
+  const [showBatch, setShowBatch]               = useState(false)
+  const [batchPrompt, setBatchPrompt]           = useState('')
+  const [batchQuerying, setBatchQuerying]       = useState(false)
+  const [batchResults, setBatchResults]         = useState<{ id: string; relevance: string }[]>([])
+  const [selectedBatches, setSelectedBatches]   = useState<number[]>([])
   const [batchAnalyzingId, setBatchAnalyzingId] = useState<string | null>(null)
 
-
+  // Fetch modal
+  const [showFetch, setShowFetch]           = useState(false)
+  const [fetchMode, setFetchMode]           = useState<'new' | 'last' | 'interval'>('new')
+  const [fetchLimit, setFetchLimit]         = useState(50)
+  const [fetchDateFrom, setFetchDateFrom]   = useState('')
+  const [fetchDateTo, setFetchDateTo]       = useState('')
+  const [fetching, setFetching]             = useState(false)
+  const [fetchResult, setFetchResult]       = useState<any>(null)
 
   // ── Load ──────────────────────────────────────────────────────────────────
 
+  const loadEmails = useCallback(async () => {
+    setLoading(true)
+    const { data } = await supabase
+      .from('emails')
+      .select('*')
+      .in('status', ['analyzed', 'pending', 'whitelist'])
+      .eq('is_replied', false)
+      .order('is_pinned', { ascending: false })
+      .order('received_at', { ascending: false })
+    setEmails(data || [])
+    setLoading(false)
+  }, [])
+
+  useEffect(() => { loadEmails() }, [loadEmails])
+
+  // ── Derived lists ─────────────────────────────────────────────────────────
+
+  const pending        = emails.filter(e => e.status === 'pending')
+  const whitelistAll   = emails.filter(e => e.status === 'whitelist')
+  const whitelistVisible = whitelistAll.filter(e => e.is_pinned || !e.is_processed)
+  const pinnedEmails   = whitelistVisible.filter(e => e.is_pinned)
+  const unpinnedEmails = whitelistVisible.filter(e => !e.is_pinned)
+  const analyzed       = emails.filter(e => e.status === 'analyzed')
+
+  const batchNumbersRaw = whitelistAll.map(e => e.batch_number).filter(Boolean) as number[]
+  const batchNumbers    = batchNumbersRaw.filter((v, i) => batchNumbersRaw.indexOf(v) === i).sort((a, b) => b - a)
+
+  const filterList = (list: Email[]) => {
+    if (!search.trim()) return list
+    const q = search.toLowerCase()
+    return list.filter(e =>
+      e.from_address.toLowerCase().includes(q) ||
+      e.subject?.toLowerCase().includes(q) ||
+      e.ai_summary?.toLowerCase().includes(q)
+    )
+  }
+
+  // ── Fetch emails from Yahoo ───────────────────────────────────────────────
+
   async function fetchEmails() {
-    setFetching(true); setFetchResult(null)
+    setFetching(true)
+    setFetchResult(null)
     try {
       const res = await fetch('/api/fetch-emails', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          mode: fetchMode,
-          limit: fetchLimit,
-          dateFrom: fetchDateFrom || undefined,
-          dateTo: fetchDateTo || undefined,
+          mode:     fetchMode,
+          limit:    fetchLimit,
+          dateFrom: fetchDateFrom || null,
+          dateTo:   fetchDateTo   || null,
         }),
       })
       const data = await res.json()
-      if (data.error) {
-        setFetchResult(`❌ ${data.error}`)
-      } else {
-        setFetchResult(`✅ ${data.message}`)
-        await loadAll()
-      }
-    } catch (err) {
-      setFetchResult('❌ Eroare de conexiune')
+      setFetchResult(data)
+      if (data.success) await loadEmails()
+    } catch {
+      setFetchResult({ error: 'Eroare de conexiune' })
     }
     setFetching(false)
   }
 
-  
+  // ── Actions ───────────────────────────────────────────────────────────────
+
   async function togglePin(email: Email) {
     const val = !email.is_pinned
     await supabase.from('emails').update({ is_pinned: val }).eq('id', email.id)
@@ -124,7 +156,6 @@ export default function EmailuriPage() {
   }
 
   async function markProcessed(ids: string[]) {
-    // Nu procesăm cele pinned
     const eligible = ids.filter(id => {
       const email = emails.find(e => e.id === id)
       return email && !email.is_pinned
@@ -149,15 +180,6 @@ export default function EmailuriPage() {
     setEmails(prev => prev.filter(e => e.id !== email.id))
   }
 
-  async function moveToWhitelistManual(email: Email) {
-    await supabase.from('email_rules').upsert(
-      { email_address: email.from_address, rule_type: 'whitelist' },
-      { onConflict: 'email_address' }
-    )
-    await supabase.from('emails').update({ status: 'whitelist' }).eq('id', email.id)
-    setEmails(prev => prev.map(e => e.id === email.id ? { ...e, status: 'whitelist' } : e))
-  }
-
   async function analyzeEmail(email: Email) {
     setAnalyzingId(email.id)
     try {
@@ -170,7 +192,6 @@ export default function EmailuriPage() {
         }),
       })
       const ai = await res.json()
-      // Analyze → status: analyzed + is_processed: true → dispare din whitelist
       await supabase.from('emails').update({
         status: 'analyzed', is_processed: true, ...ai
       }).eq('id', email.id)
@@ -188,7 +209,25 @@ export default function EmailuriPage() {
     setActiveReply(null)
   }
 
-  // ── Pending: classify ─────────────────────────────────────────────────────
+  // ── Pending actions ───────────────────────────────────────────────────────
+
+  async function movePendingSelected(type: 'whitelist' | 'blacklist') {
+    const ids = Array.from(pendingSelected)
+    if (!ids.length) return
+    for (const id of ids) {
+      const email = emails.find(e => e.id === id)
+      if (!email) continue
+      await supabase.from('email_rules').upsert(
+        { email_address: email.from_address, rule_type: type },
+        { onConflict: 'email_address' }
+      )
+      await supabase.from('emails').update({
+        status: type === 'whitelist' ? 'whitelist' : 'blacklisted'
+      }).eq('id', id)
+    }
+    setPendingSelected(new Set())
+    loadEmails()
+  }
 
   async function classifyPending() {
     if (!pending.length) return
@@ -228,7 +267,7 @@ export default function EmailuriPage() {
       await supabase.from('emails').update({ status: 'blacklisted' }).eq('id', email.id)
     }
     setProposals({}); setProposalReasons({})
-    setCommitting(false); loadAll()
+    setCommitting(false); loadEmails()
   }
 
   // ── Batch Query ───────────────────────────────────────────────────────────
@@ -265,49 +304,17 @@ export default function EmailuriPage() {
 
   function toggleSelect(id: string) {
     setSelectedIds(prev => {
-      const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
-      return next
+      const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next
     })
-  }
-
-  function selectAll() {
-    setSelectedIds(new Set(unpinnedEmails.map(e => e.id)))
-  }
-
-  function selectNone() {
-    setSelectedIds(new Set())
   }
 
   function togglePendingSelect(id: string) {
     setPendingSelected(prev => {
-      const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
-      return next
+      const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next
     })
   }
 
-  async function movePendingSelected(type: 'whitelist' | 'blacklist') {
-    const ids = Array.from(pendingSelected)
-    if (!ids.length) return
-    for (const id of ids) {
-      const email = emails.find(e => e.id === id)
-      if (!email) continue
-      await supabase.from('email_rules').upsert(
-        { email_address: email.from_address, rule_type: type },
-        { onConflict: 'email_address' }
-      )
-      if (type === 'whitelist') {
-        await supabase.from('emails').update({ status: 'whitelist' }).eq('id', id)
-      } else {
-        await supabase.from('emails').update({ status: 'blacklisted' }).eq('id', id)
-      }
-    }
-    setPendingSelected(new Set())
-    loadAll()
-  }
-
-  // ── Email Card (Whitelist + Analyzed) ─────────────────────────────────────
+  // ── Email Card ────────────────────────────────────────────────────────────
 
   function EmailCard({ email, showCheckbox = false }: { email: Email; showCheckbox?: boolean }) {
     const expanded   = expandedId === email.id
@@ -321,28 +328,18 @@ export default function EmailuriPage() {
         expanded ? 'border-gray-200 shadow-md' : 'border-gray-100 shadow-sm hover:border-gray-200'
       }`}>
         <div className="p-4 flex items-start gap-3">
-          {/* Checkbox */}
           {showCheckbox && !email.is_pinned && (
             <button onClick={() => toggleSelect(email.id)} className="mt-0.5 shrink-0 text-gray-300 hover:text-gray-600">
               {isSelected ? <CheckSquare size={16} className="text-blue-500" /> : <Square size={16} />}
             </button>
           )}
+          {email.is_pinned && <div className="mt-1 shrink-0"><Pin size={13} className="text-yellow-500" /></div>}
 
-          {/* Pin indicator */}
-          {email.is_pinned && (
-            <div className="mt-1 shrink-0">
-              <Pin size={13} className="text-yellow-500" />
-            </div>
-          )}
-
-          {/* Avatar */}
           <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white text-xs font-bold cursor-pointer"
-            style={{ background: '#0a1628' }}
-            onClick={() => setExpandedId(expanded ? null : email.id)}>
+            style={{ background: '#0a1628' }} onClick={() => setExpandedId(expanded ? null : email.id)}>
             {(email.from_name?.[0] || email.from_address[0]).toUpperCase()}
           </div>
 
-          {/* Content */}
           <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setExpandedId(expanded ? null : email.id)}>
             <div className="flex items-center gap-2 flex-wrap mb-0.5">
               <span className="font-medium text-gray-900 text-sm">{email.from_name || email.from_address}</span>
@@ -357,27 +354,19 @@ export default function EmailuriPage() {
             {!email.ai_summary && !expanded && email.body_text && <div className="text-xs text-gray-400 mt-0.5 truncate">{email.body_text.slice(0, 80)}</div>}
           </div>
 
-          {/* Right actions */}
           <div className="flex items-center gap-1.5 shrink-0">
             <span className="text-xs text-gray-400">{new Date(email.received_at).toLocaleDateString('ro-RO', { day: '2-digit', month: 'short' })}</span>
 
-            {/* Analyze button in header — only for whitelist */}
             {email.status === 'whitelist' && (
-              <button
-                onClick={e => { e.stopPropagation(); analyzeEmail(email) }}
-                disabled={analyzingId === email.id}
+              <button onClick={e => { e.stopPropagation(); analyzeEmail(email) }} disabled={analyzingId === email.id}
                 title="Analizează cu Claude"
-                className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-all disabled:opacity-50 hover:opacity-90"
-                style={{ background: '#0a1628', color: 'white' }}
-              >
-                {analyzingId === email.id
-                  ? <RefreshCw size={11} className="animate-spin" />
-                  : <Sparkles size={11} />}
+                className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+                style={{ background: '#0a1628' }}>
+                {analyzingId === email.id ? <RefreshCw size={11} className="animate-spin" /> : <Sparkles size={11} />}
                 <span className="hidden sm:inline ml-0.5">AI</span>
               </button>
             )}
 
-            {/* Pin/Unpin */}
             {email.status === 'whitelist' && (
               <button onClick={e => { e.stopPropagation(); togglePin(email) }} title={email.is_pinned ? 'Scoate pin' : 'Pin'}
                 className={`p-1.5 rounded-lg transition-colors ${email.is_pinned ? 'text-yellow-500 hover:text-yellow-600' : 'text-gray-300 hover:text-yellow-400'}`}>
@@ -391,10 +380,8 @@ export default function EmailuriPage() {
           </div>
         </div>
 
-        {/* Expanded */}
         {expanded && (
           <div className="px-4 pb-4 border-t border-gray-50 pt-4 space-y-4">
-
             {email.ai_summary && (
               <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50 border border-blue-100">
                 <Sparkles size={14} className="text-blue-500 shrink-0 mt-0.5" />
@@ -479,15 +466,12 @@ export default function EmailuriPage() {
               </div>
             )}
 
-            {/* Whitelist actions */}
             {email.status === 'whitelist' && (
               <div className="flex gap-2 pt-2 border-t border-gray-100 flex-wrap">
                 <button onClick={() => analyzeEmail(email)} disabled={analyzingId === email.id}
                   className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-white hover:opacity-90 disabled:opacity-60"
                   style={{ background: '#0a1628' }}>
-                  {analyzingId === email.id
-                    ? <><RefreshCw size={11} className="animate-spin" /> Analizez...</>
-                    : <><Sparkles size={11} /> Analizează cu Claude</>}
+                  {analyzingId === email.id ? <><RefreshCw size={11} className="animate-spin" /> Analizez...</> : <><Sparkles size={11} /> Analizează cu Claude</>}
                 </button>
                 {!email.is_pinned && (
                   <button onClick={() => markProcessed([email.id])}
@@ -498,7 +482,6 @@ export default function EmailuriPage() {
               </div>
             )}
 
-            {/* Analyzed actions */}
             {email.status === 'analyzed' && (
               <div className="flex gap-2 pt-2 border-t border-gray-100">
                 <button onClick={() => markReplied(email.id)}
@@ -516,8 +499,8 @@ export default function EmailuriPage() {
   // ── Pending Card ──────────────────────────────────────────────────────────
 
   function PendingCard({ email }: { email: Email }) {
-    const proposal  = proposals[email.from_address]
-    const reason    = proposalReasons[email.from_address]
+    const proposal   = proposals[email.from_address]
+    const reason     = proposalReasons[email.from_address]
     const isSelected = pendingSelected.has(email.id)
     return (
       <div className={`bg-white rounded-xl border shadow-sm transition-all ${
@@ -571,22 +554,21 @@ export default function EmailuriPage() {
   // ── Tabs ──────────────────────────────────────────────────────────────────
 
   const tabs = [
-    { id: 'pending'   as Tab, label: 'Pending',       count: pending.length,          icon: Clock },
-    { id: 'whitelist' as Tab, label: 'Whitelist',    count: whitelistVisible.length,  icon: CheckCircle },
-    { id: 'analyzed'  as Tab, label: 'Analizate',    count: analyzed.length,          icon: Sparkles },
+    { id: 'pending'   as Tab, label: 'Pending',    count: pending.length,          icon: Clock },
+    { id: 'whitelist' as Tab, label: 'Whitelist',  count: whitelistVisible.length,  icon: CheckCircle },
+    { id: 'analyzed'  as Tab, label: 'Analizate',  count: analyzed.length,          icon: Sparkles },
   ]
 
   // ─────────────────────────────────────────────────────────────────────────
 
   return (
     <div className="p-8">
-
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-gray-900" style={{ fontFamily: 'Georgia, serif' }}>Emailuri</h1>
           <p className="text-gray-500 text-sm mt-1">
-            {pending.length} în așteptare · {whitelistVisible.length} whitelist · {analyzed.length} analizate
+            {pending.length} pending · {whitelistVisible.length} whitelist · {analyzed.length} analizate
           </p>
         </div>
         <div className="flex gap-2">
@@ -594,86 +576,14 @@ export default function EmailuriPage() {
             className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border border-gray-200 text-gray-600 hover:bg-gray-50">
             Reguli
           </Link>
-          <div className="relative">
-            <button onClick={() => { setShowFetch(!showFetch); setFetchResult(null) }}
-              className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-white hover:opacity-90"
-              style={{ background: '#0a1628' }}>
-              <Inbox size={14} /> Fetch Yahoo
-            </button>
-
-            {showFetch && (
-              <div className="absolute right-0 top-12 z-50 bg-white rounded-2xl shadow-2xl border border-gray-100 w-80 p-5 space-y-4">
-                <div className="font-semibold text-gray-900 text-sm">Import emailuri din Yahoo</div>
-
-                {/* Mode selector */}
-                <div className="space-y-2">
-                  {[
-                    { id: 'new',   label: '🆕 Emailuri noi',        desc: 'De la ultimul fetch încoace' },
-                    { id: 'last',  label: '📥 Ultimele X emailuri',  desc: 'Specifică numărul' },
-                    { id: 'range', label: '📅 Interval de date',     desc: 'De la / până la' },
-                  ].map(opt => (
-                    <button key={opt.id}
-                      onClick={() => setFetchMode(opt.id as any)}
-                      className={`w-full text-left px-3 py-2.5 rounded-xl border transition-all ${
-                        fetchMode === opt.id ? 'border-[#0a1628] bg-gray-50' : 'border-gray-100 hover:border-gray-200'
-                      }`}>
-                      <div className="text-sm font-medium text-gray-900">{opt.label}</div>
-                      <div className="text-xs text-gray-400">{opt.desc}</div>
-                    </button>
-                  ))}
-                </div>
-
-                {/* Options per mode */}
-                {fetchMode === 'last' && (
-                  <div>
-                    <label className="text-xs font-medium text-gray-500 block mb-1">Număr emailuri</label>
-                    <input type="number" min={1} max={500} value={fetchLimit}
-                      onChange={e => setFetchLimit(parseInt(e.target.value) || 20)}
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
-                  </div>
-                )}
-
-                {fetchMode === 'range' && (
-                  <div className="space-y-2">
-                    <div>
-                      <label className="text-xs font-medium text-gray-500 block mb-1">De la</label>
-                      <input type="date" value={fetchDateFrom} onChange={e => setFetchDateFrom(e.target.value)}
-                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
-                    </div>
-                    <div>
-                      <label className="text-xs font-medium text-gray-500 block mb-1">Până la</label>
-                      <input type="date" value={fetchDateTo} onChange={e => setFetchDateTo(e.target.value)}
-                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
-                    </div>
-                  </div>
-                )}
-
-                {/* Result */}
-                {fetchResult && (
-                  <div className={`text-xs p-2.5 rounded-lg ${fetchResult.startsWith('✅') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
-                    {fetchResult}
-                  </div>
-                )}
-
-                {/* Actions */}
-                <div className="flex gap-2">
-                  <button onClick={() => setShowFetch(false)}
-                    className="flex-1 px-3 py-2 rounded-lg text-sm border border-gray-200 text-gray-500 hover:bg-gray-50">
-                    Închide
-                  </button>
-                  <button onClick={fetchEmails} disabled={fetching}
-                    className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
-                    style={{ background: '#0a1628' }}>
-                    {fetching ? <><RefreshCw size={13} className="animate-spin" /> Se importă...</> : <><Inbox size={13} /> Importă</>}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          <button onClick={loadAll}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border border-gray-200 text-gray-600 hover:bg-gray-50">
+          <button onClick={loadEmails}
+            className="flex items-center gap-2 px-3 py-2.5 rounded-lg text-sm font-medium border border-gray-200 text-gray-600 hover:bg-gray-50">
             <RefreshCw size={14} />
+          </button>
+          <button onClick={() => { setFetchResult(null); setShowFetch(true) }}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-white hover:opacity-90"
+            style={{ background: '#0a1628' }}>
+            <Download size={14} /> Fetch Yahoo
           </button>
         </div>
       </div>
@@ -702,14 +612,14 @@ export default function EmailuriPage() {
           onChange={e => setSearch(e.target.value)} />
       </div>
 
-      {/* ── Tab: În așteptare ── */}
+      {/* ── Tab: Pending ── */}
       {tab === 'pending' && (
         <div className="space-y-3">
           {loading ? <div className="py-12 text-center text-gray-400">Se încarcă...</div>
           : pending.length === 0 ? (
             <div className="py-12 text-center text-gray-400">
               <Clock size={32} className="mx-auto mb-3 opacity-30" />
-              <p className="text-sm">Niciun email în așteptare.</p>
+              <p className="text-sm">Niciun email pending.</p>
             </div>
           ) : (
             <>
@@ -717,15 +627,13 @@ export default function EmailuriPage() {
                 <div>
                   <div className="font-semibold text-gray-900 text-sm">{pending.length} emailuri pending</div>
                   <div className="text-xs text-gray-400 mt-0.5">
-                    {pendingSelected.size > 0
-                      ? `${pendingSelected.size} selectate`
+                    {pendingSelected.size > 0 ? `${pendingSelected.size} selectate`
                       : Object.keys(proposals).length > 0
                         ? `${Object.values(proposals).filter(p => p === 'whitelist').length} → WL · ${Object.values(proposals).filter(p => p === 'blacklist').length} → BL propuse`
                         : 'Selectează manual sau folosește AI Propuneri'}
                   </div>
                 </div>
                 <div className="flex gap-2 flex-wrap">
-                  {/* Select all/none */}
                   <button onClick={() => setPendingSelected(new Set(pending.map(e => e.id)))}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border border-gray-200 text-gray-600 hover:bg-gray-50">
                     <CheckSquare size={12} /> Toate
@@ -734,8 +642,6 @@ export default function EmailuriPage() {
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border border-gray-200 text-gray-600 hover:bg-gray-50">
                     <Square size={12} /> Niciunul
                   </button>
-
-                  {/* Bulk move selected */}
                   {pendingSelected.size > 0 && (
                     <>
                       <button onClick={() => movePendingSelected('whitelist')}
@@ -750,8 +656,6 @@ export default function EmailuriPage() {
                       </button>
                     </>
                   )}
-
-                  {/* AI proposals */}
                   <button onClick={classifyPending} disabled={classifying}
                     className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-50">
                     {classifying ? <><RefreshCw size={13} className="animate-spin" /> Analizez...</> : <><Sparkles size={13} /> AI Propuneri</>}
@@ -782,7 +686,6 @@ export default function EmailuriPage() {
             </div>
           ) : (
             <>
-              {/* Toolbar */}
               <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-gray-100 shadow-sm flex-wrap gap-3">
                 <div>
                   <div className="font-semibold text-gray-900 text-sm">
@@ -794,10 +697,12 @@ export default function EmailuriPage() {
                   </div>
                 </div>
                 <div className="flex gap-2 flex-wrap">
-                  <button onClick={selectAll} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border border-gray-200 text-gray-600 hover:bg-gray-50">
+                  <button onClick={() => setSelectedIds(new Set(unpinnedEmails.map(e => e.id)))}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border border-gray-200 text-gray-600 hover:bg-gray-50">
                     <CheckSquare size={12} /> Toate
                   </button>
-                  <button onClick={selectNone} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border border-gray-200 text-gray-600 hover:bg-gray-50">
+                  <button onClick={() => setSelectedIds(new Set())}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border border-gray-200 text-gray-600 hover:bg-gray-50">
                     <Square size={12} /> Niciunul
                   </button>
                   {selectedIds.size > 0 && (
@@ -814,22 +719,20 @@ export default function EmailuriPage() {
                 </div>
               </div>
 
-              {/* Pinned section */}
               {pinnedEmails.length > 0 && (
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 px-1">
                     <Pin size={12} className="text-yellow-500" />
                     <span className="text-xs font-medium text-yellow-600">Pinned ({pinnedEmails.length})</span>
                   </div>
-                  {filterList(pinnedEmails).map(e => <EmailCard key={e.id} email={e} showCheckbox={false} />)}
+                  {filterList(pinnedEmails).map(e => <EmailCard key={e.id} email={e} />)}
                 </div>
               )}
 
-              {/* Unpinned section */}
               {unpinnedEmails.length > 0 && (
                 <div className="space-y-2">
                   {pinnedEmails.length > 0 && (
-                    <div className="flex items-center gap-2 px-1 pt-2">
+                    <div className="px-1 pt-2">
                       <span className="text-xs font-medium text-gray-400">Neprocesate ({unpinnedEmails.length})</span>
                     </div>
                   )}
@@ -867,16 +770,13 @@ export default function EmailuriPage() {
             </div>
 
             <div className="px-6 py-5 space-y-5">
-
-              {/* Mode selector */}
               <div className="space-y-2">
                 {[
                   { id: 'new',      label: 'Emailuri noi',        desc: 'De la ultimul fetch încoace', icon: '🆕' },
                   { id: 'last',     label: 'Ultimele X emailuri', desc: 'Specifică numărul dorit',     icon: '📥' },
                   { id: 'interval', label: 'Interval de date',    desc: 'Alege perioada',              icon: '📅' },
                 ].map(opt => (
-                  <button key={opt.id}
-                    onClick={() => setFetchMode(opt.id as any)}
+                  <button key={opt.id} onClick={() => setFetchMode(opt.id as any)}
                     className={`w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-all ${
                       fetchMode === opt.id ? 'border-[#0a1628] bg-gray-50' : 'border-gray-200 hover:border-gray-300'
                     }`}>
@@ -890,7 +790,6 @@ export default function EmailuriPage() {
                 ))}
               </div>
 
-              {/* Limit input */}
               {fetchMode === 'last' && (
                 <div>
                   <label className="text-xs font-medium text-gray-500 mb-1.5 block">Număr emailuri</label>
@@ -901,34 +800,24 @@ export default function EmailuriPage() {
                 </div>
               )}
 
-              {/* Date interval */}
               {fetchMode === 'interval' && (
                 <div className="space-y-3">
                   <div>
-                    <label className="text-xs font-medium text-gray-500 mb-1.5 block flex items-center gap-1">
-                      <Calendar size={11} /> De la
-                    </label>
-                    <input type="date"
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                    <label className="text-xs font-medium text-gray-500 mb-1.5 block">De la</label>
+                    <input type="date" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
                       value={fetchDateFrom} onChange={e => setFetchDateFrom(e.target.value)} />
                   </div>
                   <div>
-                    <label className="text-xs font-medium text-gray-500 mb-1.5 block flex items-center gap-1">
-                      <Calendar size={11} /> Până la
-                    </label>
-                    <input type="date"
-                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                    <label className="text-xs font-medium text-gray-500 mb-1.5 block">Până la</label>
+                    <input type="date" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
                       value={fetchDateTo} onChange={e => setFetchDateTo(e.target.value)} />
                   </div>
                 </div>
               )}
 
-              {/* Result */}
               {fetchResult && (
                 <div className={`p-3 rounded-xl text-sm ${fetchResult.error ? 'bg-red-50 border border-red-100 text-red-700' : 'bg-green-50 border border-green-100'}`}>
-                  {fetchResult.error ? (
-                    <p>❌ {fetchResult.error}</p>
-                  ) : (
+                  {fetchResult.error ? <p>❌ {fetchResult.error}</p> : (
                     <div className="space-y-1">
                       <p className="font-medium text-green-800">✅ Batch #{fetchResult.batchNumber} importat</p>
                       <div className="text-xs text-green-700 space-y-0.5">
@@ -1015,7 +904,7 @@ export default function EmailuriPage() {
                       const email = emails.find(e => e.id === result.id)
                       if (!email) return null
                       const isAnalyzing = batchAnalyzingId === email.id
-                      const isDone = email.status === 'analyzed'
+                      const isDone      = email.status === 'analyzed'
                       return (
                         <div key={result.id} className={`p-3 rounded-xl border ${isDone ? 'border-green-100 bg-green-50' : 'border-gray-100 bg-gray-50'}`}>
                           <div className="flex items-start gap-3">
@@ -1031,7 +920,8 @@ export default function EmailuriPage() {
                               </div>
                               {isDone && email.ai_summary && <div className="text-xs text-green-700 mt-1">{email.ai_summary}</div>}
                             </div>
-                            <button onClick={async () => { setBatchAnalyzingId(email.id); await analyzeEmail(email); setBatchAnalyzingId(null) }}
+                            <button
+                              onClick={async () => { setBatchAnalyzingId(email.id); await analyzeEmail(email); setBatchAnalyzingId(null) }}
                               disabled={isAnalyzing || isDone}
                               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium shrink-0 ${
                                 isDone ? 'bg-green-100 text-green-600 cursor-default' : 'text-white hover:opacity-90 disabled:opacity-60'
