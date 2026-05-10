@@ -33,7 +33,7 @@ type Email = {
   batch_number: number | null
 }
 
-type Tab = 'pending' | 'whitelist' | 'analyzed'
+type Tab = 'pending' | 'whitelist' | 'analyzed' | 'conversations'
 
 const priorityConfig: Record<string, { label: string; color: string; bg: string }> = {
   high:   { label: 'Urgentă', color: '#ef4444', bg: '#fef2f2' },
@@ -73,6 +73,16 @@ export default function EmailuriPage() {
   const [batchResults, setBatchResults]         = useState<{ id: string; relevance: string }[]>([])
   const [selectedBatches, setSelectedBatches]   = useState<number[]>([])
   const [batchAnalyzingId, setBatchAnalyzingId] = useState<string | null>(null)
+
+  // Conversations
+  const [convSearch, setConvSearch]     = useState('')
+  const [convAddress, setConvAddress]   = useState('')
+  const [convDateFrom, setConvDateFrom] = useState('')
+  const [convDateTo, setConvDateTo]     = useState('')
+  const [convStatus, setConvStatus]     = useState('all')
+  const [convResults, setConvResults]   = useState<Email[]>([])
+  const [convLoading, setConvLoading]   = useState(false)
+  const [convSearched, setConvSearched] = useState(false)
 
   // Fetch modal
   const [showFetch, setShowFetch]           = useState(false)
@@ -312,6 +322,50 @@ export default function EmailuriPage() {
     setPendingSelected(prev => {
       const next = new Set(prev); next.has(id) ? next.delete(id) : next.add(id); return next
     })
+  }
+
+  // ── Conversations search ─────────────────────────────────────────────────
+
+  async function searchConversations() {
+    setConvLoading(true)
+    setConvSearched(true)
+
+    let query = supabase
+      .from('emails')
+      .select('*')
+      .order('received_at', { ascending: false })
+      .limit(200)
+
+    // Status filter
+    if (convStatus !== 'all') {
+      query = query.eq('status', convStatus)
+    } else {
+      query = query.in('status', ['pending', 'whitelist', 'analyzed'])
+    }
+
+    // Address filter
+    if (convAddress.trim()) {
+      query = query.ilike('from_address', `%${convAddress.trim()}%`)
+    }
+
+    // Date filters
+    if (convDateFrom) {
+      query = query.gte('received_at', new Date(convDateFrom).toISOString())
+    }
+    if (convDateTo) {
+      const toDate = new Date(convDateTo)
+      toDate.setHours(23, 59, 59)
+      query = query.lte('received_at', toDate.toISOString())
+    }
+
+    // Text search
+    if (convSearch.trim()) {
+      query = query.or(`subject.ilike.%${convSearch.trim()}%,body_text.ilike.%${convSearch.trim()}%`)
+    }
+
+    const { data } = await query
+    setConvResults(data || [])
+    setConvLoading(false)
   }
 
   // ── Email Card ────────────────────────────────────────────────────────────
@@ -557,6 +611,7 @@ export default function EmailuriPage() {
     { id: 'pending'   as Tab, label: 'Pending',    count: pending.length,          icon: Clock },
     { id: 'whitelist' as Tab, label: 'Whitelist',  count: whitelistVisible.length,  icon: CheckCircle },
     { id: 'analyzed'  as Tab, label: 'Analizate',  count: analyzed.length,          icon: Sparkles },
+    { id: 'conversations' as Tab, label: 'Conversations', icon: Mail },
   ]
 
   // ─────────────────────────────────────────────────────────────────────────
@@ -754,6 +809,159 @@ export default function EmailuriPage() {
               <p className="text-sm">Niciun email analizat încă.</p>
             </div>
           ) : filterList(analyzed).map(e => <EmailCard key={e.id} email={e} />)}
+        </div>
+      )}
+
+      {/* ── Tab: Conversations ── */}
+      {tab === 'conversations' && (
+        <div className="space-y-4">
+          {/* Filters */}
+          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {/* Address */}
+              <div>
+                <label className="text-xs font-medium text-gray-500 mb-1.5 block">Adresă expeditor</label>
+                <input
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  placeholder="ex: ion@gmail.com sau @gmail.com"
+                  value={convAddress}
+                  onChange={e => setConvAddress(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && searchConversations()}
+                />
+              </div>
+
+              {/* Status */}
+              <div>
+                <label className="text-xs font-medium text-gray-500 mb-1.5 block">Status</label>
+                <select
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none bg-white"
+                  value={convStatus}
+                  onChange={e => setConvStatus(e.target.value)}
+                >
+                  <option value="all">Toate</option>
+                  <option value="pending">Pending</option>
+                  <option value="whitelist">Whitelist</option>
+                  <option value="analyzed">Analizate</option>
+                </select>
+              </div>
+
+              {/* Date from */}
+              <div>
+                <label className="text-xs font-medium text-gray-500 mb-1.5 block">De la data</label>
+                <input type="date"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  value={convDateFrom}
+                  onChange={e => setConvDateFrom(e.target.value)}
+                />
+              </div>
+
+              {/* Date to */}
+              <div>
+                <label className="text-xs font-medium text-gray-500 mb-1.5 block">Până la data</label>
+                <input type="date"
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  value={convDateTo}
+                  onChange={e => setConvDateTo(e.target.value)}
+                />
+              </div>
+
+              {/* Text search - full width */}
+              <div className="sm:col-span-2">
+                <label className="text-xs font-medium text-gray-500 mb-1.5 block">Caută în subiect și conținut</label>
+                <input
+                  className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  placeholder="ex: expeditie, radio, pontoon..."
+                  value={convSearch}
+                  onChange={e => setConvSearch(e.target.value)}
+                  onKeyDown={e => e.key === 'Enter' && searchConversations()}
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between mt-4">
+              <button
+                onClick={() => { setConvAddress(''); setConvDateFrom(''); setConvDateTo(''); setConvSearch(''); setConvStatus('all'); setConvResults([]); setConvSearched(false) }}
+                className="text-xs text-gray-400 hover:text-gray-600"
+              >
+                Resetează filtrele
+              </button>
+              <button
+                onClick={searchConversations}
+                disabled={convLoading}
+                className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+                style={{ background: '#0a1628' }}
+              >
+                {convLoading ? <><RefreshCw size={13} className="animate-spin" /> Caut...</> : <><Search size={13} /> Caută</>}
+              </button>
+            </div>
+          </div>
+
+          {/* Results */}
+          {convLoading ? (
+            <div className="py-8 text-center text-gray-400">Se caută...</div>
+          ) : convSearched && convResults.length === 0 ? (
+            <div className="py-8 text-center text-gray-400">
+              <Mail size={28} className="mx-auto mb-3 opacity-30" />
+              <p className="text-sm">Niciun email găsit pentru filtrele selectate.</p>
+            </div>
+          ) : convResults.length > 0 ? (
+            <>
+              <div className="flex items-center justify-between px-1">
+                <span className="text-xs text-gray-500 font-medium">{convResults.length} emailuri găsite</span>
+                {convResults.length === 200 && <span className="text-xs text-amber-500">Afișate primele 200 — adaugă filtre pentru a restrânge</span>}
+              </div>
+              <div className="space-y-2">
+                {convResults.map(e => (
+                  <div key={e.id} className={`bg-white rounded-xl border shadow-sm p-4 flex items-start gap-3 ${
+                    e.status === 'analyzed' ? 'border-blue-100' :
+                    e.status === 'whitelist' ? 'border-green-100' :
+                    'border-gray-100'
+                  }`}>
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white text-xs font-bold"
+                      style={{ background: '#0a1628' }}>
+                      {(e.from_name?.[0] || e.from_address[0]).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap mb-0.5">
+                        <span className="font-medium text-gray-900 text-sm">{e.from_name || e.from_address}</span>
+                        {e.from_name && <span className="text-xs text-gray-400">{e.from_address}</span>}
+                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                          e.status === 'analyzed' ? 'bg-blue-100 text-blue-700' :
+                          e.status === 'whitelist' ? 'bg-green-100 text-green-700' :
+                          'bg-gray-100 text-gray-500'
+                        }`}>
+                          {e.status === 'analyzed' ? 'Analizat' : e.status === 'whitelist' ? 'Whitelist' : 'Pending'}
+                        </span>
+                        {e.batch_number && <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-400">#{e.batch_number}</span>}
+                        {e.is_pinned && <Pin size={11} className="text-yellow-500" />}
+                      </div>
+                      <div className="text-sm font-medium text-gray-800 truncate">{e.subject}</div>
+                      {e.ai_summary
+                        ? <div className="text-xs text-blue-600 mt-0.5 flex items-center gap-1"><Sparkles size={10} /> {e.ai_summary}</div>
+                        : e.body_text && <div className="text-xs text-gray-400 mt-0.5 truncate">{e.body_text.slice(0, 100)}</div>
+                      }
+                    </div>
+                    <div className="shrink-0 text-right">
+                      <div className="text-xs text-gray-400">{new Date(e.received_at).toLocaleDateString('ro-RO', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
+                      {e.status === 'whitelist' && (
+                        <button onClick={() => analyzeEmail(e)} disabled={analyzingId === e.id}
+                          className="mt-1 flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium text-white hover:opacity-90 disabled:opacity-50"
+                          style={{ background: '#0a1628' }}>
+                          {analyzingId === e.id ? <RefreshCw size={10} className="animate-spin" /> : <Sparkles size={10} />}
+                          AI
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          ) : !convSearched ? (
+            <div className="py-8 text-center text-gray-400">
+              <Search size={28} className="mx-auto mb-3 opacity-30" />
+              <p className="text-sm">Setează filtrele și apasă Caută.</p>
+            </div>
+          ) : null}
         </div>
       )}
 
