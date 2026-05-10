@@ -99,7 +99,7 @@ export default function EmailuriPage() {
     setLoading(true)
     const { data } = await supabase
       .from('emails')
-      .select('*')
+      .select('id,from_address,from_name,subject,body_text,received_at,status,is_processed,is_pinned,is_replied,category,ai_summary,ai_sentiment,ai_priority,reply_suggestion_1,reply_suggestion_2,reply_suggestion_3,reply_sent,reply_sent_at,attachments,batch_number')
       .in('status', ['analyzed', 'pending', 'whitelist'])
       .eq('is_replied', false)
       .order('received_at', { ascending: false })
