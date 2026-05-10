@@ -366,9 +366,25 @@ export default function EmailuriPage() {
           <div className="flex items-center gap-1.5 shrink-0">
             <span className="text-xs text-gray-400">{new Date(email.received_at).toLocaleDateString('ro-RO', { day: '2-digit', month: 'short' })}</span>
 
+            {/* Analyze button in header — only for whitelist */}
+            {email.status === 'whitelist' && (
+              <button
+                onClick={e => { e.stopPropagation(); analyzeEmail(email) }}
+                disabled={analyzingId === email.id}
+                title="Analizează cu Claude"
+                className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs font-medium transition-all disabled:opacity-50 hover:opacity-90"
+                style={{ background: '#0a1628', color: 'white' }}
+              >
+                {analyzingId === email.id
+                  ? <RefreshCw size={11} className="animate-spin" />
+                  : <Sparkles size={11} />}
+                <span className="hidden sm:inline ml-0.5">AI</span>
+              </button>
+            )}
+
             {/* Pin/Unpin */}
             {email.status === 'whitelist' && (
-              <button onClick={() => togglePin(email)} title={email.is_pinned ? 'Scoate pin' : 'Pin'}
+              <button onClick={e => { e.stopPropagation(); togglePin(email) }} title={email.is_pinned ? 'Scoate pin' : 'Pin'}
                 className={`p-1.5 rounded-lg transition-colors ${email.is_pinned ? 'text-yellow-500 hover:text-yellow-600' : 'text-gray-300 hover:text-yellow-400'}`}>
                 {email.is_pinned ? <PinOff size={13} /> : <Pin size={13} />}
               </button>
