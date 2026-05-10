@@ -430,10 +430,13 @@ export default function CursantAdminPage() {
                     const fallback1 = pool.filter(p => !groupIds.includes(p.session_id) && !usedSourceIds.has(p.id))
                     // Fallback 2: orice din afara grupului
                     const fallback2 = pool.filter(p => !groupIds.includes(p.session_id))
-                    const source = available.length > 0 ? available : fallback1.length > 0 ? fallback1 : fallback2.length > 0 ? fallback2 : pool
-                    if (source.length === 0) { alert('Nu mai sunt semnături disponibile!'); return }
+                    // Logica stricta: daca nu exista surse disponibile fara duplicat, nu alocam
+                    if (available.length === 0) {
+                      alert('Nu mai sunt semnături disponibile pentru această sesiune!\nToate semnăturile din pool au fost deja alocate altor cursanți din sesiune.')
+                      return
+                    }
 
-                    const pick = source[Math.floor(Math.random() * source.length)]
+                    const pick = available[Math.floor(Math.random() * available.length)]
                     await supabase.from('students').update({
                       signature_random: pick.signature_data,
                       signature_pool_source_id: pick.id
