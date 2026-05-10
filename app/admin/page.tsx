@@ -1,5 +1,6 @@
 'use client'
 import { useEffect, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Calendar, Users, CheckCircle, Clock, Plus, ExternalLink, GitBranch, UserX, ArrowRight } from 'lucide-react'
 import Link from 'next/link'
@@ -12,6 +13,7 @@ const statusMap: Record<string, { label: string; color: string }> = {
 }
 
 export default function AdminDashboard() {
+  const router = useRouter()
   const [stats, setStats]           = useState({ sessions: 0, students: 0, active: 0, completed: 0 })
   const [allSessions, setAllSessions] = useState<any[]>([])
   const [absentStudents, setAbsentStudents] = useState<any[]>([])
@@ -31,6 +33,13 @@ export default function AdminDashboard() {
 
     const all = sessions || []
     const sts = allSts || []
+
+    // Redirect la sesiunea Focus daca exista
+    const focusSess = all.find((s:any) => s.status === 'focus' && s.session_type === 'principal')
+    if (focusSess) {
+      router.replace(`/admin/sesiuni/${focusSess.id}`)
+      return
+    }
 
     const counts: Record<string,number> = {}
     for (const st of sts) counts[st.session_id] = (counts[st.session_id]||0) + 1
