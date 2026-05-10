@@ -102,7 +102,6 @@ export default function EmailuriPage() {
       .select('*')
       .in('status', ['analyzed', 'pending', 'whitelist'])
       .eq('is_replied', false)
-      .order('is_pinned', { ascending: false })
       .order('received_at', { ascending: false })
     setEmails(data || [])
     setLoading(false)
