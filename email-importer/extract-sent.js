@@ -1,210 +1,196 @@
 /**
  * SetSail — Extract emails from Yahoo Sent folder
+ * Versiune cu salvare progres — continuă de unde a rămas dacă se întrerupe
  * 
- * Extrage adresele din To / CC / BCC din folderul Sent
- * și exportă un CSV gata de importat în whitelist.
- * 
- * Instalare: npm install imapflow mailparser dotenv
- * Rulare:    node extract-sent.js
+ * Rulare: node extract-sent.js
  */
 
 import { ImapFlow } from 'imapflow';
 import { simpleParser } from 'mailparser';
-import { writeFileSync } from 'fs';
+import { writeFileSync, readFileSync, existsSync } from 'fs';
 import 'dotenv/config';
-
-// ─── Config ────────────────────────────────────────────────────────────────
 
 const YAHOO_USER     = process.env.YAHOO_USER     || 'ovidiuteo@yahoo.com';
 const YAHOO_PASSWORD = process.env.YAHOO_APP_PASSWORD || 'uovhdjrnzlvvotvd';
-
-// Yahoo Sent folder — încearcă în ordine până găsește unul valid
-const SENT_FOLDERS = ['Sent', 'Sent Messages', 'Sent Items', '&BB8EQgQ,BEAEMAQyBDsENQQ9BD0ESwQ1-'];
-
-const OUTPUT_FILE  = 'whitelist-sent.csv';
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
-
-function extractAddresses(parsed) {
-  const addresses = new Set();
-
-  const fields = ['to', 'cc', 'bcc'];
-  for (const field of fields) {
-    const val = parsed[field];
-    if (!val) continue;
-    const list = Array.isArray(val) ? val : [val];
-    for (const group of list) {
-      for (const addr of (group.value || [])) {
-        if (addr.address && addr.address.includes('@')) {
-          addresses.add(addr.address.trim().toLowerCase());
-        }
-      }
-    }
-  }
-
-  return addresses;
-}
+const OUTPUT_FILE    = 'whitelist-sent.csv';
+const PROGRESS_FILE  = 'extract-progress.json';
+const BATCH_SIZE     = 200; // mesaje per conexiune
 
 function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 }
 
-// ─── Main ─────────────────────────────────────────────────────────────────────
+function extractAddresses(parsed) {
+  const addresses = new Set();
+  for (const field of ['to', 'cc', 'bcc']) {
+    const val = parsed[field];
+    if (!val) continue;
+    for (const group of (Array.isArray(val) ? val : [val])) {
+      for (const addr of (group.value || [])) {
+        if (addr.address?.includes('@')) {
+          addresses.add(addr.address.trim().toLowerCase());
+        }
+      }
+    }
+  }
+  return addresses;
+}
 
-async function extractSentEmails() {
+function saveProgress(processed, addresses) {
+  const data = {
+    processed,
+    addresses: Object.fromEntries(addresses),
+    savedAt: new Date().toISOString(),
+  };
+  writeFileSync(PROGRESS_FILE, JSON.stringify(data), 'utf-8');
+}
+
+function loadProgress() {
+  if (!existsSync(PROGRESS_FILE)) return { processed: 0, addresses: new Map() };
+  try {
+    const data = JSON.parse(readFileSync(PROGRESS_FILE, 'utf-8'));
+    return {
+      processed: data.processed || 0,
+      addresses: new Map(Object.entries(data.addresses || {})),
+    };
+  } catch { return { processed: 0, addresses: new Map() }; }
+}
+
+function exportCSV(addresses, ownEmail) {
+  const sorted = [...addresses.entries()]
+    .filter(([email]) => email !== ownEmail.toLowerCase())
+    .sort((a, b) => b[1].count - a[1].count);
+
+  const lines = [
+    'email_address,rule_type,notes,aparitii,ultima_data',
+    ...sorted.map(([email, { count, lastSeen }]) =>
+      `"${email}","whitelist","Din Sent Yahoo","${count}","${new Date(lastSeen).toLocaleDateString('ro-RO')}"`
+    )
+  ];
+
+  writeFileSync(OUTPUT_FILE, lines.join('\n'), 'utf-8');
+  return sorted.length;
+}
+
+async function connectImap() {
   const client = new ImapFlow({
     host: 'imap.mail.yahoo.com',
     port: 993,
     secure: true,
     auth: { user: YAHOO_USER, pass: YAHOO_PASSWORD },
     logger: false,
+    connectionTimeout: 60000,
+    socketTimeout: 60000,
   });
+  await client.connect();
+  return client;
+}
 
+async function extractSentEmails() {
   console.log('\n🚀 SetSail — Extragere adrese din Sent\n');
 
-  await client.connect();
-  console.log('✅ Conectat la Yahoo IMAP\n');
-
-  // ── Găsește folderul Sent ─────────────────────────────────────────────────
-
-  let sentFolder = null;
-  const folderList = await client.list();
-  const folders = folderList.map(f => f.path);
-
-  console.log('📁 Foldere disponibile:');
-  folders.forEach(f => console.log(`   ${f}`));
-  console.log('');
-
-  for (const candidate of SENT_FOLDERS) {
-    if (folders.some(f => f.toLowerCase() === candidate.toLowerCase())) {
-      sentFolder = folders.find(f => f.toLowerCase() === candidate.toLowerCase());
-      break;
-    }
+  // Încarcă progresul salvat
+  let { processed, addresses } = loadProgress();
+  if (processed > 0) {
+    console.log(`📂 Progres anterior găsit: ${processed} mesaje procesate, ${addresses.size} adrese\n`);
   }
 
-  // Fallback: caută orice folder care conține "sent"
-  if (!sentFolder) {
-    sentFolder = folders.find(f => f.toLowerCase().includes('sent'));
-  }
+  // Prima conexiune — află totalul
+  let client = await connectImap();
+  console.log('✅ Conectat la Yahoo IMAP');
 
-  if (!sentFolder) {
-    console.error('❌ Nu am găsit folderul Sent. Foldere disponibile:', folders);
-    await client.logout();
+  const lock = await client.getMailboxLock('Sent');
+  const total = client.mailbox.exists;
+  lock.release();
+
+  console.log(`📧 Total mesaje în Sent: ${total}`);
+  console.log(`⏭️  Continuă de la mesajul: ${processed + 1}\n`);
+  await client.logout();
+
+  if (processed >= total) {
+    console.log('✅ Toate mesajele au fost deja procesate!');
+    const count = exportCSV(addresses, YAHOO_USER);
+    console.log(`📊 ${count} adrese exportate în ${OUTPUT_FILE}`);
     return;
   }
 
-  console.log(`📬 Folosesc folderul: "${sentFolder}"\n`);
+  // Procesează în batch-uri mici cu reconectare
+  let errors = 0;
 
-  // ── Fetch mesaje ──────────────────────────────────────────────────────────
+  while (processed < total) {
+    const start = processed + 1;
+    const end   = Math.min(processed + BATCH_SIZE, total);
 
-  const lock = await client.getMailboxLock(sentFolder);
-  const allAddresses = new Map(); // email -> { count, lastSeen }
+    process.stdout.write(`\r   Procesate: ${processed}/${total} — ${addresses.size} adrese unice`);
 
-  try {
-    const total = client.mailbox.exists;
-    console.log(`📧 Total mesaje în Sent: ${total}`);
-    console.log('⏳ Extrag adresele (durează câteva minute pentru inbox mare)...\n');
+    let success = false;
+    let retries = 3;
 
-    let processed = 0;
-    let errors    = 0;
+    while (!success && retries > 0) {
+      try {
+        client = await connectImap();
+        const lock = await client.getMailboxLock('Sent');
 
-    // Procesează în batch-uri de 200 pentru a evita timeout-ul Yahoo
-    const batchSize = 200;
-    for (let start = 1; start <= total; start += batchSize) {
-      const end = Math.min(start + batchSize - 1, total);
-      const range = `${start}:${end}`;
+        for await (const message of client.fetch(`${start}:${end}`, { source: true })) {
+          try {
+            const parsed = await simpleParser(message.source);
+            const found  = extractAddresses(parsed);
+            const date   = parsed.date || new Date();
 
-      let retries = 3;
-      while (retries > 0) {
-        try {
-          for await (const message of client.fetch(range, { source: true })) {
-            try {
-              const parsed = await simpleParser(message.source);
-              const found  = extractAddresses(parsed);
-              const date   = parsed.date || new Date();
-
-              for (const email of found) {
-                if (!isValidEmail(email)) continue;
-                if (allAddresses.has(email)) {
-                  const entry = allAddresses.get(email);
-                  entry.count++;
-                  if (date > entry.lastSeen) entry.lastSeen = date;
-                } else {
-                  allAddresses.set(email, { count: 1, lastSeen: date });
-                }
+            for (const email of found) {
+              if (!isValidEmail(email)) continue;
+              if (addresses.has(email)) {
+                const e = addresses.get(email);
+                e.count++;
+                if (date > new Date(e.lastSeen)) e.lastSeen = date.toISOString();
+              } else {
+                addresses.set(email, { count: 1, lastSeen: date.toISOString() });
               }
-
-              processed++;
-              if (processed % 100 === 0) {
-                process.stdout.write(`\r   Procesate: ${processed}/${total} — ${allAddresses.size} adrese unice găsite`);
-              }
-
-            } catch (err) {
-              errors++;
             }
-          }
-          break; // batch ok, iese din retry
+          } catch { errors++; }
+        }
 
-        } catch (batchErr) {
-          retries--;
-          if (retries === 0) {
-            console.log(`\n⚠️  Batch ${start}-${end} eșuat după 3 încercări, continuă...`);
-            break;
-          }
-          // Reconectare
-          console.log(`\n🔄 Reconectare (batch ${start}-${end}, retry ${3 - retries}/3)...`);
-          try { await client.logout(); } catch (_) {}
-          await new Promise(r => setTimeout(r, 2000));
-          await client.connect();
-          await client.getMailboxLock(sentFolder);
+        lock.release();
+        await client.logout();
+        success = true;
+
+      } catch (err) {
+        retries--;
+        try { await client.logout(); } catch (_) {}
+        if (retries > 0) {
+          await new Promise(r => setTimeout(r, 3000));
         }
       }
     }
 
-    process.stdout.write('\n');
-    console.log(`\n✅ Procesare completă: ${processed} mesaje, ${errors} erori\n`);
+    processed = end;
 
-  } finally {
-    lock.release();
+    // Salvează progresul la fiecare batch
+    saveProgress(processed, addresses);
   }
 
-  await client.logout();
-  console.log('👋 Deconectat\n');
+  process.stdout.write('\n');
 
-  // ── Export CSV ────────────────────────────────────────────────────────────
+  // Export final CSV
+  const count = exportCSV(addresses, YAHOO_USER);
 
-  if (allAddresses.size === 0) {
-    console.log('⚠️  Nu s-au găsit adrese de email.');
-    return;
-  }
-
-  // Sortează după numărul de apariții (cele mai frecvente primele)
-  const sorted = [...allAddresses.entries()]
-    .sort((a, b) => b[1].count - a[1].count);
-
-  // Exclude propriul cont
-  const filtered = sorted.filter(([email]) => email !== YAHOO_USER.toLowerCase());
-
-  const csvLines = [
-    'email_address,rule_type,notes,aparitii,ultima_data',
-    ...filtered.map(([email, { count, lastSeen }]) =>
-      `"${email}","whitelist","Din Sent Yahoo","${count}","${lastSeen.toLocaleDateString('ro-RO')}"`
-    )
-  ];
-
-  writeFileSync(OUTPUT_FILE, csvLines.join('\n'), 'utf-8');
-
-  console.log(`📊 Rezultate:`);
-  console.log(`   Total adrese unice : ${filtered.length}`);
-  console.log(`   Fișier exportat    : ${OUTPUT_FILE}`);
+  console.log(`\n✅ Gata!`);
+  console.log(`   Mesaje procesate : ${processed}`);
+  console.log(`   Adrese unice     : ${count}`);
+  console.log(`   Erori            : ${errors}`);
+  console.log(`   Fișier           : ${OUTPUT_FILE}`);
   console.log(`\n💡 Top 10 cele mai contactate:`);
-  filtered.slice(0, 10).forEach(([email, { count }], i) => {
-    console.log(`   ${i + 1}. ${email} (${count}x)`);
-  });
-  console.log(`\n✅ Gata! Importă ${OUTPUT_FILE} în pagina Reguli → Import → Whitelist\n`);
+  [...addresses.entries()]
+    .filter(([e]) => e !== YAHOO_USER.toLowerCase())
+    .sort((a, b) => b[1].count - a[1].count)
+    .slice(0, 10)
+    .forEach(([email, { count }], i) => console.log(`   ${i+1}. ${email} (${count}x)`));
+
+  console.log(`\n📥 Importă ${OUTPUT_FILE} în SetSail → Reguli → Import → Whitelist\n`);
 }
 
 extractSentEmails().catch(err => {
-  console.error('❌ Eroare fatală:', err.message);
+  console.error('\n❌ Eroare fatală:', err.message);
+  console.log('💾 Progresul a fost salvat. Rulează din nou pentru a continua.');
   process.exit(1);
 });

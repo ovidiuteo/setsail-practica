@@ -2,11 +2,13 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import {
-  Mail, CheckCircle, Clock, Ban, Search,
-  ChevronDown, ChevronUp, Send, Sparkles, RefreshCw,
-  AlertCircle, ExternalLink
+  Mail, CheckCircle, Clock, Ban, Search, RefreshCw,
+  ChevronDown, ChevronUp, Send, Sparkles, Pin, PinOff,
+  Filter, X, Check, ChevronRight, CheckSquare, Square
 } from 'lucide-react'
 import Link from 'next/link'
+
+// ─── Types ───────────────────────────────────────────────────────────────────
 
 type Email = {
   id: string
@@ -15,7 +17,10 @@ type Email = {
   subject: string
   body_text: string | null
   received_at: string
-  status: 'analyzed' | 'pending'
+  status: 'analyzed' | 'pending' | 'whitelist'
+  is_processed: boolean
+  is_pinned: boolean
+  is_replied: boolean
   category: string | null
   ai_summary: string | null
   ai_sentiment: string | null
@@ -26,12 +31,12 @@ type Email = {
   reply_sent: string | null
   reply_sent_at: string | null
   attachments: any[]
+  batch_number: number | null
 }
 
-type Rule = { id: string; email_address: string; rule_type: string }
-type Tab = 'analyzed' | 'pending' | 'rules'
+type Tab = 'pending' | 'whitelist' | 'analyzed'
 
-const priorityConfig = {
+const priorityConfig: Record<string, { label: string; color: string; bg: string }> = {
   high:   { label: 'Urgentă', color: '#ef4444', bg: '#fef2f2' },
   medium: { label: 'Normală', color: '#d97706', bg: '#fffbeb' },
   low:    { label: 'Scăzută', color: '#6b7280', bg: '#f9fafb' },
@@ -44,34 +49,66 @@ const categoryLabel: Record<string, string> = {
 }
 
 export default function EmailuriPage() {
-  const [tab, setTab]           = useState<Tab>('analyzed')
-  const [emails, setEmails]     = useState<Email[]>([])
-  const [rules, setRules]       = useState<Rule[]>([])
-  const [loading, setLoading]   = useState(true)
-  const [search, setSearch]     = useState('')
-  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [tab, setTab]         = useState<Tab>('pending')
+  const [emails, setEmails]   = useState<Email[]>([])
+  const [loading, setLoading] = useState(true)
+  const [search, setSearch]   = useState('')
+  const [expandedId, setExpandedId]   = useState<string | null>(null)
   const [activeReply, setActiveReply] = useState<{ id: string; text: string } | null>(null)
   const [analyzingId, setAnalyzingId] = useState<string | null>(null)
 
+  // Whitelist checkboxes
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+
+  // Pending AI proposals
+  const [proposals, setProposals]           = useState<Record<string, 'whitelist' | 'blacklist'>>({})
+  const [proposalReasons, setProposalReasons] = useState<Record<string, string>>({})
+  const [classifying, setClassifying]       = useState(false)
+  const [committing, setCommitting]         = useState(false)
+
+  // Batch Query
+  const [showBatch, setShowBatch]             = useState(false)
+  const [batchPrompt, setBatchPrompt]         = useState('')
+  const [batchQuerying, setBatchQuerying]     = useState(false)
+  const [batchResults, setBatchResults]       = useState<{ id: string; relevance: string }[]>([])
+  const [selectedBatches, setSelectedBatches] = useState<number[]>([])
+  const [batchAnalyzingId, setBatchAnalyzingId] = useState<string | null>(null)
+
+  // ── Load ──────────────────────────────────────────────────────────────────
+
   const loadAll = useCallback(async () => {
     setLoading(true)
-    const [{ data: em }, { data: ru }] = await Promise.all([
-      supabase.from('emails').select('*').in('status', ['analyzed', 'pending']).order('received_at', { ascending: false }),
-      supabase.from('email_rules').select('id, email_address, rule_type'),
-    ])
-    setEmails(em || [])
-    setRules(ru || [])
+    const { data } = await supabase
+      .from('emails')
+      .select('*')
+      .in('status', ['analyzed', 'pending', 'whitelist'])
+      .eq('is_replied', false)
+      .order('is_pinned', { ascending: false })
+      .order('received_at', { ascending: false })
+    setEmails(data || [])
     setLoading(false)
   }, [])
 
   useEffect(() => { loadAll() }, [loadAll])
 
-  const analyzed = emails.filter(e => e.status === 'analyzed')
-  const pending  = emails.filter(e => e.status === 'pending')
-  const whitelist = rules.filter(r => r.rule_type === 'whitelist')
-  const blacklist = rules.filter(r => r.rule_type === 'blacklist')
+  // ── Derived lists ─────────────────────────────────────────────────────────
 
-  const filtered = (list: Email[]) => {
+  const pending = emails.filter(e => e.status === 'pending')
+
+  // Whitelist: pinned TOȚI + neprocesate, ordonate pinned first
+  const whitelistVisible = emails.filter(e =>
+    e.status === 'whitelist' && (e.is_pinned || !e.is_processed)
+  )
+  const pinnedEmails     = whitelistVisible.filter(e => e.is_pinned)
+  const unpinnedEmails   = whitelistVisible.filter(e => !e.is_pinned)
+
+  const analyzed = emails.filter(e => e.status === 'analyzed')
+
+  const batchNumbers = [...new Set(
+    emails.filter(e => e.status === 'whitelist').map(e => e.batch_number).filter(Boolean)
+  )].sort((a, b) => (b as number) - (a as number)) as number[]
+
+  const filterList = (list: Email[]) => {
     if (!search.trim()) return list
     const q = search.toLowerCase()
     return list.filter(e =>
@@ -81,12 +118,29 @@ export default function EmailuriPage() {
     )
   }
 
-  async function moveToWhitelist(email: Email) {
-    await supabase.from('email_rules').upsert(
-      { email_address: email.from_address, rule_type: 'whitelist' },
-      { onConflict: 'email_address' }
-    )
-    await analyzeEmail(email)
+  // ── Basic actions ─────────────────────────────────────────────────────────
+
+  async function togglePin(email: Email) {
+    const val = !email.is_pinned
+    await supabase.from('emails').update({ is_pinned: val }).eq('id', email.id)
+    setEmails(prev => prev.map(e => e.id === email.id ? { ...e, is_pinned: val } : e))
+  }
+
+  async function markProcessed(ids: string[]) {
+    // Nu procesăm cele pinned
+    const eligible = ids.filter(id => {
+      const email = emails.find(e => e.id === id)
+      return email && !email.is_pinned
+    })
+    if (!eligible.length) return
+    await supabase.from('emails').update({ is_processed: true }).in('id', eligible)
+    setEmails(prev => prev.map(e => eligible.includes(e.id) ? { ...e, is_processed: true } : e))
+    setSelectedIds(new Set())
+  }
+
+  async function markReplied(emailId: string) {
+    await supabase.from('emails').update({ is_replied: true }).eq('id', emailId)
+    setEmails(prev => prev.filter(e => e.id !== emailId))
   }
 
   async function moveToBlacklist(email: Email) {
@@ -98,17 +152,34 @@ export default function EmailuriPage() {
     setEmails(prev => prev.filter(e => e.id !== email.id))
   }
 
+  async function moveToWhitelistManual(email: Email) {
+    await supabase.from('email_rules').upsert(
+      { email_address: email.from_address, rule_type: 'whitelist' },
+      { onConflict: 'email_address' }
+    )
+    await supabase.from('emails').update({ status: 'whitelist' }).eq('id', email.id)
+    setEmails(prev => prev.map(e => e.id === email.id ? { ...e, status: 'whitelist' } : e))
+  }
+
   async function analyzeEmail(email: Email) {
     setAnalyzingId(email.id)
     try {
       const res = await fetch('/api/analyze-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ from: email.from_address, subject: email.subject, bodyText: email.body_text }),
+        body: JSON.stringify({
+          type: 'analyze',
+          emails: [{ from_address: email.from_address, subject: email.subject, body_text: email.body_text }],
+        }),
       })
       const ai = await res.json()
-      await supabase.from('emails').update({ status: 'analyzed', is_processed: true, ...ai }).eq('id', email.id)
-      setEmails(prev => prev.map(e => e.id === email.id ? { ...e, status: 'analyzed', ...ai } : e))
+      // Analyze → status: analyzed + is_processed: true → dispare din whitelist
+      await supabase.from('emails').update({
+        status: 'analyzed', is_processed: true, ...ai
+      }).eq('id', email.id)
+      setEmails(prev => prev.map(e =>
+        e.id === email.id ? { ...e, status: 'analyzed', is_processed: true, ...ai } : e
+      ))
     } catch (err) { console.error(err) }
     setAnalyzingId(null)
   }
@@ -120,41 +191,169 @@ export default function EmailuriPage() {
     setActiveReply(null)
   }
 
-  // ── Email Card ──────────────────────────────────────────────────────────────
+  // ── Pending: classify ─────────────────────────────────────────────────────
 
-  function EmailCard({ email }: { email: Email }) {
+  async function classifyPending() {
+    if (!pending.length) return
+    setClassifying(true)
+    try {
+      const res = await fetch('/api/analyze-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'classify',
+          emails: pending.map(e => ({ from_address: e.from_address, subject: e.subject, body_text: e.body_text })),
+        }),
+      })
+      const data = await res.json()
+      const newP: Record<string, 'whitelist' | 'blacklist'> = {}
+      const newR: Record<string, string> = {}
+      for (const p of data.proposals || []) {
+        const email = pending[p.index]
+        if (email) { newP[email.from_address] = p.proposal; newR[email.from_address] = p.reason }
+      }
+      setProposals(newP); setProposalReasons(newR)
+    } catch (err) { console.error(err) }
+    setClassifying(false)
+  }
+
+  async function commitProposals() {
+    if (!Object.keys(proposals).length) return
+    setCommitting(true)
+    const toWL = pending.filter(e => proposals[e.from_address] === 'whitelist')
+    const toBL = pending.filter(e => proposals[e.from_address] === 'blacklist')
+    for (const email of toWL) {
+      await supabase.from('email_rules').upsert({ email_address: email.from_address, rule_type: 'whitelist' }, { onConflict: 'email_address' })
+      await supabase.from('emails').update({ status: 'whitelist' }).eq('id', email.id)
+    }
+    for (const email of toBL) {
+      await supabase.from('email_rules').upsert({ email_address: email.from_address, rule_type: 'blacklist' }, { onConflict: 'email_address' })
+      await supabase.from('emails').update({ status: 'blacklisted' }).eq('id', email.id)
+    }
+    setProposals({}); setProposalReasons({})
+    setCommitting(false); loadAll()
+  }
+
+  // ── Batch Query ───────────────────────────────────────────────────────────
+
+  function openBatchQuery() {
+    setSelectedBatches(batchNumbers); setBatchResults([]); setBatchPrompt('')
+    setShowBatch(true)
+  }
+
+  async function runBatchQuery() {
+    if (!batchPrompt.trim()) return
+    setBatchQuerying(true); setBatchResults([])
+    const toQuery = emails.filter(e =>
+      e.status === 'whitelist' &&
+      (selectedBatches.length === 0 || selectedBatches.includes(e.batch_number as number))
+    )
+    if (!toQuery.length) { setBatchQuerying(false); return }
+    try {
+      const res = await fetch('/api/analyze-email', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'batch_query', prompt: batchPrompt,
+          emails: toQuery.map(e => ({ id: e.id, from_address: e.from_address, subject: e.subject, body_text: e.body_text })),
+        }),
+      })
+      const data = await res.json()
+      setBatchResults(data.results || [])
+    } catch (err) { console.error(err) }
+    setBatchQuerying(false)
+  }
+
+  // ── Checkbox helpers ──────────────────────────────────────────────────────
+
+  function toggleSelect(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  function selectAll() {
+    setSelectedIds(new Set(unpinnedEmails.map(e => e.id)))
+  }
+
+  function selectNone() {
+    setSelectedIds(new Set())
+  }
+
+  // ── Email Card (Whitelist + Analyzed) ─────────────────────────────────────
+
+  function EmailCard({ email, showCheckbox = false }: { email: Email; showCheckbox?: boolean }) {
     const expanded   = expandedId === email.id
-    const pri        = priorityConfig[email.ai_priority as keyof typeof priorityConfig]
+    const pri        = priorityConfig[email.ai_priority as string]
     const isReplying = activeReply?.id === email.id
+    const isSelected = selectedIds.has(email.id)
 
     return (
-      <div className={`bg-white rounded-xl border transition-all ${expanded ? 'border-gray-200 shadow-md' : 'border-gray-100 shadow-sm hover:border-gray-200'}`}>
-        <button className="w-full text-left p-4 flex items-start gap-3"
-          onClick={() => setExpandedId(expanded ? null : email.id)}>
-          <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white text-xs font-bold"
-            style={{ background: '#0a1628' }}>
+      <div className={`bg-white rounded-xl border transition-all ${
+        email.is_pinned ? 'border-yellow-300 shadow-md' :
+        expanded ? 'border-gray-200 shadow-md' : 'border-gray-100 shadow-sm hover:border-gray-200'
+      }`}>
+        <div className="p-4 flex items-start gap-3">
+          {/* Checkbox */}
+          {showCheckbox && !email.is_pinned && (
+            <button onClick={() => toggleSelect(email.id)} className="mt-0.5 shrink-0 text-gray-300 hover:text-gray-600">
+              {isSelected ? <CheckSquare size={16} className="text-blue-500" /> : <Square size={16} />}
+            </button>
+          )}
+
+          {/* Pin indicator */}
+          {email.is_pinned && (
+            <div className="mt-1 shrink-0">
+              <Pin size={13} className="text-yellow-500" />
+            </div>
+          )}
+
+          {/* Avatar */}
+          <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white text-xs font-bold cursor-pointer"
+            style={{ background: '#0a1628' }}
+            onClick={() => setExpandedId(expanded ? null : email.id)}>
             {(email.from_name?.[0] || email.from_address[0]).toUpperCase()}
           </div>
-          <div className="flex-1 min-w-0">
+
+          {/* Content */}
+          <div className="flex-1 min-w-0 cursor-pointer" onClick={() => setExpandedId(expanded ? null : email.id)}>
             <div className="flex items-center gap-2 flex-wrap mb-0.5">
               <span className="font-medium text-gray-900 text-sm">{email.from_name || email.from_address}</span>
               {email.from_name && <span className="text-xs text-gray-400">{email.from_address}</span>}
               {pri && <span className="px-2 py-0.5 rounded-full text-xs font-medium" style={{ background: pri.bg, color: pri.color }}>{pri.label}</span>}
               {email.category && <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">{categoryLabel[email.category] || email.category}</span>}
               {email.reply_sent && <span className="flex items-center gap-1 text-xs text-green-600"><Send size={10} /> Trimis</span>}
-              {email.attachments?.length > 0 && <span className="text-xs text-blue-500">📎 {email.attachments.length}</span>}
+              {email.batch_number && <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-400">#{email.batch_number}</span>}
             </div>
             <div className="text-sm font-medium text-gray-800 truncate">{email.subject}</div>
             {email.ai_summary && !expanded && <div className="text-xs text-gray-500 mt-0.5 truncate">{email.ai_summary}</div>}
+            {!email.ai_summary && !expanded && email.body_text && <div className="text-xs text-gray-400 mt-0.5 truncate">{email.body_text.slice(0, 80)}</div>}
           </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="text-xs text-gray-400">{new Date(email.received_at).toLocaleDateString('ro-RO', { day: '2-digit', month: 'short' })}</span>
-            {expanded ? <ChevronUp size={14} className="text-gray-400" /> : <ChevronDown size={14} className="text-gray-400" />}
-          </div>
-        </button>
 
+          {/* Right actions */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className="text-xs text-gray-400">{new Date(email.received_at).toLocaleDateString('ro-RO', { day: '2-digit', month: 'short' })}</span>
+
+            {/* Pin/Unpin */}
+            {email.status === 'whitelist' && (
+              <button onClick={() => togglePin(email)} title={email.is_pinned ? 'Scoate pin' : 'Pin'}
+                className={`p-1.5 rounded-lg transition-colors ${email.is_pinned ? 'text-yellow-500 hover:text-yellow-600' : 'text-gray-300 hover:text-yellow-400'}`}>
+                {email.is_pinned ? <PinOff size={13} /> : <Pin size={13} />}
+              </button>
+            )}
+
+            <button onClick={() => setExpandedId(expanded ? null : email.id)} className="p-1 text-gray-300 hover:text-gray-500">
+              {expanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+            </button>
+          </div>
+        </div>
+
+        {/* Expanded */}
         {expanded && (
           <div className="px-4 pb-4 border-t border-gray-50 pt-4 space-y-4">
+
             {email.ai_summary && (
               <div className="flex items-start gap-2 p-3 rounded-lg bg-blue-50 border border-blue-100">
                 <Sparkles size={14} className="text-blue-500 shrink-0 mt-0.5" />
@@ -178,11 +377,9 @@ export default function EmailuriPage() {
                 <div className="flex flex-wrap gap-2">
                   {email.attachments.map((att: any, i: number) => (
                     <div key={i} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white text-xs">
-                      <span>📎</span>
-                      <span className="font-medium text-gray-700">{att.filename}</span>
+                      <span>📎</span><span className="font-medium text-gray-700">{att.filename}</span>
                       <span className="text-gray-400">({Math.round(att.size_bytes / 1024)}KB)</span>
-                      <button onClick={() => navigator.clipboard.writeText(att.search_query)}
-                        className="ml-1 text-blue-500 hover:underline" title="Copiază query de căutare">🔍</button>
+                      <button onClick={() => navigator.clipboard.writeText(att.search_query)} className="ml-1 text-blue-500 hover:underline">🔍</button>
                     </div>
                   ))}
                 </div>
@@ -241,18 +438,31 @@ export default function EmailuriPage() {
               </div>
             )}
 
-            {email.status === 'pending' && (
-              <div className="flex gap-2 pt-2 border-t border-gray-100">
-                <button onClick={() => moveToWhitelist(email)} disabled={analyzingId === email.id}
+            {/* Whitelist actions */}
+            {email.status === 'whitelist' && (
+              <div className="flex gap-2 pt-2 border-t border-gray-100 flex-wrap">
+                <button onClick={() => analyzeEmail(email)} disabled={analyzingId === email.id}
                   className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-white hover:opacity-90 disabled:opacity-60"
-                  style={{ background: '#059669' }}>
+                  style={{ background: '#0a1628' }}>
                   {analyzingId === email.id
                     ? <><RefreshCw size={11} className="animate-spin" /> Analizez...</>
-                    : <><CheckCircle size={11} /> Whitelist + Analizează</>}
+                    : <><Sparkles size={11} /> Analizează cu Claude</>}
                 </button>
-                <button onClick={() => moveToBlacklist(email)}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-red-600 border border-red-200 hover:bg-red-50">
-                  <Ban size={11} /> Blacklist + Șterge
+                {!email.is_pinned && (
+                  <button onClick={() => markProcessed([email.id])}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-gray-200 text-gray-600 hover:bg-gray-50">
+                    <Check size={11} /> Marchează Procesat
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Analyzed actions */}
+            {email.status === 'analyzed' && (
+              <div className="flex gap-2 pt-2 border-t border-gray-100">
+                <button onClick={() => markReplied(email.id)}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-green-200 text-green-700 hover:bg-green-50">
+                  <Send size={11} /> Replied — elimină din listă
                 </button>
               </div>
             )}
@@ -262,28 +472,88 @@ export default function EmailuriPage() {
     )
   }
 
-  // ── Tabs ────────────────────────────────────────────────────────────────────
+  // ── Pending Card ──────────────────────────────────────────────────────────
+
+  function PendingCard({ email }: { email: Email }) {
+    const proposal = proposals[email.from_address]
+    const reason   = proposalReasons[email.from_address]
+    return (
+      <div className={`bg-white rounded-xl border shadow-sm transition-all ${
+        proposal === 'whitelist' ? 'border-green-200' :
+        proposal === 'blacklist' ? 'border-red-200' : 'border-gray-100'
+      }`}>
+        <div className="p-4 flex items-start gap-3">
+          <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white text-xs font-bold"
+            style={{ background: '#0a1628' }}>
+            {(email.from_name?.[0] || email.from_address[0]).toUpperCase()}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-center gap-2 flex-wrap mb-0.5">
+              <span className="font-medium text-gray-900 text-sm">{email.from_name || email.from_address}</span>
+              {email.from_name && <span className="text-xs text-gray-400">{email.from_address}</span>}
+            </div>
+            <div className="text-sm text-gray-700 truncate">{email.subject}</div>
+            {reason && (
+              <div className={`mt-1 text-xs px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${
+                proposal === 'whitelist' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'
+              }`}>
+                <Sparkles size={10} /> {reason}
+              </div>
+            )}
+            {!reason && email.body_text && <div className="text-xs text-gray-400 mt-0.5 truncate">{email.body_text.slice(0, 80)}</div>}
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className="text-xs text-gray-400 mr-1">{new Date(email.received_at).toLocaleDateString('ro-RO', { day: '2-digit', month: 'short' })}</span>
+            <button onClick={() => setProposals(p => ({ ...p, [email.from_address]: 'whitelist' }))}
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                proposal === 'whitelist' ? 'bg-green-500 text-white' : 'border border-gray-200 text-gray-500 hover:border-green-300 hover:text-green-600'
+              }`}>
+              <CheckCircle size={11} /> WL
+            </button>
+            <button onClick={() => setProposals(p => ({ ...p, [email.from_address]: 'blacklist' }))}
+              className={`flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                proposal === 'blacklist' ? 'bg-red-500 text-white' : 'border border-gray-200 text-gray-500 hover:border-red-300 hover:text-red-500'
+              }`}>
+              <Ban size={11} /> BL
+            </button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Tabs ──────────────────────────────────────────────────────────────────
 
   const tabs = [
-    { id: 'analyzed' as Tab, label: 'Analizate',    count: analyzed.length, icon: CheckCircle },
-    { id: 'pending'  as Tab, label: 'În așteptare', count: pending.length,  icon: Clock },
-    { id: 'rules'    as Tab, label: 'Reguli',       icon: Ban },
+    { id: 'pending'   as Tab, label: 'În așteptare', count: pending.length,          icon: Clock },
+    { id: 'whitelist' as Tab, label: 'Whitelist',    count: whitelistVisible.length,  icon: CheckCircle },
+    { id: 'analyzed'  as Tab, label: 'Analizate',    count: analyzed.length,          icon: Sparkles },
   ]
+
+  // ─────────────────────────────────────────────────────────────────────────
 
   return (
     <div className="p-8">
+
+      {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-2xl font-bold text-gray-900" style={{ fontFamily: 'Georgia, serif' }}>Emailuri</h1>
           <p className="text-gray-500 text-sm mt-1">
-            {whitelist.length} whitelist · {blacklist.length} blacklist · {pending.length} în așteptare
+            {pending.length} în așteptare · {whitelistVisible.length} whitelist · {analyzed.length} analizate
           </p>
         </div>
-        <button onClick={loadAll}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-white hover:opacity-90"
-          style={{ background: '#0a1628' }}>
-          <RefreshCw size={14} /> Reîncarcă
-        </button>
+        <div className="flex gap-2">
+          <Link href="/admin/emailuri/reguli"
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border border-gray-200 text-gray-600 hover:bg-gray-50">
+            Reguli
+          </Link>
+          <button onClick={loadAll}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-white hover:opacity-90"
+            style={{ background: '#0a1628' }}>
+            <RefreshCw size={14} /> Reîncarcă
+          </button>
+        </div>
       </div>
 
       {/* Tabs */}
@@ -295,93 +565,244 @@ export default function EmailuriPage() {
             }`}>
             <Icon size={14} />
             {label}
-            {count !== undefined && (
-              <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${
-                tab === id ? 'bg-[#0a1628] text-white' : 'bg-gray-100 text-gray-500'
-              }`}>{count}</span>
-            )}
+            <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${
+              tab === id ? 'bg-[#0a1628] text-white' : 'bg-gray-100 text-gray-500'
+            }`}>{count}</span>
           </button>
         ))}
       </div>
 
       {/* Search */}
-      {tab !== 'rules' && (
-        <div className="relative mb-4">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-          <input className="w-full border border-gray-200 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
-            placeholder="Caută după expeditor, subiect, rezumat..."
-            value={search} onChange={e => setSearch(e.target.value)} />
+      <div className="relative mb-4">
+        <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+        <input className="w-full border border-gray-200 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
+          placeholder="Caută după expeditor, subiect..." value={search}
+          onChange={e => setSearch(e.target.value)} />
+      </div>
+
+      {/* ── Tab: În așteptare ── */}
+      {tab === 'pending' && (
+        <div className="space-y-3">
+          {loading ? <div className="py-12 text-center text-gray-400">Se încarcă...</div>
+          : pending.length === 0 ? (
+            <div className="py-12 text-center text-gray-400">
+              <Clock size={32} className="mx-auto mb-3 opacity-30" />
+              <p className="text-sm">Niciun email în așteptare.</p>
+            </div>
+          ) : (
+            <>
+              <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-gray-100 shadow-sm">
+                <div>
+                  <div className="font-semibold text-gray-900 text-sm">{pending.length} emailuri în așteptare</div>
+                  <div className="text-xs text-gray-400 mt-0.5">
+                    {Object.keys(proposals).length > 0
+                      ? `${Object.values(proposals).filter(p => p === 'whitelist').length} → WL · ${Object.values(proposals).filter(p => p === 'blacklist').length} → BL propuse`
+                      : 'Apasă AI Propuneri pentru clasificare automată'}
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button onClick={classifyPending} disabled={classifying}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                    {classifying ? <><RefreshCw size={13} className="animate-spin" /> Analizez...</> : <><Sparkles size={13} /> AI Propuneri</>}
+                  </button>
+                  {Object.keys(proposals).length > 0 && (
+                    <button onClick={commitProposals} disabled={committing}
+                      className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+                      style={{ background: '#0a1628' }}>
+                      {committing ? <><RefreshCw size={13} className="animate-spin" /> Se aplică...</> : <><Check size={13} /> Commit ({Object.keys(proposals).length})</>}
+                    </button>
+                  )}
+                </div>
+              </div>
+              {filterList(pending).map(e => <PendingCard key={e.id} email={e} />)}
+            </>
+          )}
+        </div>
+      )}
+
+      {/* ── Tab: Whitelist ── */}
+      {tab === 'whitelist' && (
+        <div className="space-y-3">
+          {loading ? <div className="py-12 text-center text-gray-400">Se încarcă...</div>
+          : whitelistVisible.length === 0 ? (
+            <div className="py-12 text-center text-gray-400">
+              <CheckCircle size={32} className="mx-auto mb-3 opacity-30" />
+              <p className="text-sm">Niciun email în whitelist.</p>
+            </div>
+          ) : (
+            <>
+              {/* Toolbar */}
+              <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-gray-100 shadow-sm flex-wrap gap-3">
+                <div>
+                  <div className="font-semibold text-gray-900 text-sm">
+                    {whitelistVisible.length} emailuri
+                    {pinnedEmails.length > 0 && <span className="ml-2 text-xs text-yellow-600">· {pinnedEmails.length} 📌 pinned</span>}
+                  </div>
+                  <div className="text-xs text-gray-400 mt-0.5">
+                    {selectedIds.size > 0 ? `${selectedIds.size} selectate` : 'Selectează pentru acțiuni în masă'}
+                  </div>
+                </div>
+                <div className="flex gap-2 flex-wrap">
+                  <button onClick={selectAll} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border border-gray-200 text-gray-600 hover:bg-gray-50">
+                    <CheckSquare size={12} /> Toate
+                  </button>
+                  <button onClick={selectNone} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border border-gray-200 text-gray-600 hover:bg-gray-50">
+                    <Square size={12} /> Niciunul
+                  </button>
+                  {selectedIds.size > 0 && (
+                    <button onClick={() => markProcessed([...selectedIds])}
+                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white hover:opacity-90"
+                      style={{ background: '#059669' }}>
+                      <Check size={12} /> Procesat ({selectedIds.size})
+                    </button>
+                  )}
+                  <button onClick={openBatchQuery}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 text-gray-700 hover:bg-gray-50">
+                    <Filter size={12} /> Batch Query
+                  </button>
+                </div>
+              </div>
+
+              {/* Pinned section */}
+              {pinnedEmails.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 px-1">
+                    <Pin size={12} className="text-yellow-500" />
+                    <span className="text-xs font-medium text-yellow-600">Pinned ({pinnedEmails.length})</span>
+                  </div>
+                  {filterList(pinnedEmails).map(e => <EmailCard key={e.id} email={e} showCheckbox={false} />)}
+                </div>
+              )}
+
+              {/* Unpinned section */}
+              {unpinnedEmails.length > 0 && (
+                <div className="space-y-2">
+                  {pinnedEmails.length > 0 && (
+                    <div className="flex items-center gap-2 px-1 pt-2">
+                      <span className="text-xs font-medium text-gray-400">Neprocesate ({unpinnedEmails.length})</span>
+                    </div>
+                  )}
+                  {filterList(unpinnedEmails).map(e => <EmailCard key={e.id} email={e} showCheckbox />)}
+                </div>
+              )}
+            </>
+          )}
         </div>
       )}
 
       {/* ── Tab: Analizate ── */}
       {tab === 'analyzed' && (
         <div className="space-y-3">
-          {loading ? (
-            <div className="py-12 text-center text-gray-400">Se încarcă...</div>
-          ) : filtered(analyzed).length === 0 ? (
+          {loading ? <div className="py-12 text-center text-gray-400">Se încarcă...</div>
+          : analyzed.length === 0 ? (
             <div className="py-12 text-center text-gray-400">
-              <Mail size={32} className="mx-auto mb-3 opacity-30" />
+              <Sparkles size={32} className="mx-auto mb-3 opacity-30" />
               <p className="text-sm">Niciun email analizat încă.</p>
             </div>
-          ) : filtered(analyzed).map(e => <EmailCard key={e.id} email={e} />)}
+          ) : filterList(analyzed).map(e => <EmailCard key={e.id} email={e} />)}
         </div>
       )}
 
-      {/* ── Tab: Pending ── */}
-      {tab === 'pending' && (
-        <div className="space-y-3">
-          {pending.length > 0 && (
-            <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-50 border border-amber-100 mb-2">
-              <AlertCircle size={14} className="text-amber-500 shrink-0" />
-              <p className="text-xs text-amber-700">
-                Emailuri de la expeditori necunoscuți. Decide per email: <strong>Whitelist + Analizează</strong> sau <strong>Blacklist + Șterge</strong>.
-              </p>
+      {/* ── Batch Query Modal ── */}
+      {showBatch && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+              <div>
+                <h2 className="font-semibold text-gray-900">Batch Query</h2>
+                <p className="text-xs text-gray-400 mt-0.5">Filtrează emailurile din whitelist cu o întrebare în limbaj natural</p>
+              </div>
+              <button onClick={() => setShowBatch(false)} className="text-gray-300 hover:text-gray-600"><X size={18} /></button>
             </div>
-          )}
-          {loading ? (
-            <div className="py-12 text-center text-gray-400">Se încarcă...</div>
-          ) : filtered(pending).length === 0 ? (
-            <div className="py-12 text-center text-gray-400">
-              <Clock size={32} className="mx-auto mb-3 opacity-30" />
-              <p className="text-sm">Niciun email în așteptare.</p>
-            </div>
-          ) : filtered(pending).map(e => <EmailCard key={e.id} email={e} />)}
-        </div>
-      )}
 
-      {/* ── Tab: Reguli ── */}
-      {tab === 'rules' && (
-        <div className="space-y-4">
-          {/* Stats rapide */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-              <div className="flex items-center gap-2 mb-2">
-                <CheckCircle size={15} className="text-green-500" />
-                <span className="font-semibold text-gray-900">Whitelist</span>
-                <span className="ml-auto text-2xl font-bold text-green-600" style={{ fontFamily: 'Georgia, serif' }}>{whitelist.length}</span>
+            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
+              {batchNumbers.length > 0 && (
+                <div>
+                  <div className="text-xs font-medium text-gray-500 mb-2">Filtrează după batch</div>
+                  <div className="flex flex-wrap gap-2">
+                    <button onClick={() => setSelectedBatches(selectedBatches.length === batchNumbers.length ? [] : [...batchNumbers])}
+                      className="px-2.5 py-1 rounded-lg text-xs border border-gray-200 text-gray-500 hover:bg-gray-50">
+                      {selectedBatches.length === batchNumbers.length ? 'Deselectează toate' : 'Selectează toate'}
+                    </button>
+                    {batchNumbers.map(b => (
+                      <button key={b}
+                        onClick={() => setSelectedBatches(prev => prev.includes(b) ? prev.filter(x => x !== b) : [...prev, b])}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                          selectedBatches.includes(b) ? 'bg-[#0a1628] text-white' : 'border border-gray-200 text-gray-500'
+                        }`}>
+                        Batch #{b}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <div className="text-xs font-medium text-gray-500 mb-2">Întrebarea ta</div>
+                <div className="flex gap-2">
+                  <input className="flex-1 border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                    placeholder='ex: "care au legătură cu expediții?" sau "cine e la curs radio?"'
+                    value={batchPrompt} onChange={e => setBatchPrompt(e.target.value)}
+                    onKeyDown={e => e.key === 'Enter' && runBatchQuery()} />
+                  <button onClick={runBatchQuery} disabled={batchQuerying || !batchPrompt.trim()}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-white hover:opacity-90 disabled:opacity-40"
+                    style={{ background: '#0a1628' }}>
+                    {batchQuerying ? <><RefreshCw size={13} className="animate-spin" /> Caut...</> : <><Sparkles size={13} /> Caută</>}
+                  </button>
+                </div>
               </div>
-              <p className="text-xs text-gray-400">Adrese analizate automat cu Claude</p>
+
+              {batchResults.length > 0 && (
+                <div>
+                  <div className="text-xs font-medium text-gray-500 mb-2">{batchResults.length} emailuri relevante</div>
+                  <div className="space-y-2">
+                    {batchResults.map(result => {
+                      const email = emails.find(e => e.id === result.id)
+                      if (!email) return null
+                      const isAnalyzing = batchAnalyzingId === email.id
+                      const isDone = email.status === 'analyzed'
+                      return (
+                        <div key={result.id} className={`p-3 rounded-xl border ${isDone ? 'border-green-100 bg-green-50' : 'border-gray-100 bg-gray-50'}`}>
+                          <div className="flex items-start gap-3">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-0.5">
+                                <span className="text-sm font-medium text-gray-900 truncate">{email.from_name || email.from_address}</span>
+                                {email.batch_number && <span className="text-xs px-1.5 py-0.5 rounded bg-gray-200 text-gray-500">#{email.batch_number}</span>}
+                                {email.is_pinned && <Pin size={11} className="text-yellow-500" />}
+                              </div>
+                              <div className="text-xs text-gray-600 truncate mb-1">{email.subject}</div>
+                              <div className="text-xs text-blue-600 flex items-center gap-1">
+                                <Sparkles size={10} /> {result.relevance}
+                              </div>
+                              {isDone && email.ai_summary && <div className="text-xs text-green-700 mt-1">{email.ai_summary}</div>}
+                            </div>
+                            <button onClick={async () => { setBatchAnalyzingId(email.id); await analyzeEmail(email); setBatchAnalyzingId(null) }}
+                              disabled={isAnalyzing || isDone}
+                              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium shrink-0 ${
+                                isDone ? 'bg-green-100 text-green-600 cursor-default' : 'text-white hover:opacity-90 disabled:opacity-60'
+                              }`}
+                              style={isDone ? {} : { background: '#0a1628' }}>
+                              {isAnalyzing ? <><RefreshCw size={11} className="animate-spin" /> Analizez...</>
+                                : isDone ? <><Check size={11} /> Analizat</>
+                                : <><ChevronRight size={11} /> Analizează</>}
+                            </button>
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {batchResults.length === 0 && batchPrompt && !batchQuerying && (
+                <div className="py-6 text-center text-gray-400 text-sm">Niciun email relevant găsit.</div>
+              )}
             </div>
-            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-              <div className="flex items-center gap-2 mb-2">
-                <Ban size={15} className="text-red-400" />
-                <span className="font-semibold text-gray-900">Blacklist</span>
-                <span className="ml-auto text-2xl font-bold text-red-500" style={{ fontFamily: 'Georgia, serif' }}>{blacklist.length}</span>
-              </div>
-              <p className="text-xs text-gray-400">Adrese ignorate complet</p>
+
+            <div className="px-6 py-4 border-t border-gray-100 shrink-0 flex justify-end">
+              <button onClick={() => setShowBatch(false)} className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700">Închide</button>
             </div>
           </div>
-
-          {/* Link spre pagina dedicată */}
-          <Link href="/admin/emailuri/reguli"
-            className="flex items-center justify-between p-5 bg-white rounded-xl border border-gray-100 shadow-sm hover:border-gray-200 hover:shadow-md transition-all group">
-            <div>
-              <div className="font-semibold text-gray-900 mb-0.5">Gestionează listele</div>
-              <div className="text-xs text-gray-400">Adaugă, șterge, importă din CSV/Excel, exportă</div>
-            </div>
-            <ExternalLink size={16} className="text-gray-300 group-hover:text-gray-500 transition-colors" />
-          </Link>
         </div>
       )}
     </div>
