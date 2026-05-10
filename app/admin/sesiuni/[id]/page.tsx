@@ -28,6 +28,8 @@ type Student = {
   original_session_id: string; allocated_session_id: string
   only_sailing: boolean
   notes?: string
+  signature_pool?: boolean
+  signature_random?: string
 }
 type Session = { id: string; session_date: string; course_start_date?: string; status: string; session_type: string; access_code: string; class_caa: string; request_number?: string; location_detail?: string; parent_session_id?: string; is_clone?: boolean; locations?: any; boats?: any; evaluators?: any; instructors?: any }
 
@@ -492,6 +494,14 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
                             title="Semnătură — click pentru previzualizare"
                             className="p-1 rounded hover:bg-gray-100 transition-colors">
                             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                              <path d="M3 17c3-3 6 3 9 0s6-3 9 0"/><line x1="3" y1="12" x2="21" y2="12" strokeDasharray="2 2"/>
+                            </svg>
+                          </button>
+                        ) : (s as any).signature_random ? (
+                          <button onClick={()=>{const w=window.open('','_blank');w?.document.write(`<img src="${(s as any).signature_random}" style="max-width:400px;border:1px solid #ccc;padding:10px;background:#fff;"/>`)}}
+                            title="Semnătură random alocată — invizibilă pe portal"
+                            className="p-1 rounded hover:bg-purple-100 transition-colors">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#9333ea" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                               <path d="M3 17c3-3 6 3 9 0s6-3 9 0"/><line x1="3" y1="12" x2="21" y2="12" strokeDasharray="2 2"/>
                             </svg>
                           </button>

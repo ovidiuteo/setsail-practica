@@ -17,6 +17,7 @@ type Student = {
   order_in_session: number; communication_target: boolean
   expiry_date: string; nationality: string; signature_data: string
   original_session_id: string; allocated_session_id: string
+  signature_pool: boolean; signature_random: string
 }
 
 type Session = {
@@ -367,7 +368,53 @@ export default function CursantAdminPage() {
 
           {/* Semnatura */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
-            <h3 className="font-semibold text-gray-900 text-sm mb-4">Semnătură</h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-semibold text-gray-900 text-sm">Semnătură</h3>
+              <div className="flex items-center gap-2">
+                {/* Buton Pool rdmz - mov */}
+                <button
+                  onClick={async () => {
+                    const nv = !student.signature_pool
+                    await supabase.from('students').update({ signature_pool: nv }).eq('id', student.id)
+                    setStudent(s => s ? { ...s, signature_pool: nv } : s)
+                  }}
+                  title={student.signature_pool ? 'În pool — click pentru a scoate' : 'Adaugă semnătura în pool random'}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all border ${
+                    student.signature_pool
+                      ? 'bg-purple-600 text-white border-purple-600'
+                      : 'border-purple-200 text-purple-600 hover:bg-purple-50'
+                  }`}>
+                  🟣 Pool rdmz
+                </button>
+                {/* Buton Alocă rndm - portocaliu */}
+                <button
+                  onClick={async () => {
+                    // Ia semnaturile din pool din toata baza de date
+                    const { data: pool } = await supabase
+                      .from('students')
+                      .select('id, signature_data, session_id')
+                      .eq('signature_pool', true)
+                      .not('signature_data', 'is', null)
+                      .neq('id', student.id)
+                    if (!pool || pool.length === 0) { alert('Nicio semnătură în pool!'); return }
+                    // Preferabil exclude cursantii din aceeasi sesiune
+                    const otherSess = pool.filter(p => p.session_id !== student.session_id)
+                    const source = otherSess.length > 0 ? otherSess : pool
+                    const pick = source[Math.floor(Math.random() * source.length)]
+                    await supabase.from('students').update({ signature_random: pick.signature_data }).eq('id', student.id)
+                    setStudent(s => s ? { ...s, signature_random: pick.signature_data } : s)
+                  }}
+                  title={student.signature_random ? 'Realocă semnătură random din pool' : 'Alocă semnătură random din pool'}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all border ${
+                    student.signature_random
+                      ? 'bg-orange-500 text-white border-orange-500'
+                      : 'border-orange-300 text-orange-600 hover:bg-orange-50'
+                  }`}>
+                  🟠 Alocă rndm
+                </button>
+              </div>
+            </div>
+
             {student.signature_data ? (
               <div>
                 <div className="rounded-xl border border-gray-100 p-3 bg-gray-50 cursor-pointer"
@@ -375,6 +422,14 @@ export default function CursantAdminPage() {
                   <img src={student.signature_data} alt="Semnătură" className="w-full object-contain" style={{ maxHeight: 80 }}/>
                 </div>
                 <p className="text-xs text-gray-400 text-center mt-2">Click pentru mărire</p>
+              </div>
+            ) : student.signature_random ? (
+              <div>
+                <div className="rounded-xl border-2 border-orange-200 p-3 bg-orange-50 cursor-pointer"
+                  onClick={() => { const w = window.open('', '_blank'); w?.document.write(`<img src="${student.signature_random}" style="max-width:400px;border:1px solid #ccc;padding:20px;background:#fff;"/>`) }}>
+                  <img src={student.signature_random} alt="Semnătură random" className="w-full object-contain" style={{ maxHeight: 80 }}/>
+                </div>
+                <p className="text-xs text-orange-400 text-center mt-2">🟠 Semnătură alocată random — invizibilă pe portal</p>
               </div>
             ) : (
               <div className="rounded-xl border-2 border-dashed border-red-200 p-6 text-center">

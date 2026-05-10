@@ -97,21 +97,31 @@ export default function PortalPage() {
     if (!code.trim()) { setLoginError('Introduceți codul sesiunii.'); return }
     if (!emailInput.trim()) { setLoginError('Introduceți adresa de email.'); return }
 
-    const { data: s } = await supabase
+    // Gasim TOATE sesiunile cu acest access_code (principal + clone partajate)
+    const { data: sessions } = await supabase
       .from('sessions')
       .select('*, locations(name), instructors(full_name)')
       .eq('access_code', code.toUpperCase().trim())
-      .single()
 
-    if (!s) { setLoginError('Codul sesiunii nu a fost găsit.'); return }
+    if (!sessions || sessions.length === 0) { setLoginError('Codul sesiunii nu a fost găsit.'); return }
+
+    // Sesiunea principala (pentru afisare date)
+    const s = sessions.find((s:any) => s.session_type === 'principal' && !s.parent_session_id)
+      || sessions.find((s:any) => s.session_type === 'principal')
+      || sessions[0]
+
     if (s.status === 'draft') { setLoginError('Sesiunea nu este activă încă. Contactați instructorul.'); return }
     if (s.status === 'completed') { setLoginError('Această sesiune a fost finalizată și nu mai acceptă conexiuni.'); return }
 
+    // Cauta cursantul in TOATE sesiunile cu acest cod
+    const sessionIds = sessions.map((s:any) => s.id)
     const { data: st } = await supabase
       .from('students')
       .select('*')
-      .eq('session_id', s.id)
+      .in('session_id', sessionIds)
       .ilike('email', emailInput.trim())
+      .eq('only_sailing', false)
+      .neq('portal_status', 'absent')
       .single()
 
     if (!st) { setLoginError('Email-ul nu a fost găsit în această sesiune. Verificați adresa sau contactați instructorul.'); return }
