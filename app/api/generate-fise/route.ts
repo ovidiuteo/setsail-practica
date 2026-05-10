@@ -261,11 +261,12 @@ export async function POST(req: NextRequest) {
     )
 
     // Imaginea semnăturii digitale dacă există
-    if (s.signature_data) {
+    const sigSource = s.signature_data || s.signature_random
+  if (sigSource) {
       try {
-        const sigBase64 = s.signature_data.includes(',')
-          ? s.signature_data.split(',')[1]
-          : s.signature_data
+        const sigBase64 = sigSource.includes(',')
+          ? sigSource.split(',')[1]
+          : sigSource
         const sigBuffer = Buffer.from(sigBase64, 'base64')
         children.push(
           new Paragraph({

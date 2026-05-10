@@ -51,8 +51,9 @@ export async function POST(req: NextRequest) {
       ? `${s.ci_series} ${s.ci_number}`
       : (s.id_document || '___________________________')
 
-    const sigHtml = s.signature_data
-      ? `<img src="${s.signature_data}" style="height:55px;max-width:160px;display:block;margin-top:2px;" />`
+    const sigSrc = s.signature_data || s.signature_random
+    const sigHtml = sigSrc
+      ? `<img src="${sigSrc}" style="height:55px;max-width:160px;display:block;margin-top:2px;" />`
       : `<div style="height:40px;"></div>`
 
     const evalRowsHtml = evalRows.map(r => `
