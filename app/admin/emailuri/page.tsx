@@ -649,7 +649,7 @@ export default function EmailuriPage() {
                     <Square size={12} /> Niciunul
                   </button>
                   {selectedIds.size > 0 && (
-                    <button onClick={() => markProcessed([...selectedIds])}
+                    <button onClick={() => markProcessed(Array.from(selectedIds))}
                       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white hover:opacity-90"
                       style={{ background: '#059669' }}>
                       <Check size={12} /> Procesat ({selectedIds.size})
