@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
     .eq('id', session_id).single()
 
   const { data: students } = await supabase
-    .from('students').select('*').eq('session_id', session_id).order('order_in_session')
+    .from('students').select('*').eq('session_id', session_id).eq('only_sailing', false).order('order_in_session')
 
   if (!session || !students) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
