@@ -116,72 +116,7 @@ export default function EmailuriPage() {
     setFetching(false)
   }
 
-  async function fetchEmails() {
-    setFetching(true)
-    setFetchResult(null)
-    try {
-      const res = await fetch('/api/fetch-emails', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          mode:     fetchMode,
-          limit:    fetchLimit,
-          dateFrom: fetchDateFrom || null,
-          dateTo:   fetchDateTo   || null,
-        }),
-      })
-      const data = await res.json()
-      setFetchResult(data)
-      if (data.success) await loadAll()
-    } catch (err) {
-      setFetchResult({ error: 'Eroare de conexiune' })
-    }
-    setFetching(false)
-  }
-
-  const loadAll = useCallback(async () => {
-    setLoading(true)
-    const { data } = await supabase
-      .from('emails')
-      .select('*')
-      .in('status', ['analyzed', 'pending', 'whitelist'])
-      .eq('is_replied', false)
-      .order('is_pinned', { ascending: false })
-      .order('received_at', { ascending: false })
-    setEmails(data || [])
-    setLoading(false)
-  }, [])
-
-  useEffect(() => { loadAll() }, [loadAll])
-
-  // ── Derived lists ─────────────────────────────────────────────────────────
-
-  const pending = emails.filter(e => e.status === 'pending')
-
-  // Whitelist: pinned TOȚI + neprocesate, ordonate pinned first
-  const whitelistVisible = emails.filter(e =>
-    e.status === 'whitelist' && (e.is_pinned || !e.is_processed)
-  )
-  const pinnedEmails     = whitelistVisible.filter(e => e.is_pinned)
-  const unpinnedEmails   = whitelistVisible.filter(e => !e.is_pinned)
-
-  const analyzed = emails.filter(e => e.status === 'analyzed')
-
-  const batchNumbersRaw = emails.filter(e => e.status === 'whitelist').map(e => e.batch_number).filter(Boolean) as number[]
-  const batchNumbers = batchNumbersRaw.filter((v, i) => batchNumbersRaw.indexOf(v) === i).sort((a, b) => b - a)
-
-  const filterList = (list: Email[]) => {
-    if (!search.trim()) return list
-    const q = search.toLowerCase()
-    return list.filter(e =>
-      e.from_address.toLowerCase().includes(q) ||
-      e.subject?.toLowerCase().includes(q) ||
-      e.ai_summary?.toLowerCase().includes(q)
-    )
-  }
-
-  // ── Basic actions ─────────────────────────────────────────────────────────
-
+  
   async function togglePin(email: Email) {
     const val = !email.is_pinned
     await supabase.from('emails').update({ is_pinned: val }).eq('id', email.id)
