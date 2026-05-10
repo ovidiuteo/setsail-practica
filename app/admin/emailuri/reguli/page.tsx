@@ -121,13 +121,18 @@ export default function ReguliPage() {
 
   async function handleImport() {
     setImporting(true)
-    const toImport = importRows.filter(r => !r.conflict || resolutions[r.email] === 'move')
-    for (const row of toImport) {
-      await supabase.from('email_rules').upsert(
-        { email_address: row.email, rule_type: importMode, notes: null },
-        { onConflict: 'email_address' }
-      )
+    const toImport = importRows
+      .filter(r => !r.conflict || resolutions[r.email] === 'move')
+      .map(r => ({ email_address: r.email, rule_type: importMode, notes: null as string | null }))
+
+    // Bulk upsert în chunks de 500
+    const chunkSize = 500
+    for (let i = 0; i < toImport.length; i += chunkSize) {
+      await supabase
+        .from('email_rules')
+        .upsert(toImport.slice(i, i + chunkSize), { onConflict: 'email_address' })
     }
+
     await load(); setImportStep('done'); setImporting(false)
   }
 
