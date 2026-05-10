@@ -7,8 +7,9 @@ export async function POST(req: NextRequest) {
 
   // ── Tip 1: clasificare pending ────────────────────────────────────────────
   if (type === 'classify') {
+    const sanitize = (s: string) => (s || '').replace(/[\x00-\x1F\x7F]/g, ' ').replace(/`/g, "'").slice(0, 100)
     const list = emails.map((e: any, i: number) =>
-      `${i + 1}. De la: ${e.from_address}\n   Subiect: ${e.subject}\n   Preview: ${e.body_text?.slice(0, 150) || '(fără conținut)'}`
+      `${i + 1}. De la: ${e.from_address}\n   Subiect: ${sanitize(e.subject)}\n   Preview: ${sanitize(e.body_text || '(fara continut)')}`
     ).join('\n\n')
 
     const prompt = `Ești asistentul platformei SetSail — o platformă română de navigație sportivă.
@@ -41,7 +42,7 @@ Analizează emailul și răspunde DOAR cu JSON valid, fără markdown.
 
 De la: ${email.from_address}
 Subiect: ${email.subject}
-Conținut: ${email.body_text?.slice(0, 2000) || '(fără conținut)'}
+Conținut: ${(email.body_text || '(fara continut)').replace(/[\x00-\x1F\x7F]/g, ' ').slice(0, 1500)}
 
 {"category":"access_request|support|authentication|notification|spam|other","ai_summary":"1-2 propoziții","ai_sentiment":"positive|neutral|negative","ai_priority":"high|medium|low","reply_suggestion_1":"Stil SetSail, profesional","reply_suggestion_2":"Formal, Stimate/Stimată...","reply_suggestion_3":"Friendly, ton cald"}`
 
@@ -59,8 +60,9 @@ Conținut: ${email.body_text?.slice(0, 2000) || '(fără conținut)'}
 
   // ── Tip 3: batch query ────────────────────────────────────────────────────
   if (type === 'batch_query') {
+    const sanitizeBq = (s: string) => (s || '').replace(/[\x00-\x1F\x7F]/g, ' ').replace(/`/g, "'").slice(0, 80)
     const list = emails.map((e: any, i: number) =>
-      `ID:${e.id} | De la: ${e.from_address} | Subiect: ${e.subject} | Preview: ${e.body_text?.slice(0, 100) || ''}`
+      `ID:${e.id} | De la: ${e.from_address} | Subiect: ${sanitizeBq(e.subject)} | Preview: ${sanitizeBq(e.body_text || '')}`
     ).join('\n')
 
     const prompt = `Ești asistentul platformei SetSail — o platformă română de navigație sportivă.
