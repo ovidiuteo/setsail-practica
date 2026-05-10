@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import {
-  Mail, CheckCircle, Clock, Ban, Search, RefreshCw,
+  Mail, CheckCircle, Clock, Ban, Search, RefreshCw, Inbox,
   ChevronDown, ChevronUp, Send, Sparkles, Pin, PinOff,
   Filter, X, Check, ChevronRight, CheckSquare, Square
 } from 'lucide-react'
@@ -69,6 +69,15 @@ export default function EmailuriPage() {
   const [classifying, setClassifying]       = useState(false)
   const [committing, setCommitting]         = useState(false)
 
+  // Fetch modal
+  const [showFetch, setShowFetch]       = useState(false)
+  const [fetchMode, setFetchMode]       = useState<'new' | 'last' | 'interval'>('new')
+  const [fetchLimit, setFetchLimit]     = useState(50)
+  const [fetchDateFrom, setFetchDateFrom] = useState('')
+  const [fetchDateTo, setFetchDateTo]   = useState('')
+  const [fetching, setFetching]         = useState(false)
+  const [fetchResult, setFetchResult]   = useState<any>(null)
+
   // Batch Query
   const [showBatch, setShowBatch]             = useState(false)
   const [batchPrompt, setBatchPrompt]         = useState('')
@@ -77,7 +86,65 @@ export default function EmailuriPage() {
   const [selectedBatches, setSelectedBatches] = useState<number[]>([])
   const [batchAnalyzingId, setBatchAnalyzingId] = useState<string | null>(null)
 
+  // Fetch state
+  const [showFetch, setShowFetch]       = useState(false)
+  const [fetchMode, setFetchMode]       = useState<'new' | 'last' | 'range'>('new')
+  const [fetchLimit, setFetchLimit]     = useState(50)
+  const [fetchDateFrom, setFetchDateFrom] = useState('')
+  const [fetchDateTo, setFetchDateTo]   = useState('')
+  const [fetching, setFetching]         = useState(false)
+  const [fetchResult, setFetchResult]   = useState<string | null>(null)
+
   // ── Load ──────────────────────────────────────────────────────────────────
+
+  async function fetchEmails() {
+    setFetching(true); setFetchResult(null)
+    try {
+      const res = await fetch('/api/fetch-emails', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode: fetchMode,
+          limit: fetchLimit,
+          dateFrom: fetchDateFrom || undefined,
+          dateTo: fetchDateTo || undefined,
+        }),
+      })
+      const data = await res.json()
+      if (data.error) {
+        setFetchResult(`❌ ${data.error}`)
+      } else {
+        setFetchResult(`✅ ${data.message}`)
+        await loadAll()
+      }
+    } catch (err) {
+      setFetchResult('❌ Eroare de conexiune')
+    }
+    setFetching(false)
+  }
+
+  async function fetchEmails() {
+    setFetching(true)
+    setFetchResult(null)
+    try {
+      const res = await fetch('/api/fetch-emails', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mode:     fetchMode,
+          limit:    fetchLimit,
+          dateFrom: fetchDateFrom || null,
+          dateTo:   fetchDateTo   || null,
+        }),
+      })
+      const data = await res.json()
+      setFetchResult(data)
+      if (data.success) await loadAll()
+    } catch (err) {
+      setFetchResult({ error: 'Eroare de conexiune' })
+    }
+    setFetching(false)
+  }
 
   const loadAll = useCallback(async () => {
     setLoading(true)
@@ -599,10 +666,86 @@ export default function EmailuriPage() {
             className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border border-gray-200 text-gray-600 hover:bg-gray-50">
             Reguli
           </Link>
+          <div className="relative">
+            <button onClick={() => { setShowFetch(!showFetch); setFetchResult(null) }}
+              className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-white hover:opacity-90"
+              style={{ background: '#0a1628' }}>
+              <Inbox size={14} /> Fetch Yahoo
+            </button>
+
+            {showFetch && (
+              <div className="absolute right-0 top-12 z-50 bg-white rounded-2xl shadow-2xl border border-gray-100 w-80 p-5 space-y-4">
+                <div className="font-semibold text-gray-900 text-sm">Import emailuri din Yahoo</div>
+
+                {/* Mode selector */}
+                <div className="space-y-2">
+                  {[
+                    { id: 'new',   label: '🆕 Emailuri noi',        desc: 'De la ultimul fetch încoace' },
+                    { id: 'last',  label: '📥 Ultimele X emailuri',  desc: 'Specifică numărul' },
+                    { id: 'range', label: '📅 Interval de date',     desc: 'De la / până la' },
+                  ].map(opt => (
+                    <button key={opt.id}
+                      onClick={() => setFetchMode(opt.id as any)}
+                      className={`w-full text-left px-3 py-2.5 rounded-xl border transition-all ${
+                        fetchMode === opt.id ? 'border-[#0a1628] bg-gray-50' : 'border-gray-100 hover:border-gray-200'
+                      }`}>
+                      <div className="text-sm font-medium text-gray-900">{opt.label}</div>
+                      <div className="text-xs text-gray-400">{opt.desc}</div>
+                    </button>
+                  ))}
+                </div>
+
+                {/* Options per mode */}
+                {fetchMode === 'last' && (
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 block mb-1">Număr emailuri</label>
+                    <input type="number" min={1} max={500} value={fetchLimit}
+                      onChange={e => setFetchLimit(parseInt(e.target.value) || 20)}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                  </div>
+                )}
+
+                {fetchMode === 'range' && (
+                  <div className="space-y-2">
+                    <div>
+                      <label className="text-xs font-medium text-gray-500 block mb-1">De la</label>
+                      <input type="date" value={fetchDateFrom} onChange={e => setFetchDateFrom(e.target.value)}
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-500 block mb-1">Până la</label>
+                      <input type="date" value={fetchDateTo} onChange={e => setFetchDateTo(e.target.value)}
+                        className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                    </div>
+                  </div>
+                )}
+
+                {/* Result */}
+                {fetchResult && (
+                  <div className={`text-xs p-2.5 rounded-lg ${fetchResult.startsWith('✅') ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'}`}>
+                    {fetchResult}
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div className="flex gap-2">
+                  <button onClick={() => setShowFetch(false)}
+                    className="flex-1 px-3 py-2 rounded-lg text-sm border border-gray-200 text-gray-500 hover:bg-gray-50">
+                    Închide
+                  </button>
+                  <button onClick={fetchEmails} disabled={fetching}
+                    className="flex-1 flex items-center justify-center gap-2 px-3 py-2 rounded-lg text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+                    style={{ background: '#0a1628' }}>
+                    {fetching ? <><RefreshCw size={13} className="animate-spin" /> Se importă...</> : <><Inbox size={13} /> Importă</>}
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+
           <button onClick={loadAll}
-            className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-white hover:opacity-90"
-            style={{ background: '#0a1628' }}>
-            <RefreshCw size={14} /> Reîncarcă
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border border-gray-200 text-gray-600 hover:bg-gray-50">
+            <RefreshCw size={14} />
           </button>
         </div>
       </div>
@@ -780,6 +923,110 @@ export default function EmailuriPage() {
               <p className="text-sm">Niciun email analizat încă.</p>
             </div>
           ) : filterList(analyzed).map(e => <EmailCard key={e.id} email={e} />)}
+        </div>
+      )}
+
+      {/* ── Fetch Modal ── */}
+      {showFetch && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md flex flex-col">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+              <div>
+                <h2 className="font-semibold text-gray-900">Fetch emailuri Yahoo</h2>
+                <p className="text-xs text-gray-400 mt-0.5">Importă emailuri noi din INBOX</p>
+              </div>
+              <button onClick={() => setShowFetch(false)} className="text-gray-300 hover:text-gray-600"><X size={18} /></button>
+            </div>
+
+            <div className="px-6 py-5 space-y-5">
+
+              {/* Mode selector */}
+              <div className="space-y-2">
+                {[
+                  { id: 'new',      label: 'Emailuri noi',        desc: 'De la ultimul fetch încoace', icon: '🆕' },
+                  { id: 'last',     label: 'Ultimele X emailuri', desc: 'Specifică numărul dorit',     icon: '📥' },
+                  { id: 'interval', label: 'Interval de date',    desc: 'Alege perioada',              icon: '📅' },
+                ].map(opt => (
+                  <button key={opt.id}
+                    onClick={() => setFetchMode(opt.id as any)}
+                    className={`w-full flex items-center gap-3 p-3 rounded-xl border text-left transition-all ${
+                      fetchMode === opt.id ? 'border-[#0a1628] bg-gray-50' : 'border-gray-200 hover:border-gray-300'
+                    }`}>
+                    <span className="text-lg">{opt.icon}</span>
+                    <div className="flex-1">
+                      <div className={`text-sm font-medium ${fetchMode === opt.id ? 'text-[#0a1628]' : 'text-gray-700'}`}>{opt.label}</div>
+                      <div className="text-xs text-gray-400">{opt.desc}</div>
+                    </div>
+                    {fetchMode === opt.id && <Check size={14} className="text-[#0a1628] shrink-0" />}
+                  </button>
+                ))}
+              </div>
+
+              {/* Limit input */}
+              {fetchMode === 'last' && (
+                <div>
+                  <label className="text-xs font-medium text-gray-500 mb-1.5 block">Număr emailuri</label>
+                  <input type="number" min={1} max={500}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                    value={fetchLimit} onChange={e => setFetchLimit(parseInt(e.target.value) || 20)} />
+                  <p className="text-xs text-gray-400 mt-1">Maximum 500 per fetch</p>
+                </div>
+              )}
+
+              {/* Date interval */}
+              {fetchMode === 'interval' && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 mb-1.5 block flex items-center gap-1">
+                      <Calendar size={11} /> De la
+                    </label>
+                    <input type="date"
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                      value={fetchDateFrom} onChange={e => setFetchDateFrom(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 mb-1.5 block flex items-center gap-1">
+                      <Calendar size={11} /> Până la
+                    </label>
+                    <input type="date"
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                      value={fetchDateTo} onChange={e => setFetchDateTo(e.target.value)} />
+                  </div>
+                </div>
+              )}
+
+              {/* Result */}
+              {fetchResult && (
+                <div className={`p-3 rounded-xl text-sm ${fetchResult.error ? 'bg-red-50 border border-red-100 text-red-700' : 'bg-green-50 border border-green-100'}`}>
+                  {fetchResult.error ? (
+                    <p>❌ {fetchResult.error}</p>
+                  ) : (
+                    <div className="space-y-1">
+                      <p className="font-medium text-green-800">✅ Batch #{fetchResult.batchNumber} importat</p>
+                      <div className="text-xs text-green-700 space-y-0.5">
+                        <p>📥 Importate: <strong>{fetchResult.stats?.imported}</strong></p>
+                        <p>✅ Whitelist: <strong>{fetchResult.stats?.whitelist}</strong></p>
+                        <p>⏳ Pending: <strong>{fetchResult.stats?.pending}</strong></p>
+                        <p>· Existente: <strong>{fetchResult.stats?.skipped}</strong></p>
+                        <p>✗ Blacklist ignorate: <strong>{fetchResult.stats?.blacklisted}</strong></p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-between shrink-0">
+              <button onClick={() => setShowFetch(false)} className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700">
+                {fetchResult?.success ? 'Închide' : 'Anulează'}
+              </button>
+              <button onClick={fetchEmails} disabled={fetching || (fetchMode === 'interval' && !fetchDateFrom)}
+                className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium text-white hover:opacity-90 disabled:opacity-40"
+                style={{ background: '#0a1628' }}>
+                {fetching ? <><RefreshCw size={13} className="animate-spin" /> Se importă...</> : <><Download size={13} /> Fetch</>}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
