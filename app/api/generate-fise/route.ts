@@ -20,6 +20,7 @@ export async function POST(req: NextRequest) {
     .from('students')
     .select('*')
     .eq('session_id', session_id)
+    .eq('only_sailing', false)
     .order('order_in_session')
 
   if (!session || !students) {
