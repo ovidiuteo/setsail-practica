@@ -87,12 +87,16 @@ export default function CloneSessionPage() {
     }
     setSaving(true)
 
-    // Creează sesiunea clonată
+    // Creează sesiunea clonată — preia access_code-ul principalei (portal partajat by default)
+    const { data: principalSess } = await supabase
+      .from('sessions').select('access_code').eq('id', id).single()
+
     const { data: newSession, error } = await supabase.from('sessions').insert({
       ...form,
       session_type: 'clone',
       parent_session_id: id,
       is_clone: true,
+      access_code: principalSess?.access_code || undefined,
     }).select().single()
 
     if (error || !newSession) {
