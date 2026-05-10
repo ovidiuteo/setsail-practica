@@ -82,6 +82,10 @@ export default function CursantAdminPage() {
     const updates = { ...form }
     delete (updates as any).id
     delete (updates as any).created_at
+    // Nu suprascriem campurile de semnatura random - sunt gestionate separat
+    delete (updates as any).signature_random
+    delete (updates as any).signature_pool_source_id
+    delete (updates as any).signature_pool
     await supabase.from('students').update(updates).eq('id', student.id)
     setStudent({ ...student, ...form } as Student)
     setSaved(true)
