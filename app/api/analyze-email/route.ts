@@ -30,7 +30,7 @@ Răspunde DOAR cu JSON array cu exact ${emails.length} obiecte:
       const data = await res.json()
       const parsed = JSON.parse(data.content?.[0]?.text?.replace(/```json|```/g, '').trim() || '[]')
       return NextResponse.json({ proposals: parsed })
-    } catch { return NextResponse.json({ error: 'Claude error' }, { status: 500 }) }
+    } catch (err: any) { console.error('Claude error:', err?.message, err); return NextResponse.json({ error: 'Claude error', detail: err?.message }, { status: 500 }) }
   }
 
   // ── Tip 2: analiză completă email ─────────────────────────────────────────
@@ -54,7 +54,7 @@ Conținut: ${email.body_text?.slice(0, 2000) || '(fără conținut)'}
       const data = await res.json()
       const parsed = JSON.parse(data.content?.[0]?.text?.replace(/```json|```/g, '').trim() || '{}')
       return NextResponse.json(parsed)
-    } catch { return NextResponse.json({ error: 'Claude error' }, { status: 500 }) }
+    } catch (err: any) { console.error('Claude error:', err?.message, err); return NextResponse.json({ error: 'Claude error', detail: err?.message }, { status: 500 }) }
   }
 
   // ── Tip 3: batch query ────────────────────────────────────────────────────
@@ -86,7 +86,7 @@ Dacă nu există emailuri relevante, răspunde cu array gol: []`
       const data = await res.json()
       const parsed = JSON.parse(data.content?.[0]?.text?.replace(/```json|```/g, '').trim() || '[]')
       return NextResponse.json({ results: parsed })
-    } catch { return NextResponse.json({ error: 'Claude error' }, { status: 500 }) }
+    } catch (err: any) { console.error('Claude error:', err?.message, err); return NextResponse.json({ error: 'Claude error', detail: err?.message }, { status: 500 }) }
   }
 
   return NextResponse.json({ error: 'Unknown type' }, { status: 400 })
