@@ -1,31 +1,12 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import {
-  Mail, CheckCircle, Clock, Ban, Plus, Trash2, Search,
-  ChevronDown, ChevronUp, Send, Sparkles, X, AlertCircle, RefreshCw
+  CheckCircle, Ban, Plus, Trash2, Download, Upload,
+  AlertTriangle, X, Check, Search, FileText, ClipboardPaste,
+  ArrowLeft
 } from 'lucide-react'
-
-type Email = {
-  id: string
-  from_address: string
-  from_name: string | null
-  subject: string
-  body_text: string | null
-  received_at: string
-  status: 'analyzed' | 'pending' | 'blacklisted'
-  category: string | null
-  ai_summary: string | null
-  ai_sentiment: string | null
-  ai_priority: string | null
-  reply_suggestion_1: string | null
-  reply_suggestion_2: string | null
-  reply_suggestion_3: string | null
-  reply_sent: string | null
-  reply_sent_at: string | null
-  attachments: any[]
-  mail_provider: string
-}
+import Link from 'next/link'
 
 type Rule = {
   id: string
@@ -35,176 +16,88 @@ type Rule = {
   created_at: string
 }
 
-type Tab = 'analyzed' | 'pending' | 'rules'
-
-const priorityConfig = {
-  high:   { label: 'Urgentă',  color: '#ef4444', bg: '#fef2f2' },
-  medium: { label: 'Normală',  color: '#d97706', bg: '#fffbeb' },
-  low:    { label: 'Scăzută',  color: '#6b7280', bg: '#f9fafb' },
+type ImportRow = {
+  email: string
+  notes: string
+  conflict?: 'whitelist' | 'blacklist'
 }
 
-const sentimentIcon = { positive: '😊', neutral: '😐', negative: '😟' }
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const categoryLabel: Record<string, string> = {
-  access_request: 'Cerere acces',
-  support: 'Suport',
-  authentication: 'Autentificare',
-  notification: 'Notificare',
-  spam: 'Spam',
-  other: 'Altele',
+function parseEmails(text: string): string[] {
+  return [...new Set(
+    text.split(/[\n\r\t,;]+/)
+      .map(l => l.trim().toLowerCase())
+      .filter(l => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(l))
+  )]
 }
 
-export default function EmailuriPage() {
-  const [tab, setTab] = useState<Tab>('analyzed')
-  const [emails, setEmails] = useState<Email[]>([])
-  const [rules, setRules] = useState<Rule[]>([])
+function exportCSV(rules: Rule[]) {
+  const header = 'email_address,rule_type,notes,created_at'
+  const rows = rules.map(r =>
+    `"${r.email_address}","${r.rule_type}","${(r.notes || '').replace(/"/g, '""')}","${new Date(r.created_at).toLocaleDateString('ro-RO')}"`
+  )
+  const blob = new Blob([[header, ...rows].join('\n')], { type: 'text/csv;charset=utf-8;' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a'); a.href = url
+  a.download = `setsail-reguli-${new Date().toISOString().slice(0, 10)}.csv`
+  a.click(); URL.revokeObjectURL(url)
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
+export default function ReguliPage() {
+  const [rules, setRules]   = useState<Rule[]>([])
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
-  const [expandedId, setExpandedId] = useState<string | null>(null)
-  const [activeReply, setActiveReply] = useState<{ id: string; text: string } | null>(null)
+  const [activeTab, setActiveTab] = useState<'whitelist' | 'blacklist'>('whitelist')
 
-  // Rules form
+  // Add single
   const [newEmail, setNewEmail] = useState('')
-  const [newType, setNewType] = useState<'whitelist' | 'blacklist'>('whitelist')
   const [newNotes, setNewNotes] = useState('')
-  const [addingRule, setAddingRule] = useState(false)
+  const [adding, setAdding]   = useState(false)
 
-  // Analyze pending
-  const [analyzingId, setAnalyzingId] = useState<string | null>(null)
+  // Import
+  const [showImport, setShowImport]   = useState(false)
+  const [importMode, setImportMode]   = useState<'whitelist' | 'blacklist'>('whitelist')
+  const [importText, setImportText]   = useState('')
+  const [importStep, setImportStep]   = useState<'input' | 'preview' | 'done'>('input')
+  const [importRows, setImportRows]   = useState<ImportRow[]>([])
+  const [resolutions, setResolutions] = useState<Record<string, 'move' | 'skip'>>({})
+  const [importing, setImporting]     = useState(false)
+  const fileRef = useRef<HTMLInputElement>(null)
 
-  const loadEmails = useCallback(async () => {
+  // ── Load ──────────────────────────────────────────────────────────────────
+
+  const load = useCallback(async () => {
     setLoading(true)
     const { data } = await supabase
-      .from('emails')
-      .select('*')
-      .in('status', ['analyzed', 'pending'])
-      .order('received_at', { ascending: false })
-    setEmails(data || [])
+      .from('email_rules').select('*').order('created_at', { ascending: false })
+    setRules(data || [])
     setLoading(false)
   }, [])
 
-  const loadRules = useCallback(async () => {
-    const { data } = await supabase
-      .from('email_rules')
-      .select('*')
-      .order('created_at', { ascending: false })
-    setRules(data || [])
-  }, [])
+  useEffect(() => { load() }, [load])
 
-  useEffect(() => { loadEmails(); loadRules() }, [loadEmails, loadRules])
-
-  const analyzed = emails.filter(e => e.status === 'analyzed')
-  const pending  = emails.filter(e => e.status === 'pending')
   const whitelist = rules.filter(r => r.rule_type === 'whitelist')
   const blacklist = rules.filter(r => r.rule_type === 'blacklist')
+  const activeList = (activeTab === 'whitelist' ? whitelist : blacklist).filter(r =>
+    !search || r.email_address.includes(search.toLowerCase()) ||
+    r.notes?.toLowerCase().includes(search.toLowerCase())
+  )
 
-  const filterEmails = (list: Email[]) => {
-    if (!search.trim()) return list
-    const q = search.toLowerCase()
-    return list.filter(e =>
-      e.from_address.toLowerCase().includes(q) ||
-      e.subject?.toLowerCase().includes(q) ||
-      e.ai_summary?.toLowerCase().includes(q)
-    )
-  }
-
-  // ── Acțiuni ──────────────────────────────────────────────────────────────
-
-  async function moveToWhitelist(email: Email) {
-    // Adaugă în whitelist
-    await supabase.from('email_rules').upsert({
-      email_address: email.from_address,
-      rule_type: 'whitelist',
-    }, { onConflict: 'email_address' })
-
-    // Marchează ca analizat (sau declanșează analiză Claude)
-    await analyzeEmail(email)
-    loadRules()
-  }
-
-  async function moveToBlacklist(email: Email) {
-    await supabase.from('email_rules').upsert({
-      email_address: email.from_address,
-      rule_type: 'blacklist',
-    }, { onConflict: 'email_address' })
-
-    // Trigger-ul din DB șterge automat emailul
-    await supabase.from('emails').update({ status: 'blacklisted' }).eq('id', email.id)
-    setEmails(prev => prev.filter(e => e.id !== email.id))
-    loadRules()
-  }
-
-  async function analyzeEmail(email: Email) {
-    setAnalyzingId(email.id)
-    try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': process.env.NEXT_PUBLIC_ANTHROPIC_KEY || '',
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 1500,
-          messages: [{
-            role: 'user',
-            content: `Ești asistentul platformei SetSail — o platformă de navigație sportivă.
-Analizează emailul și răspunde DOAR cu JSON valid, fără markdown.
-
-De la: ${email.from_address}
-Subiect: ${email.subject}
-Conținut: ${email.body_text?.slice(0, 2000) || '(fără conținut)'}
-
-{"category":"access_request|support|authentication|notification|spam|other","ai_summary":"1-2 propoziții","ai_sentiment":"positive|neutral|negative","ai_priority":"high|medium|low","reply_suggestion_1":"Stil SetSail, profesional","reply_suggestion_2":"Formal, Stimate/Stimată...","reply_suggestion_3":"Friendly, ton cald"}`
-          }]
-        })
-      })
-      const data = await res.json()
-      const text = data.content?.[0]?.text || '{}'
-      const ai = JSON.parse(text.replace(/```json|```/g, '').trim())
-
-      await supabase.from('emails').update({
-        status: 'analyzed',
-        is_processed: true,
-        category: ai.category,
-        ai_summary: ai.ai_summary,
-        ai_sentiment: ai.ai_sentiment,
-        ai_priority: ai.ai_priority,
-        reply_suggestion_1: ai.reply_suggestion_1,
-        reply_suggestion_2: ai.reply_suggestion_2,
-        reply_suggestion_3: ai.reply_suggestion_3,
-      }).eq('id', email.id)
-
-      setEmails(prev => prev.map(e => e.id === email.id
-        ? { ...e, status: 'analyzed', ...ai } : e))
-    } catch (err) {
-      console.error('Analyze error:', err)
-    }
-    setAnalyzingId(null)
-  }
-
-  async function sendReply(emailId: string, text: string) {
-    await supabase.from('emails').update({
-      reply_sent: text,
-      reply_sent_at: new Date().toISOString(),
-    }).eq('id', emailId)
-    setEmails(prev => prev.map(e => e.id === emailId
-      ? { ...e, reply_sent: text, reply_sent_at: new Date().toISOString() } : e))
-    setActiveReply(null)
-  }
+  // ── Add single ────────────────────────────────────────────────────────────
 
   async function addRule() {
-    if (!newEmail.trim()) return
-    setAddingRule(true)
-    await supabase.from('email_rules').upsert({
-      email_address: newEmail.trim().toLowerCase(),
-      rule_type: newType,
-      notes: newNotes.trim() || null,
-    }, { onConflict: 'email_address' })
+    const email = newEmail.trim().toLowerCase()
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return
+    setAdding(true)
+    await supabase.from('email_rules').upsert(
+      { email_address: email, rule_type: activeTab, notes: newNotes.trim() || null },
+      { onConflict: 'email_address' }
+    )
     setNewEmail(''); setNewNotes('')
-    await loadRules()
-    setAddingRule(false)
+    await load(); setAdding(false)
   }
 
   async function deleteRule(id: string) {
@@ -212,414 +105,435 @@ Conținut: ${email.body_text?.slice(0, 2000) || '(fără conținut)'}
     setRules(prev => prev.filter(r => r.id !== id))
   }
 
-  // ── Render helpers ────────────────────────────────────────────────────────
+  // ── Import ────────────────────────────────────────────────────────────────
 
-  function EmailCard({ email }: { email: Email }) {
-    const expanded = expandedId === email.id
-    const pri = priorityConfig[email.ai_priority as keyof typeof priorityConfig]
-    const isReplying = activeReply?.id === email.id
-
-    return (
-      <div className={`bg-white rounded-xl border transition-all ${expanded ? 'border-gray-200 shadow-md' : 'border-gray-100 shadow-sm hover:border-gray-200'}`}>
-        {/* Header */}
-        <button
-          className="w-full text-left p-4 flex items-start gap-3"
-          onClick={() => setExpandedId(expanded ? null : email.id)}
-        >
-          <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white text-xs font-bold"
-            style={{ background: '#0a1628' }}>
-            {email.from_name?.[0] || email.from_address[0].toUpperCase()}
-          </div>
-
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap mb-0.5">
-              <span className="font-medium text-gray-900 text-sm">
-                {email.from_name || email.from_address}
-              </span>
-              {email.from_name && (
-                <span className="text-xs text-gray-400">{email.from_address}</span>
-              )}
-              {pri && (
-                <span className="px-2 py-0.5 rounded-full text-xs font-medium"
-                  style={{ background: pri.bg, color: pri.color }}>
-                  {pri.label}
-                </span>
-              )}
-              {email.category && (
-                <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">
-                  {categoryLabel[email.category] || email.category}
-                </span>
-              )}
-              {email.reply_sent && (
-                <span className="flex items-center gap-1 text-xs text-green-600">
-                  <Send size={10} /> Răspuns trimis
-                </span>
-              )}
-              {email.attachments?.length > 0 && (
-                <span className="text-xs text-blue-500">📎 {email.attachments.length}</span>
-              )}
-            </div>
-
-            <div className="text-sm font-medium text-gray-800 truncate">{email.subject}</div>
-
-            {email.ai_summary && !expanded && (
-              <div className="text-xs text-gray-500 mt-0.5 truncate">{email.ai_summary}</div>
-            )}
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="text-xs text-gray-400">
-              {new Date(email.received_at).toLocaleDateString('ro-RO', { day: '2-digit', month: 'short' })}
-            </span>
-            {expanded ? <ChevronUp size={14} className="text-gray-400" /> : <ChevronDown size={14} className="text-gray-400" />}
-          </div>
-        </button>
-
-        {/* Expanded content */}
-        {expanded && (
-          <div className="px-4 pb-4 border-t border-gray-50 pt-4">
-
-            {/* AI Summary */}
-            {email.ai_summary && (
-              <div className="flex items-start gap-2 mb-4 p-3 rounded-lg bg-blue-50 border border-blue-100">
-                <Sparkles size={14} className="text-blue-500 shrink-0 mt-0.5" />
-                <div>
-                  <div className="text-xs font-medium text-blue-700 mb-0.5">Rezumat AI</div>
-                  <div className="text-sm text-blue-800">{email.ai_summary}</div>
-                  {email.ai_sentiment && (
-                    <div className="text-xs text-blue-500 mt-1">
-                      {sentimentIcon[email.ai_sentiment as keyof typeof sentimentIcon]} {email.ai_sentiment}
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-
-            {/* Body preview */}
-            {email.body_text && (
-              <div className="mb-4 p-3 rounded-lg bg-gray-50 text-xs text-gray-600 font-mono max-h-32 overflow-y-auto whitespace-pre-wrap">
-                {email.body_text.slice(0, 600)}{email.body_text.length > 600 ? '...' : ''}
-              </div>
-            )}
-
-            {/* Atașamente */}
-            {email.attachments?.length > 0 && (
-              <div className="mb-4">
-                <div className="text-xs font-medium text-gray-500 mb-2">Atașamente</div>
-                <div className="flex flex-wrap gap-2">
-                  {email.attachments.map((att: any, i: number) => (
-                    <div key={i} className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg border border-gray-200 bg-white text-xs">
-                      <span>📎</span>
-                      <span className="font-medium text-gray-700">{att.filename}</span>
-                      <span className="text-gray-400">({Math.round(att.size_bytes / 1024)}KB)</span>
-                      <button
-                        onClick={() => navigator.clipboard.writeText(att.search_query)}
-                        className="ml-1 text-blue-500 hover:underline"
-                        title="Copiază query de căutare"
-                      >
-                        🔍
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Propuneri răspuns */}
-            {(email.reply_suggestion_1 || email.reply_suggestion_2 || email.reply_suggestion_3) && !email.reply_sent && (
-              <div className="mb-4">
-                <div className="text-xs font-medium text-gray-500 mb-2">Propuneri răspuns</div>
-                <div className="space-y-2">
-                  {[
-                    { label: 'Stil SetSail', text: email.reply_suggestion_1, color: '#0a1628' },
-                    { label: 'Formal',       text: email.reply_suggestion_2, color: '#1e3a6e' },
-                    { label: 'Friendly',     text: email.reply_suggestion_3, color: '#059669' },
-                  ].filter(r => r.text).map((r, i) => (
-                    <div key={i} className="p-3 rounded-lg border border-gray-100 bg-gray-50">
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-xs font-semibold" style={{ color: r.color }}>{r.label}</span>
-                        <button
-                          onClick={() => setActiveReply({ id: email.id, text: r.text! })}
-                          className="text-xs px-2 py-1 rounded-lg text-white hover:opacity-90"
-                          style={{ background: r.color }}
-                        >
-                          Folosește
-                        </button>
-                      </div>
-                      <p className="text-xs text-gray-600 line-clamp-3">{r.text}</p>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Răspuns trimis */}
-            {email.reply_sent && (
-              <div className="mb-4 p-3 rounded-lg border border-green-100 bg-green-50">
-                <div className="text-xs font-medium text-green-700 mb-1 flex items-center gap-1">
-                  <Send size={11} /> Răspuns trimis la {new Date(email.reply_sent_at!).toLocaleDateString('ro-RO')}
-                </div>
-                <p className="text-xs text-green-800 line-clamp-3">{email.reply_sent}</p>
-              </div>
-            )}
-
-            {/* Reply editor */}
-            {isReplying && (
-              <div className="mb-4 p-3 rounded-lg border border-blue-200 bg-blue-50">
-                <div className="text-xs font-medium text-blue-700 mb-2">Editează răspunsul</div>
-                <textarea
-                  className="w-full border border-blue-200 rounded-lg p-2.5 text-xs text-gray-800 bg-white resize-none focus:outline-none focus:ring-2 focus:ring-blue-300"
-                  rows={6}
-                  value={activeReply.text}
-                  onChange={e => setActiveReply({ ...activeReply, text: e.target.value })}
-                />
-                <div className="flex gap-2 mt-2">
-                  <button
-                    onClick={() => sendReply(email.id, activeReply.text)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white"
-                    style={{ background: '#059669' }}
-                  >
-                    <Send size={11} /> Marchează ca trimis
-                  </button>
-                  <button
-                    onClick={() => setActiveReply(null)}
-                    className="px-3 py-1.5 rounded-lg text-xs border border-gray-200 text-gray-500 hover:bg-gray-50"
-                  >
-                    Anulează
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Acțiuni pending */}
-            {email.status === 'pending' && (
-              <div className="flex gap-2 pt-2 border-t border-gray-100">
-                <button
-                  onClick={() => moveToWhitelist(email)}
-                  disabled={analyzingId === email.id}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-white hover:opacity-90 disabled:opacity-60"
-                  style={{ background: '#059669' }}
-                >
-                  {analyzingId === email.id
-                    ? <><RefreshCw size={11} className="animate-spin" /> Analizez...</>
-                    : <><CheckCircle size={11} /> Whitelist + Analizează</>}
-                </button>
-                <button
-                  onClick={() => moveToBlacklist(email)}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-red-600 border border-red-200 hover:bg-red-50"
-                >
-                  <Ban size={11} /> Blacklist + Șterge
-                </button>
-              </div>
-            )}
-          </div>
-        )}
-      </div>
-    )
+  function handlePreview() {
+    const emails = parseEmails(importText)
+    if (!emails.length) return
+    const rows: ImportRow[] = emails.map(email => {
+      const existing = rules.find(r => r.email_address === email)
+      const conflict = existing && existing.rule_type !== importMode ? existing.rule_type : undefined
+      return { email, notes: '', conflict }
+    })
+    const res: Record<string, 'move' | 'skip'> = {}
+    rows.filter(r => r.conflict).forEach(r => { res[r.email] = 'move' })
+    setImportRows(rows); setResolutions(res); setImportStep('preview')
   }
 
-  // ── UI ────────────────────────────────────────────────────────────────────
+  async function handleImport() {
+    setImporting(true)
+    const toImport = importRows.filter(r => !r.conflict || resolutions[r.email] === 'move')
+    for (const row of toImport) {
+      await supabase.from('email_rules').upsert(
+        { email_address: row.email, rule_type: importMode, notes: null },
+        { onConflict: 'email_address' }
+      )
+    }
+    await load(); setImportStep('done'); setImporting(false)
+  }
 
-  const tabs: { id: Tab; label: string; count?: number; icon: any }[] = [
-    { id: 'analyzed', label: 'Analizate',  count: analyzed.length,  icon: CheckCircle },
-    { id: 'pending',  label: 'În așteptare', count: pending.length, icon: Clock },
-    { id: 'rules',    label: 'Reguli',     icon: Ban },
-  ]
+  function resetImport() {
+    setShowImport(false); setImportText(''); setImportRows([])
+    setResolutions({}); setImportStep('input')
+  }
+
+  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]; if (!file) return
+    const reader = new FileReader()
+    reader.onload = ev => {
+      const text = ev.target?.result as string
+      const lines = text.split('\n')
+      const header = lines[0]?.toLowerCase()
+      const col = header?.split(/[,;\t]/).findIndex(h => h.includes('email')) ?? 0
+      const skip = header?.includes('@') ? 0 : 1
+      const extracted = lines.slice(skip)
+        .map(l => l.split(/[,;\t]/)[col]?.replace(/"/g, '').trim())
+        .filter(Boolean).join('\n')
+      setImportText(p => p ? p + '\n' + extracted : extracted)
+    }
+    reader.readAsText(file); e.target.value = ''
+  }
+
+  const validCount    = parseEmails(importText).length
+  const conflictRows  = importRows.filter(r => r.conflict)
+  const cleanRows     = importRows.filter(r => !r.conflict)
+  const toImportCount = importRows.filter(r => !r.conflict || resolutions[r.email] === 'move').length
+
+  // ─────────────────────────────────────────────────────────────────────────
 
   return (
-    <div className="p-8">
+    <div className="p-8 max-w-4xl">
+
       {/* Header */}
       <div className="flex items-center justify-between mb-8">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900" style={{ fontFamily: 'Georgia, serif' }}>
-            Emailuri
-          </h1>
-          <p className="text-gray-500 text-sm mt-1">
-            {whitelist.length} whitelist · {blacklist.length} blacklist · {pending.length} în așteptare
+          <div className="flex items-center gap-2 mb-1">
+            <Link href="/admin/emailuri" className="text-gray-400 hover:text-gray-600 transition-colors">
+              <ArrowLeft size={16} />
+            </Link>
+            <h1 className="text-2xl font-bold text-gray-900" style={{ fontFamily: 'Georgia, serif' }}>
+              Reguli Email
+            </h1>
+          </div>
+          <p className="text-gray-500 text-sm">
+            {whitelist.length} whitelist · {blacklist.length} blacklist
           </p>
         </div>
-        <button
-          onClick={() => { loadEmails(); loadRules() }}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-white hover:opacity-90"
-          style={{ background: '#0a1628' }}
-        >
-          <RefreshCw size={14} /> Reîncarcă
-        </button>
-      </div>
-
-      {/* Tabs */}
-      <div className="flex gap-1 mb-6 border-b border-gray-200">
-        {tabs.map(({ id, label, count, icon: Icon }) => (
+        <div className="flex gap-2">
           <button
-            key={id}
-            onClick={() => setTab(id)}
-            className={`flex items-center gap-2 px-4 py-2.5 text-sm font-medium border-b-2 transition-colors -mb-px ${
-              tab === id
-                ? 'border-[#0a1628] text-[#0a1628]'
-                : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}
+            onClick={() => exportCSV(rules)}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
           >
-            <Icon size={14} />
-            {label}
-            {count !== undefined && (
-              <span className={`px-1.5 py-0.5 rounded-full text-xs font-medium ${
-                tab === id ? 'bg-[#0a1628] text-white' : 'bg-gray-100 text-gray-500'
-              }`}>
-                {count}
-              </span>
-            )}
+            <Download size={14} /> Export CSV
           </button>
-        ))}
+          <button
+            onClick={() => { setShowImport(true); setImportMode(activeTab) }}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-medium text-white hover:opacity-90"
+            style={{ background: '#0a1628' }}
+          >
+            <Upload size={14} /> Import
+          </button>
+        </div>
       </div>
 
-      {/* Search (pentru analyzed și pending) */}
-      {tab !== 'rules' && (
-        <div className="relative mb-4">
-          <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+      {/* Add single */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5 mb-6">
+        <h2 className="font-semibold text-gray-900 mb-4 text-sm">Adaugă adresă</h2>
+        <div className="flex gap-3 flex-wrap">
           <input
-            className="w-full border border-gray-200 rounded-lg pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-            placeholder="Caută după expeditor, subiect, rezumat..."
+            className="flex-1 min-w-48 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+            placeholder="email@exemplu.com"
+            value={newEmail}
+            onChange={e => setNewEmail(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && addRule()}
+          />
+          <select
+            className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none bg-white"
+            value={activeTab}
+            onChange={e => setActiveTab(e.target.value as any)}
+          >
+            <option value="whitelist">✅ Whitelist</option>
+            <option value="blacklist">🚫 Blacklist</option>
+          </select>
+          <input
+            className="flex-1 min-w-32 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none"
+            placeholder="Notă opțională"
+            value={newNotes}
+            onChange={e => setNewNotes(e.target.value)}
+            onKeyDown={e => e.key === 'Enter' && addRule()}
+          />
+          <button
+            onClick={addRule}
+            disabled={adding || !newEmail.trim()}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+            style={{ background: '#0a1628' }}
+          >
+            <Plus size={14} /> Adaugă
+          </button>
+        </div>
+      </div>
+
+      {/* Tabs + Search */}
+      <div className="flex items-center gap-4 mb-4">
+        <div className="flex rounded-lg border border-gray-200 overflow-hidden">
+          {(['whitelist', 'blacklist'] as const).map(t => (
+            <button key={t} onClick={() => setActiveTab(t)}
+              className={`flex items-center gap-1.5 px-4 py-2 text-sm font-medium transition-colors ${
+                activeTab === t ? 'bg-gray-900 text-white' : 'text-gray-500 hover:bg-gray-50'
+              }`}>
+              {t === 'whitelist' ? <CheckCircle size={13} /> : <Ban size={13} />}
+              {t === 'whitelist' ? 'Whitelist' : 'Blacklist'}
+              <span className={`ml-1 px-1.5 py-0.5 rounded-full text-xs ${
+                activeTab === t ? 'bg-white/20 text-white' : 'bg-gray-100 text-gray-500'
+              }`}>
+                {t === 'whitelist' ? whitelist.length : blacklist.length}
+              </span>
+            </button>
+          ))}
+        </div>
+        <div className="relative flex-1">
+          <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            className="w-full border border-gray-200 rounded-lg pl-8 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
+            placeholder="Caută adresă sau notă..."
             value={search}
             onChange={e => setSearch(e.target.value)}
           />
         </div>
-      )}
+      </div>
 
-      {/* ── Tab: Analizate ── */}
-      {tab === 'analyzed' && (
-        <div className="space-y-3">
-          {loading ? (
-            <div className="py-12 text-center text-gray-400">Se încarcă...</div>
-          ) : filterEmails(analyzed).length === 0 ? (
-            <div className="py-12 text-center text-gray-400">
-              <Mail size={32} className="mx-auto mb-3 opacity-30" />
-              <p>Niciun email analizat încă.</p>
+      {/* List */}
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+        {loading ? (
+          <div className="p-12 text-center text-gray-400 text-sm">Se încarcă...</div>
+        ) : activeList.length === 0 ? (
+          <div className="p-12 text-center text-gray-400">
+            {activeTab === 'whitelist'
+              ? <><CheckCircle size={28} className="mx-auto mb-3 opacity-20" /><p className="text-sm">Nicio adresă în whitelist.</p></>
+              : <><Ban size={28} className="mx-auto mb-3 opacity-20" /><p className="text-sm">Nicio adresă în blacklist.</p></>
+            }
+          </div>
+        ) : (
+          <>
+            <div className="px-4 py-2 bg-gray-50 border-b border-gray-100 grid grid-cols-[1fr_2fr_auto_auto] gap-4">
+              <span className="text-xs font-medium text-gray-400">ADRESĂ</span>
+              <span className="text-xs font-medium text-gray-400">NOTĂ</span>
+              <span className="text-xs font-medium text-gray-400">DATA</span>
+              <span></span>
             </div>
-          ) : (
-            filterEmails(analyzed).map(email => <EmailCard key={email.id} email={email} />)
-          )}
-        </div>
-      )}
+            <div className="divide-y divide-gray-50">
+              {activeList.map(rule => (
+                <div key={rule.id} className="grid grid-cols-[1fr_2fr_auto_auto] gap-4 items-center px-4 py-3 hover:bg-gray-50 transition-colors">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0 ${
+                      activeTab === 'whitelist' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
+                    }`}>
+                      {rule.email_address[0].toUpperCase()}
+                    </div>
+                    <span className="text-sm font-medium text-gray-900 truncate">{rule.email_address}</span>
+                  </div>
+                  <span className="text-xs text-gray-400 truncate">{rule.notes || '—'}</span>
+                  <span className="text-xs text-gray-300 whitespace-nowrap">
+                    {new Date(rule.created_at).toLocaleDateString('ro-RO', { day: '2-digit', month: 'short', year: 'numeric' })}
+                  </span>
+                  <button onClick={() => deleteRule(rule.id)} className="text-gray-200 hover:text-red-400 transition-colors">
+                    <Trash2 size={14} />
+                  </button>
+                </div>
+              ))}
+            </div>
+            <div className="px-4 py-2.5 bg-gray-50 border-t border-gray-100 text-xs text-gray-400 text-right">
+              {activeList.length} adrese afișate
+            </div>
+          </>
+        )}
+      </div>
 
-      {/* ── Tab: Pending ── */}
-      {tab === 'pending' && (
-        <div className="space-y-3">
-          {pending.length > 0 && (
-            <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-50 border border-amber-100 mb-4">
-              <AlertCircle size={14} className="text-amber-500 shrink-0" />
-              <p className="text-xs text-amber-700">
-                Aceste emailuri nu au fost analizate. Apasă pe fiecare pentru a decide: <strong>Whitelist</strong> (analizează + adaugă expeditorul în lista albă) sau <strong>Blacklist</strong> (șterge + ignoră pe viitor).
-              </p>
-            </div>
-          )}
-          {loading ? (
-            <div className="py-12 text-center text-gray-400">Se încarcă...</div>
-          ) : filterEmails(pending).length === 0 ? (
-            <div className="py-12 text-center text-gray-400">
-              <Clock size={32} className="mx-auto mb-3 opacity-30" />
-              <p>Niciun email în așteptare.</p>
-            </div>
-          ) : (
-            filterEmails(pending).map(email => <EmailCard key={email.id} email={email} />)
-          )}
-        </div>
-      )}
+      {/* ── Import Modal ───────────────────────────────────────────────────── */}
+      {showImport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col">
 
-      {/* ── Tab: Reguli ── */}
-      {tab === 'rules' && (
-        <div className="space-y-6">
-          {/* Adaugă regulă */}
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
-            <h2 className="font-semibold text-gray-900 mb-4">Adaugă regulă</h2>
-            <div className="flex gap-3 flex-wrap">
-              <input
-                className="flex-1 min-w-48 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
-                placeholder="email@exemplu.com"
-                value={newEmail}
-                onChange={e => setNewEmail(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && addRule()}
-              />
-              <select
-                className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none bg-white"
-                value={newType}
-                onChange={e => setNewType(e.target.value as any)}
-              >
-                <option value="whitelist">✅ Whitelist</option>
-                <option value="blacklist">🚫 Blacklist</option>
-              </select>
-              <input
-                className="flex-1 min-w-32 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none"
-                placeholder="Notă opțională"
-                value={newNotes}
-                onChange={e => setNewNotes(e.target.value)}
-              />
-              <button
-                onClick={addRule}
-                disabled={addingRule || !newEmail.trim()}
-                className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
-                style={{ background: '#0a1628' }}
-              >
-                <Plus size={14} /> Adaugă
+            {/* Modal header */}
+            <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 shrink-0">
+              <div>
+                <h2 className="font-semibold text-gray-900">Import adrese</h2>
+                <p className="text-xs text-gray-400 mt-0.5">
+                  {importStep === 'input' && 'Paste sau încarcă un fișier'}
+                  {importStep === 'preview' && `Preview: ${importRows.length} adrese detectate`}
+                  {importStep === 'done' && 'Import finalizat'}
+                </p>
+              </div>
+              <button onClick={resetImport} className="text-gray-300 hover:text-gray-600 transition-colors">
+                <X size={18} />
               </button>
             </div>
-          </div>
 
-          {/* Whitelist */}
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
-            <div className="p-4 border-b border-gray-100 flex items-center gap-2">
-              <CheckCircle size={15} className="text-green-500" />
-              <h2 className="font-semibold text-gray-900">Whitelist</h2>
-              <span className="ml-auto text-xs text-gray-400">{whitelist.length} adrese</span>
-            </div>
-            {whitelist.length === 0 ? (
-              <div className="p-6 text-center text-gray-400 text-sm">Nicio adresă în whitelist.</div>
-            ) : (
-              <div className="divide-y divide-gray-50">
-                {whitelist.map(rule => (
-                  <div key={rule.id} className="flex items-center px-4 py-3 gap-3">
-                    <div className="w-7 h-7 rounded-full bg-green-100 flex items-center justify-center text-xs font-bold text-green-700">
-                      {rule.email_address[0].toUpperCase()}
-                    </div>
-                    <div className="flex-1">
-                      <div className="text-sm font-medium text-gray-900">{rule.email_address}</div>
-                      {rule.notes && <div className="text-xs text-gray-400">{rule.notes}</div>}
-                    </div>
-                    <button onClick={() => deleteRule(rule.id)} className="text-gray-300 hover:text-red-400 transition-colors">
-                      <Trash2 size={14} />
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+            <div className="flex-1 overflow-y-auto px-6 py-5 space-y-5">
 
-          {/* Blacklist */}
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm">
-            <div className="p-4 border-b border-gray-100 flex items-center gap-2">
-              <Ban size={15} className="text-red-400" />
-              <h2 className="font-semibold text-gray-900">Blacklist</h2>
-              <span className="ml-auto text-xs text-gray-400">{blacklist.length} adrese</span>
-            </div>
-            {blacklist.length === 0 ? (
-              <div className="p-6 text-center text-gray-400 text-sm">Nicio adresă în blacklist.</div>
-            ) : (
-              <div className="divide-y divide-gray-50">
-                {blacklist.map(rule => (
-                  <div key={rule.id} className="flex items-center px-4 py-3 gap-3">
-                    <div className="w-7 h-7 rounded-full bg-red-100 flex items-center justify-center text-xs font-bold text-red-500">
-                      {rule.email_address[0].toUpperCase()}
-                    </div>
-                    <div className="flex-1">
-                      <div className="text-sm font-medium text-gray-900">{rule.email_address}</div>
-                      {rule.notes && <div className="text-xs text-gray-400">{rule.notes}</div>}
-                    </div>
-                    <button onClick={() => deleteRule(rule.id)} className="text-gray-300 hover:text-red-400 transition-colors">
-                      <Trash2 size={14} />
-                    </button>
+              {/* ── Step 1: Input ── */}
+              {importStep === 'input' && (
+                <>
+                  {/* Whitelist / Blacklist toggle */}
+                  <div className="flex gap-2">
+                    {(['whitelist', 'blacklist'] as const).map(type => (
+                      <button key={type} onClick={() => setImportMode(type)}
+                        className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl border text-sm font-medium transition-all ${
+                          importMode === type
+                            ? type === 'whitelist'
+                              ? 'border-green-400 bg-green-50 text-green-700'
+                              : 'border-red-300 bg-red-50 text-red-600'
+                            : 'border-gray-200 text-gray-400 hover:border-gray-300'
+                        }`}>
+                        {type === 'whitelist' ? <CheckCircle size={14} /> : <Ban size={14} />}
+                        {type === 'whitelist' ? 'Whitelist' : 'Blacklist'}
+                      </button>
+                    ))}
                   </div>
-                ))}
-              </div>
-            )}
+
+                  {/* Paste */}
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <ClipboardPaste size={13} className="text-gray-400" />
+                      <span className="text-xs font-medium text-gray-600">Paste adrese</span>
+                      <span className="text-xs text-gray-400">— per linie, sau separate prin virgulă / tab / punct și virgulă</span>
+                    </div>
+                    <textarea
+                      className="w-full border border-gray-200 rounded-xl p-3 text-sm font-mono text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"
+                      rows={7}
+                      placeholder={'email1@exemplu.com\nemail2@exemplu.com\n\nSau copiază direct din Excel (Ctrl+C pe coloana de emailuri → Ctrl+V aici)'}
+                      value={importText}
+                      onChange={e => setImportText(e.target.value)}
+                    />
+                    <div className="text-xs text-gray-400 mt-1">
+                      {validCount > 0 ? `${validCount} adrese valide detectate` : 'Nicio adresă validă detectată'}
+                    </div>
+                  </div>
+
+                  {/* Upload fișier */}
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <FileText size={13} className="text-gray-400" />
+                      <span className="text-xs font-medium text-gray-600">Sau importă din fișier CSV / TXT</span>
+                    </div>
+                    <button onClick={() => fileRef.current?.click()}
+                      className="w-full flex items-center justify-center gap-2 py-3 rounded-xl border-2 border-dashed border-gray-200 text-sm text-gray-400 hover:border-gray-300 hover:text-gray-500 transition-colors">
+                      <Upload size={14} /> Click pentru a selecta fișier (.csv, .txt)
+                    </button>
+                    <input ref={fileRef} type="file" accept=".csv,.txt" className="hidden" onChange={handleFile} />
+                  </div>
+                </>
+              )}
+
+              {/* ── Step 2: Preview ── */}
+              {importStep === 'preview' && (
+                <>
+                  {/* Summary pills */}
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-50 text-green-700 text-xs font-medium">
+                      <Check size={12} /> {cleanRows.length} fără conflict
+                    </div>
+                    {conflictRows.length > 0 && (
+                      <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-50 text-amber-700 text-xs font-medium">
+                        <AlertTriangle size={12} /> {conflictRows.length} conflict{conflictRows.length > 1 ? 'e' : ''}
+                      </div>
+                    )}
+                    <div className="ml-auto text-xs text-gray-400">
+                      Se vor importa <strong className="text-gray-700">{toImportCount}</strong> adrese în <strong className="text-gray-700">{importMode}</strong>
+                    </div>
+                  </div>
+
+                  {/* Conflicte */}
+                  {conflictRows.length > 0 && (
+                    <div className="rounded-xl border border-amber-200 overflow-hidden">
+                      <div className="px-4 py-2.5 bg-amber-50 border-b border-amber-100 flex items-center gap-2">
+                        <AlertTriangle size={13} className="text-amber-500" />
+                        <span className="text-xs font-medium text-amber-700">Conflicte — există deja în lista opusă</span>
+                        <div className="ml-auto flex gap-2">
+                          <button onClick={() => {
+                            const r = { ...resolutions }
+                            conflictRows.forEach(c => { r[c.email] = 'move' })
+                            setResolutions(r)
+                          }} className="text-xs px-2 py-1 rounded bg-amber-100 text-amber-700 hover:bg-amber-200">
+                            Mută toate
+                          </button>
+                          <button onClick={() => {
+                            const r = { ...resolutions }
+                            conflictRows.forEach(c => { r[c.email] = 'skip' })
+                            setResolutions(r)
+                          }} className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-600 hover:bg-gray-200">
+                            Sari toate
+                          </button>
+                        </div>
+                      </div>
+                      <div className="divide-y divide-amber-50 max-h-52 overflow-y-auto">
+                        {conflictRows.map(row => (
+                          <div key={row.email} className="flex items-center px-4 py-2.5 gap-3">
+                            <div className="flex-1 min-w-0">
+                              <div className="text-sm font-medium text-gray-900 truncate">{row.email}</div>
+                              <div className="text-xs text-amber-600">
+                                Acum în <strong>{row.conflict}</strong> → vrei să muți în <strong>{importMode}</strong>?
+                              </div>
+                            </div>
+                            <div className="flex gap-1.5 shrink-0">
+                              <button
+                                onClick={() => setResolutions(r => ({ ...r, [row.email]: 'move' }))}
+                                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                                  resolutions[row.email] === 'move'
+                                    ? 'bg-amber-500 text-white'
+                                    : 'border border-gray-200 text-gray-500 hover:bg-gray-50'
+                                }`}
+                              >
+                                Mută
+                              </button>
+                              <button
+                                onClick={() => setResolutions(r => ({ ...r, [row.email]: 'skip' }))}
+                                className={`px-2.5 py-1 rounded-lg text-xs font-medium transition-all ${
+                                  resolutions[row.email] === 'skip'
+                                    ? 'bg-gray-600 text-white'
+                                    : 'border border-gray-200 text-gray-500 hover:bg-gray-50'
+                                }`}
+                              >
+                                Sari
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Preview adrese fără conflict */}
+                  {cleanRows.length > 0 && (
+                    <div className="rounded-xl border border-gray-100 overflow-hidden">
+                      <div className="px-4 py-2.5 bg-gray-50 border-b border-gray-100">
+                        <span className="text-xs font-medium text-gray-500">Adrese noi ({cleanRows.length})</span>
+                      </div>
+                      <div className="max-h-40 overflow-y-auto divide-y divide-gray-50">
+                        {cleanRows.map(row => (
+                          <div key={row.email} className="flex items-center px-4 py-2 gap-2">
+                            <Check size={12} className="text-green-500 shrink-0" />
+                            <span className="text-sm text-gray-700">{row.email}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* ── Step 3: Done ── */}
+              {importStep === 'done' && (
+                <div className="py-8 text-center">
+                  <div className="w-14 h-14 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4">
+                    <Check size={28} className="text-green-600" />
+                  </div>
+                  <h3 className="font-semibold text-gray-900 mb-1">Import finalizat!</h3>
+                  <p className="text-sm text-gray-500">
+                    {toImportCount} adrese adăugate în <strong>{importMode}</strong>.
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Modal footer */}
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-between shrink-0">
+              {importStep === 'input' && (
+                <>
+                  <button onClick={resetImport} className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700">
+                    Anulează
+                  </button>
+                  <button
+                    onClick={handlePreview}
+                    disabled={validCount === 0}
+                    className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium text-white hover:opacity-90 disabled:opacity-40"
+                    style={{ background: '#0a1628' }}
+                  >
+                    Continuă →
+                  </button>
+                </>
+              )}
+              {importStep === 'preview' && (
+                <>
+                  <button onClick={() => setImportStep('input')} className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700">
+                    ← Înapoi
+                  </button>
+                  <button
+                    onClick={handleImport}
+                    disabled={importing || toImportCount === 0}
+                    className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium text-white hover:opacity-90 disabled:opacity-40"
+                    style={{ background: '#059669' }}
+                  >
+                    {importing ? 'Se importă...' : `Importă ${toImportCount} adrese`}
+                  </button>
+                </>
+              )}
+              {importStep === 'done' && (
+                <button onClick={resetImport} className="ml-auto px-5 py-2 rounded-lg text-sm font-medium text-white" style={{ background: '#0a1628' }}>
+                  Închide
+                </button>
+              )}
+            </div>
           </div>
         </div>
       )}
