@@ -1,0 +1,17 @@
+{
+  "name": "setsail-imap-fetcher",
+  "version": "1.0.0",
+  "description": "SetSail — IMAP email fetcher with Claude AI analysis",
+  "type": "module",
+  "main": "imap-fetch.js",
+  "scripts": {
+    "fetch": "node imap-fetch.js",
+    "fetch:watch": "node --watch imap-fetch.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.4",
+    "dotenv": "^16.5.0",
+    "imapflow": "^1.0.188",
+    "mailparser": "^3.7.4"
+  }
+}
