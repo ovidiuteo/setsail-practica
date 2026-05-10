@@ -104,9 +104,8 @@ export default function EmailuriPage() {
 
   const analyzed = emails.filter(e => e.status === 'analyzed')
 
-  const batchNumbers = [...new Set(
-    emails.filter(e => e.status === 'whitelist').map(e => e.batch_number).filter(Boolean)
-  )].sort((a, b) => (b as number) - (a as number)) as number[]
+  const batchNumbersRaw = emails.filter(e => e.status === 'whitelist').map(e => e.batch_number).filter(Boolean) as number[]
+  const batchNumbers = batchNumbersRaw.filter((v, i) => batchNumbersRaw.indexOf(v) === i).sort((a, b) => b - a)
 
   const filterList = (list: Email[]) => {
     if (!search.trim()) return list
