@@ -108,30 +108,56 @@ async function extractSentEmails() {
     let processed = 0;
     let errors    = 0;
 
-    for await (const message of client.fetch('1:*', { source: true })) {
-      try {
-        const parsed = await simpleParser(message.source);
-        const found  = extractAddresses(parsed);
-        const date   = parsed.date || new Date();
+    // Procesează în batch-uri de 200 pentru a evita timeout-ul Yahoo
+    const batchSize = 200;
+    for (let start = 1; start <= total; start += batchSize) {
+      const end = Math.min(start + batchSize - 1, total);
+      const range = `${start}:${end}`;
 
-        for (const email of found) {
-          if (!isValidEmail(email)) continue;
-          if (allAddresses.has(email)) {
-            const entry = allAddresses.get(email);
-            entry.count++;
-            if (date > entry.lastSeen) entry.lastSeen = date;
-          } else {
-            allAddresses.set(email, { count: 1, lastSeen: date });
+      let retries = 3;
+      while (retries > 0) {
+        try {
+          for await (const message of client.fetch(range, { source: true })) {
+            try {
+              const parsed = await simpleParser(message.source);
+              const found  = extractAddresses(parsed);
+              const date   = parsed.date || new Date();
+
+              for (const email of found) {
+                if (!isValidEmail(email)) continue;
+                if (allAddresses.has(email)) {
+                  const entry = allAddresses.get(email);
+                  entry.count++;
+                  if (date > entry.lastSeen) entry.lastSeen = date;
+                } else {
+                  allAddresses.set(email, { count: 1, lastSeen: date });
+                }
+              }
+
+              processed++;
+              if (processed % 100 === 0) {
+                process.stdout.write(`\r   Procesate: ${processed}/${total} — ${allAddresses.size} adrese unice găsite`);
+              }
+
+            } catch (err) {
+              errors++;
+            }
           }
-        }
+          break; // batch ok, iese din retry
 
-        processed++;
-        if (processed % 100 === 0) {
-          process.stdout.write(`\r   Procesate: ${processed}/${total} — ${allAddresses.size} adrese unice găsite`);
+        } catch (batchErr) {
+          retries--;
+          if (retries === 0) {
+            console.log(`\n⚠️  Batch ${start}-${end} eșuat după 3 încercări, continuă...`);
+            break;
+          }
+          // Reconectare
+          console.log(`\n🔄 Reconectare (batch ${start}-${end}, retry ${3 - retries}/3)...`);
+          try { await client.logout(); } catch (_) {}
+          await new Promise(r => setTimeout(r, 2000));
+          await client.connect();
+          await client.getMailboxLock(sentFolder);
         }
-
-      } catch (err) {
-        errors++;
       }
     }
 
