@@ -667,11 +667,19 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
     () => students.filter(s=>s.email).map(s=>s.email)
   )
 
-  // Sincronizeaza BCC automat cand se schimba communication_target la orice cursant
+  // Sincronizeaza BCC automat - include toti cursantii din TOATE sesiunile (principal+clone+absenti+sailing)
+  // Toti cursantii din sesiunile ACESTEI sesiuni (principal + clone + absenti + sailing)
+  const currentSessionIds = new Set(allSessions.map((s:Session) => s.id))
+  const allCommStudents = Object.values(allStudents)
+    .flat()
+    .filter((s: Student) => currentSessionIds.has(s.session_id)) as Student[]
   useEffect(()=>{
-    const commEmails = students.filter(s=>s.email && s.communication_target).map(s=>s.email)
+    const commEmails = allCommStudents
+      .filter(s=>s.email && s.communication_target)
+      .map(s=>s.email as string)
+      .filter((e,i,arr)=>arr.indexOf(e)===i) // deduplicare
     setSelectedEmails(commEmails)
-  }, [students.map(s=>s.id+'_'+s.communication_target).join(',')])
+  }, [allCommStudents.map(s=>s.id+'_'+s.communication_target).join(',')])
 
   useEffect(()=>{
     setMailTo(selectedEmails.join(', '))
@@ -1200,8 +1208,13 @@ Set Sail NauticSchool
               if(!showMail) {
                 // Refresh la deschidere - doar cei cu communication_target=true
                 const commEmails = students.filter(s=>s.email && s.communication_target).map(s=>s.email)
-                setSelectedEmails(commEmails)
-                setMailTo(commEmails.join(', '))
+                const allComm = Object.values(allStudents).flat() as Student[]
+                const allCommEmails = allComm
+                  .filter((s:Student)=>s.email&&s.communication_target)
+                  .map((s:Student)=>s.email as string)
+                  .filter((e:string,i:number,arr:string[])=>arr.indexOf(e)===i)
+                setSelectedEmails(allCommEmails)
+                setMailTo(allCommEmails.join(', '))
               }
               setShowMail(!showMail)
             }} className="w-full flex items-center justify-between">
@@ -1230,8 +1243,8 @@ Set Sail NauticSchool
                         <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                           <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>
                         </svg>
-                        {students.filter(s=>s.email&&s.communication_target).length > 0
-                          ? <><span className="font-medium text-green-600">{students.filter(s=>s.email&&s.communication_target).length}</span><span className="text-green-600 ml-0.5">selectați</span></>
+                        {allCommStudents.filter(s=>s.email&&s.communication_target).length > 0
+                          ? <><span className="font-medium text-green-600">{allCommStudents.filter(s=>s.email&&s.communication_target).length}</span><span className="text-green-600 ml-0.5">selectați</span></>
                           : <span>Refresh</span>}
                       </button>
                     </div>
@@ -1412,6 +1425,7 @@ function OnlySailingSection({ sessions, studentsMap, setStudentsMap }: {
                   <th className="px-3 py-2 text-left">Email</th>
                   <th className="px-3 py-2 text-left">CNP</th>
                   <th className="px-3 py-2 text-left">Portal</th>
+                  <th className="px-3 py-2 text-center w-8">✉</th>
                   <th className="px-3 py-2 w-20"/>
                 </tr>
               </thead>
@@ -1427,6 +1441,17 @@ function OnlySailingSection({ sessions, studentsMap, setStudentsMap }: {
                       <td className="px-3 py-2 text-xs text-gray-500">{s.email||'—'}</td>
                       <td className="px-3 py-2 text-xs font-mono text-gray-400">{s.cnp||'—'}</td>
                       <td className="px-3 py-2 text-xs font-medium" style={{color:pst.color}}>{pst.label}</td>
+                      <td className="px-3 py-2 text-center">
+                        {s.email ? (
+                          <button onClick={async(e)=>{ e.stopPropagation(); const nv=!s.communication_target; await supabase.from('students').update({communication_target:nv}).eq('id',s.id); setStudentsMap((prev:any)=>{const upd={...prev};for(const sid of Object.keys(upd)){upd[sid]=upd[sid].map((st:Student)=>st.id===s.id?{...st,communication_target:nv}:st)}return upd}) }}
+                            title={s.communication_target ? 'Email activ' : 'Email inactiv'}>
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" stroke={s.communication_target ? '#16a34a' : '#d1d5db'}>
+                              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+                              <polyline points="22,6 12,13 2,6"/>
+                            </svg>
+                          </button>
+                        ) : <span className="text-gray-200">✉</span>}
+                      </td>
                       <td className="px-3 py-2 text-right">
                         <button onClick={()=>revoke(s)} className="text-xs text-orange-400 hover:text-red-500 hover:bg-red-50 px-2 py-1 rounded transition-colors">✕ Revocă</button>
                       </td>
