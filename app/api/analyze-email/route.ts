@@ -27,28 +27,37 @@ export async function POST(req: NextRequest) {
     return text.replace(/```json|```/g, '').trim()
   }
 
-  // ── Tip 1: clasificare pending ────────────────────────────────────────────
+  // ── Tip 1: clasificare pending (in batches of 20) ───────────────────────
   if (type === 'classify') {
     try {
-      const emailList = emails.map((e: any, i: number) =>
-        `${i + 1}. De la: ${clean(e.from_address, 80)}\n   Subiect: ${clean(e.subject, 80)}\n   Preview: ${clean(e.body_text, 100)}`
-      ).join('\n\n')
+      const allProposals: any[] = []
+      const batchSize = 20
 
-      const prompt = [
-        'Esti asistentul platformei SetSail — o platforma romana de navigatie sportiva.',
-        'Clasifica fiecare expeditor ca WHITELIST sau BLACKLIST.',
-        'WHITELIST = cursanti, instructori, parteneri, clienti, cereri profesionale.',
-        'BLACKLIST = newsletter, promotii, notificari automate, spam, facturi externe.',
-        '',
-        emailList,
-        '',
-        `Raspunde DOAR cu JSON array cu exact ${emails.length} obiecte:`,
-        '[{"index":0,"proposal":"whitelist","reason":"motiv scurt max 8 cuvinte"}]',
-      ].join('\n')
+      for (let start = 0; start < emails.length; start += batchSize) {
+        const batch = emails.slice(start, start + batchSize)
 
-      const text = await callClaude(prompt, 1200)
-      const parsed = JSON.parse(text)
-      return NextResponse.json({ proposals: parsed })
+        const emailList = batch.map((e: any, i: number) =>
+          `${start + i + 1}. De la: ${clean(e.from_address, 80)}\n   Subiect: ${clean(e.subject, 80)}\n   Preview: ${clean(e.body_text, 80)}`
+        ).join('\n\n')
+
+        const prompt = [
+          'Esti asistentul platformei SetSail — o platforma romana de navigatie sportiva.',
+          'Clasifica fiecare expeditor ca WHITELIST sau BLACKLIST.',
+          'WHITELIST = cursanti, instructori, parteneri, clienti, cereri profesionale.',
+          'BLACKLIST = newsletter, promotii, notificari automate, spam, facturi externe.',
+          '',
+          emailList,
+          '',
+          `Raspunde DOAR cu JSON array cu exact ${batch.length} obiecte (index incepe de la ${start}):`,
+          `[{"index":${start},"proposal":"whitelist","reason":"motiv scurt max 8 cuvinte"}]`,
+        ].join('\n')
+
+        const text = await callClaude(prompt, 800)
+        const parsed = JSON.parse(text)
+        allProposals.push(...parsed)
+      }
+
+      return NextResponse.json({ proposals: allProposals })
     } catch (err: any) {
       console.error('classify error:', err?.message)
       return NextResponse.json({ error: 'Claude error', detail: err?.message }, { status: 500 })
