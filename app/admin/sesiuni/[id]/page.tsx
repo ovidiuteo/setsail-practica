@@ -1420,12 +1420,12 @@ function OnlySailingSection({ sessions, studentsMap, setStudentsMap }: {
             <table className="w-full">
               <thead>
                 <tr className="bg-orange-50 border-b border-orange-100 text-xs font-medium text-orange-600">
+                  <th className="px-3 py-2 text-center w-8">✉</th>
                   <th className="px-3 py-2 text-left w-8">#</th>
                   <th className="px-3 py-2 text-left">Nume</th>
                   <th className="px-3 py-2 text-left">Email</th>
                   <th className="px-3 py-2 text-left">CNP</th>
                   <th className="px-3 py-2 text-left">Portal</th>
-                  <th className="px-3 py-2 text-center w-8">✉</th>
                   <th className="px-3 py-2 w-20"/>
                 </tr>
               </thead>
@@ -1434,13 +1434,6 @@ function OnlySailingSection({ sessions, studentsMap, setStudentsMap }: {
                   const pst = psMap[s.portal_status as keyof typeof psMap]||psMap.pending
                   return (
                     <tr key={s.id} className="border-b border-gray-50 hover:bg-orange-50/20">
-                      <td className="px-3 py-2 text-xs text-gray-300">{i+1}</td>
-                      <td className="px-3 py-2 text-xs font-medium text-orange-900">
-                        <Link href={`/admin/cursanti/${s.id}`} target="_blank" className="hover:underline">{s.full_name}</Link>
-                      </td>
-                      <td className="px-3 py-2 text-xs text-gray-500">{s.email||'—'}</td>
-                      <td className="px-3 py-2 text-xs font-mono text-gray-400">{s.cnp||'—'}</td>
-                      <td className="px-3 py-2 text-xs font-medium" style={{color:pst.color}}>{pst.label}</td>
                       <td className="px-3 py-2 text-center">
                         {s.email ? (
                           <button onClick={async(e)=>{ e.stopPropagation(); const nv=!s.communication_target; await supabase.from('students').update({communication_target:nv}).eq('id',s.id); setStudentsMap((prev:any)=>{const upd={...prev};for(const sid of Object.keys(upd)){upd[sid]=upd[sid].map((st:Student)=>st.id===s.id?{...st,communication_target:nv}:st)}return upd}) }}
@@ -1452,6 +1445,13 @@ function OnlySailingSection({ sessions, studentsMap, setStudentsMap }: {
                           </button>
                         ) : <span className="text-gray-200">✉</span>}
                       </td>
+                      <td className="px-3 py-2 text-xs text-gray-300">{i+1}</td>
+                      <td className="px-3 py-2 text-xs font-medium text-orange-900">
+                        <Link href={`/admin/cursanti/${s.id}`} target="_blank" className="hover:underline">{s.full_name}</Link>
+                      </td>
+                      <td className="px-3 py-2 text-xs text-gray-500">{s.email||'—'}</td>
+                      <td className="px-3 py-2 text-xs font-mono text-gray-400">{s.cnp||'—'}</td>
+                      <td className="px-3 py-2 text-xs font-medium" style={{color:pst.color}}>{pst.label}</td>
                       <td className="px-3 py-2 text-right">
                         <button onClick={()=>revoke(s)} className="text-xs text-orange-400 hover:text-red-500 hover:bg-red-50 px-2 py-1 rounded transition-colors">✕ Revocă</button>
                       </td>
