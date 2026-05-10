@@ -68,10 +68,8 @@ async function extractSentEmails() {
   // ── Găsește folderul Sent ─────────────────────────────────────────────────
 
   let sentFolder = null;
-  const folders = [];
-  for await (const folder of client.list()) {
-    folders.push(folder.path);
-  }
+  const folderList = await client.list();
+  const folders = folderList.map(f => f.path);
 
   console.log('📁 Foldere disponibile:');
   folders.forEach(f => console.log(`   ${f}`));
