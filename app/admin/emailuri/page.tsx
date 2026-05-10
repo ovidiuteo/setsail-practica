@@ -86,14 +86,7 @@ export default function EmailuriPage() {
   const [selectedBatches, setSelectedBatches] = useState<number[]>([])
   const [batchAnalyzingId, setBatchAnalyzingId] = useState<string | null>(null)
 
-  // Fetch state
-  const [showFetch, setShowFetch]       = useState(false)
-  const [fetchMode, setFetchMode]       = useState<'new' | 'last' | 'range'>('new')
-  const [fetchLimit, setFetchLimit]     = useState(50)
-  const [fetchDateFrom, setFetchDateFrom] = useState('')
-  const [fetchDateTo, setFetchDateTo]   = useState('')
-  const [fetching, setFetching]         = useState(false)
-  const [fetchResult, setFetchResult]   = useState<string | null>(null)
+
 
   // ── Load ──────────────────────────────────────────────────────────────────
 
