@@ -389,28 +389,26 @@ export default function CursantAdminPage() {
                 {/* Buton Alocă rndm - portocaliu */}
                 <button
                   onClick={async () => {
-                    // 1. Gasim toate sesiunile din grupul curent (principal + clone)
+                    // 1. Gasim grupul sesiunii curente (principal + clone)
                     const { data: allSessions } = await supabase
-                      .from('sessions')
-                      .select('id, parent_session_id, session_type')
+                      .from('sessions').select('id, parent_session_id, session_type')
                     const sess = allSessions?.find(s => s.id === student.session_id)
                     const principalId = sess?.session_type === 'principal'
-                      ? sess.id
-                      : (sess?.parent_session_id || sess?.id)
+                      ? sess.id : (sess?.parent_session_id || sess?.id)
                     const groupIds = (allSessions || [])
                       .filter(s => s.id === principalId || s.parent_session_id === principalId)
                       .map(s => s.id)
 
-                    // 2. Gasim semnaturile deja alocate random in grupul curent
+                    // 2. Gasim ID-urile surselor deja folosite in grup (via signature_pool_source_id)
                     const { data: usedInGroup } = await supabase
                       .from('students')
-                      .select('signature_random')
+                      .select('signature_pool_source_id')
                       .in('session_id', groupIds)
-                      .not('signature_random', 'is', null)
+                      .not('signature_pool_source_id', 'is', null)
                       .neq('id', student.id)
-                    const usedSignatures = new Set((usedInGroup || []).map(u => u.signature_random))
+                    const usedSourceIds = new Set((usedInGroup || []).map(u => u.signature_pool_source_id))
 
-                    // 3. Pool global - exclude cursantul curent si semnaturile deja folosite in grup
+                    // 3. Pool global - exclude cursantul curent, cei din grup si cei deja folositi
                     const { data: pool } = await supabase
                       .from('students')
                       .select('id, signature_data, session_id')
@@ -419,18 +417,23 @@ export default function CursantAdminPage() {
                       .neq('id', student.id)
                     if (!pool || pool.length === 0) { alert('Nicio semnătură în pool!'); return }
 
-                    // 4. Exclude semnaturile deja folosite in sesiunile din grup
+                    // 4. Filtrare: exclude surse deja folosite in grup SI cursanti din grup
                     const available = pool.filter(p =>
-                      !usedSignatures.has(p.signature_data) &&
+                      !usedSourceIds.has(p.id) &&
                       !groupIds.includes(p.session_id)
                     )
-                    // Fallback: daca nu mai sunt disponibile, folosim orice din pool (exclus grup)
-                    const fallback = pool.filter(p => !groupIds.includes(p.session_id))
-                    const source = available.length > 0 ? available : (fallback.length > 0 ? fallback : pool)
-                    if (source.length === 0) { alert('Nu mai sunt semnături disponibile pentru această sesiune!'); return }
+                    // Fallback 1: din afara grupului, chiar daca sursa e deja folosita in alt grup
+                    const fallback1 = pool.filter(p => !groupIds.includes(p.session_id) && !usedSourceIds.has(p.id))
+                    // Fallback 2: orice din afara grupului
+                    const fallback2 = pool.filter(p => !groupIds.includes(p.session_id))
+                    const source = available.length > 0 ? available : fallback1.length > 0 ? fallback1 : fallback2.length > 0 ? fallback2 : pool
+                    if (source.length === 0) { alert('Nu mai sunt semnături disponibile!'); return }
 
                     const pick = source[Math.floor(Math.random() * source.length)]
-                    await supabase.from('students').update({ signature_random: pick.signature_data }).eq('id', student.id)
+                    await supabase.from('students').update({
+                      signature_random: pick.signature_data,
+                      signature_pool_source_id: pick.id
+                    }).eq('id', student.id)
                     setStudent(s => s ? { ...s, signature_random: pick.signature_data } : s)
                   }}
                   title={student.signature_random ? 'Realocă semnătură random din pool' : 'Alocă semnătură random din pool'}
