@@ -60,6 +60,9 @@ export default function EmailuriPage() {
   // Whitelist checkboxes
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
 
+  // Pending checkboxes
+  const [pendingSelected, setPendingSelected] = useState<Set<string>>(new Set())
+
   // Pending AI proposals
   const [proposals, setProposals]           = useState<Record<string, 'whitelist' | 'blacklist'>>({})
   const [proposalReasons, setProposalReasons] = useState<Record<string, string>>({})
@@ -281,6 +284,34 @@ export default function EmailuriPage() {
     setSelectedIds(new Set())
   }
 
+  function togglePendingSelect(id: string) {
+    setPendingSelected(prev => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
+  async function movePendingSelected(type: 'whitelist' | 'blacklist') {
+    const ids = Array.from(pendingSelected)
+    if (!ids.length) return
+    for (const id of ids) {
+      const email = emails.find(e => e.id === id)
+      if (!email) continue
+      await supabase.from('email_rules').upsert(
+        { email_address: email.from_address, rule_type: type },
+        { onConflict: 'email_address' }
+      )
+      if (type === 'whitelist') {
+        await supabase.from('emails').update({ status: 'whitelist' }).eq('id', id)
+      } else {
+        await supabase.from('emails').update({ status: 'blacklisted' }).eq('id', id)
+      }
+    }
+    setPendingSelected(new Set())
+    loadAll()
+  }
+
   // ── Email Card (Whitelist + Analyzed) ─────────────────────────────────────
 
   function EmailCard({ email, showCheckbox = false }: { email: Email; showCheckbox?: boolean }) {
@@ -474,14 +505,19 @@ export default function EmailuriPage() {
   // ── Pending Card ──────────────────────────────────────────────────────────
 
   function PendingCard({ email }: { email: Email }) {
-    const proposal = proposals[email.from_address]
-    const reason   = proposalReasons[email.from_address]
+    const proposal  = proposals[email.from_address]
+    const reason    = proposalReasons[email.from_address]
+    const isSelected = pendingSelected.has(email.id)
     return (
       <div className={`bg-white rounded-xl border shadow-sm transition-all ${
         proposal === 'whitelist' ? 'border-green-200' :
-        proposal === 'blacklist' ? 'border-red-200' : 'border-gray-100'
+        proposal === 'blacklist' ? 'border-red-200' :
+        isSelected ? 'border-blue-200' : 'border-gray-100'
       }`}>
         <div className="p-4 flex items-start gap-3">
+          <button onClick={() => togglePendingSelect(email.id)} className="mt-0.5 shrink-0 text-gray-300 hover:text-gray-600">
+            {isSelected ? <CheckSquare size={16} className="text-blue-500" /> : <Square size={16} />}
+          </button>
           <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 text-white text-xs font-bold"
             style={{ background: '#0a1628' }}>
             {(email.from_name?.[0] || email.from_address[0]).toUpperCase()}
@@ -524,7 +560,7 @@ export default function EmailuriPage() {
   // ── Tabs ──────────────────────────────────────────────────────────────────
 
   const tabs = [
-    { id: 'pending'   as Tab, label: 'În așteptare', count: pending.length,          icon: Clock },
+    { id: 'pending'   as Tab, label: 'Pending',       count: pending.length,          icon: Clock },
     { id: 'whitelist' as Tab, label: 'Whitelist',    count: whitelistVisible.length,  icon: CheckCircle },
     { id: 'analyzed'  as Tab, label: 'Analizate',    count: analyzed.length,          icon: Sparkles },
   ]
@@ -590,16 +626,45 @@ export default function EmailuriPage() {
             </div>
           ) : (
             <>
-              <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-gray-100 shadow-sm">
+              <div className="flex items-center justify-between p-4 bg-white rounded-xl border border-gray-100 shadow-sm flex-wrap gap-3">
                 <div>
-                  <div className="font-semibold text-gray-900 text-sm">{pending.length} emailuri în așteptare</div>
+                  <div className="font-semibold text-gray-900 text-sm">{pending.length} emailuri pending</div>
                   <div className="text-xs text-gray-400 mt-0.5">
-                    {Object.keys(proposals).length > 0
-                      ? `${Object.values(proposals).filter(p => p === 'whitelist').length} → WL · ${Object.values(proposals).filter(p => p === 'blacklist').length} → BL propuse`
-                      : 'Apasă AI Propuneri pentru clasificare automată'}
+                    {pendingSelected.size > 0
+                      ? `${pendingSelected.size} selectate`
+                      : Object.keys(proposals).length > 0
+                        ? `${Object.values(proposals).filter(p => p === 'whitelist').length} → WL · ${Object.values(proposals).filter(p => p === 'blacklist').length} → BL propuse`
+                        : 'Selectează manual sau folosește AI Propuneri'}
                   </div>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
+                  {/* Select all/none */}
+                  <button onClick={() => setPendingSelected(new Set(pending.map(e => e.id)))}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border border-gray-200 text-gray-600 hover:bg-gray-50">
+                    <CheckSquare size={12} /> Toate
+                  </button>
+                  <button onClick={() => setPendingSelected(new Set())}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border border-gray-200 text-gray-600 hover:bg-gray-50">
+                    <Square size={12} /> Niciunul
+                  </button>
+
+                  {/* Bulk move selected */}
+                  {pendingSelected.size > 0 && (
+                    <>
+                      <button onClick={() => movePendingSelected('whitelist')}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white hover:opacity-90"
+                        style={{ background: '#059669' }}>
+                        <CheckCircle size={12} /> WL ({pendingSelected.size})
+                      </button>
+                      <button onClick={() => movePendingSelected('blacklist')}
+                        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white hover:opacity-90"
+                        style={{ background: '#ef4444' }}>
+                        <Ban size={12} /> BL ({pendingSelected.size})
+                      </button>
+                    </>
+                  )}
+
+                  {/* AI proposals */}
                   <button onClick={classifyPending} disabled={classifying}
                     className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-50">
                     {classifying ? <><RefreshCw size={13} className="animate-spin" /> Analizez...</> : <><Sparkles size={13} /> AI Propuneri</>}
