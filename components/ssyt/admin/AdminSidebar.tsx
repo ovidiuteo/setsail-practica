@@ -16,6 +16,7 @@ import {
   CheckSquare,
   Shuffle,
   Wallet,
+  UserCog,
   ChevronLeft,
 } from 'lucide-react'
 
@@ -24,6 +25,7 @@ const NAV = [
   { href: '/ssyt/admin/teams', label: 'Echipe', icon: Users },
   { href: '/ssyt/admin/roster', label: 'Roster (drag-drop)', icon: Shuffle },
   { href: '/ssyt/admin/participants', label: 'Participanți', icon: UserPlus },
+  { href: '/ssyt/admin/users', label: 'Useri și conturi', icon: UserCog },
   { href: '/ssyt/admin/applications', label: 'Aplicări', icon: ClipboardList },
   { href: '/ssyt/admin/boats', label: 'Ambarcațiuni', icon: Sailboat },
   { href: '/ssyt/admin/regattas', label: 'Regatte', icon: Anchor },
@@ -56,7 +58,7 @@ export default function AdminSidebar() {
 
       <div className="w-8 h-px mb-4" style={{ background: 'rgba(255,255,255,0.1)' }}></div>
 
-      <nav className="flex flex-col gap-1 flex-1">
+      <nav className="flex flex-col gap-1 flex-1 overflow-y-auto">
         {NAV.map((item) => {
           const active =
             pathname === item.href ||
