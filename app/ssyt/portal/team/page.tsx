@@ -1,25 +1,79 @@
+'use client'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { Crown, Sailboat } from 'lucide-react'
-import { redirect } from 'next/navigation'
-import { getCurrentUser, createSupabaseServerClient } from '@/lib/ssyt/supabase-server'
+import { useCurrentUser } from '@/lib/ssyt/useCurrentUser'
+import { createSupabaseBrowserClient } from '@/lib/ssyt/supabase-browser'
 
-export const dynamic = 'force-dynamic'
+export default function PortalTeamPage() {
+  const { participant, loading } = useCurrentUser()
+  const [team, setTeam] = useState<any>(null)
+  const [boat, setBoat] = useState<any>(null)
+  const [skipper, setSkipper] = useState<any>(null)
+  const [teammates, setTeammates] = useState<any[]>([])
+  const [dataLoading, setDataLoading] = useState(true)
 
-export default async function PortalTeamPage() {
-  const { user, participant } = await getCurrentUser()
-  if (!user) redirect('/ssyt/login')
-  if (!participant) redirect('/ssyt/portal')
+  useEffect(() => {
+    if (loading || !participant) {
+      if (!loading) setDataLoading(false)
+      return
+    }
 
-  const supabase = createSupabaseServerClient()
+    async function load() {
+      const supabase = createSupabaseBrowserClient()
+      const { data: myMem } = await supabase
+        .from('ssyt_team_memberships')
+        .select('team_id')
+        .eq('participant_id', participant.id)
+        .eq('status', 'active')
+        .maybeSingle()
 
-  const { data: myMembership } = await supabase
-    .from('ssyt_team_memberships')
-    .select(`team_id`)
-    .eq('participant_id', participant.id)
-    .eq('status', 'active')
-    .maybeSingle()
+      if (!myMem) { setDataLoading(false); return }
 
-  if (!myMembership) {
+      const { data: teamData } = await supabase
+        .from('ssyt_teams')
+        .select(`
+          id, name, short_name, color_primary, slogan, skipper_id,
+          boat:ssyt_boats(id, name, model, sail_number)
+        `)
+        .eq('id', myMem.team_id)
+        .maybeSingle()
+
+      if (!teamData) { setDataLoading(false); return }
+      setTeam(teamData)
+      const b = Array.isArray(teamData.boat) ? teamData.boat[0] : teamData.boat
+      setBoat(b)
+
+      // Skipper separat
+      if (teamData.skipper_id) {
+        const { data: sk } = await supabase
+          .from('ssyt_participants')
+          .select('id, full_name, first_name, last_name, photo_url')
+          .eq('id', teamData.skipper_id)
+          .maybeSingle()
+        setSkipper(sk)
+      }
+
+      // Teammates
+      const { data: tm } = await supabase
+        .from('ssyt_team_memberships')
+        .select(`
+          id, membership_type,
+          participant:ssyt_participants(id, full_name, first_name, last_name, photo_url)
+        `)
+        .eq('team_id', teamData.id)
+        .eq('status', 'active')
+      setTeammates(tm || [])
+      setDataLoading(false)
+    }
+    load()
+  }, [participant, loading])
+
+  if (loading || dataLoading) {
+    return <div className="max-w-6xl mx-auto px-6 py-8 text-sm text-gray-400">Se încarcă...</div>
+  }
+
+  if (!team) {
     return (
       <div className="max-w-6xl mx-auto px-6 py-8">
         <div className="rounded-lg p-8 text-center text-gray-500" style={{ background: '#fff', border: '1px dashed #e5e7eb' }}>
@@ -28,31 +82,6 @@ export default async function PortalTeamPage() {
       </div>
     )
   }
-
-  // Detalii echipa + skipper + barca + membri
-  const { data: team } = await supabase
-    .from('ssyt_teams')
-    .select(`
-      id, name, short_name, color_primary, slogan, skipper_id,
-      boat:ssyt_boats(id, name, model, sail_number),
-      skipper:ssyt_participants!ssyt_teams_skipper_id_fkey(id, full_name, first_name, last_name, photo_url)
-    `)
-    .eq('id', myMembership.team_id)
-    .maybeSingle()
-
-  if (!team) return null
-
-  const boat = Array.isArray(team.boat) ? team.boat[0] : team.boat
-  const skipper = Array.isArray(team.skipper) ? team.skipper[0] : team.skipper
-
-  const { data: teammates } = await supabase
-    .from('ssyt_team_memberships')
-    .select(`
-      id, membership_type,
-      participant:ssyt_participants(id, full_name, first_name, last_name, photo_url)
-    `)
-    .eq('team_id', team.id)
-    .eq('status', 'active')
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-8">
@@ -90,27 +119,17 @@ export default async function PortalTeamPage() {
 
       <div>
         <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-500 mb-3">
-          Echipaj ({teammates?.length || 0})
+          Echipaj ({teammates.length})
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {teammates?.map((m) => {
+          {teammates.map((m) => {
             const p = Array.isArray(m.participant) ? m.participant[0] : m.participant
             if (!p) return null
             const isMe = p.id === participant.id
             const isSkipperRow = p.id === team.skipper_id
             return (
-              <div
-                key={m.id}
-                className="rounded-lg p-3 flex items-center gap-3"
-                style={{
-                  background: '#fff',
-                  border: isMe ? '2px solid #FF6B35' : '1px solid #e5e7eb',
-                }}
-              >
-                <div
-                  className="w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0"
-                  style={{ background: isSkipperRow ? '#FF6B35' : (team.color_primary || '#4A5568'), color: '#fff' }}
-                >
+              <div key={m.id} className="rounded-lg p-3 flex items-center gap-3" style={{ background: '#fff', border: isMe ? '2px solid #FF6B35' : '1px solid #e5e7eb' }}>
+                <div className="w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0" style={{ background: isSkipperRow ? '#FF6B35' : (team.color_primary || '#4A5568'), color: '#fff' }}>
                   {p.first_name?.[0]}{p.last_name?.[0]}
                 </div>
                 <div className="flex-1 min-w-0">

@@ -1,15 +1,30 @@
+'use client'
 import Link from 'next/link'
-import { redirect } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { Anchor, LogOut } from 'lucide-react'
-import { getCurrentUser } from '@/lib/ssyt/supabase-server'
+import { useRequireAuth } from '@/lib/ssyt/useCurrentUser'
+import { createSupabaseBrowserClient } from '@/lib/ssyt/supabase-browser'
 import PortalNav from './PortalNav'
-import LogoutButton from './LogoutButton'
 
-export const dynamic = 'force-dynamic'
+export default function PortalLayout({ children }: { children: React.ReactNode }) {
+  const router = useRouter()
+  const { user, participant, isAdmin, loading } = useRequireAuth()
 
-export default async function PortalLayout({ children }: { children: React.ReactNode }) {
-  const { user, participant, isAdmin } = await getCurrentUser()
-  if (!user) redirect('/ssyt/login?next=/ssyt/portal')
+  async function handleLogout() {
+    const supabase = createSupabaseBrowserClient()
+    await supabase.auth.signOut()
+    router.push('/ssyt')
+  }
+
+  if (loading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: '#f8f9fa' }}>
+        <div className="text-sm text-gray-400">Se încarcă...</div>
+      </div>
+    )
+  }
+
+  if (!user) return null  // redirect-ul deja in progres
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: '#f8f9fa' }}>
@@ -24,7 +39,9 @@ export default async function PortalLayout({ children }: { children: React.React
             <Link href="/ssyt/admin" className="text-gray-600 hover:underline">Admin</Link>
           )}
           <span className="text-gray-700 font-medium">{participant?.full_name || user.email}</span>
-          <LogoutButton />
+          <button onClick={handleLogout} className="text-gray-400 hover:text-gray-700 transition" title="Logout">
+            <LogOut size={16} />
+          </button>
         </div>
       </header>
 

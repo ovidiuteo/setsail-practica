@@ -1,25 +1,96 @@
+'use client'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
-import { Anchor, Calendar, Clock, Users, AlertCircle } from 'lucide-react'
-import { redirect } from 'next/navigation'
-import { getCurrentUser, createSupabaseServerClient } from '@/lib/ssyt/supabase-server'
+import { AlertCircle } from 'lucide-react'
+import { useCurrentUser } from '@/lib/ssyt/useCurrentUser'
+import { createSupabaseBrowserClient } from '@/lib/ssyt/supabase-browser'
 
-export const dynamic = 'force-dynamic'
+export default function PortalHome() {
+  const { user, participant, loading } = useCurrentUser()
+  const [team, setTeam] = useState<any>(null)
+  const [boat, setBoat] = useState<any>(null)
+  const [regattas, setRegattas] = useState<any[]>([])
+  const [participations, setParticipations] = useState<Record<string, any>>({})
+  const [signupReqStatus, setSignupReqStatus] = useState<string | null>(null)
+  const [dataLoading, setDataLoading] = useState(true)
 
-export default async function PortalHome() {
-  const { user, participant } = await getCurrentUser()
-  if (!user) redirect('/ssyt/login')
+  useEffect(() => {
+    if (loading) return
+    if (!user) return
 
-  const supabase = createSupabaseServerClient()
+    async function load() {
+      if (!user) return
+      const supabase = createSupabaseBrowserClient()
 
-  // Daca participantul nu e legat de user, arat mesaj
+      if (!participant) {
+        const { data: req } = await supabase
+          .from('ssyt_signup_requests')
+          .select('status')
+          .eq('user_id', user.id)
+          .maybeSingle()
+        setSignupReqStatus(req?.status || null)
+        setDataLoading(false)
+        return
+      }
+
+      // Echipa
+      const { data: membership } = await supabase
+        .from('ssyt_team_memberships')
+        .select(`
+          membership_type,
+          team:ssyt_teams(id, name, short_name, color_primary, skipper_id, boat:ssyt_boats(id, name))
+        `)
+        .eq('participant_id', participant.id)
+        .eq('status', 'active')
+        .maybeSingle()
+
+      const teamObj = Array.isArray(membership?.team) ? membership?.team[0] : membership?.team
+      setTeam(teamObj)
+      if (teamObj) {
+        const boatObj = Array.isArray(teamObj.boat) ? teamObj.boat[0] : teamObj.boat
+        setBoat(boatObj)
+      }
+
+      // Regate urmatoare
+      const { data: seasons } = await supabase.from('ssyt_seasons').select('id').eq('status', 'active').limit(1)
+      const seasonId = seasons?.[0]?.id
+
+      const { data: regs } = await supabase
+        .from('ssyt_regattas')
+        .select('id, name, short_name, slug, start_date, end_date, event_type, status')
+        .eq('season_id', seasonId)
+        .gte('start_date', new Date().toISOString().split('T')[0])
+        .order('start_date')
+        .limit(3)
+      setRegattas(regs || [])
+
+      // Disponibilitati
+      const regIds = (regs || []).map((r) => r.id)
+      if (regIds.length > 0) {
+        const { data: parts } = await supabase
+          .from('ssyt_regatta_participation')
+          .select('regatta_id, confirmation_status, on_crewlist')
+          .eq('participant_id', participant.id)
+          .in('regatta_id', regIds)
+        const map: Record<string, any> = {}
+        for (const p of parts || []) map[p.regatta_id] = p
+        setParticipations(map)
+      }
+      setDataLoading(false)
+    }
+
+    load()
+  }, [user, participant, loading])
+
+  if (loading || dataLoading) {
+    return (
+      <div className="max-w-6xl mx-auto px-6 py-8">
+        <div className="text-sm text-gray-400">Se încarcă...</div>
+      </div>
+    )
+  }
+
   if (!participant) {
-    // Caut signup request
-    const { data: signupReq } = await supabase
-      .from('ssyt_signup_requests')
-      .select('status, full_name')
-      .eq('user_id', user.id)
-      .maybeSingle()
-
     return (
       <div className="max-w-6xl mx-auto px-6 py-8">
         <div className="rounded-lg p-8 text-center" style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
@@ -28,53 +99,14 @@ export default async function PortalHome() {
             Contul tău așteaptă aprobare
           </h2>
           <p className="text-sm text-gray-500 max-w-md mx-auto">
-            {signupReq?.status === 'pending'
-              ? 'Cererea ta a fost trimisă către organizatorul SSYT. Vei fi notificat când e aprobată și legată de profilul tău.'
+            {signupReqStatus === 'pending'
+              ? 'Cererea ta a fost trimisă către organizatorul SSYT. Vei fi notificat când e aprobată.'
               : 'Contul tău nu e încă legat de un profil de participant. Contactează organizatorul.'}
           </p>
         </div>
       </div>
     )
   }
-
-  // Iau echipa lui
-  const { data: membership } = await supabase
-    .from('ssyt_team_memberships')
-    .select(`
-      id, membership_type,
-      team:ssyt_teams(id, name, short_name, color_primary, skipper_id, boat:ssyt_boats(id, name))
-    `)
-    .eq('participant_id', participant.id)
-    .eq('status', 'active')
-    .maybeSingle()
-
-  const team = Array.isArray(membership?.team) ? membership?.team[0] : membership?.team
-  const boat = team && (Array.isArray(team.boat) ? team.boat[0] : team.boat)
-
-  // Iau regate sezonului
-  const { data: seasons } = await supabase.from('ssyt_seasons').select('id').eq('status', 'active').limit(1)
-  const seasonId = seasons?.[0]?.id
-
-  const { data: regattas } = await supabase
-    .from('ssyt_regattas')
-    .select('id, name, short_name, slug, start_date, end_date, event_type, status')
-    .eq('season_id', seasonId)
-    .gte('start_date', new Date().toISOString().split('T')[0])
-    .order('start_date')
-    .limit(3)
-
-  // Iau disponibilitatea participantului pentru regate
-  const regattaIds = (regattas || []).map((r) => r.id)
-  const { data: participations } = regattaIds.length > 0
-    ? await supabase
-        .from('ssyt_regatta_participation')
-        .select('regatta_id, confirmation_status, on_crewlist')
-        .eq('participant_id', participant.id)
-        .in('regatta_id', regattaIds)
-    : { data: [] }
-
-  const partMap: Record<string, any> = {}
-  for (const p of participations || []) partMap[p.regatta_id] = p
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-8">
@@ -88,7 +120,6 @@ export default async function PortalHome() {
         </p>
       </div>
 
-      {/* Echipa quick card */}
       {team && (
         <Link href="/ssyt/portal/team" className="block mb-6 rounded-lg p-5 hover:shadow-md transition" style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
           <div className="flex items-center gap-3">
@@ -104,26 +135,23 @@ export default async function PortalHome() {
         </Link>
       )}
 
-      {/* Regate urmatoare */}
-      <div className="mb-4">
-        <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-500 mb-3">Regate următoare</h2>
-      </div>
+      <h2 className="text-sm font-semibold uppercase tracking-wider text-gray-500 mb-3">Regate următoare</h2>
 
-      {regattas && regattas.length > 0 ? (
+      {regattas.length > 0 ? (
         <div className="space-y-3">
           {regattas.map((r) => {
-            const part = partMap[r.id]
+            const part = participations[r.id]
             const status = part?.confirmation_status
             const onCrewlist = part?.on_crewlist
             const d1 = new Date(r.start_date)
             const d2 = r.end_date ? new Date(r.end_date) : null
             return (
-              <div key={r.id} className="rounded-lg p-4 flex items-center gap-4" style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
+              <div key={r.id} className="rounded-lg p-4 flex items-center gap-4 flex-wrap" style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
                 <div className="w-12 h-12 rounded-md flex flex-col items-center justify-center" style={{ background: '#0a1628', color: '#fff' }}>
                   <div className="text-xs uppercase">{d1.toLocaleString('ro-RO', { month: 'short' })}</div>
                   <div className="text-lg font-bold leading-none">{d1.getDate()}</div>
                 </div>
-                <div className="flex-1">
+                <div className="flex-1 min-w-0">
                   <Link href={`/ssyt/regattas/${r.slug}`} className="font-semibold hover:underline" style={{ color: '#0a1628' }}>
                     {r.name}
                   </Link>
