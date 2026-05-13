@@ -2,6 +2,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import { UserCheck } from 'lucide-react'
 import { supabase } from '@/lib/ssyt/supabase'
 
 type Regatta = { id: string; name: string; short_name: string | null; start_date: string; end_date: string | null; event_type: string; status: string }
@@ -20,20 +21,21 @@ type Participation = {
   team_id: string
   confirmation_status: string
   attendance_type: string | null
+  on_crewlist?: boolean
 }
 
-const CONF_COLORS: Record<string, string> = {
-  confirmed: '#10B981',
-  tentative: '#3B82F6',
-  pending: '#F59E0B',
-  declined: '#EF4444',
+const STATUS_COLORS: Record<string, string> = {
+  confirmed: '#10B981',  // verde
+  declined: '#EF4444',   // rosu
+  tentative: '#9CA3AF',  // gri (cum a cerut)
+  pending: '#F59E0B',    // amber (legacy - le tratam ca tentative vizual)
 }
 
+// Ciclul: empty → confirmed → declined → tentative → empty (sterg)
 const NEXT_STATE: Record<string, string> = {
-  pending: 'confirmed',
   confirmed: 'declined',
   declined: 'tentative',
-  tentative: 'pending',
+  tentative: 'CLEAR',
 }
 
 function getParticipant(m: Membership) {
@@ -64,26 +66,62 @@ export default function AvailabilityMatrix({
     const existing = partMap[key]
 
     if (!existing) {
-      // Insert nou cu status confirmed (presupunere: admin click = vrea pe el)
+      // Insert nou cu status confirmed
       const { error } = await supabase.from('ssyt_regatta_participation').insert({
         regatta_id: regattaId,
         participant_id: participantId,
         team_id: teamId,
         confirmation_status: 'confirmed',
         attendance_type: 'core',
+        on_crewlist: false,
         confirmed_at: new Date().toISOString(),
       })
       if (error) alert(error.message)
     } else {
-      const next = NEXT_STATE[existing.confirmation_status] || 'pending'
-      const updates: any = { confirmation_status: next }
-      if (next === 'confirmed') updates.confirmed_at = new Date().toISOString()
-      const { error } = await supabase
-        .from('ssyt_regatta_participation')
-        .update(updates)
-        .eq('id', existing.id)
-      if (error) alert(error.message)
+      const next = NEXT_STATE[existing.confirmation_status] || 'confirmed'
+      if (next === 'CLEAR') {
+        // Sterg complet
+        const { error } = await supabase
+          .from('ssyt_regatta_participation')
+          .delete()
+          .eq('id', existing.id)
+        if (error) alert(error.message)
+      } else {
+        // Update; daca status != confirmed, automat on_crewlist = false
+        const updates: any = { confirmation_status: next }
+        if (next === 'confirmed') {
+          updates.confirmed_at = new Date().toISOString()
+        } else {
+          // Daca devine declined sau tentative, scot de pe crewlist
+          updates.on_crewlist = false
+        }
+        const { error } = await supabase
+          .from('ssyt_regatta_participation')
+          .update(updates)
+          .eq('id', existing.id)
+        if (error) alert(error.message)
+      }
     }
+    setBusy(null)
+    router.refresh()
+  }
+
+  async function toggleCrewlist(regattaId: string, participantId: string, teamId: string) {
+    const key = `${regattaId}_${participantId}`
+    const existing = partMap[key]
+
+    // Doar daca e disponibil (confirmed) poate fi pe crewlist
+    if (!existing || existing.confirmation_status !== 'confirmed') {
+      alert('Trebuie să fie disponibil (verde) ca să fie pus pe crewlist. Click pe celulă întâi.')
+      return
+    }
+
+    setBusy(key)
+    const { error } = await supabase
+      .from('ssyt_regatta_participation')
+      .update({ on_crewlist: !existing.on_crewlist })
+      .eq('id', existing.id)
+    if (error) alert(error.message)
     setBusy(null)
     router.refresh()
   }
@@ -99,13 +137,13 @@ export default function AvailabilityMatrix({
             {regattas.map((r) => {
               const d = new Date(r.start_date)
               return (
-                <th key={r.id} className="px-2 py-2 text-center" style={{ minWidth: 80 }}>
+                <th key={r.id} className="px-2 py-2 text-center" style={{ minWidth: 100 }}>
                   <Link href={`/ssyt/admin/regattas/${r.id}`} className="block hover:underline">
                     <div className="text-[10px] uppercase text-gray-400">{d.toLocaleString('ro-RO', { month: 'short' })}</div>
                     <div className="font-semibold text-sm" style={{ color: '#0a1628' }}>
                       {d.getDate()}{r.end_date && new Date(r.end_date).getDate() !== d.getDate() ? `-${new Date(r.end_date).getDate()}` : ''}
                     </div>
-                    <div className="text-[10px] text-gray-500 mt-0.5 truncate max-w-[80px]" title={r.name}>
+                    <div className="text-[10px] text-gray-500 mt-0.5 truncate max-w-[100px]" title={r.name}>
                       {r.short_name || r.name.split(' ').slice(0, 2).join(' ')}
                     </div>
                   </Link>
@@ -146,23 +184,25 @@ export default function AvailabilityMatrix({
                         const key = `${r.id}_${p.id}`
                         const part = partMap[key]
                         const status = part?.confirmation_status
-                        const color = status ? CONF_COLORS[status] : null
+                        const onCrewlist = part?.on_crewlist || false
                         const isBusy = busy === key
+                        const isConfirmed = status === 'confirmed'
+
                         return (
-                          <td key={r.id} className="text-center p-1">
-                            <button
-                              onClick={() => cycleStatus(r.id, p.id, team.id)}
-                              disabled={isBusy}
-                              className="w-12 h-8 rounded text-[10px] font-semibold uppercase transition hover:scale-105 disabled:opacity-50"
-                              style={{
-                                background: color || '#F3F4F6',
-                                color: color ? '#fff' : '#9CA3AF',
-                                border: color ? 'none' : '1px dashed #d1d5db',
-                              }}
-                              title={status || 'click pentru a adăuga'}
-                            >
-                              {isBusy ? '...' : (status ? status.slice(0, 3) : '+')}
-                            </button>
+                          <td key={r.id} className="p-1">
+                            <div className="flex items-center justify-center gap-1">
+                              <StatusCell
+                                status={status}
+                                onClick={() => cycleStatus(r.id, p.id, team.id)}
+                                disabled={isBusy}
+                              />
+                              <CrewlistIcon
+                                onCrewlist={onCrewlist}
+                                isConfirmed={isConfirmed}
+                                onClick={() => toggleCrewlist(r.id, p.id, team.id)}
+                                disabled={isBusy || !isConfirmed}
+                              />
+                            </div>
                           </td>
                         )
                       })}
@@ -175,9 +215,68 @@ export default function AvailabilityMatrix({
         </tbody>
       </table>
 
-      <div className="px-3 py-3 text-xs text-gray-500 border-t" style={{ background: '#f8f9fa' }}>
-        💡 Click pe o celulă comută: <strong>+</strong> → confirmed → declined → tentative → pending → confirmed...
+      <div className="px-3 py-3 text-xs text-gray-500 border-t space-y-1" style={{ background: '#f8f9fa' }}>
+        <div>💡 <strong>Click pe pătrat</strong>: comută disponibilitatea (verde → roșu → gri → fără înregistrare → verde...).</div>
+        <div>👤 <strong>Click pe iconul cap-de-om</strong>: pune/scoate de pe crewlist (doar dacă e disponibil/verde).</div>
+        <div className="pt-1 flex flex-wrap items-center gap-3">
+          <span className="font-medium">Legendă:</span>
+          <LegendItem color="#10B981" label="Disponibil" />
+          <LegendItem color="#EF4444" label="Indisponibil" />
+          <LegendItem color="#9CA3AF" label="Tentative" />
+          <span className="inline-flex items-center gap-1 ml-2">
+            <UserCheck size={14} style={{ color: '#10B981' }} />
+            <span className="text-gray-600">Pe crewlist</span>
+          </span>
+        </div>
       </div>
     </div>
+  )
+}
+
+function StatusCell({ status, onClick, disabled }: { status: string | undefined; onClick: () => void; disabled: boolean }) {
+  const color = status ? STATUS_COLORS[status] : null
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="w-7 h-7 rounded transition hover:scale-105 disabled:opacity-50 flex items-center justify-center"
+      style={{
+        background: color || 'transparent',
+        border: color ? 'none' : '1px dashed #d1d5db',
+      }}
+      title={status || 'Click pentru a adauga'}
+    >
+      {!color && <span className="text-gray-300 text-base leading-none">+</span>}
+    </button>
+  )
+}
+
+function CrewlistIcon({ onCrewlist, isConfirmed, onClick, disabled }: { onCrewlist: boolean; isConfirmed: boolean; onClick: () => void; disabled: boolean }) {
+  const iconColor = onCrewlist ? '#10B981' : '#D1D5DB'
+  const title = !isConfirmed
+    ? 'Trebuie disponibil ca să poată fi pus pe crewlist'
+    : onCrewlist
+      ? 'Pe crewlist - click pentru a scoate'
+      : 'Click pentru a pune pe crewlist'
+
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="w-6 h-6 rounded transition hover:bg-gray-100 disabled:cursor-not-allowed flex items-center justify-center"
+      style={{ opacity: !isConfirmed ? 0.4 : 1 }}
+      title={title}
+    >
+      <UserCheck size={14} style={{ color: iconColor }} />
+    </button>
+  )
+}
+
+function LegendItem({ color, label }: { color: string; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1">
+      <span className="w-3 h-3 rounded" style={{ background: color }}></span>
+      <span className="text-gray-600">{label}</span>
+    </span>
   )
 }

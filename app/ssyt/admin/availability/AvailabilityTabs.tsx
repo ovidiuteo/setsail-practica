@@ -22,22 +22,12 @@ export default function AvailabilityTabs(props: {
       </div>
 
       {tab === 'members' && (
-        <>
-          {/* Legend */}
-          <div className="flex flex-wrap items-center gap-4 mb-4 text-xs">
-            <LegendDot color="#10B981" label="Confirmat" />
-            <LegendDot color="#3B82F6" label="Tentative" />
-            <LegendDot color="#F59E0B" label="Pending" />
-            <LegendDot color="#EF4444" label="Refuzat" />
-            <LegendDot color="#E5E7EB" label="Nu e în crewlist" />
-          </div>
-          <AvailabilityMatrix
-            regattas={props.regattas}
-            teams={props.teams}
-            memberships={props.memberships}
-            participation={props.participation}
-          />
-        </>
+        <AvailabilityMatrix
+          regattas={props.regattas}
+          teams={props.teams}
+          memberships={props.memberships}
+          participation={props.participation}
+        />
       )}
 
       {tab === 'boats' && (
@@ -66,14 +56,5 @@ function TabButton({ active, onClick, icon, label }: { active: boolean; onClick:
       {icon}
       {label}
     </button>
-  )
-}
-
-function LegendDot({ color, label }: { color: string; label: string }) {
-  return (
-    <span className="inline-flex items-center gap-1.5">
-      <span className="w-3 h-3 rounded" style={{ background: color }}></span>
-      <span className="text-gray-600">{label}</span>
-    </span>
   )
 }

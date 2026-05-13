@@ -35,7 +35,7 @@ export default async function AdminAvailabilityPage() {
     supabase
       .from('ssyt_regatta_participation')
       .select(`
-        id, regatta_id, participant_id, team_id, confirmation_status, attendance_type,
+        id, regatta_id, participant_id, team_id, confirmation_status, attendance_type, on_crewlist,
         participant:ssyt_participants(id, full_name, first_name, last_name)
       `),
   ])

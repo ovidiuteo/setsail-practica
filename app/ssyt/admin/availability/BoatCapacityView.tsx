@@ -1,8 +1,8 @@
 'use client'
-import { useState, useMemo } from 'react'
+import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Crown, X, UserPlus, Sailboat, Trash2 } from 'lucide-react'
+import { Crown, X, UserPlus, Sailboat, UserCheck } from 'lucide-react'
 import { supabase } from '@/lib/ssyt/supabase'
 
 type Regatta = { id: string; name: string; short_name: string | null; start_date: string; end_date: string | null; event_type: string; status: string }
@@ -29,6 +29,7 @@ type Participation = {
   team_id: string
   confirmation_status: string
   attendance_type: string | null
+  on_crewlist?: boolean
   participant: { id: string; full_name: string; first_name: string; last_name: string } | { id: string; full_name: string; first_name: string; last_name: string }[] | null
 }
 
@@ -38,13 +39,20 @@ function asObject<T>(v: T | T[] | null | undefined): T | null {
   if (!v) return null
   return Array.isArray(v) ? (v[0] ?? null) : v
 }
+function getParticipant(p: { participant: any }) { return asObject(p.participant) }
+function getMembershipParticipant(m: Membership) { return asObject(m.participant) }
+function getBoat(t: Team) { return asObject(t.boat) }
 
-function getParticipant(p: { participant: any }) {
-  return asObject(p.participant)
-}
-
-function getBoat(t: Team) {
-  return asObject(t.boat)
+type Slot = {
+  kind: 'core' | 'occasional' | 'tentative' | 'empty'
+  participantId?: string
+  participantName?: string
+  firstName?: string
+  lastName?: string
+  participationId?: string
+  status?: string
+  onCrewlist?: boolean
+  isSkipper?: boolean
 }
 
 export default function BoatCapacityView({
@@ -56,128 +64,224 @@ export default function BoatCapacityView({
   participation: Participation[]
 }) {
   const router = useRouter()
-  const [pickerOpen, setPickerOpen] = useState<{ regattaId: string; teamId: string } | null>(null)
+  const [pickerOpen, setPickerOpen] = useState<{ regattaId: string; teamId: string; replaceParticipationId?: string } | null>(null)
   const [busy, setBusy] = useState(false)
 
-  // Lookup: regatta_id × team_id → array de Participations confirmate sortate skipper-first
-  function getOccupants(regattaId: string, teamId: string, skipperId: string | null): Participation[] {
-    const confirmed = participation.filter(
-      (p) => p.regatta_id === regattaId && p.team_id === teamId && p.confirmation_status === 'confirmed'
+  function buildSlots(regattaId: string, team: Team): Slot[] {
+    const slots: Slot[] = []
+    const coreMembers = memberships.filter((m) => m.team_id === team.id)
+    const coreIds = new Set(coreMembers.map((m) => getMembershipParticipant(m)?.id).filter(Boolean))
+
+    // 1. Membrii core: doar cei confirmed sau tentative apar
+    for (const m of coreMembers) {
+      const p = getMembershipParticipant(m)
+      if (!p) continue
+      const part = participation.find((x) => x.regatta_id === regattaId && x.participant_id === p.id)
+      const status = part?.confirmation_status
+
+      // Skip pe declined - nu apar in barci
+      if (status === 'declined') continue
+
+      // Skipper-ul intotdeauna apare (chiar daca nu are inregistrare)
+      // Pentru ceilalti, daca status e undefined ii sarim
+      if (status === 'confirmed') {
+        slots.push({
+          kind: 'core',
+          participantId: p.id,
+          participantName: p.full_name,
+          firstName: p.first_name,
+          lastName: p.last_name,
+          participationId: part?.id,
+          status: 'confirmed',
+          onCrewlist: part?.on_crewlist || false,
+          isSkipper: p.id === team.skipper_id,
+        })
+      } else if (status === 'tentative') {
+        slots.push({
+          kind: 'tentative',
+          participantId: p.id,
+          participantName: p.full_name,
+          firstName: p.first_name,
+          lastName: p.last_name,
+          participationId: part?.id,
+          status: 'tentative',
+          onCrewlist: false,
+          isSkipper: p.id === team.skipper_id,
+        })
+      } else if (p.id === team.skipper_id) {
+        // Skipper fara inregistrare - tot apare (default confirmed)
+        slots.push({
+          kind: 'core',
+          participantId: p.id,
+          participantName: p.full_name,
+          firstName: p.first_name,
+          lastName: p.last_name,
+          participationId: part?.id,
+          status: 'confirmed',
+          onCrewlist: part?.on_crewlist || false,
+          isSkipper: true,
+        })
+      }
+      // Altfel (status null/pending pentru non-skipper) - nu il afisez, ramane slot gol
+    }
+
+    // 2. Occasionals: participation cu team_id = aceasta echipa + status confirmed
+    const occParticipations = participation.filter(
+      (x) => x.regatta_id === regattaId && x.team_id === team.id && !coreIds.has(x.participant_id) && x.confirmation_status === 'confirmed'
     )
-    // Skipper-ul primul
-    return confirmed.sort((a, b) => {
-      if (a.participant_id === skipperId && b.participant_id !== skipperId) return -1
-      if (b.participant_id === skipperId && a.participant_id !== skipperId) return 1
-      // Apoi core inainte de occasional
-      const aOcc = a.attendance_type === 'occasional' ? 1 : 0
-      const bOcc = b.attendance_type === 'occasional' ? 1 : 0
-      if (aOcc !== bOcc) return aOcc - bOcc
-      // Apoi alfabetic
-      const pa = getParticipant(a)
-      const pb = getParticipant(b)
-      return (pa?.full_name || '').localeCompare(pb?.full_name || '', 'ro')
+    for (const occ of occParticipations) {
+      const p = getParticipant(occ)
+      if (!p) continue
+      slots.push({
+        kind: 'occasional',
+        participantId: p.id,
+        participantName: p.full_name,
+        firstName: p.first_name,
+        lastName: p.last_name,
+        participationId: occ.id,
+        status: 'confirmed',
+        onCrewlist: occ.on_crewlist || false,
+        isSkipper: false,
+      })
+    }
+
+    // Sortare: skipper > core verde > occasional azur > tentative galben
+    slots.sort((a, b) => {
+      if (a.isSkipper && !b.isSkipper) return -1
+      if (b.isSkipper && !a.isSkipper) return 1
+      const rank = (s: Slot) => {
+        if (s.kind === 'core' && s.status === 'confirmed') return 0
+        if (s.kind === 'occasional') return 1
+        if (s.kind === 'tentative') return 2
+        return 3
+      }
+      const diff = rank(a) - rank(b)
+      if (diff !== 0) return diff
+      return (a.participantName || '').localeCompare(b.participantName || '', 'ro')
     })
+
+    // Umplem cu sloturi goale pana la 10
+    while (slots.length < SLOTS_PER_BOAT) {
+      slots.push({ kind: 'empty' })
+    }
+    return slots.slice(0, SLOTS_PER_BOAT)
   }
 
-  // Participanții disponibili pentru un slot (pentru picker)
-  // Critique: vrem persoanele care nu sunt deja confirmate la barca asta pe regatta asta
-  function getAvailableForSlot(regattaId: string, teamId: string): { id: string; full_name: string; teamId: string | null; teamName: string | null; status: string }[] {
-    // Toți participanții cu un membership activ
+  function getAvailableForSlot(regattaId: string, teamId: string, excludeParticipationId?: string) {
     const allMembers = memberships.map((m) => {
-      const p = getParticipant(m)
+      const p = getMembershipParticipant(m)
       if (!p) return null
       return { participant_id: p.id, full_name: p.full_name, team_id: m.team_id }
     }).filter(Boolean) as { participant_id: string; full_name: string; team_id: string }[]
 
-    // Cei deja confirmati la barca curenta
-    const alreadyOnBoat = new Set(
-      participation
-        .filter((p) => p.regatta_id === regattaId && p.team_id === teamId && p.confirmation_status === 'confirmed')
-        .map((p) => p.participant_id)
-    )
+    // Cei deja pe aceasta barca cu status confirmed (vizibili in slot)
+    const alreadyOnBoat = new Set<string>()
+    participation.forEach((x) => {
+      if (x.regatta_id === regattaId && x.team_id === teamId && x.confirmation_status === 'confirmed') {
+        if (x.id !== excludeParticipationId) {
+          alreadyOnBoat.add(x.participant_id)
+        }
+      }
+    })
+    // Si membrii core ai echipei cu status confirmed (deja vizibili)
+    memberships.filter((m) => m.team_id === teamId).forEach((m) => {
+      const p = getMembershipParticipant(m)
+      if (p) {
+        const part = participation.find((x) => x.regatta_id === regattaId && x.participant_id === p.id)
+        if (part?.confirmation_status === 'confirmed' && part.id !== excludeParticipationId) {
+          alreadyOnBoat.add(p.id)
+        }
+      }
+    })
 
-    // Map team_id → name
     const teamNameMap: Record<string, string> = {}
     teams.forEach((t) => { teamNameMap[t.id] = t.short_name || t.name })
 
     return allMembers
       .filter((m) => !alreadyOnBoat.has(m.participant_id))
       .map((m) => {
-        // Determin status-ul lui pe aceasta regatta
         const part = participation.find((p) => p.regatta_id === regattaId && p.participant_id === m.participant_id)
         return {
           id: m.participant_id,
           full_name: m.full_name,
           teamId: m.team_id,
           teamName: teamNameMap[m.team_id] || null,
-          status: part?.confirmation_status || 'fără confirmare',
+          status: part?.confirmation_status || 'fără',
+          isOnCrewlistOtherTeam: part?.on_crewlist && part.team_id !== teamId,
+          otherTeamName: part?.on_crewlist && part.team_id !== teamId ? teamNameMap[part.team_id] : null,
         }
       })
-      // Sort: cei confirmati la alta barca primii, apoi tentative, apoi pending/fără, apoi declined
       .sort((a, b) => {
-        const rank = (s: string) => s === 'confirmed' ? 0 : s === 'tentative' ? 1 : s === 'pending' ? 2 : s === 'fără confirmare' ? 3 : 4
-        const diff = rank(a.status) - rank(b.status)
+        const rank = (p: typeof a) => {
+          if (p.status === 'confirmed') return 0
+          if (p.status === 'tentative') return 1
+          if (p.status === 'declined') return 3
+          return 2
+        }
+        const diff = rank(a) - rank(b)
         if (diff !== 0) return diff
         return a.full_name.localeCompare(b.full_name, 'ro')
       })
   }
 
-  async function addToBoat(regattaId: string, teamId: string, participantId: string) {
+  async function addToBoat(regattaId: string, teamId: string, participantId: string, replaceParticipationId?: string) {
     setBusy(true)
-    // Verific daca exista deja inregistrare (poate cu status diferit)
+
+    // Daca inlocuim un tentative existent (peste care selectam ad-hoc)
+    // Nu il stergem - il lasam ca tentative dar adaugam separatul ca occasional
+    // (asta inseamna ca tentative-ul persista in baza de date)
+
     const existing = participation.find(
       (p) => p.regatta_id === regattaId && p.participant_id === participantId
     )
 
     if (existing) {
-      // Update: mut pe noua echipa, status confirmed, attendance occasional
-      const { error } = await supabase
-        .from('ssyt_regatta_participation')
-        .update({
-          team_id: teamId,
-          confirmation_status: 'confirmed',
-          attendance_type: 'occasional',
-          confirmed_at: new Date().toISOString(),
-          notes: 'Adaugat ad-hoc pe barca din vizualizare capacitate',
-        })
-        .eq('id', existing.id)
+      const isOriginalTeam = existing.team_id === teamId
+      const updates: any = {
+        team_id: teamId,
+        on_crewlist: true,
+        confirmation_status: 'confirmed',
+        confirmed_at: new Date().toISOString(),
+      }
+      if (!isOriginalTeam) {
+        updates.attendance_type = 'occasional'
+      }
+      const { error } = await supabase.from('ssyt_regatta_participation').update(updates).eq('id', existing.id)
       if (error) { alert(error.message); setBusy(false); return }
     } else {
-      // Insert nou
-      const { error } = await supabase
-        .from('ssyt_regatta_participation')
-        .insert({
-          regatta_id: regattaId,
-          participant_id: participantId,
-          team_id: teamId,
-          confirmation_status: 'confirmed',
-          attendance_type: 'occasional',
-          confirmed_at: new Date().toISOString(),
-          notes: 'Adaugat ad-hoc pe barca din vizualizare capacitate',
-        })
+      const { error } = await supabase.from('ssyt_regatta_participation').insert({
+        regatta_id: regattaId,
+        participant_id: participantId,
+        team_id: teamId,
+        confirmation_status: 'confirmed',
+        attendance_type: 'occasional',
+        on_crewlist: true,
+        confirmed_at: new Date().toISOString(),
+      })
       if (error) { alert(error.message); setBusy(false); return }
     }
-
     setBusy(false)
     setPickerOpen(null)
     router.refresh()
   }
 
-  async function removeFromBoat(participationId: string, isOccasional: boolean) {
-    if (!confirm(isOccasional ? 'Scoți acest participant ad-hoc de pe barcă?' : 'Marchezi participantul ca declined pentru această regatta?')) return
+  async function toggleCrewlist(slot: Slot) {
+    if (!slot.participationId || slot.status !== 'confirmed') return
     setBusy(true)
-    if (isOccasional) {
-      // Pentru occasional adaugat ad-hoc, sterg complet
-      const { error } = await supabase.from('ssyt_regatta_participation').delete().eq('id', participationId)
-      if (error) { alert(error.message); setBusy(false); return }
-    } else {
-      // Pentru core, doar marchez declined
-      const { error } = await supabase
-        .from('ssyt_regatta_participation')
-        .update({ confirmation_status: 'declined', confirmed_at: null })
-        .eq('id', participationId)
-      if (error) { alert(error.message); setBusy(false); return }
-    }
+    const { error } = await supabase
+      .from('ssyt_regatta_participation')
+      .update({ on_crewlist: !slot.onCrewlist })
+      .eq('id', slot.participationId)
+    if (error) { alert(error.message); setBusy(false); return }
+    setBusy(false)
+    router.refresh()
+  }
+
+  async function removeOccasional(participationId: string) {
+    if (!confirm('Scoți participantul ad-hoc de pe această barcă?')) return
+    setBusy(true)
+    const { error } = await supabase.from('ssyt_regatta_participation').delete().eq('id', participationId)
+    if (error) { alert(error.message); setBusy(false); return }
     setBusy(false)
     router.refresh()
   }
@@ -185,10 +289,20 @@ export default function BoatCapacityView({
   return (
     <div className="space-y-8">
       {/* Legend */}
-      <div className="flex flex-wrap items-center gap-4 text-xs">
-        <LegendBox color="#10B981" label="Membru core confirmat" />
-        <LegendBox color="#7DD3FC" label="Ad-hoc / occasional" />
-        <LegendBox color="#F3F4F6" label="Loc liber (click)" border />
+      <div className="rounded-lg p-3 text-xs" style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
+        <div className="font-medium uppercase tracking-wider text-gray-500 mb-2">Legendă</div>
+        <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+          <LegendItem bg="#10B981" border="#10B981" label="Disponibil + pe crewlist" />
+          <LegendItem bg="#10B981" border="#D1D5DB" label="Disponibil + neînscris" />
+          <LegendItem bg="#7DD3FC" border="#10B981" label="Ad-hoc + pe crewlist" />
+          <LegendItem bg="#7DD3FC" border="#D1D5DB" label="Ad-hoc + neînscris" />
+          <LegendItem bg="#FEF3C7" border="#D1D5DB" label="Tentative (click → ad-hoc)" />
+          <LegendItem bg="#F3F4F6" border="#D1D5DB" dashed label="Loc liber" />
+        </div>
+        <div className="mt-2 text-gray-500">
+          💡 Click pe iconița <UserCheck size={11} className="inline" /> din slot verde/azur pentru a comuta crewlist.
+          Click pe slot galben sau gri pentru a selecta un participant ad-hoc.
+        </div>
       </div>
 
       {regattas.map((r) => {
@@ -196,7 +310,6 @@ export default function BoatCapacityView({
         const d2 = r.end_date ? new Date(r.end_date) : null
         return (
           <section key={r.id} className="rounded-lg overflow-hidden" style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
-            {/* Header regatta */}
             <div className="px-5 py-3 flex items-center justify-between flex-wrap gap-3" style={{ background: '#0a1628', color: '#fff' }}>
               <div>
                 <Link href={`/ssyt/admin/regattas/${r.id}`} className="font-semibold tracking-tight hover:underline">
@@ -212,19 +325,13 @@ export default function BoatCapacityView({
               </span>
             </div>
 
-            {/* Bărci pentru această regatta */}
             <div>
               {teams.map((team) => {
                 const boat = getBoat(team)
-                const occupants = getOccupants(r.id, team.id, team.skipper_id)
-                const skipper = team.skipper_id
-                  ? memberships.find((m) => m.participant_id === team.skipper_id)
-                  : null
-                const skipperParticipant = skipper ? getParticipant(skipper) : null
-
+                const slots = buildSlots(r.id, team)
+                const onCrewlistCount = slots.filter((s) => s.onCrewlist).length
                 return (
                   <div key={team.id} className="flex items-stretch border-t" style={{ borderColor: '#e5e7eb' }}>
-                    {/* Team header (stânga) */}
                     <div className="w-40 flex-shrink-0 p-3 flex flex-col justify-center" style={{ background: team.color_primary || '#4A5568', color: '#fff' }}>
                       <Link href={`/ssyt/admin/teams/${team.id}`} className="font-semibold text-sm hover:underline truncate">
                         {team.short_name || team.name}
@@ -235,41 +342,44 @@ export default function BoatCapacityView({
                         </Link>
                       )}
                       <div className="text-xs text-white/60 mt-1">
-                        {occupants.length}/{SLOTS_PER_BOAT}
+                        Crewlist: {onCrewlistCount}/{SLOTS_PER_BOAT}
                       </div>
                     </div>
 
-                    {/* 10 sloturi */}
                     <div className="flex-1 grid grid-cols-10 gap-1 p-2">
-                      {Array.from({ length: SLOTS_PER_BOAT }).map((_, idx) => {
-                        const occupant = occupants[idx]
-                        if (occupant) {
-                          const part = getParticipant(occupant)
-                          const isSkipper = occupant.participant_id === team.skipper_id
-                          const isOccasional = occupant.attendance_type === 'occasional'
+                      {slots.map((slot, idx) => {
+                        if (slot.kind === 'empty') {
                           return (
-                            <SlotCard
-                              key={`occ-${occupant.id}`}
-                              occupant={occupant}
-                              participant={part}
-                              isSkipper={isSkipper}
-                              isOccasional={isOccasional}
-                              onRemove={() => removeFromBoat(occupant.id, isOccasional)}
+                            <button
+                              key={`empty-${idx}`}
+                              onClick={() => setPickerOpen({ regattaId: r.id, teamId: team.id })}
+                              disabled={busy}
+                              className="rounded p-1.5 text-xs flex items-center justify-center transition hover:bg-gray-200 disabled:opacity-50"
+                              style={{ background: '#F3F4F6', border: '1px dashed #d1d5db', minHeight: 70 }}
+                              title="Loc liber - click pentru a adăuga ad-hoc"
+                            >
+                              <UserPlus size={14} className="text-gray-400" />
+                            </button>
+                          )
+                        }
+                        if (slot.kind === 'tentative') {
+                          return (
+                            <TentativeSlot
+                              key={`t-${slot.participantId}-${idx}`}
+                              slot={slot}
+                              onClick={() => setPickerOpen({ regattaId: r.id, teamId: team.id, replaceParticipationId: slot.participationId })}
                               disabled={busy}
                             />
                           )
                         }
                         return (
-                          <button
-                            key={`empty-${idx}`}
-                            onClick={() => setPickerOpen({ regattaId: r.id, teamId: team.id })}
+                          <FilledSlot
+                            key={`s-${slot.participantId}-${idx}`}
+                            slot={slot}
+                            onToggleCrewlist={() => toggleCrewlist(slot)}
+                            onRemoveOccasional={() => slot.participationId && removeOccasional(slot.participationId)}
                             disabled={busy}
-                            className="rounded p-1.5 text-xs flex items-center justify-center transition hover:bg-gray-200 disabled:opacity-50"
-                            style={{ background: '#F3F4F6', border: '1px dashed #d1d5db', minHeight: 60 }}
-                            title="Click pentru a adăuga un participant"
-                          >
-                            <UserPlus size={14} className="text-gray-400" />
-                          </button>
+                          />
                         )
                       })}
                     </div>
@@ -281,105 +391,152 @@ export default function BoatCapacityView({
         )
       })}
 
-      {/* Picker modal */}
       {pickerOpen && (
         <PickerModal
-          available={getAvailableForSlot(pickerOpen.regattaId, pickerOpen.teamId)}
+          available={getAvailableForSlot(pickerOpen.regattaId, pickerOpen.teamId, pickerOpen.replaceParticipationId)}
           regattaName={regattas.find((r) => r.id === pickerOpen.regattaId)?.name || ''}
           teamName={teams.find((t) => t.id === pickerOpen.teamId)?.name || ''}
           teamColor={teams.find((t) => t.id === pickerOpen.teamId)?.color_primary || '#4A5568'}
+          isReplacingTentative={!!pickerOpen.replaceParticipationId}
           onClose={() => setPickerOpen(null)}
-          onSelect={(participantId) => addToBoat(pickerOpen.regattaId, pickerOpen.teamId, participantId)}
+          onSelect={(participantId) => addToBoat(pickerOpen.regattaId, pickerOpen.teamId, participantId, pickerOpen.replaceParticipationId)}
         />
       )}
     </div>
   )
 }
 
-function SlotCard({
-  occupant, participant, isSkipper, isOccasional, onRemove, disabled,
+function FilledSlot({
+  slot, onToggleCrewlist, onRemoveOccasional, disabled,
 }: {
-  occupant: Participation
-  participant: { id: string; full_name: string; first_name: string; last_name: string } | null
-  isSkipper: boolean
-  isOccasional: boolean
-  onRemove: () => void
+  slot: Slot
+  onToggleCrewlist: () => void
+  onRemoveOccasional: () => void
   disabled: boolean
 }) {
-  if (!participant) return <div className="rounded p-1.5 bg-gray-100"></div>
+  // Background dupa kind
+  const background = slot.kind === 'occasional' ? '#7DD3FC' : '#10B981'
+  const textColor = slot.kind === 'occasional' ? '#0a1628' : '#fff'
 
-  const background = isOccasional ? '#7DD3FC' : '#10B981'
-  const textColor = '#fff'
-  const initials = (participant.first_name?.[0] || '') + (participant.last_name?.[0] || '')
+  // Border: verde daca pe crewlist, gri daca nu
+  const borderColor = slot.onCrewlist ? '#10B981' : '#D1D5DB'
+  const borderWidth = 3
+
+  const initials = (slot.firstName?.[0] || '') + (slot.lastName?.[0] || '')
 
   return (
     <div
-      className="rounded p-1.5 relative group flex flex-col justify-center items-center text-center"
+      className="rounded relative group flex flex-col justify-center items-center text-center p-1"
       style={{
         background,
         color: textColor,
-        minHeight: 60,
-        border: isSkipper ? '2px solid #FF6B35' : 'none',
+        minHeight: 70,
+        border: `${borderWidth}px solid ${borderColor}`,
       }}
-      title={participant.full_name + (isSkipper ? ' (skipper)' : '') + (isOccasional ? ' (occasional)' : '')}
+      title={
+        (slot.participantName || '') +
+        (slot.isSkipper ? ' · skipper' : '') +
+        (slot.kind === 'occasional' ? ' · occasional' : '') +
+        (slot.onCrewlist ? ' · pe crewlist' : ' · neînscris')
+      }
     >
-      {isSkipper && (
-        <Crown size={10} className="absolute top-0.5 left-0.5" style={{ color: '#FF6B35' }} />
+      {slot.isSkipper && (
+        <Crown size={11} className="absolute top-0.5 left-0.5" style={{ color: '#FF6B35' }} />
       )}
-      <Link
-        href={`/ssyt/admin/participants/${participant.id}`}
-        className="text-[10px] font-semibold uppercase opacity-90 hover:opacity-100"
-        onClick={(e) => e.stopPropagation()}
+
+      <button
+        onClick={(e) => { e.stopPropagation(); onToggleCrewlist() }}
+        disabled={disabled}
+        className="absolute top-0.5 right-0.5 rounded p-0.5 transition hover:bg-black/15 disabled:opacity-50"
+        title={slot.onCrewlist ? 'Pe crewlist — click pentru a scoate' : 'Click pentru a pune pe crewlist'}
       >
+        <UserCheck
+          size={12}
+          style={{ color: slot.onCrewlist ? (slot.kind === 'occasional' ? '#10B981' : '#fff') : (slot.kind === 'occasional' ? '#6B7280' : 'rgba(255,255,255,0.5)') }}
+          fill={slot.onCrewlist ? 'currentColor' : 'none'}
+        />
+      </button>
+
+      <div className="text-[10px] font-semibold uppercase opacity-90 mt-2">
         {initials.toUpperCase() || '?'}
-      </Link>
+      </div>
       <div className="text-[10px] leading-tight font-medium mt-0.5" style={{ wordBreak: 'break-word', lineHeight: '1.1' }}>
-        {participant.last_name}
+        {slot.lastName}
       </div>
       <div className="text-[9px] opacity-80 leading-none">
-        {participant.first_name}
+        {slot.firstName}
       </div>
-      {!isSkipper && (
+
+      {slot.kind === 'occasional' && !slot.isSkipper && (
         <button
-          onClick={onRemove}
+          onClick={(e) => { e.stopPropagation(); onRemoveOccasional() }}
           disabled={disabled}
-          className="absolute top-0.5 right-0.5 opacity-0 group-hover:opacity-100 hover:bg-black/20 rounded p-0.5 transition disabled:opacity-50"
-          title={isOccasional ? 'Scoate de pe barcă' : 'Marchează ca declined'}
+          className="absolute bottom-0.5 right-0.5 opacity-0 group-hover:opacity-100 hover:bg-black/20 rounded p-0.5 transition disabled:opacity-50"
+          title="Scoate de pe această barcă"
         >
-          <X size={10} />
+          <X size={9} style={{ color: textColor }} />
         </button>
       )}
     </div>
   )
 }
 
+function TentativeSlot({ slot, onClick, disabled }: { slot: Slot; onClick: () => void; disabled: boolean }) {
+  const initials = (slot.firstName?.[0] || '') + (slot.lastName?.[0] || '')
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="rounded relative flex flex-col justify-center items-center text-center p-1 transition hover:opacity-90 disabled:opacity-50"
+      style={{
+        background: '#FEF3C7',  // galben pal
+        color: '#92400E',
+        minHeight: 70,
+        border: '2px solid #D1D5DB',  // gri
+        cursor: 'pointer',
+      }}
+      title={`${slot.participantName} — tentative. Click pentru a selecta ad-hoc peste el.`}
+    >
+      <div className="text-[10px] font-semibold uppercase opacity-80 mt-1">
+        {initials.toUpperCase() || '?'}
+      </div>
+      <div className="text-[10px] leading-tight font-medium mt-0.5" style={{ wordBreak: 'break-word', lineHeight: '1.1' }}>
+        {slot.lastName}
+      </div>
+      <div className="text-[9px] opacity-80 leading-none">
+        {slot.firstName}
+      </div>
+      <div className="text-[8px] uppercase tracking-wider opacity-60 mt-0.5">tentative</div>
+    </button>
+  )
+}
+
 function PickerModal({
-  available, regattaName, teamName, teamColor, onClose, onSelect,
+  available, regattaName, teamName, teamColor, isReplacingTentative, onClose, onSelect,
 }: {
-  available: { id: string; full_name: string; teamId: string | null; teamName: string | null; status: string }[]
+  available: { id: string; full_name: string; teamId: string | null; teamName: string | null; status: string; isOnCrewlistOtherTeam?: boolean; otherTeamName?: string | null }[]
   regattaName: string
   teamName: string
   teamColor: string
+  isReplacingTentative: boolean
   onClose: () => void
   onSelect: (participantId: string) => void
 }) {
   const [filter, setFilter] = useState('')
-  const [showAll, setShowAll] = useState(false)
+  const [showDeclined, setShowDeclined] = useState(false)
 
   const filtered = available.filter((p) =>
     !filter || p.full_name.toLowerCase().includes(filter.toLowerCase())
   )
-
-  // Grupez: cei confirmati la alta barca + tentative au prioritate
-  const preferred = filtered.filter((p) => ['confirmed', 'tentative', 'pending', 'fără confirmare'].includes(p.status))
-  const others = filtered.filter((p) => p.status === 'declined')
-  const list = showAll ? filtered : preferred
+  const preferred = filtered.filter((p) => p.status !== 'declined')
+  const declined = filtered.filter((p) => p.status === 'declined')
+  const list = showDeclined ? filtered : preferred
 
   const STATUS_COLORS: Record<string, string> = {
     confirmed: '#10B981',
-    tentative: '#3B82F6',
+    tentative: '#F59E0B',
     pending: '#F59E0B',
-    'fără confirmare': '#9CA3AF',
+    'fără': '#D1D5DB',
     declined: '#EF4444',
   }
 
@@ -388,7 +545,9 @@ function PickerModal({
       <div className="bg-white rounded-lg max-w-lg w-full max-h-[80vh] flex flex-col" onClick={(e) => e.stopPropagation()}>
         <div className="p-5 border-b flex items-start justify-between" style={{ borderColor: '#e5e7eb' }}>
           <div>
-            <h3 className="font-semibold tracking-tight" style={{ color: '#0a1628' }}>Adaugă pe barcă</h3>
+            <h3 className="font-semibold tracking-tight" style={{ color: '#0a1628' }}>
+              {isReplacingTentative ? 'Înlocuiește tentative' : 'Adaugă ad-hoc pe barcă'}
+            </h3>
             <p className="text-xs text-gray-500 mt-1">
               <span style={{ color: teamColor, fontWeight: 600 }}>{teamName}</span> · {regattaName}
             </p>
@@ -425,7 +584,10 @@ function PickerModal({
                   <div className="flex-1 min-w-0">
                     <div className="font-medium text-sm" style={{ color: '#0a1628' }}>{p.full_name}</div>
                     <div className="text-xs text-gray-500 mt-0.5">
-                      Echipă curentă: {p.teamName || '—'}
+                      Echipă: {p.teamName || '—'}
+                      {p.isOnCrewlistOtherTeam && (
+                        <span className="ml-2 text-amber-600">⚠ deja pe crewlist {p.otherTeamName}</span>
+                      )}
                     </div>
                   </div>
                   <span
@@ -439,29 +601,36 @@ function PickerModal({
             </div>
           )}
 
-          {!showAll && others.length > 0 && (
+          {!showDeclined && declined.length > 0 && (
             <button
-              onClick={() => setShowAll(true)}
+              onClick={() => setShowDeclined(true)}
               className="mt-3 w-full p-3 text-xs text-gray-500 hover:text-gray-900 italic"
             >
-              + arată {others.length} participanți care au declinat această regatta
+              + arată {declined.length} participanți care au declinat
             </button>
           )}
         </div>
 
         <div className="p-3 border-t text-xs text-gray-500" style={{ borderColor: '#e5e7eb', background: '#f8f9fa' }}>
-          💡 Persoana selectată va fi marcată ca <strong>occasional</strong> și apare cu culoare azur pe barcă.
+          💡 Adăugat ad-hoc → apare azur cu chenar verde (pe crewlist).
+          {isReplacingTentative && ' Tentative-ul original rămâne în matricea Membri, dar nu mai apare pe această barcă.'}
         </div>
       </div>
     </div>
   )
 }
 
-function LegendBox({ color, label, border }: { color: string; label: string; border?: boolean }) {
+function LegendItem({ bg, border, label, dashed }: { bg: string; border: string; label: string; dashed?: boolean }) {
   return (
     <span className="inline-flex items-center gap-1.5">
-      <span className="w-4 h-4 rounded" style={{ background: color, border: border ? '1px dashed #d1d5db' : 'none' }}></span>
-      <span className="text-gray-600">{label}</span>
+      <span
+        className="w-5 h-5 rounded"
+        style={{
+          background: bg,
+          border: `2px ${dashed ? 'dashed' : 'solid'} ${border}`,
+        }}
+      ></span>
+      <span className="text-gray-700">{label}</span>
     </span>
   )
 }
