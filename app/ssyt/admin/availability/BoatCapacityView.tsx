@@ -336,14 +336,17 @@ export default function BoatCapacityView({
                 return (
                   <div key={team.id} className="flex items-stretch border-t" style={{ borderColor: '#e5e7eb' }}>
                     <div className="w-40 flex-shrink-0 p-3 flex flex-col justify-center" style={{ background: team.color_primary || '#4A5568', color: '#fff' }}>
-                      <Link href={`/ssyt/admin/teams/${team.id}`} className="font-semibold text-sm hover:underline truncate">
-                        {team.short_name || team.name}
-                      </Link>
-                      {boat && (
-                        <Link href={`/ssyt/admin/boats/${boat.id}`} className="text-xs text-white/70 hover:underline mt-0.5 inline-flex items-center gap-1">
-                          <Sailboat size={10} /> {boat.name}
+                      {boat ? (
+                        <Link href={`/ssyt/admin/boats/${boat.id}`} className="font-semibold text-sm hover:underline truncate inline-flex items-center gap-1.5">
+                          <Sailboat size={12} />
+                          {boat.name}
                         </Link>
+                      ) : (
+                        <span className="font-semibold text-sm truncate">{team.short_name || team.name}</span>
                       )}
+                      <Link href={`/ssyt/admin/teams/${team.id}`} className="text-xs text-white/70 hover:underline mt-0.5 truncate">
+                        Team {team.short_name || team.name}
+                      </Link>
                       <div className="text-xs text-white/60 mt-1">Crewlist: {onCrewlistCount}/{SLOTS_PER_BOAT}</div>
                     </div>
 
