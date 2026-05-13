@@ -12,7 +12,6 @@ type Team = {
   color_primary: string | null
   slug: string | null
   skipper_id: string | null
-  // Supabase poate returna relatia ca array sau obiect; normalizam la string in render
   boat?: { name: string } | { name: string }[] | null
 }
 
@@ -64,31 +63,66 @@ export default function RosterBoard({
     setTimeout(() => setToast(null), 2500)
   }
 
-  const grouping = useMemo(() => {
-    const result: Record<string, Participant[]> = { [UNASSIGNED]: [] }
-    teams.forEach((t) => { result[t.id] = [] })
-
-    const participantTeam: Record<string, string> = {}
-    for (const m of memberships) {
-      participantTeam[m.participant_id] = m.team_id
-    }
-
-    for (const p of participants) {
-      const tid = participantTeam[p.id]
-      if (tid && result[tid]) {
-        result[tid].push(p)
-      } else {
-        result[UNASSIGNED].push(p)
-      }
-    }
-    return result
-  }, [participants, memberships, teams])
+  // Map participant_id -> team_id pentru lookup rapid
+  const participantTeamMap = useMemo(() => {
+    const m: Record<string, string> = {}
+    for (const x of memberships) m[x.participant_id] = x.team_id
+    return m
+  }, [memberships])
 
   const membershipMap = useMemo(() => {
     const m: Record<string, Membership> = {}
     for (const x of memberships) m[x.participant_id] = x
     return m
   }, [memberships])
+
+  // Sortare: skipper > core > occasional > alfabetic
+  function sortParticipants(arr: Participant[], teamId: string | null) {
+    const team = teamId ? teams.find((t) => t.id === teamId) : null
+    const skipperId = team?.skipper_id
+
+    return [...arr].sort((a, b) => {
+      // 1. Skipper-ul echipei primul
+      if (skipperId) {
+        if (a.id === skipperId && b.id !== skipperId) return -1
+        if (b.id === skipperId && a.id !== skipperId) return 1
+      }
+
+      // 2. Core inainte de occasional
+      const aType = membershipMap[a.id]?.membership_type
+      const bType = membershipMap[b.id]?.membership_type
+      const typeRank = (t: string | undefined) => t === 'core' ? 0 : t === 'occasional' ? 1 : 2
+      const rankDiff = typeRank(aType) - typeRank(bType)
+      if (rankDiff !== 0) return rankDiff
+
+      // 3. Alfabetic
+      return a.full_name.localeCompare(b.full_name, 'ro')
+    })
+  }
+
+  // Group participants by team, deja sortat
+  const grouping = useMemo(() => {
+    const result: Record<string, Participant[]> = { [UNASSIGNED]: [] }
+    teams.forEach((t) => { result[t.id] = [] })
+
+    for (const p of participants) {
+      const tid = participantTeamMap[p.id]
+      if (tid && result[tid]) {
+        result[tid].push(p)
+      } else {
+        result[UNASSIGNED].push(p)
+      }
+    }
+
+    // Aplic sortarea pe fiecare coloana
+    for (const tid of Object.keys(result)) {
+      const teamId = tid === UNASSIGNED ? null : tid
+      result[tid] = sortParticipants(result[tid], teamId)
+    }
+
+    return result
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [participants, memberships, teams])
 
   const searchLower = search.trim().toLowerCase()
   function matchesSearch(p: Participant) {
@@ -372,6 +406,8 @@ function ParticipantCard({
   onToggleType: () => void
 }) {
   const initials = (participant.first_name?.[0] ?? '') + (participant.last_name?.[0] ?? '')
+  const isSkipper = !!isSkipperOf
+
   return (
     <div
       draggable
@@ -379,14 +415,17 @@ function ParticipantCard({
       onDragEnd={onDragEnd}
       className="group flex items-center gap-2 p-2 rounded-md cursor-grab active:cursor-grabbing transition"
       style={{
-        background: dragging ? 'rgba(255,107,53,0.1)' : '#fff',
-        border: '1px solid #e5e7eb',
+        background: dragging ? 'rgba(255,107,53,0.1)' : (isSkipper ? 'rgba(255,107,53,0.04)' : '#fff'),
+        border: isSkipper ? '1px solid rgba(255,107,53,0.3)' : '1px solid #e5e7eb',
         opacity: dragging ? 0.5 : 1,
       }}
     >
       <GripVertical size={12} className="text-gray-300 group-hover:text-gray-500 flex-shrink-0" />
 
-      <div className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-semibold flex-shrink-0" style={{ background: '#4A5568' }}>
+      <div
+        className="w-7 h-7 rounded-full flex items-center justify-center text-white text-[10px] font-semibold flex-shrink-0"
+        style={{ background: isSkipper ? '#FF6B35' : '#4A5568' }}
+      >
         {initials.toUpperCase() || '?'}
       </div>
 
@@ -400,12 +439,12 @@ function ParticipantCard({
           {participant.full_name}
         </Link>
         <div className="flex items-center gap-1 mt-0.5">
-          {isSkipperOf && (
-            <span title={`Skipper ${isSkipperOf.short_name || isSkipperOf.name}`} className="inline-flex items-center gap-0.5 text-[9px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded" style={{ background: 'rgba(255,107,53,0.15)', color: '#FF6B35' }}>
+          {isSkipper && (
+            <span title={`Skipper ${isSkipperOf!.short_name || isSkipperOf!.name}`} className="inline-flex items-center gap-0.5 text-[9px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded" style={{ background: 'rgba(255,107,53,0.15)', color: '#FF6B35' }}>
               <Crown size={8} /> skipper
             </span>
           )}
-          {membership && (
+          {membership && !isSkipper && (
             <button
               onClick={(e) => { e.stopPropagation(); onToggleType() }}
               title="Click pentru toggle core/occasional"
