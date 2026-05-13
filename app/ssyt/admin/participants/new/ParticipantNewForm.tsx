@@ -11,7 +11,24 @@ export default function ParticipantNewForm({ teams }: { teams: TeamOption[] }) {
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const [form, setForm] = useState({
+  const [form, setForm] = useState<{
+    first_name: string
+    last_name: string
+    nickname: string
+    email: string
+    phone: string
+    date_of_birth: string
+    cnp: string
+    sailing_experience: string
+    regatta_experience: string
+    motivation: string
+    status: string
+    notes: string
+    consent_gdpr: boolean
+    consent_public_profile: boolean
+    team_id: string
+    membership_type: string
+  }>({
     first_name: '',
     last_name: '',
     nickname: '',
@@ -22,12 +39,12 @@ export default function ParticipantNewForm({ teams }: { teams: TeamOption[] }) {
     sailing_experience: '',
     regatta_experience: '',
     motivation: '',
-    status: 'active' as const,
+    status: 'active',
     notes: '',
     consent_gdpr: true,
     consent_public_profile: false,
     team_id: '',
-    membership_type: 'core' as const,
+    membership_type: 'core',
   })
 
   async function save() {
@@ -38,6 +55,8 @@ export default function ParticipantNewForm({ teams }: { teams: TeamOption[] }) {
     }
 
     setSaving(true)
+
+    const isAccepted = form.status === 'accepted' || form.status === 'active'
 
     const insertData: any = {
       first_name: form.first_name.trim(),
@@ -55,7 +74,7 @@ export default function ParticipantNewForm({ teams }: { teams: TeamOption[] }) {
       consent_gdpr: form.consent_gdpr,
       consent_gdpr_at: form.consent_gdpr ? new Date().toISOString() : null,
       consent_public_profile: form.consent_public_profile,
-      accepted_at: form.status === 'accepted' || form.status === 'active' ? new Date().toISOString() : null,
+      accepted_at: isAccepted ? new Date().toISOString() : null,
     }
 
     const { data: participant, error: err } = await supabase
@@ -70,7 +89,6 @@ export default function ParticipantNewForm({ teams }: { teams: TeamOption[] }) {
       return
     }
 
-    // Daca a fost ales o echipa, cream si membership
     if (form.team_id && participant) {
       const { error: mErr } = await supabase
         .from('ssyt_team_memberships')
@@ -107,7 +125,7 @@ export default function ParticipantNewForm({ teams }: { teams: TeamOption[] }) {
           <input type="text" value={form.nickname} onChange={(e) => setForm({ ...form, nickname: e.target.value })} className="input" />
         </Field>
         <Field label="Status">
-          <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as any })} className="input">
+          <select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value })} className="input">
             <option value="applied">applied</option>
             <option value="accepted">accepted</option>
             <option value="active">active</option>
@@ -151,7 +169,6 @@ export default function ParticipantNewForm({ teams }: { teams: TeamOption[] }) {
         <textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} rows={2} className="input" />
       </Field>
 
-      {/* Asignare directă la echipă */}
       <div className="rounded-lg p-4 mt-2" style={{ background: '#f8f9fa', border: '1px solid #e5e7eb' }}>
         <h3 className="text-xs font-medium uppercase tracking-wider text-gray-500 mb-3">Asignare la echipă (opțional)</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -165,7 +182,7 @@ export default function ParticipantNewForm({ teams }: { teams: TeamOption[] }) {
           </Field>
           {form.team_id && (
             <Field label="Tip membership">
-              <select value={form.membership_type} onChange={(e) => setForm({ ...form, membership_type: e.target.value as any })} className="input">
+              <select value={form.membership_type} onChange={(e) => setForm({ ...form, membership_type: e.target.value })} className="input">
                 <option value="core">core</option>
                 <option value="occasional">occasional</option>
               </select>
@@ -174,7 +191,6 @@ export default function ParticipantNewForm({ teams }: { teams: TeamOption[] }) {
         </div>
       </div>
 
-      {/* Consimțământe */}
       <div className="flex flex-col gap-2 pt-2 border-t border-gray-100">
         <label className="inline-flex items-center gap-2 text-sm cursor-pointer">
           <input type="checkbox" checked={form.consent_gdpr} onChange={(e) => setForm({ ...form, consent_gdpr: e.target.checked })} />
