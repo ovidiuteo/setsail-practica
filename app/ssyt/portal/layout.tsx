@@ -1,0 +1,38 @@
+import Link from 'next/link'
+import { redirect } from 'next/navigation'
+import { Anchor, LogOut } from 'lucide-react'
+import { getCurrentUser } from '@/lib/ssyt/supabase-server'
+import PortalNav from './PortalNav'
+import LogoutButton from './LogoutButton'
+
+export const dynamic = 'force-dynamic'
+
+export default async function PortalLayout({ children }: { children: React.ReactNode }) {
+  const { user, participant, isAdmin } = await getCurrentUser()
+  if (!user) redirect('/ssyt/login?next=/ssyt/portal')
+
+  return (
+    <div className="min-h-screen flex flex-col" style={{ background: '#f8f9fa' }}>
+      <header className="px-6 py-3 flex items-center justify-between border-b" style={{ background: '#fff', borderColor: '#e5e7eb' }}>
+        <Link href="/ssyt" className="inline-flex items-center gap-2">
+          <Anchor size={18} style={{ color: '#FF6B35' }} />
+          <span className="font-bold tracking-tight" style={{ color: '#0a1628' }}>SSYT2026</span>
+          <span className="text-xs text-gray-400 ml-2">Portal membri</span>
+        </Link>
+        <div className="flex items-center gap-3 text-sm">
+          {isAdmin && (
+            <Link href="/ssyt/admin" className="text-gray-600 hover:underline">Admin</Link>
+          )}
+          <span className="text-gray-700 font-medium">{participant?.full_name || user.email}</span>
+          <LogoutButton />
+        </div>
+      </header>
+
+      <PortalNav />
+
+      <main className="flex-1">
+        {children}
+      </main>
+    </div>
+  )
+}
