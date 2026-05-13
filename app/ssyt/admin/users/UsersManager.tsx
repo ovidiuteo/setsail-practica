@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { Copy, Check, Send, Mail, UserPlus, Pause, Play, Shield, Trash2, AlertCircle, X, Inbox } from 'lucide-react'
+import { Copy, Check, Send, Mail, UserPlus, Pause, Play, Shield, Trash2, AlertCircle, X, Inbox, ThumbsUp, ThumbsDown, Link2, Plus } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/ssyt/supabase-browser'
 
 type UserRow = {
@@ -27,8 +27,10 @@ type SignupRequest = {
   user_id: string
   email: string
   full_name: string
+  phone: string | null
   status: string
   notes: string | null
+  suggested_participant_id: string | null
   created_at: string
 }
 
@@ -66,7 +68,7 @@ export default function UsersManager({
     setBusy(key)
     try {
       const data = await fn()
-      if (data) setResultModal({ title: label, data })
+      if (data && (data.tempPassword || data.link)) setResultModal({ title: label, data })
       router.refresh()
     } catch (e: any) {
       alert('Eroare: ' + e.message)
@@ -85,6 +87,9 @@ export default function UsersManager({
     return true
   })
 
+  // Lista participanți fără cont, pentru picker în signup request approval
+  const unlinkedParticipants = users.filter((u) => !u.user_id)
+
   return (
     <div>
       {/* Inbox cereri signup pending */}
@@ -96,17 +101,15 @@ export default function UsersManager({
               {signupRequests.length} cereri de signup pending
             </h3>
           </div>
-          <div className="space-y-2">
+          <div className="space-y-3">
             {signupRequests.map((r) => (
-              <div key={r.id} className="rounded-md p-3 flex items-center gap-3" style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
-                <div className="flex-1">
-                  <div className="font-medium text-sm" style={{ color: '#0a1628' }}>{r.full_name}</div>
-                  <div className="text-xs text-gray-500">{r.email}</div>
-                  {r.notes && <div className="text-xs text-amber-600 mt-1">⚠ {r.notes}</div>}
-                </div>
-                <span className="text-xs text-gray-400">{new Date(r.created_at).toLocaleDateString('ro-RO')}</span>
-                {/* TODO: butoane Aprobă/Respinge cu legare la participant */}
-              </div>
+              <SignupRequestCard
+                key={r.id}
+                request={r}
+                unlinkedParticipants={unlinkedParticipants}
+                busy={busy}
+                onAction={action}
+              />
             ))}
           </div>
         </div>
@@ -132,7 +135,7 @@ export default function UsersManager({
         <span className="text-xs text-gray-500">{filtered.length} rezultate</span>
       </div>
 
-      {/* Tabel */}
+      {/* Tabel useri */}
       <div className="rounded-lg overflow-x-auto" style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
         <table className="w-full text-sm" style={{ minWidth: 1200 }}>
           <thead style={{ background: '#f8f9fa', borderBottom: '1px solid #e5e7eb' }}>
@@ -249,9 +252,195 @@ export default function UsersManager({
         </table>
       </div>
 
-      {/* Modal cu rezultat (parola temporara sau link) */}
       {resultModal && (
         <ResultModal modal={resultModal} onClose={() => setResultModal(null)} />
+      )}
+    </div>
+  )
+}
+
+function SignupRequestCard({
+  request, unlinkedParticipants, busy, onAction,
+}: {
+  request: SignupRequest
+  unlinkedParticipants: UserRow[]
+  busy: string | null
+  onAction: (label: string, fn: () => Promise<any>, key: string) => void
+}) {
+  const [mode, setMode] = useState<'idle' | 'link_existing' | 'create_new' | 'reject'>('idle')
+  const [linkToId, setLinkToId] = useState<string>(request.suggested_participant_id || '')
+  const [rejectReason, setRejectReason] = useState('')
+  const [deleteAccount, setDeleteAccount] = useState(false)
+
+  // Filter participanti fara cont, sortati alfabetic + suggested in top
+  const sortedParticipants = unlinkedParticipants
+    .slice()
+    .sort((a, b) => {
+      if (a.participant_id === request.suggested_participant_id) return -1
+      if (b.participant_id === request.suggested_participant_id) return 1
+      return a.full_name.localeCompare(b.full_name, 'ro')
+    })
+
+  const isBusy = busy?.startsWith(`req-${request.id}`)
+
+  return (
+    <div className="rounded-md p-4" style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
+      <div className="flex items-start gap-3 flex-wrap">
+        <div className="flex-1 min-w-[200px]">
+          <div className="font-medium text-sm" style={{ color: '#0a1628' }}>{request.full_name}</div>
+          <div className="text-xs text-gray-500 mt-0.5">
+            {request.email}
+            {request.phone && ` · ${request.phone}`}
+          </div>
+          {request.notes && <div className="text-xs text-amber-600 mt-1">⚠ {request.notes}</div>}
+          <div className="text-[10px] text-gray-400 mt-1">Cerere depusă: {new Date(request.created_at).toLocaleString('ro-RO')}</div>
+        </div>
+
+        {mode === 'idle' && (
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <button
+              onClick={() => setMode('link_existing')}
+              disabled={isBusy}
+              className="px-3 py-1.5 rounded text-xs font-medium transition hover:opacity-80 disabled:opacity-50 inline-flex items-center gap-1"
+              style={{ background: '#10B981', color: '#fff' }}
+              title="Aprobă și leagă de un participant existent"
+            >
+              <Link2 size={12} />
+              Leagă existent
+            </button>
+            <button
+              onClick={() => setMode('create_new')}
+              disabled={isBusy}
+              className="px-3 py-1.5 rounded text-xs font-medium transition hover:opacity-80 disabled:opacity-50 inline-flex items-center gap-1"
+              style={{ background: '#FF6B35', color: '#fff' }}
+              title="Aprobă ca participant nou"
+            >
+              <Plus size={12} />
+              Participant nou
+            </button>
+            <button
+              onClick={() => setMode('reject')}
+              disabled={isBusy}
+              className="px-3 py-1.5 rounded text-xs font-medium transition hover:opacity-80 disabled:opacity-50 inline-flex items-center gap-1"
+              style={{ background: '#fff', color: '#EF4444', border: '1px solid #EF4444' }}
+            >
+              <ThumbsDown size={12} />
+              Respinge
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Mode: link existing */}
+      {mode === 'link_existing' && (
+        <div className="mt-3 pt-3 border-t" style={{ borderColor: '#e5e7eb' }}>
+          <label className="block text-xs uppercase tracking-wider text-gray-500 mb-1.5 font-medium">
+            Leagă de participant existent
+          </label>
+          {request.suggested_participant_id && (
+            <p className="text-xs text-amber-600 mb-2">💡 Sistemul sugerează: <strong>{unlinkedParticipants.find((p) => p.participant_id === request.suggested_participant_id)?.full_name || '—'}</strong></p>
+          )}
+          <select
+            value={linkToId}
+            onChange={(e) => setLinkToId(e.target.value)}
+            className="w-full px-3 py-2 border rounded-md text-sm mb-3"
+            style={{ borderColor: '#d1d5db' }}
+          >
+            <option value="">— alege participant —</option>
+            {sortedParticipants.map((p) => (
+              <option key={p.participant_id} value={p.participant_id}>
+                {p.full_name}
+                {p.team_name && ` (${p.team_name})`}
+                {p.participant_id === request.suggested_participant_id && ' ★ sugerat'}
+              </option>
+            ))}
+          </select>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => onAction(
+                'Aprobat',
+                () => callAPI('approve_request_existing', { requestId: request.id, linkToParticipantId: linkToId }),
+                `req-${request.id}`
+              )}
+              disabled={!linkToId || isBusy}
+              className="px-3 py-1.5 rounded text-xs font-medium text-white transition hover:opacity-80 disabled:opacity-50"
+              style={{ background: '#10B981' }}
+            >
+              <ThumbsUp size={12} className="inline mr-1" />
+              Aprobă și leagă
+            </button>
+            <button onClick={() => setMode('idle')} className="px-3 py-1.5 rounded text-xs font-medium text-gray-500 hover:bg-gray-100">
+              Anulează
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Mode: create new */}
+      {mode === 'create_new' && (
+        <div className="mt-3 pt-3 border-t" style={{ borderColor: '#e5e7eb' }}>
+          <p className="text-xs text-gray-600 mb-3">
+            Se va crea un participant nou cu datele din cerere:<br />
+            <strong className="text-gray-900">Nume:</strong> {request.full_name}<br />
+            <strong className="text-gray-900">Email:</strong> {request.email}
+            {request.phone && <><br /><strong className="text-gray-900">Telefon:</strong> {request.phone}</>}
+          </p>
+          <p className="text-xs text-amber-600 mb-3">⚠ Participantul va fi nealocat la echipă. Îl poți pune în echipă ulterior din Roster.</p>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => onAction(
+                'Participant nou creat',
+                () => callAPI('approve_request_new', { requestId: request.id }),
+                `req-${request.id}`
+              )}
+              disabled={isBusy}
+              className="px-3 py-1.5 rounded text-xs font-medium text-white transition hover:opacity-80 disabled:opacity-50"
+              style={{ background: '#FF6B35' }}
+            >
+              <ThumbsUp size={12} className="inline mr-1" />
+              Creează și aprobă
+            </button>
+            <button onClick={() => setMode('idle')} className="px-3 py-1.5 rounded text-xs font-medium text-gray-500 hover:bg-gray-100">
+              Anulează
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Mode: reject */}
+      {mode === 'reject' && (
+        <div className="mt-3 pt-3 border-t" style={{ borderColor: '#e5e7eb' }}>
+          <label className="block text-xs uppercase tracking-wider text-gray-500 mb-1.5 font-medium">Motivul respingerii (opțional)</label>
+          <input
+            value={rejectReason}
+            onChange={(e) => setRejectReason(e.target.value)}
+            placeholder="Ex: nu suntem siguri cine este, ne contactează direct"
+            className="w-full px-3 py-2 border rounded-md text-sm mb-2"
+            style={{ borderColor: '#d1d5db' }}
+          />
+          <label className="flex items-center gap-2 text-xs text-gray-700 mb-3">
+            <input type="checkbox" checked={deleteAccount} onChange={(e) => setDeleteAccount(e.target.checked)} />
+            Șterge complet și contul (în loc de doar suspendare)
+          </label>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => onAction(
+                'Respins',
+                () => callAPI('reject_request', { requestId: request.id, reviewNotes: rejectReason, deleteAccount }),
+                `req-${request.id}`
+              )}
+              disabled={isBusy}
+              className="px-3 py-1.5 rounded text-xs font-medium text-white transition hover:opacity-80 disabled:opacity-50"
+              style={{ background: '#EF4444' }}
+            >
+              <ThumbsDown size={12} className="inline mr-1" />
+              Respinge cererea
+            </button>
+            <button onClick={() => setMode('idle')} className="px-3 py-1.5 rounded text-xs font-medium text-gray-500 hover:bg-gray-100">
+              Anulează
+            </button>
+          </div>
+        </div>
       )}
     </div>
   )
