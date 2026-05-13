@@ -19,7 +19,6 @@ export async function generateMetadata({ params }: { params: { slug: string } })
 }
 
 export default async function TeamPublicPage({ params }: { params: { slug: string } }) {
-  // Iau echipa de baza
   const { data: team } = await supabase
     .from('ssyt_teams')
     .select('id, name, short_name, slug, color_primary, color_secondary, slogan, description, logo_url, flag_url, boat_id, skipper_id, season_id')
@@ -28,7 +27,6 @@ export default async function TeamPublicPage({ params }: { params: { slug: strin
 
   if (!team) notFound()
 
-  // Iau separat boat, skipper, season (mai sigur decat join-uri)
   const [boatRes, skipperRes, seasonRes] = await Promise.all([
     team.boat_id ? supabase.from('ssyt_boats').select('id, name, model, sail_number, photo_url, capacity').eq('id', team.boat_id).maybeSingle() : Promise.resolve({ data: null }),
     team.skipper_id ? supabase.from('ssyt_participants').select('id, full_name, first_name, last_name, photo_url, nickname, sailing_experience').eq('id', team.skipper_id).maybeSingle() : Promise.resolve({ data: null }),
@@ -38,73 +36,27 @@ export default async function TeamPublicPage({ params }: { params: { slug: strin
   const skipper = skipperRes.data
   const season = seasonRes.data
 
-  // Membri (fara skipper)
-  const { data: memberships } = await supabase
+  // Numar membri
+  const { count: memberCount } = await supabase
     .from('ssyt_team_memberships')
-    .select('id, membership_type, status, participant_id')
+    .select('*', { count: 'exact', head: true })
     .eq('team_id', team.id)
     .eq('status', 'active')
 
-  const memberIds = (memberships || []).map((m) => m.participant_id)
-  const { data: memberParticipants } = memberIds.length > 0
-    ? await supabase
-        .from('ssyt_participants')
-        .select('id, full_name, first_name, last_name, photo_url, nickname')
-        .in('id', memberIds)
-    : { data: [] }
-
-  const allMembers = (memberships || []).map((m) => {
-    const p = (memberParticipants || []).find((x) => x.id === m.participant_id)
-    if (!p) return null
-    return {
-      id: p.id,
-      full_name: p.full_name,
-      first_name: p.first_name,
-      last_name: p.last_name,
-      photo_url: p.photo_url,
-      nickname: p.nickname,
-      membership_type: m.membership_type,
-      isSkipper: p.id === team.skipper_id,
-    }
-  }).filter(Boolean) as any[]
-
-  const core = allMembers.filter((m) => m.membership_type === 'core' && !m.isSkipper).sort((a, b) => a.full_name.localeCompare(b.full_name, 'ro'))
-  const occasional = allMembers.filter((m) => m.membership_type === 'occasional').sort((a, b) => a.full_name.localeCompare(b.full_name, 'ro'))
-
-  // Regate sezon
+  // Regate sezon (toate)
   const { data: regattas } = season?.id ? await supabase
     .from('ssyt_regattas')
     .select('id, name, short_name, slug, start_date, end_date, event_type, status, location')
     .eq('season_id', season.id)
     .order('start_date') : { data: [] }
 
-  // Disponibilitati echipa pentru regate
-  const regattaIds = (regattas || []).map((r) => r.id)
-  const { data: participations } = regattaIds.length > 0
-    ? await supabase
-        .from('ssyt_regatta_participation')
-        .select('regatta_id, confirmation_status, on_crewlist')
-        .in('regatta_id', regattaIds)
-        .eq('team_id', team.id)
-    : { data: [] }
-
-  const partByRegatta: Record<string, { confirmed: number; total: number; onCrewlist: number }> = {}
-  for (const r of regattas || []) {
-    const parts = (participations || []).filter((p) => p.regatta_id === r.id)
-    partByRegatta[r.id] = {
-      confirmed: parts.filter((p) => p.confirmation_status === 'confirmed').length,
-      total: parts.length,
-      onCrewlist: parts.filter((p) => p.on_crewlist).length,
-    }
-  }
-
-  // Rezultate echipa - simplu, fara join in order
+  // Rezultate echipa
   const { data: results } = await supabase
     .from('ssyt_results')
     .select('id, regatta_id, official_place, official_class, official_total_boats, official_points, ssyt_internal_points, ssyt_internal_place, recap')
     .eq('team_id', team.id)
 
-  // Badge-uri castigate - simplu
+  // Badge-uri
   const { data: teamBadgesRaw } = await supabase
     .from('ssyt_team_badges')
     .select('id, awarded_at, notes, badge_id, regatta_id')
@@ -123,7 +75,7 @@ export default async function TeamPublicPage({ params }: { params: { slug: strin
   const colorPrimary = team.color_primary || '#4A5568'
   const today = new Date().toISOString().split('T')[0]
   const upcomingRegattas = (regattas || []).filter((r) => r.start_date >= today)
-  const pastRegattas = (regattas || []).filter((r) => r.start_date < today).reverse()  // cele mai recente sus
+  const pastRegattas = (regattas || []).filter((r) => r.start_date < today).reverse()
 
   return (
     <div className="min-h-screen" style={{ background: '#f8f9fa' }}>
@@ -234,37 +186,16 @@ export default async function TeamPublicPage({ params }: { params: { slug: strin
           )}
         </section>
 
-        {/* Echipaj */}
+        {/* Echipaj - doar contor */}
         <section>
-          <h2 className="text-2xl font-bold tracking-tight mb-4" style={{ color: '#0a1628' }}>
+          <h2 className="text-2xl font-bold tracking-tight" style={{ color: '#0a1628' }}>
             <Users size={22} className="inline mr-2 align-middle" style={{ color: '#FF6B35' }} />
             Echipaj
-            <span className="text-base font-normal text-gray-500 ml-2">({core.length + occasional.length})</span>
+            <span className="text-base font-normal text-gray-500 ml-2">({memberCount || 0})</span>
           </h2>
-          {core.length > 0 && (
-            <div className="mb-6">
-              <h3 className="text-xs font-medium uppercase tracking-wider text-gray-500 mb-2">Core</h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                {core.map((m) => <MemberCard key={m.id} member={m} color={colorPrimary} />)}
-              </div>
-            </div>
-          )}
-          {occasional.length > 0 && (
-            <div>
-              <h3 className="text-xs font-medium uppercase tracking-wider text-gray-500 mb-2">Occasional</h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                {occasional.map((m) => <MemberCard key={m.id} member={m} color={colorPrimary} occasional />)}
-              </div>
-            </div>
-          )}
-          {core.length === 0 && occasional.length === 0 && (
-            <div className="rounded-lg p-8 text-center text-gray-400 italic" style={{ background: '#fff', border: '1px dashed #e5e7eb' }}>
-              Niciun membru încă.
-            </div>
-          )}
         </section>
 
-        {/* Regate viitoare */}
+        {/* Regate viitoare - fara contor confirmati */}
         {upcomingRegattas.length > 0 && (
           <section>
             <h2 className="text-2xl font-bold tracking-tight mb-4" style={{ color: '#0a1628' }}>
@@ -273,8 +204,8 @@ export default async function TeamPublicPage({ params }: { params: { slug: strin
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {upcomingRegattas.map((r) => {
-                const stat = partByRegatta[r.id] || { confirmed: 0, total: 0, onCrewlist: 0 }
                 const d1 = new Date(r.start_date)
+                const d2 = r.end_date ? new Date(r.end_date) : null
                 return (
                   <Link key={r.id} href={`/ssyt/regattas/${r.slug}`} className="rounded-lg p-4 flex items-center gap-4 hover:shadow-md transition" style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
                     <div className="w-12 h-12 rounded-md flex flex-col items-center justify-center flex-shrink-0" style={{ background: '#0a1628', color: '#fff' }}>
@@ -284,20 +215,13 @@ export default async function TeamPublicPage({ params }: { params: { slug: strin
                     <div className="flex-1 min-w-0">
                       <div className="font-semibold text-sm truncate" style={{ color: '#0a1628' }}>{r.name}</div>
                       <div className="text-xs text-gray-500 mt-0.5 flex items-center gap-2 flex-wrap">
-                        <span>{d1.toLocaleDateString('ro-RO', { day: 'numeric', month: 'long' })}</span>
+                        <span>
+                          {d1.toLocaleDateString('ro-RO', { day: 'numeric', month: 'long' })}
+                          {d2 && d2.getDate() !== d1.getDate() && ` – ${d2.toLocaleDateString('ro-RO', { day: 'numeric', month: 'long' })}`}
+                        </span>
                         {r.location && (
                           <span className="inline-flex items-center gap-1">
                             <MapPin size={10} /> {r.location}
-                          </span>
-                        )}
-                      </div>
-                      <div className="mt-1.5 flex items-center gap-1.5">
-                        <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-medium" style={{ background: 'rgba(16,185,129,0.12)', color: '#10B981' }}>
-                          {stat.confirmed} confirmat{stat.confirmed === 1 ? '' : 'i'}
-                        </span>
-                        {stat.onCrewlist > 0 && (
-                          <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-medium" style={{ background: 'rgba(255,107,53,0.12)', color: '#FF6B35' }}>
-                            {stat.onCrewlist} pe crewlist
                           </span>
                         )}
                       </div>
@@ -395,35 +319,7 @@ export default async function TeamPublicPage({ params }: { params: { slug: strin
             </div>
           </section>
         )}
-
       </div>
-    </div>
-  )
-}
-
-function MemberCard({ member, color, occasional }: { member: any; color: string; occasional?: boolean }) {
-  return (
-    <div className="rounded-lg p-3 text-center hover:shadow-md transition" style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
-      {member.photo_url ? (
-        <img src={member.photo_url} alt={member.full_name} className="w-16 h-16 mx-auto rounded-full object-cover mb-2" />
-      ) : (
-        <div className="w-16 h-16 mx-auto rounded-full flex items-center justify-center font-bold text-lg mb-2" style={{ background: color, color: '#fff' }}>
-          {member.first_name?.[0]}{member.last_name?.[0]}
-        </div>
-      )}
-      <div className="font-semibold text-xs leading-tight" style={{ color: '#0a1628' }}>
-        {member.full_name}
-      </div>
-      {member.nickname && (
-        <div className="text-[10px] text-gray-500 italic mt-0.5">"{member.nickname}"</div>
-      )}
-      {occasional && (
-        <div className="mt-1.5">
-          <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-medium" style={{ background: 'rgba(0,168,181,0.12)', color: '#00A8B5' }}>
-            occasional
-          </span>
-        </div>
-      )}
     </div>
   )
 }
