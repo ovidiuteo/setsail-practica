@@ -73,14 +73,12 @@ export default function BadgesManager({
     router.refresh()
   }
 
-  // Group badges by category
   const grouped: Record<string, Badge[]> = {}
   for (const b of badges) {
     if (!grouped[b.category]) grouped[b.category] = []
     grouped[b.category].push(b)
   }
 
-  // Count awardings per badge
   const countMap: Record<string, number> = {}
   for (const a of participantBadges) countMap[a.badge_id] = (countMap[a.badge_id] || 0) + 1
   for (const a of teamBadges) countMap[a.badge_id] = (countMap[a.badge_id] || 0) + 1
@@ -108,7 +106,6 @@ export default function BadgesManager({
         />
       )}
 
-      {/* Galerie badge-uri grupată pe categorie */}
       {Object.keys(grouped).length === 0 ? (
         <div className="rounded-lg p-16 text-center text-gray-500" style={{ background: '#fff', border: '1px dashed #e5e7eb' }}>
           <Award size={28} className="mx-auto mb-3 opacity-30" />
@@ -137,7 +134,6 @@ export default function BadgesManager({
         </div>
       )}
 
-      {/* Recent awardings */}
       {(participantBadges.length > 0 || teamBadges.length > 0) && (
         <div className="mt-10">
           <h2 className="text-sm font-medium uppercase tracking-wider text-gray-500 mb-3">Atribuiri recente</h2>
@@ -285,7 +281,7 @@ function NewBadgeForm({ onClose, onSaved }: { onClose: () => void; onSaved: () =
     if (!form.name.trim()) { setError('Nume obligatoriu.'); return }
     setSaving(true)
     setError(null)
-    const finalCode = form.code.trim() || slugify(form.name.replace(/[\u{1F000}-\u{1FFFF}]/gu, '').trim())
+    const finalCode = form.code.trim() || slugify(form.name.trim())
     const { error: err } = await supabase.from('ssyt_badges').insert({
       code: finalCode,
       name: form.name,
