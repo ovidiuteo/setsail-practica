@@ -4,9 +4,9 @@ import { usePathname } from 'next/navigation'
 import {
   LayoutDashboard,
   Users,
+  UserPlus,
   Sailboat,
   Anchor,
-  Calendar,
   Trophy,
   FileText,
   Settings,
@@ -14,13 +14,15 @@ import {
   Image as ImageIcon,
   ClipboardList,
   CheckSquare,
+  Shuffle,
   ChevronLeft,
 } from 'lucide-react'
 
 const NAV = [
   { href: '/ssyt/admin', label: 'Overview sezon', icon: LayoutDashboard },
   { href: '/ssyt/admin/teams', label: 'Echipe', icon: Users },
-  { href: '/ssyt/admin/participants', label: 'Participanți', icon: Users },
+  { href: '/ssyt/admin/roster', label: 'Roster (drag-drop)', icon: Shuffle },
+  { href: '/ssyt/admin/participants', label: 'Participanți', icon: UserPlus },
   { href: '/ssyt/admin/applications', label: 'Aplicări', icon: ClipboardList },
   { href: '/ssyt/admin/boats', label: 'Ambarcațiuni', icon: Sailboat },
   { href: '/ssyt/admin/regattas', label: 'Regatte', icon: Anchor },
@@ -40,7 +42,6 @@ export default function AdminSidebar() {
       className="fixed left-0 top-0 bottom-0 z-30 flex flex-col items-center py-4"
       style={{ width: 56, background: '#0a1628', borderRight: '1px solid rgba(255,255,255,0.08)' }}
     >
-      {/* Logo / Back to public */}
       <Link
         href="/ssyt"
         title="Înapoi la SSYT public"
@@ -52,7 +53,6 @@ export default function AdminSidebar() {
 
       <div className="w-8 h-px mb-4" style={{ background: 'rgba(255,255,255,0.1)' }}></div>
 
-      {/* Nav items */}
       <nav className="flex flex-col gap-1 flex-1">
         {NAV.map((item) => {
           const active =
@@ -72,9 +72,8 @@ export default function AdminSidebar() {
               }}
             >
               <Icon size={18} />
-              {/* Tooltip */}
               <span
-                className="absolute left-full ml-3 px-2.5 py-1 rounded-md text-xs whitespace-nowrap pointer-events-none opacity-0 group-hover:opacity-100 transition"
+                className="absolute left-full ml-3 px-2.5 py-1 rounded-md text-xs whitespace-nowrap pointer-events-none opacity-0 group-hover:opacity-100 transition z-50"
                 style={{ background: '#0a1628', color: '#fff', border: '1px solid rgba(255,255,255,0.1)' }}
               >
                 {item.label}
@@ -84,7 +83,6 @@ export default function AdminSidebar() {
         })}
       </nav>
 
-      {/* Bottom — SSYT branding */}
       <div className="text-[9px] text-white/30 font-semibold tracking-wider mt-2">SSYT</div>
     </aside>
   )
