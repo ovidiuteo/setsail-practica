@@ -18,20 +18,25 @@ type Participation = {
   id: string
   regatta_id: string
   participant_id: string
-  team_id: string
+  team_id: string | null
   confirmation_status: string
   attendance_type: string | null
   on_crewlist?: boolean
 }
-
-const STATUS_COLORS: Record<string, string> = {
-  confirmed: '#10B981',  // verde
-  declined: '#EF4444',   // rosu
-  tentative: '#9CA3AF',  // gri (cum a cerut)
-  pending: '#F59E0B',    // amber (legacy - le tratam ca tentative vizual)
+type UnallocatedParticipant = {
+  id: string
+  full_name: string
+  first_name: string
+  last_name: string
 }
 
-// Ciclul: empty → confirmed → declined → tentative → empty (sterg)
+const STATUS_COLORS: Record<string, string> = {
+  confirmed: '#10B981',
+  declined: '#EF4444',
+  tentative: '#9CA3AF',
+  pending: '#F59E0B',
+}
+
 const NEXT_STATE: Record<string, string> = {
   confirmed: 'declined',
   declined: 'tentative',
@@ -44,35 +49,34 @@ function getParticipant(m: Membership) {
 }
 
 export default function AvailabilityMatrix({
-  regattas, teams, memberships, participation,
+  regattas, teams, memberships, participation, unallocatedParticipants,
 }: {
   regattas: Regatta[]
   teams: Team[]
   memberships: Membership[]
   participation: Participation[]
+  unallocatedParticipants: UnallocatedParticipant[]
 }) {
   const router = useRouter()
   const [busy, setBusy] = useState<string | null>(null)
 
-  // Lookup: regatta_id + participant_id → participation
   const partMap: Record<string, Participation> = {}
   for (const p of participation) {
     partMap[`${p.regatta_id}_${p.participant_id}`] = p
   }
 
-  async function cycleStatus(regattaId: string, participantId: string, teamId: string) {
+  async function cycleStatus(regattaId: string, participantId: string, teamId: string | null) {
     const key = `${regattaId}_${participantId}`
     setBusy(key)
     const existing = partMap[key]
 
     if (!existing) {
-      // Insert nou cu status confirmed
       const { error } = await supabase.from('ssyt_regatta_participation').insert({
         regatta_id: regattaId,
         participant_id: participantId,
-        team_id: teamId,
+        team_id: teamId,  // poate fi null pentru nealocati
         confirmation_status: 'confirmed',
-        attendance_type: 'core',
+        attendance_type: teamId ? 'core' : 'occasional',
         on_crewlist: false,
         confirmed_at: new Date().toISOString(),
       })
@@ -80,19 +84,16 @@ export default function AvailabilityMatrix({
     } else {
       const next = NEXT_STATE[existing.confirmation_status] || 'confirmed'
       if (next === 'CLEAR') {
-        // Sterg complet
         const { error } = await supabase
           .from('ssyt_regatta_participation')
           .delete()
           .eq('id', existing.id)
         if (error) alert(error.message)
       } else {
-        // Update; daca status != confirmed, automat on_crewlist = false
         const updates: any = { confirmation_status: next }
         if (next === 'confirmed') {
           updates.confirmed_at = new Date().toISOString()
         } else {
-          // Daca devine declined sau tentative, scot de pe crewlist
           updates.on_crewlist = false
         }
         const { error } = await supabase
@@ -106,13 +107,16 @@ export default function AvailabilityMatrix({
     router.refresh()
   }
 
-  async function toggleCrewlist(regattaId: string, participantId: string, teamId: string) {
+  async function toggleCrewlist(regattaId: string, participantId: string, teamId: string | null) {
     const key = `${regattaId}_${participantId}`
     const existing = partMap[key]
 
-    // Doar daca e disponibil (confirmed) poate fi pe crewlist
     if (!existing || existing.confirmation_status !== 'confirmed') {
-      alert('Trebuie să fie disponibil (verde) ca să fie pus pe crewlist. Click pe celulă întâi.')
+      alert('Trebuie să fie disponibil (verde) ca să fie pus pe crewlist.')
+      return
+    }
+    if (!existing.team_id) {
+      alert('Participantul nu e alocat la nicio echipă/barcă. Selectează-l ad-hoc dintr-o barcă în tab "Bărci".')
       return
     }
 
@@ -153,6 +157,7 @@ export default function AvailabilityMatrix({
           </tr>
         </thead>
         <tbody>
+          {/* Sectiuni pe echipe */}
           {teams.map((team) => {
             const teamMembers = memberships.filter((m) => m.team_id === team.id)
             return (
@@ -169,55 +174,56 @@ export default function AvailabilityMatrix({
                   const p = getParticipant(m)
                   if (!p) return null
                   return (
-                    <tr key={m.id} style={{ borderTop: '1px solid #f3f4f6' }}>
-                      <td className="px-3 py-2 sticky left-0 z-10" style={{ background: '#fff' }}>
-                        <Link href={`/ssyt/admin/participants/${p.id}`} className="hover:underline" style={{ color: '#0a1628' }}>
-                          {p.full_name}
-                        </Link>
-                        {m.membership_type === 'occasional' && (
-                          <span className="ml-1.5 text-[9px] uppercase tracking-wider px-1 py-0.5 rounded" style={{ background: 'rgba(0,168,181,0.12)', color: '#00A8B5' }}>
-                            occ
-                          </span>
-                        )}
-                      </td>
-                      {regattas.map((r) => {
-                        const key = `${r.id}_${p.id}`
-                        const part = partMap[key]
-                        const status = part?.confirmation_status
-                        const onCrewlist = part?.on_crewlist || false
-                        const isBusy = busy === key
-                        const isConfirmed = status === 'confirmed'
-
-                        return (
-                          <td key={r.id} className="p-1">
-                            <div className="flex items-center justify-center gap-1">
-                              <StatusCell
-                                status={status}
-                                onClick={() => cycleStatus(r.id, p.id, team.id)}
-                                disabled={isBusy}
-                              />
-                              <CrewlistIcon
-                                onCrewlist={onCrewlist}
-                                isConfirmed={isConfirmed}
-                                onClick={() => toggleCrewlist(r.id, p.id, team.id)}
-                                disabled={isBusy || !isConfirmed}
-                              />
-                            </div>
-                          </td>
-                        )
-                      })}
-                    </tr>
+                    <ParticipantRow
+                      key={m.id}
+                      participantId={p.id}
+                      participantName={p.full_name}
+                      teamId={team.id}
+                      isOccasional={m.membership_type === 'occasional'}
+                      regattas={regattas}
+                      partMap={partMap}
+                      busy={busy}
+                      onCycleStatus={cycleStatus}
+                      onToggleCrewlist={toggleCrewlist}
+                    />
                   )
                 })}
               </>
             )
           })}
+
+          {/* Sectiune Nealocati (la baza) */}
+          {unallocatedParticipants.length > 0 && (
+            <>
+              <tr style={{ background: '#6B7280' }}>
+                <td colSpan={regattas.length + 1} className="px-3 py-2 text-white font-semibold sticky left-0 z-10" style={{ background: '#6B7280' }}>
+                  Nealocați
+                  <span className="text-white/70 text-xs font-normal ml-2">({unallocatedParticipants.length} participanți fără echipă)</span>
+                </td>
+              </tr>
+              {unallocatedParticipants.map((p) => (
+                <ParticipantRow
+                  key={`un-${p.id}`}
+                  participantId={p.id}
+                  participantName={p.full_name}
+                  teamId={null}
+                  isOccasional={false}
+                  isUnallocated
+                  regattas={regattas}
+                  partMap={partMap}
+                  busy={busy}
+                  onCycleStatus={cycleStatus}
+                  onToggleCrewlist={toggleCrewlist}
+                />
+              ))}
+            </>
+          )}
         </tbody>
       </table>
 
       <div className="px-3 py-3 text-xs text-gray-500 border-t space-y-1" style={{ background: '#f8f9fa' }}>
         <div>💡 <strong>Click pe pătrat</strong>: comută disponibilitatea (verde → roșu → gri → fără înregistrare → verde...).</div>
-        <div>👤 <strong>Click pe iconul cap-de-om</strong>: pune/scoate de pe crewlist (doar dacă e disponibil/verde).</div>
+        <div>👤 <strong>Click pe iconul cap-de-om</strong>: pune/scoate de pe crewlist (doar dacă e disponibil și alocat la echipă).</div>
         <div className="pt-1 flex flex-wrap items-center gap-3">
           <span className="font-medium">Legendă:</span>
           <LegendItem color="#10B981" label="Disponibil" />
@@ -230,6 +236,68 @@ export default function AvailabilityMatrix({
         </div>
       </div>
     </div>
+  )
+}
+
+function ParticipantRow({
+  participantId, participantName, teamId, isOccasional, isUnallocated, regattas, partMap, busy, onCycleStatus, onToggleCrewlist,
+}: {
+  participantId: string
+  participantName: string
+  teamId: string | null
+  isOccasional: boolean
+  isUnallocated?: boolean
+  regattas: Regatta[]
+  partMap: Record<string, Participation>
+  busy: string | null
+  onCycleStatus: (rId: string, pId: string, tId: string | null) => void
+  onToggleCrewlist: (rId: string, pId: string, tId: string | null) => void
+}) {
+  return (
+    <tr style={{ borderTop: '1px solid #f3f4f6' }}>
+      <td className="px-3 py-2 sticky left-0 z-10" style={{ background: '#fff' }}>
+        <Link href={`/ssyt/admin/participants/${participantId}`} className="hover:underline" style={{ color: '#0a1628' }}>
+          {participantName}
+        </Link>
+        {isOccasional && (
+          <span className="ml-1.5 text-[9px] uppercase tracking-wider px-1 py-0.5 rounded" style={{ background: 'rgba(0,168,181,0.12)', color: '#00A8B5' }}>
+            occ
+          </span>
+        )}
+        {isUnallocated && (
+          <span className="ml-1.5 text-[9px] uppercase tracking-wider px-1 py-0.5 rounded" style={{ background: 'rgba(107,114,128,0.15)', color: '#6B7280' }}>
+            fără echipă
+          </span>
+        )}
+      </td>
+      {regattas.map((r) => {
+        const key = `${r.id}_${participantId}`
+        const part = partMap[key]
+        const status = part?.confirmation_status
+        const onCrewlist = part?.on_crewlist || false
+        const isBusy = busy === key
+        const isConfirmed = status === 'confirmed'
+
+        return (
+          <td key={r.id} className="p-1">
+            <div className="flex items-center justify-center gap-1">
+              <StatusCell
+                status={status}
+                onClick={() => onCycleStatus(r.id, participantId, teamId)}
+                disabled={isBusy}
+              />
+              <CrewlistIcon
+                onCrewlist={onCrewlist}
+                isConfirmed={isConfirmed}
+                hasTeam={!!part?.team_id}
+                onClick={() => onToggleCrewlist(r.id, participantId, teamId)}
+                disabled={isBusy || !isConfirmed || !part?.team_id}
+              />
+            </div>
+          </td>
+        )
+      })}
+    </tr>
   )
 }
 
@@ -251,20 +319,19 @@ function StatusCell({ status, onClick, disabled }: { status: string | undefined;
   )
 }
 
-function CrewlistIcon({ onCrewlist, isConfirmed, onClick, disabled }: { onCrewlist: boolean; isConfirmed: boolean; onClick: () => void; disabled: boolean }) {
+function CrewlistIcon({ onCrewlist, isConfirmed, hasTeam, onClick, disabled }: { onCrewlist: boolean; isConfirmed: boolean; hasTeam: boolean; onClick: () => void; disabled: boolean }) {
   const iconColor = onCrewlist ? '#10B981' : '#D1D5DB'
-  const title = !isConfirmed
-    ? 'Trebuie disponibil ca să poată fi pus pe crewlist'
-    : onCrewlist
-      ? 'Pe crewlist - click pentru a scoate'
-      : 'Click pentru a pune pe crewlist'
+  let title = 'Click pentru a pune pe crewlist'
+  if (!isConfirmed) title = 'Trebuie disponibil ca să poată fi pus pe crewlist'
+  else if (!hasTeam) title = 'Trebuie alocat pe o barcă (din tab Bărci) pentru crewlist'
+  else if (onCrewlist) title = 'Pe crewlist - click pentru a scoate'
 
   return (
     <button
       onClick={onClick}
       disabled={disabled}
       className="w-6 h-6 rounded transition hover:bg-gray-100 disabled:cursor-not-allowed flex items-center justify-center"
-      style={{ opacity: !isConfirmed ? 0.4 : 1 }}
+      style={{ opacity: (!isConfirmed || !hasTeam) ? 0.4 : 1 }}
       title={title}
     >
       <UserCheck size={14} style={{ color: iconColor }} />

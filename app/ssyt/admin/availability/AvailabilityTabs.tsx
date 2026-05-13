@@ -11,6 +11,7 @@ export default function AvailabilityTabs(props: {
   teams: any[]
   memberships: any[]
   participation: any[]
+  unallocatedParticipants: any[]
 }) {
   const [tab, setTab] = useState<TabKey>('members')
 
@@ -27,6 +28,7 @@ export default function AvailabilityTabs(props: {
           teams={props.teams}
           memberships={props.memberships}
           participation={props.participation}
+          unallocatedParticipants={props.unallocatedParticipants}
         />
       )}
 
@@ -36,6 +38,7 @@ export default function AvailabilityTabs(props: {
           teams={props.teams}
           memberships={props.memberships}
           participation={props.participation}
+          unallocatedParticipants={props.unallocatedParticipants}
         />
       )}
     </div>

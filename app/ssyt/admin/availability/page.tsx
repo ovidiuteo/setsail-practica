@@ -11,7 +11,6 @@ export default async function AdminAvailabilityPage() {
     return <div className="px-8 py-16 text-center text-gray-500">Niciun sezon activ.</div>
   }
 
-  // Iau IDs-urile regatelor sezonului ca sa filtrez participation
   const { data: regattas } = await supabase
     .from('ssyt_regattas')
     .select('id, name, short_name, start_date, end_date, event_type, status')
@@ -20,7 +19,7 @@ export default async function AdminAvailabilityPage() {
 
   const regattaIds = (regattas || []).map((r) => r.id)
 
-  const [teamsRes, membershipsRes, participationRes] = await Promise.all([
+  const [teamsRes, membershipsRes, participationRes, unallocatedParticipantsRes] = await Promise.all([
     supabase
       .from('ssyt_teams')
       .select(`
@@ -38,15 +37,20 @@ export default async function AdminAvailabilityPage() {
       `)
       .eq('status', 'active')
       .limit(2000),
-    // Query simplificat: doar coloanele de baza, fara relatie pe participant
     supabase
       .from('ssyt_regatta_participation')
       .select('id, regatta_id, participant_id, team_id, confirmation_status, attendance_type, on_crewlist')
       .in('regatta_id', regattaIds.length > 0 ? regattaIds : ['00000000-0000-0000-0000-000000000000'])
       .limit(2000),
+    // Participanti activi care NU au membership intr-o echipa
+    supabase
+      .from('ssyt_participants')
+      .select('id, full_name, first_name, last_name')
+      .in('status', ['active', 'accepted'])
+      .limit(500),
   ])
 
-  // Iau separat datele participantilor pe care le-am referit
+  // Iau separat datele participantilor referite in participation
   const participantIds = Array.from(new Set((participationRes.data || []).map((p) => p.participant_id)))
   const { data: extraParticipants } = participantIds.length > 0
     ? await supabase
@@ -55,14 +59,19 @@ export default async function AdminAvailabilityPage() {
         .in('id', participantIds)
     : { data: [] }
 
-  // Atasez participantii la fiecare participation
-  const partMap: Record<string, any> = {}
-  for (const p of extraParticipants || []) partMap[p.id] = p
+  // Atasez participantii la participation
+  const participantMap: Record<string, any> = {}
+  for (const p of extraParticipants || []) participantMap[p.id] = p
 
   const enrichedParticipation = (participationRes.data || []).map((p) => ({
     ...p,
-    participant: partMap[p.participant_id] || null,
+    participant: participantMap[p.participant_id] || null,
   }))
+
+  // Filtru nealocati: participanti care nu sunt in nicio echipa activa
+  const allocatedIds = new Set((membershipsRes.data || []).map((m) => m.participant_id))
+  const unallocatedParticipants = (unallocatedParticipantsRes.data || [])
+    .filter((p) => !allocatedIds.has(p.id))
 
   return (
     <div className="px-8 py-8 max-w-[1600px]">
@@ -77,9 +86,6 @@ export default async function AdminAvailabilityPage() {
         <p className="text-sm text-gray-500 mt-1">
           Două vizualizări: pe <strong>membri</strong> (matricea confirmărilor) sau pe <strong>bărci</strong> (capacitate per regatta).
         </p>
-        <p className="text-xs text-gray-400 mt-1">
-          Debug: {regattas?.length || 0} regate · {teamsRes.data?.length || 0} echipe · {membershipsRes.data?.length || 0} memberships · {enrichedParticipation.length} confirmări
-        </p>
       </div>
 
       <AvailabilityTabs
@@ -87,6 +93,7 @@ export default async function AdminAvailabilityPage() {
         teams={teamsRes.data || []}
         memberships={membershipsRes.data || []}
         participation={enrichedParticipation}
+        unallocatedParticipants={unallocatedParticipants}
       />
     </div>
   )
