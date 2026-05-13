@@ -1,10 +1,9 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { ChevronLeft, Crown, Sailboat, Anchor, Trophy, Calendar, Users, MapPin } from 'lucide-react'
+import { ChevronLeft, Crown, Sailboat, Trophy, Calendar, Users, MapPin } from 'lucide-react'
 import { supabase } from '@/lib/ssyt/supabase'
 
 export const dynamic = 'force-dynamic'
-export const revalidate = 60
 
 export async function generateMetadata({ params }: { params: { slug: string } }) {
   const { data: team } = await supabase
@@ -20,50 +19,66 @@ export async function generateMetadata({ params }: { params: { slug: string } })
 }
 
 export default async function TeamPublicPage({ params }: { params: { slug: string } }) {
+  // Iau echipa de baza
   const { data: team } = await supabase
     .from('ssyt_teams')
-    .select(`
-      id, name, short_name, slug, color_primary, color_secondary,
-      slogan, description, logo_url, flag_url,
-      boat:ssyt_boats(id, name, model, sail_number, photo_url, capacity),
-      skipper:ssyt_participants!ssyt_teams_skipper_id_fkey(id, full_name, first_name, last_name, photo_url, nickname, sailing_experience),
-      season:ssyt_seasons(id, name, year, status)
-    `)
+    .select('id, name, short_name, slug, color_primary, color_secondary, slogan, description, logo_url, flag_url, boat_id, skipper_id, season_id')
     .eq('slug', params.slug)
     .maybeSingle()
 
   if (!team) notFound()
 
-  const boat = Array.isArray(team.boat) ? team.boat[0] : team.boat
-  const skipper = Array.isArray(team.skipper) ? team.skipper[0] : team.skipper
-  const season = Array.isArray(team.season) ? team.season[0] : team.season
+  // Iau separat boat, skipper, season (mai sigur decat join-uri)
+  const [boatRes, skipperRes, seasonRes] = await Promise.all([
+    team.boat_id ? supabase.from('ssyt_boats').select('id, name, model, sail_number, photo_url, capacity').eq('id', team.boat_id).maybeSingle() : Promise.resolve({ data: null }),
+    team.skipper_id ? supabase.from('ssyt_participants').select('id, full_name, first_name, last_name, photo_url, nickname, sailing_experience').eq('id', team.skipper_id).maybeSingle() : Promise.resolve({ data: null }),
+    supabase.from('ssyt_seasons').select('id, name, year, status').eq('id', team.season_id).maybeSingle(),
+  ])
+  const boat = boatRes.data
+  const skipper = skipperRes.data
+  const season = seasonRes.data
 
-  // Membri (core + occasional)
+  // Membri (fara skipper)
   const { data: memberships } = await supabase
     .from('ssyt_team_memberships')
-    .select(`
-      id, membership_type, status,
-      participant:ssyt_participants(id, full_name, first_name, last_name, photo_url, nickname)
-    `)
+    .select('id, membership_type, status, participant_id')
     .eq('team_id', team.id)
     .eq('status', 'active')
 
-  const allMembers = (memberships || []).map((m: any) => {
-    const p = Array.isArray(m.participant) ? m.participant[0] : m.participant
-    return p ? { ...p, membership_type: m.membership_type, isSkipper: p.id === (skipper?.id || null) } : null
+  const memberIds = (memberships || []).map((m) => m.participant_id)
+  const { data: memberParticipants } = memberIds.length > 0
+    ? await supabase
+        .from('ssyt_participants')
+        .select('id, full_name, first_name, last_name, photo_url, nickname')
+        .in('id', memberIds)
+    : { data: [] }
+
+  const allMembers = (memberships || []).map((m) => {
+    const p = (memberParticipants || []).find((x) => x.id === m.participant_id)
+    if (!p) return null
+    return {
+      id: p.id,
+      full_name: p.full_name,
+      first_name: p.first_name,
+      last_name: p.last_name,
+      photo_url: p.photo_url,
+      nickname: p.nickname,
+      membership_type: m.membership_type,
+      isSkipper: p.id === team.skipper_id,
+    }
   }).filter(Boolean) as any[]
 
-  const core = allMembers.filter((m) => m.membership_type === 'core' && !m.isSkipper)
-  const occasional = allMembers.filter((m) => m.membership_type === 'occasional')
+  const core = allMembers.filter((m) => m.membership_type === 'core' && !m.isSkipper).sort((a, b) => a.full_name.localeCompare(b.full_name, 'ro'))
+  const occasional = allMembers.filter((m) => m.membership_type === 'occasional').sort((a, b) => a.full_name.localeCompare(b.full_name, 'ro'))
 
   // Regate sezon
-  const { data: regattas } = await supabase
+  const { data: regattas } = season?.id ? await supabase
     .from('ssyt_regattas')
     .select('id, name, short_name, slug, start_date, end_date, event_type, status, location')
-    .eq('season_id', season?.id)
-    .order('start_date')
+    .eq('season_id', season.id)
+    .order('start_date') : { data: [] }
 
-  // Disponibilități echipa pentru fiecare regatta
+  // Disponibilitati echipa pentru regate
   const regattaIds = (regattas || []).map((r) => r.id)
   const { data: participations } = regattaIds.length > 0
     ? await supabase
@@ -83,30 +98,32 @@ export default async function TeamPublicPage({ params }: { params: { slug: strin
     }
   }
 
-  // Rezultate echipa
+  // Rezultate echipa - simplu, fara join in order
   const { data: results } = await supabase
     .from('ssyt_results')
-    .select(`
-      id, official_place, official_class, official_total_boats, official_points, ssyt_internal_points, recap,
-      regatta:ssyt_regattas(id, name, slug, start_date)
-    `)
+    .select('id, regatta_id, official_place, official_class, official_total_boats, official_points, ssyt_internal_points, ssyt_internal_place, recap')
     .eq('team_id', team.id)
-    .order('regatta(start_date)' as any, { ascending: false })
 
-  // Badge-uri castigate
-  const { data: teamBadges } = await supabase
+  // Badge-uri castigate - simplu
+  const { data: teamBadgesRaw } = await supabase
     .from('ssyt_team_badges')
-    .select(`
-      id, awarded_at, notes,
-      badge:ssyt_badges(id, name, icon_url, color, description),
-      regatta:ssyt_regattas(id, name, slug)
-    `)
+    .select('id, awarded_at, notes, badge_id, regatta_id')
     .eq('team_id', team.id)
+
+  const badgeIds = (teamBadgesRaw || []).map((tb) => tb.badge_id).filter(Boolean)
+  const { data: badgesData } = badgeIds.length > 0
+    ? await supabase.from('ssyt_badges').select('id, name, icon_url, color, description').in('id', badgeIds)
+    : { data: [] }
+
+  const teamBadges = (teamBadgesRaw || []).map((tb) => ({
+    ...tb,
+    badge: (badgesData || []).find((b) => b.id === tb.badge_id) || null,
+  }))
 
   const colorPrimary = team.color_primary || '#4A5568'
   const today = new Date().toISOString().split('T')[0]
   const upcomingRegattas = (regattas || []).filter((r) => r.start_date >= today)
-  const pastRegattas = (regattas || []).filter((r) => r.start_date < today)
+  const pastRegattas = (regattas || []).filter((r) => r.start_date < today).reverse()  // cele mai recente sus
 
   return (
     <div className="min-h-screen" style={{ background: '#f8f9fa' }}>
@@ -130,7 +147,7 @@ export default async function TeamPublicPage({ params }: { params: { slug: strin
             )}
             <div className="flex-1 text-white">
               <p className="text-sm font-medium uppercase tracking-wider mb-1 text-white/70">
-                Team · {season?.name}
+                Team · {season?.name || ''}
               </p>
               <h1 className="text-5xl font-black tracking-tight mb-2" style={{ letterSpacing: '-0.03em' }}>
                 {team.name}
@@ -159,9 +176,8 @@ export default async function TeamPublicPage({ params }: { params: { slug: strin
       </section>
 
       <div className="max-w-6xl mx-auto px-6 py-10 space-y-12">
-        {/* Skipper + Boat row */}
+        {/* Skipper + Boat */}
         <section className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {/* Skipper */}
           {skipper && (
             <div className="rounded-lg overflow-hidden" style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
               <div className="px-5 py-3 flex items-center gap-2" style={{ background: colorPrimary, color: '#fff' }}>
@@ -187,7 +203,6 @@ export default async function TeamPublicPage({ params }: { params: { slug: strin
             </div>
           )}
 
-          {/* Boat */}
           {boat && (
             <Link href={`/ssyt/admin/boats/${boat.id}`} className="rounded-lg overflow-hidden hover:shadow-md transition" style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
               <div className="px-5 py-3 flex items-center gap-2" style={{ background: colorPrimary, color: '#fff' }}>
@@ -206,11 +221,7 @@ export default async function TeamPublicPage({ params }: { params: { slug: strin
                   <h3 className="font-semibold text-lg tracking-tight" style={{ color: '#0a1628' }}>{boat.name}</h3>
                   <p className="text-xs text-gray-500 mt-0.5">{boat.model}</p>
                   <div className="flex items-center gap-3 mt-2 text-xs text-gray-600">
-                    {boat.sail_number && (
-                      <span className="inline-flex items-center gap-1">
-                        <span className="font-mono uppercase">{boat.sail_number}</span>
-                      </span>
-                    )}
+                    {boat.sail_number && <span className="font-mono uppercase">{boat.sail_number}</span>}
                     {boat.capacity && (
                       <span className="inline-flex items-center gap-1">
                         <Users size={11} /> {boat.capacity}
@@ -262,9 +273,8 @@ export default async function TeamPublicPage({ params }: { params: { slug: strin
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
               {upcomingRegattas.map((r) => {
-                const stat = partByRegatta[r.id]
+                const stat = partByRegatta[r.id] || { confirmed: 0, total: 0, onCrewlist: 0 }
                 const d1 = new Date(r.start_date)
-                const d2 = r.end_date ? new Date(r.end_date) : null
                 return (
                   <Link key={r.id} href={`/ssyt/regattas/${r.slug}`} className="rounded-lg p-4 flex items-center gap-4 hover:shadow-md transition" style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
                     <div className="w-12 h-12 rounded-md flex flex-col items-center justify-center flex-shrink-0" style={{ background: '#0a1628', color: '#fff' }}>
@@ -319,10 +329,7 @@ export default async function TeamPublicPage({ params }: { params: { slug: strin
                 </thead>
                 <tbody>
                   {pastRegattas.map((r) => {
-                    const res = (results || []).find((rs: any) => {
-                      const reg = Array.isArray(rs.regatta) ? rs.regatta[0] : rs.regatta
-                      return reg?.id === r.id
-                    })
+                    const res = (results || []).find((rs: any) => rs.regatta_id === r.id)
                     const d = new Date(r.start_date)
                     return (
                       <tr key={r.id} className="hover:bg-gray-50" style={{ borderTop: '1px solid #f3f4f6' }}>
@@ -362,14 +369,14 @@ export default async function TeamPublicPage({ params }: { params: { slug: strin
         )}
 
         {/* Badge-uri */}
-        {teamBadges && teamBadges.length > 0 && (
+        {teamBadges.length > 0 && (
           <section>
             <h2 className="text-2xl font-bold tracking-tight mb-4" style={{ color: '#0a1628' }}>
               🏆 Badge-uri câștigate
             </h2>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
               {teamBadges.map((tb: any) => {
-                const badge = Array.isArray(tb.badge) ? tb.badge[0] : tb.badge
+                const badge = tb.badge
                 if (!badge) return null
                 return (
                   <div key={tb.id} className="rounded-lg p-3 text-center" style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
