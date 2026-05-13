@@ -1,7 +1,8 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Sailboat, Edit2, Trash2, X, Check } from 'lucide-react'
+import Link from 'next/link'
+import { Plus, Sailboat, Edit2, Trash2, X, Check, ExternalLink } from 'lucide-react'
 import { supabase } from '@/lib/ssyt/supabase'
 
 type Boat = {
@@ -44,10 +45,7 @@ export default function BoatsManager({ initialBoats }: { initialBoats: Boat[] })
       </div>
 
       {showNew && (
-        <BoatNewForm
-          onClose={() => setShowNew(false)}
-          onSaved={() => { setShowNew(false); refresh() }}
-        />
+        <BoatNewForm onClose={() => setShowNew(false)} onSaved={() => { setShowNew(false); refresh() }} />
       )}
 
       {boats.length > 0 ? (
@@ -79,21 +77,29 @@ export default function BoatsManager({ initialBoats }: { initialBoats: Boat[] })
                 }
                 return (
                   <tr key={b.id} className="hover:bg-gray-50 transition" style={{ borderTop: '1px solid #e5e7eb' }}>
-                    <td className="px-5 py-3 font-semibold" style={{ color: '#0a1628' }}>
-                      <span className="inline-flex items-center gap-2">
-                        <Sailboat size={14} className="text-gray-400" />
+                    <td className="px-5 py-3 font-semibold">
+                      <Link
+                        href={`/ssyt/admin/boats/${b.id}`}
+                        className="inline-flex items-center gap-2 hover:underline transition"
+                        style={{ color: '#FF6B35' }}
+                      >
+                        <Sailboat size={14} />
                         {b.name}
-                      </span>
+                      </Link>
                     </td>
                     <td className="px-5 py-3 text-gray-700">{b.model || '—'}</td>
                     <td className="px-5 py-3 text-gray-700 font-mono text-xs">{b.sail_number || '—'}</td>
                     <td className="px-5 py-3 text-center text-gray-700">{b.capacity}</td>
                     <td className="px-5 py-3">
                       {usedByTeam ? (
-                        <span className="inline-flex items-center gap-1.5 text-xs">
+                        <Link
+                          href={`/ssyt/admin/teams/${usedByTeam.id}`}
+                          className="inline-flex items-center gap-1.5 text-xs hover:underline"
+                          style={{ color: '#0a1628' }}
+                        >
                           <span className="w-2 h-2 rounded-full" style={{ background: usedByTeam.color_primary || '#4A5568' }}></span>
                           {usedByTeam.short_name || usedByTeam.name}
-                        </span>
+                        </Link>
                       ) : (
                         <span className="text-gray-400 italic text-xs">— liberă</span>
                       )}
@@ -107,7 +113,10 @@ export default function BoatsManager({ initialBoats }: { initialBoats: Boat[] })
                       </span>
                     </td>
                     <td className="px-5 py-3 text-right">
-                      <button onClick={() => setEditingId(b.id)} className="text-gray-400 hover:text-gray-700 p-1">
+                      <Link href={`/ssyt/admin/boats/${b.id}`} className="text-gray-400 hover:text-gray-700 p-1 inline-block" title="Detalii complete">
+                        <ExternalLink size={14} />
+                      </Link>
+                      <button onClick={() => setEditingId(b.id)} className="text-gray-400 hover:text-gray-700 p-1 ml-1" title="Editare rapidă">
                         <Edit2 size={14} />
                       </button>
                       <DeleteBoatButton boatId={b.id} canDelete={!usedByTeam} onDeleted={refresh} />
