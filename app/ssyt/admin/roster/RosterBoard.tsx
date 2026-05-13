@@ -12,7 +12,8 @@ type Team = {
   color_primary: string | null
   slug: string | null
   skipper_id: string | null
-  boat?: { name: string } | null
+  // Supabase poate returna relatia ca array sau obiect; normalizam la string in render
+  boat?: { name: string } | { name: string }[] | null
 }
 
 type Participant = {
@@ -34,6 +35,12 @@ type Membership = {
 }
 
 const UNASSIGNED = 'UNASSIGNED'
+
+function getBoatName(boat: Team['boat']): string | null {
+  if (!boat) return null
+  if (Array.isArray(boat)) return boat[0]?.name ?? null
+  return boat.name ?? null
+}
 
 export default function RosterBoard({
   teams,
@@ -57,7 +64,6 @@ export default function RosterBoard({
     setTimeout(() => setToast(null), 2500)
   }
 
-  // Group participants by team
   const grouping = useMemo(() => {
     const result: Record<string, Participant[]> = { [UNASSIGNED]: [] }
     teams.forEach((t) => { result[t.id] = [] })
@@ -84,7 +90,6 @@ export default function RosterBoard({
     return m
   }, [memberships])
 
-  // Filter by search
   const searchLower = search.trim().toLowerCase()
   function matchesSearch(p: Participant) {
     if (!searchLower) return true
@@ -123,12 +128,11 @@ export default function RosterBoard({
     const currentMembership = membershipMap[participantId]
     const currentTeamId = currentMembership?.team_id ?? UNASSIGNED
 
-    if (currentTeamId === targetColumnId) return // same column, ignore
+    if (currentTeamId === targetColumnId) return
 
     setBusy(true)
 
     try {
-      // Caz 1: Mutare în UNASSIGNED → sterge membership
       if (targetColumnId === UNASSIGNED) {
         if (currentMembership) {
           const { error } = await supabase
@@ -144,9 +148,7 @@ export default function RosterBoard({
         return
       }
 
-      // Caz 2: Mutare între echipe sau din UNASSIGNED → upsert membership
       if (currentMembership) {
-        // Update echipa existenta
         const { error } = await supabase
           .from('ssyt_team_memberships')
           .update({ team_id: targetColumnId })
@@ -156,7 +158,6 @@ export default function RosterBoard({
           prev.map((m) => m.id === currentMembership.id ? { ...m, team_id: targetColumnId } : m)
         )
       } else {
-        // Insert nou (din UNASSIGNED in echipa)
         const { data, error } = await supabase
           .from('ssyt_team_memberships')
           .insert({
@@ -202,7 +203,6 @@ export default function RosterBoard({
 
   return (
     <div className="relative">
-      {/* Search bar */}
       <div className="mb-4 flex items-center gap-3">
         <div className="relative flex-1 max-w-md">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
@@ -224,7 +224,6 @@ export default function RosterBoard({
         </div>
       </div>
 
-      {/* Toast */}
       {toast && (
         <div
           className="fixed bottom-6 right-6 z-50 px-4 py-2.5 rounded-lg shadow-lg text-sm font-medium text-white"
@@ -234,9 +233,7 @@ export default function RosterBoard({
         </div>
       )}
 
-      {/* Board: Unassigned + Teams */}
       <div className="grid gap-4" style={{ gridTemplateColumns: `300px repeat(${teams.length}, minmax(220px, 1fr))` }}>
-        {/* Unassigned column */}
         <Column
           title="Neasignați"
           subtitle={`${grouping[UNASSIGNED].length} participanți`}
@@ -263,16 +260,16 @@ export default function RosterBoard({
           )}
         </Column>
 
-        {/* Team columns */}
         {teams.map((team) => {
           const isSkipperId = team.skipper_id
           const teamParticipants = grouping[team.id] || []
+          const boatName = getBoatName(team.boat)
           return (
             <Column
               key={team.id}
               title={team.name}
               titleHref={`/ssyt/admin/teams/${team.id}`}
-              subtitle={`${teamParticipants.length} membri${team.boat?.name ? ' · ' + team.boat.name : ''}`}
+              subtitle={`${teamParticipants.length} membri${boatName ? ' · ' + boatName : ''}`}
               headerStyle={{ background: team.color_primary || '#4A5568' }}
               isDragOver={dragOverColumn === team.id}
               onDragOver={(e) => onDragOver(e, team.id)}
