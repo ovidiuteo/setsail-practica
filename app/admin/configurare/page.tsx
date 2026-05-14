@@ -161,9 +161,18 @@ function Section({ title, table, fields }: {
 export default function ConfigurarePage() {
   return (
     <div className="p-8">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900" style={{ fontFamily: 'Georgia, serif' }}>Configurare</h1>
-        <p className="text-gray-500 text-sm mt-1">Gestionare locații, ambarcațiuni, evaluatori și instructori</p>
+      <div className="mb-6 flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900" style={{ fontFamily: 'Georgia, serif' }}>Configurare</h1>
+          <p className="text-gray-500 text-sm mt-1">Gestionare locații, ambarcațiuni, evaluatori și instructori</p>
+        </div>
+        <a href="/admin/configurare/mail-templates"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+          </svg>
+          Template-uri Email
+        </a>
       </div>
       <div className="grid grid-cols-2 gap-6">
         <Section title="📍 Locații de practică" table="locations"
