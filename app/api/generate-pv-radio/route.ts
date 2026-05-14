@@ -137,16 +137,17 @@ ${antetHtml}
   }
 
   // DOCX format
+  try {
   const {
     Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
-    AlignmentType, BorderStyle, WidthType, ShadingType, ImageRun,
+    AlignmentType, BorderStyle, WidthType, ShadingType, ImageRun, VerticalAlign,
     convertMillimetersToTwip
   } = await import('docx')
 
   const border = { style: BorderStyle.SINGLE, size: 4, color: '000000' }
   const borders = { top: border, bottom: border, left: border, right: border }
   const cellM = { top: 60, bottom: 60, left: 80, right: 80 }
-  const shade = { fill: 'E9D5FF', type: ShadingType.CLEAR }
+  const shade = { fill: 'E9D5FF', type: ShadingType.SOLID }
 
   const bold = (t: string, size = 18) => new TextRun({ text: t, bold: true, size, font: 'Arial' })
   const reg = (t: string, size = 17) => new TextRun({ text: t, size, font: 'Arial' })
@@ -160,7 +161,7 @@ ${antetHtml}
     shading: opts?.shade,
     margins: cellM,
     children: ch,
-    verticalAlign: 'center' as any,
+    verticalAlign: VerticalAlign.CENTER,
   })
 
   // Antet imagine
@@ -187,7 +188,7 @@ ${antetHtml}
   )
 
   // Total content width landscape A4 = 297mm - 30mm margins = 267mm = ~15189 DXA
-  const TW = 15189
+  const TW = 15188
 
   // Tabel cursanti
   const minRows = Math.max(students.length, 8)
@@ -281,7 +282,7 @@ ${antetHtml}
         new Paragraph({ spacing: { before: 240, after: 60 }, children: [] }),
         new Table({
           width: { size: TW, type: WidthType.DXA },
-          columnWidths: [TW/2, TW/2],
+          columnWidths: [Math.floor(TW/2), Math.ceil(TW/2)],
           rows: [
             new TableRow({ children: [
               cell([para([bold('Președinte comisie:', 17)]), para([reg('')]), para([reg('...............................................')])], { borders: { top: { style: BorderStyle.NONE, size:0,color:'fff'}, bottom:{style:BorderStyle.NONE,size:0,color:'fff'}, left:{style:BorderStyle.NONE,size:0,color:'fff'}, right:{style:BorderStyle.NONE,size:0,color:'fff'}}, w: TW/2 }),
@@ -305,4 +306,8 @@ ${antetHtml}
       'Content-Disposition': `attachment; filename="${filename}"`
     }
   })
+  } catch (err: any) {
+    console.error('PV Radio DOCX error:', err)
+    return NextResponse.json({ error: err.message || 'DOCX generation failed' }, { status: 500 })
+  }
 }
