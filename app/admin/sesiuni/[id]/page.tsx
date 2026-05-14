@@ -350,7 +350,7 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
             <div><div className="text-xs text-gray-400 mb-1">CNP</div><input className={addCls} placeholder="1800101..." value={newSt.cnp} onChange={e=>setNewSt((s:any)=>({...s,cnp:e.target.value}))}/></div>
             <div><div className="text-xs text-gray-400 mb-1">Clasa</div>
               <select className={addCls} value={newSt.class_caa} onChange={e=>setNewSt((s:any)=>({...s,class_caa:e.target.value}))}>
-                <option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option><option value="C,D">C,D</option><option value="Radio">Radio</option></select></div>
+                <option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option><option value="C,D">C,D</option><option value="Radio">Radio</option><option value="Obtinere LRC">Obținere LRC</option><option value="Prelungire LRC">Prelungire LRC</option></select></div>
             <div className="col-span-2"><div className="text-xs text-gray-400 mb-1">Email</div><input className={addCls} placeholder="email@..." value={newSt.email} onChange={e=>setNewSt((s:any)=>({...s,email:e.target.value}))}/></div>
             <div><div className="text-xs text-gray-400 mb-1">Telefon</div><input className={addCls} placeholder="07XX..." value={newSt.phone} onChange={e=>setNewSt((s:any)=>({...s,phone:e.target.value}))}/></div>
             <div><div className="text-xs text-gray-400 mb-1">Data nașterii</div><input className={addCls} placeholder="dd.mm.yyyy" value={newSt.birth_date} onChange={e=>setNewSt((s:any)=>({...s,birth_date:e.target.value}))}/></div>
@@ -424,7 +424,7 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
                         <input className={inCls+' w-16'} placeholder="123456" value={editValues.ci_number} onChange={e=>setEditValues((v:any)=>({...v,ci_number:e.target.value}))}/>
                       </div></td>
                       <td className="px-1 py-1.5"><select className={inCls} value={editValues.class_caa} onChange={e=>setEditValues((v:any)=>({...v,class_caa:e.target.value}))}>
-                        <option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option><option value="C,D">C,D</option><option value="Radio">Radio</option></select></td>
+                        <option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option><option value="C,D">C,D</option><option value="Radio">Radio</option><option value="Obtinere LRC">Obținere LRC</option><option value="Prelungire LRC">Prelungire LRC</option></select></td>
                       <td className="px-1 py-1.5"><span className="text-xs" style={{color:ps.color}}>{ps.label}</span></td>
                       <td className="px-2 py-1.5"><div className="flex gap-1">
                         <button onClick={()=>saveEdit(s.id)} disabled={saving} className="p-1 rounded bg-green-100 text-green-700"><Check size={12}/></button>
@@ -866,6 +866,12 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
     const blob = await res.blob()
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click()
   }
+  async function generateDocRadio(endpoint: string, filename: string) {
+    const res = await fetch(endpoint, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id})})
+    if (!res.ok) throw new Error(await res.text())
+    const blob = await res.blob()
+    const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click()
+  }
 
   const st = statusMap[sess.status] || statusMap.draft
   const isAbsent = sess.session_type === 'absent'
@@ -1016,11 +1022,37 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
             <h3 className="font-semibold text-sm text-gray-900 mb-3">Documente</h3>
             {isRadio ? (
               <div className="space-y-2">
-                {/* Documente Radio */}
-                <button onClick={async()=>{setGPV(true);try{await generateDoc('/api/generate-pv-radio',`PV_Radio_${sess.session_date}.docx`)}catch(e:any){alert(e.message)}setGPV(false)}}
-                  disabled={gPV||students.length===0} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#7c3aed'}}>
-                  <FileText size={13}/>{gPV?'Se generează...':'Proces Verbal Radio'}
-                </button>
+                {/* Documente Radio - PV + Anexa pentru Obtinere sau Prelungire */}
+                {(() => {
+                  const isPrelungire = (sess.class_caa||'').toLowerCase().includes('prelungire')
+                  const tipDoc = isPrelungire ? 'prelungire' : 'obtinere'
+                  const tipLabel = isPrelungire ? 'Prelungire LRC' : 'Obținere LRC'
+                  return (<>
+                    <button onClick={async()=>{setGPV(true);try{await generateDoc(`/api/generate-pv-radio?tip=${tipDoc}`,`PV_LRC_${tipDoc.toUpperCase()}_${sess.session_date}.docx`)}catch(e:any){alert(e.message)}setGPV(false)}}
+                      disabled={gPV||students.length===0} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#7c3aed'}}>
+                      <FileText size={13}/>{gPV?'Se generează...': `PV LRC ${tipLabel}`}
+                    </button>
+                    <button onClick={async()=>{try{
+                      const res=await fetch(`/api/generate-pv-radio?tip=${tipDoc}&format=pdf`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id})})
+                      const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>w.print(),800)}
+                    }catch(e:any){alert(e.message)}}}
+                      disabled={students.length===0} className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-medium border border-purple-200 text-purple-700 hover:bg-purple-50 disabled:opacity-50">
+                      <Download size={13}/>PDF PV LRC {tipLabel}
+                    </button>
+                    <div className="border-t border-gray-100 pt-2 mt-1"/>
+                    <button onClick={async()=>{try{await generateDoc(`/api/generate-anexa-pv?tip=${tipDoc}`,`Anexa_PV_LRC_${tipDoc.toUpperCase()}_${sess.session_date}.docx`)}catch(e:any){alert(e.message)}}}
+                      disabled={students.length===0} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#6d28d9'}}>
+                      <FileText size={13}/>Anexă PV LRC {tipLabel}
+                    </button>
+                    <button onClick={async()=>{try{
+                      const res=await fetch(`/api/generate-anexa-pv?tip=${tipDoc}&format=pdf`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id})})
+                      const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>w.print(),800)}
+                    }catch(e:any){alert(e.message)}}}
+                      disabled={students.length===0} className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-medium border border-purple-200 text-purple-700 hover:bg-purple-50 disabled:opacity-50">
+                      <Download size={13}/>PDF Anexă PV LRC {tipLabel}
+                    </button>
+                  </>)
+                })()}
               </div>
             ) : (
               <div className="space-y-2">

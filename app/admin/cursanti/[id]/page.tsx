@@ -262,7 +262,7 @@ export default function CursantAdminPage() {
                     {f.key === 'class_caa' ? (
                       <select className={inp} value={form[f.key] as string || ''}
                         onChange={e => setForm(p => ({ ...p, [f.key]: e.target.value }))}>
-                        {['A','B','C','D','C,D','Radio'].map(v => <option key={v} value={v}>{v.replace(',','+')}</option>)}
+                        {['A','B','C','D','C,D','Radio','Obtinere LRC','Prelungire LRC'].map(v => <option key={v} value={v}>{v.replace(',','+')}</option>)}
                       </select>
                     ) : (
                       <input className={inp + ' pr-8'} type={f.type || 'text'}
