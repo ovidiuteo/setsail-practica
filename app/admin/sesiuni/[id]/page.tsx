@@ -1085,6 +1085,41 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
             </div>
           )}
 
+          {/* Sectiunea Cereri - distincta, intre Instiintari si Documente */}
+          {isRadio && (
+            <div className="bg-white rounded-xl p-5 shadow-sm border border-indigo-100">
+              <h3 className="font-semibold text-sm text-gray-900 mb-3">Cereri ANCOM</h3>
+              <div className="space-y-2">
+                <div className="flex gap-1.5">
+                  <button onClick={async()=>{try{await generateDocRadio('/api/generate-cereri-radio',`Cereri_obtinere_${sess.session_date}.docx`,'obtinere','docx')}catch(e:any){alert(e.message)}}}
+                    disabled={students.length===0} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#1d4ed8'}}>
+                    <FileText size={12}/>Cereri Obținere
+                  </button>
+                  <button onClick={async()=>{try{
+                    const res=await fetch('/api/generate-cereri-radio',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id,tip:'obtinere',format:'pdf'})})
+                    const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>w.print(),800)}
+                  }catch(e:any){alert(e.message)}}}
+                    disabled={students.length===0} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#dc2626'}}>
+                    <Download size={12}/>PDF Obținere
+                  </button>
+                </div>
+                <div className="flex gap-1.5">
+                  <button onClick={async()=>{try{await generateDocRadio('/api/generate-cereri-radio',`Cereri_prelungire_${sess.session_date}.docx`,'prelungire','docx')}catch(e:any){alert(e.message)}}}
+                    disabled={students.length===0} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#1d4ed8'}}>
+                    <FileText size={12}/>Cereri Prelungire
+                  </button>
+                  <button onClick={async()=>{try{
+                    const res=await fetch('/api/generate-cereri-radio',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id,tip:'prelungire',format:'pdf'})})
+                    const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>w.print(),800)}
+                  }catch(e:any){alert(e.message)}}}
+                    disabled={students.length===0} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#dc2626'}}>
+                    <Download size={12}/>PDF Prelungire
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
             <h3 className="font-semibold text-sm text-gray-900 mb-3">Documente</h3>
             {isRadio ? (
