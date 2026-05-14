@@ -894,6 +894,7 @@ SetSail NauticSchool`,
 
 function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions, allStudents, onEditSession }:
   { sess: Session, students: Student[], allStatuses: string[], onStatusChange:(sid:string,status:string)=>void, allSessions: Session[], allStudents: Record<string,Student[]>, onEditSession:(s:Session)=>void }) {
+  const [dbTemplates, setDbTemplates] = useState<any[]>([])
   const [gPV, setGPV] = useState(false)
   const [gFise, setGFise] = useState(false)
   const [gPDF, setGPDF] = useState(false)
@@ -904,6 +905,13 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
   const [gNotif, setGNotif] = useState(false)
   const [notifSaved, setNotifSaved] = useState(false)
   const notifScanRef = useRef<HTMLInputElement|null>(null)
+
+  useEffect(() => {
+    supabase.from('mail_templates')
+      .select('*').eq('activ', true)
+      .order('categorie').order('label')
+      .then(({ data }) => setDbTemplates(data || []))
+  }, [])
 
   const [copied, setCopied] = useState(false)
   const [showMail, setShowMail] = useState(false)
@@ -1710,33 +1718,44 @@ Set Sail NauticSchool
                     value={mailBody} onChange={e=>setMailBody(e.target.value)} placeholder="Scrie sau selectează un template..."/>
                 </div>
 
-                {/* Template-uri rapide */}
+                {/* Template-uri din DB - grupate pe categorii */}
                 <div>
-                  <div className="text-xs text-gray-400 mb-1.5">Template-uri rapide:</div>
-                  <div className="flex flex-col gap-1.5">
-                    {QUICK_TEMPLATES.map((t,i) => (
-                      <button key={i} onClick={()=>{setMailSubject(applyTemplate(t.subject,sess));setMailBody(applyTemplate(t.body(sess),sess))}}
-                        className="text-left px-3 py-2 rounded-lg text-xs border border-gray-200 hover:bg-blue-50 hover:border-blue-200 transition-colors">
-                        {t.label}
-                      </button>
-                    ))}
-                    {/* Dropdown template-uri extra */}
-                    <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none bg-white"
-                      onChange={e=>{
-                        const t = DROPDOWN_TEMPLATES[parseInt(e.target.value)] as any
-                        if(t){
-                          const rawBody = typeof t.html === 'function' ? t.html(sess) : (t.html || (typeof t.body === 'function' ? t.body(sess) : t.body))
-                          setMailSubject(applyTemplate(t.subject, sess))
-                          setMailBody(applyTemplate(rawBody, sess))
-                        }
-                        e.target.value = ''
-                      }} defaultValue="">
-                      <option value="" disabled>+ Alte template-uri...</option>
-                      {DROPDOWN_TEMPLATES.map((t,i)=>(
-                        <option key={i} value={i}>{(t as any).label}</option>
-                      ))}
-                    </select>
-                  </div>
+                  {dbTemplates.length === 0 ? (
+                    <div className="text-xs text-gray-400 italic">Se încarcă template-urile...</div>
+                  ) : (() => {
+                    const CATS: Record<string,string> = {
+                      portal:'🔗 Portal', practica:'⛵ Practică',
+                      organizatoric:'📋 Organizatoric', rezultate:'🏆 Rezultate', general:'📧 General'
+                    }
+                    const grouped = dbTemplates.reduce((acc: Record<string,any[]>, t: any) => {
+                      const cat = t.categorie || 'general'
+                      if (!acc[cat]) acc[cat] = []
+                      acc[cat].push(t)
+                      return acc
+                    }, {})
+                    return (
+                      <div className="space-y-3">
+                        {Object.entries(grouped).map(([cat, items]) => (
+                          <div key={cat}>
+                            <div className="text-xs text-gray-400 font-medium mb-1">{CATS[cat] || cat}</div>
+                            <div className="flex flex-col gap-1">
+                              {(items as any[]).map((t: any) => (
+                                <button key={t.id}
+                                  onClick={()=>{
+                                    const rawBody = t.body_html || t.body_text || ''
+                                    setMailSubject(applyTemplate(t.subject, sess))
+                                    setMailBody(applyTemplate(rawBody, sess))
+                                  }}
+                                  className="text-left px-3 py-2 rounded-lg text-xs border border-gray-200 hover:bg-blue-50 hover:border-blue-200 transition-colors">
+                                  {t.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  })()}
                 </div>
 
                 {/* Buton deschide Gmail */}
