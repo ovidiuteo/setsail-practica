@@ -251,23 +251,6 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
     setMoving(null)
   }
 
-  async function moveToPrincipalSession(s: Student, targetSessionId: string) {
-    setMoving(s.id)
-    // Gasim ordinea maxima in sesiunea tinta
-    const { data: targetSts } = await supabase.from('students').select('order_in_session')
-      .eq('session_id', targetSessionId).order('order_in_session', {ascending: false}).limit(1)
-    const maxOrder = targetSts?.[0]?.order_in_session || 0
-    // Mutam cursantul
-    await supabase.from('students').update({
-      session_id: targetSessionId,
-      order_in_session: maxOrder + 1,
-      portal_status: 'pending',
-      only_sailing: false,
-    }).eq('id', s.id)
-    // Scoatem din lista curenta
-    setStudents(students.filter(st => st.id !== s.id))
-    setShowMovePrincipal(null)
-    setMoving(null)
   }
 
   async function markSailing(s: Student) {
