@@ -1707,12 +1707,33 @@ Set Sail NauticSchool
                 </div>
 
                 {/* Buton deschide Gmail */}
-                <a href={`https://mail.google.com/mail/?view=cm&bcc=${encodeURIComponent(mailTo)}&su=${encodeURIComponent(mailSubject)}&body=${encodeURIComponent(mailBody)}`}
-                  target="_blank" rel="noopener noreferrer"
-                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-medium text-white"
-                  style={{background:'#0a1628'}}>
-                  <Mail size={13}/> Deschide în Gmail
-                </a>
+                {mailBody.trim().startsWith('<') ? (
+                  // Template HTML - prea mare pentru URL Gmail, copiem in clipboard
+                  <div className="space-y-2">
+                    <button onClick={()=>{
+                      navigator.clipboard.writeText(mailBody)
+                      setMailCopied('body')
+                      setTimeout(()=>setMailCopied(null), 3000)
+                    }}
+                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-medium border border-blue-200 text-blue-700 hover:bg-blue-50">
+                      {mailCopied==='body' ? '✓ HTML copiat în clipboard!' : '📋 Copiază HTML în clipboard'}
+                    </button>
+                    <a href={`https://mail.google.com/mail/?view=cm&bcc=${encodeURIComponent(mailTo)}&su=${encodeURIComponent(mailSubject)}`}
+                      target="_blank" rel="noopener noreferrer"
+                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-medium text-white"
+                      style={{background:'#0a1628'}}>
+                      <Mail size={13}/> Deschide Gmail (paste HTML manual)
+                    </a>
+                    <p className="text-xs text-gray-400 text-center">1. Copiază HTML → 2. Deschide Gmail → 3. Ctrl+Shift+V (paste formatat)</p>
+                  </div>
+                ) : (
+                  <a href={`https://mail.google.com/mail/?view=cm&bcc=${encodeURIComponent(mailTo)}&su=${encodeURIComponent(mailSubject)}&body=${encodeURIComponent(mailBody)}`}
+                    target="_blank" rel="noopener noreferrer"
+                    className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-medium text-white"
+                    style={{background:'#0a1628'}}>
+                    <Mail size={13}/> Deschide în Gmail
+                  </a>
+                )}
               </div>
             )}
           </div>
