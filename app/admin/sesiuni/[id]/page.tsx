@@ -837,17 +837,17 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
   const isAbsent = sess.session_type === 'absent'
   const isRadio = (sess.class_caa || '').toLowerCase().includes('radio') || (sess.class_caa || '').toLowerCase().includes('lrc')
 
-  function resolveVars(text: string) {
+  const resolveVars = (text: string) => {
     const origin = typeof window !== 'undefined' ? window.location.origin : 'https://setsail-practica.vercel.app'
-    const practiceStartDate = (sess as any).practice_start_date
-    const sessionDate = sess.session_date
+    const psd = (sess as any).practice_start_date
+    const sd = sess.session_date
     return (text || '')
-      .replace(/{{link_portal}}/g, `${origin}/portal?cod=${sess.access_code}`)
-      .replace(/{{data_sesiune}}/g, sessionDate ? new Date(sessionDate).toLocaleDateString('ro-RO', {day:'2-digit', month:'long', year:'numeric'}) : '')
-      .replace(/{{locatie}}/g, sess.location_detail || sess.locations?.name || '')
-      .replace(/{{ambarcatiune}}/g, sess.boats?.name || '')
-      .replace(/{{zz_data_start_practica}}/g, practiceStartDate ? new Date(practiceStartDate).getDate().toString() : '')
-      .replace(/{{zz_llll_data_practica}}/g, sessionDate ? new Date(sessionDate).toLocaleDateString('ro-RO', {day:'2-digit', month:'long'}) : '')
+      .replace(/\{\{link_portal\}\}/g, origin + '/portal?cod=' + sess.access_code)
+      .replace(/\{\{data_sesiune\}\}/g, sd ? new Date(sd).toLocaleDateString('ro-RO', {day:'2-digit', month:'long', year:'numeric'}) : '')
+      .replace(/\{\{locatie\}\}/g, sess.location_detail || sess.locations?.name || '')
+      .replace(/\{\{ambarcatiune\}\}/g, sess.boats?.name || '')
+      .replace(/\{\{zz_data_start_practica\}\}/g, psd ? String(new Date(psd).getDate()) : '')
+      .replace(/\{\{zz_llll_data_practica\}\}/g, sd ? new Date(sd).toLocaleDateString('ro-RO', {day:'2-digit', month:'long'}) : '')
   }
 
   return (
