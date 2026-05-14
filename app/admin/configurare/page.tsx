@@ -164,7 +164,7 @@ export default function ConfigurarePage() {
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-gray-900" style={{ fontFamily: 'Georgia, serif' }}>Configurare</h1>
-          <p className="text-gray-500 text-sm mt-1">Gestionare locații, ambarcațiuni, evaluatori și instructori</p>
+          <p className="text-gray-500 text-sm mt-1">Gestionare locații, ambarcațiuni, evaluatori, instructori și persoane de contact</p>
         </div>
         <a href="/admin/configurare/mail-templates"
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors">
@@ -202,6 +202,13 @@ export default function ConfigurarePage() {
           fields={[
             { key: 'full_name', label: 'Nume complet', placeholder: 'POPESCU ION' },
             { key: 'email', label: 'Email', placeholder: 'email@setsail.ro' },
+          ]} />
+        <Section title="📞 Persoane de contact" table="contact_persons"
+          fields={[
+            { key: 'full_name', label: 'Nume complet', placeholder: 'Paula Drugan' },
+            { key: 'phone', label: 'Telefon', placeholder: '0722 488 973' },
+            { key: 'email', label: 'Email', placeholder: 'paula@setsail.ro' },
+            { key: 'rol', label: 'Rol', placeholder: 'ex: instructor, manager' },
           ]} />
       </div>
     </div>
