@@ -8,10 +8,9 @@ import { ArrowLeft, Download, FileText, Users, Copy, Plus, Trash2, Check, X, Pen
 
 // ─────────────────────────────────────────────
 // Functie pura de aplicare variabile - modul level
-// Primeste text + sess, returneaza text cu variabilele inlocuite
-// Fara regex, fara escape, simplu si predictibil
+// Primeste text + sess + contacts[], returneaza text cu variabilele inlocuite
 // ─────────────────────────────────────────────
-function applyTemplate(text: string, sess: any): string {
+function applyTemplate(text: string, sess: any, contacts?: any[]): string {
   if (!text) return ''
   const origin = typeof window !== 'undefined'
     ? window.location.origin
@@ -27,8 +26,19 @@ function applyTemplate(text: string, sess: any): string {
     'zz_llll_data_practica':  sd  ? new Date(sd).toLocaleDateString('ro-RO', {day:'2-digit', month:'long'}) : '',
     'ora_start':              sess?.practice_start_time || '9:30',
   }
+  // Persoane de contact: filtrate dupa id-urile bifate, sortate alfabetic
+  const contactIds: string[] = sess?.contact_person_ids || []
+  const selected = (contacts || [])
+    .filter((c: any) => contactIds.includes(c.id))
+    .sort((a: any, b: any) => a.full_name.localeCompare(b.full_name, 'ro'))
+  const contactVars: Record<string, string> = {
+    'pers_cont_1': selected[0] ? selected[0].full_name + '   ' + selected[0].phone : '',
+    'pers_cont_2': selected[1] ? selected[1].full_name + '   ' + selected[1].phone : '',
+    'pers_cont_3': selected[2] ? selected[2].full_name + '   ' + selected[2].phone : '',
+    'pers_cont_4': selected[3] ? selected[3].full_name + '   ' + selected[3].phone : '',
+  }
   let result = text
-  for (const [key, val] of Object.entries(vars)) {
+  for (const [key, val] of Object.entries({ ...vars, ...contactVars })) {
     result = result.split('{{' + key + '}}').join(val)
   }
   return result
@@ -1782,8 +1792,8 @@ Set Sail NauticSchool
                                 <button key={t.id}
                                   onClick={()=>{
                                     const rawBody = t.body_html || t.body_text || ''
-                                    setMailSubject(applyTemplate(t.subject, sess))
-                                    setMailBody(applyTemplate(rawBody, sess))
+                                    setMailSubject(applyTemplate(t.subject, sess, allContacts))
+                                    setMailBody(applyTemplate(rawBody, sess, allContacts))
                                   }}
                                   className="text-left px-3 py-2 rounded-lg text-xs border border-gray-200 hover:bg-blue-50 hover:border-blue-200 transition-colors">
                                   {t.label}
