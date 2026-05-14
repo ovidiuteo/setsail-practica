@@ -841,13 +841,14 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
     const origin = typeof window !== 'undefined' ? window.location.origin : 'https://setsail-practica.vercel.app'
     const psd = (sess as any).practice_start_date
     const sd = sess.session_date
-    return (text || '')
-      .replace(/\{\{link_portal\}\}/g, origin + '/portal?cod=' + sess.access_code)
-      .replace(/\{\{data_sesiune\}\}/g, sd ? new Date(sd).toLocaleDateString('ro-RO', {day:'2-digit', month:'long', year:'numeric'}) : '')
-      .replace(/\{\{locatie\}\}/g, sess.location_detail || sess.locations?.name || '')
-      .replace(/\{\{ambarcatiune\}\}/g, sess.boats?.name || '')
-      .replace(/\{\{zz_data_start_practica\}\}/g, psd ? String(new Date(psd).getDate()) : '')
-      .replace(/\{\{zz_llll_data_practica\}\}/g, sd ? new Date(sd).toLocaleDateString('ro-RO', {day:'2-digit', month:'long'}) : '')
+    let r = text || ''
+    r = r.split('{{link_portal}}').join(origin + '/portal?cod=' + sess.access_code)
+    r = r.split('{{data_sesiune}}').join(sd ? new Date(sd).toLocaleDateString('ro-RO', {day:'2-digit', month:'long', year:'numeric'}) : '')
+    r = r.split('{{locatie}}').join(sess.location_detail || sess.locations?.name || '')
+    r = r.split('{{ambarcatiune}}').join(sess.boats?.name || '')
+    r = r.split('{{zz_data_start_practica}}').join(psd ? String(new Date(psd).getDate()) : '')
+    r = r.split('{{zz_llll_data_practica}}').join(sd ? new Date(sd).toLocaleDateString('ro-RO', {day:'2-digit', month:'long'}) : '')
+    return r
   }
 
   return (
