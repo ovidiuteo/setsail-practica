@@ -693,7 +693,7 @@ const DROPDOWN_TEMPLATES = [
   {
     label: '⛵ Practică 18-20 mai - Detalii organizatorice',
     subject: '⛵ Practică navigație 18-20 mai - Detalii organizatorice',
-    body: `Ahoy,
+    body: (sess: any) => `Ahoy,
 
 În perioada 18-20 mai ne vom întâlni pentru cele 3 zile de practică. Ne vedem la ora 9:30 în marina Limanu (LifeHarbour), unde vom forma echipajele și veți face cunoștință cu instructorii Set Sail.
 
@@ -707,7 +707,7 @@ Pauza de prânz este între 14:00 și 16:00, timp numai bun de relaxare și soci
 Dacă ești sensibil la valuri, ia cu tine Emetix sau ceva echivalent.
 Vom face poze, iar unele vor ajunge pe paginile noastre de social media. Dacă nu vrei să apari, spune-ne.
 
-Te rugăm să accesezi PORTALUL DE PRACTICĂ care cere upload CI pentru a completa datele necesare fișei de evaluare ANR: [LINK_PORTAL]
+Te rugăm să accesezi PORTALUL DE PRACTICĂ care cere upload CI pentru a completa datele necesare fișei de evaluare ANR: \${typeof window !== 'undefined' ? window.location.origin : 'https://setsail-practica.vercel.app'}/portal?cod=\${sess.access_code}
 
 Pe mare va fi chiar frig seara, așa că mai bine pregătit decât surprins!
 
@@ -725,8 +725,8 @@ Paula Drugan – 0722 488 973
 Ovidiu Drugan – 0735 557 337
 
 Vă așteptăm la bord!
-SetSail NauticSchool`,
-    html: `<!DOCTYPE html>
+SetSail NauticSchool`; },
+    html: (sess: any) => `<!DOCTYPE html>
 <html lang="ro">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Practică navigație</title></head>
 <body style="margin:0;padding:0;background:#f4f6f9;font-family:Arial,Helvetica,sans-serif;">
@@ -772,13 +772,17 @@ SetSail NauticSchool`,
 
 <!-- PORTAL -->
 <tr><td style="padding:20px 40px 0 40px;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff3cd;border-radius:8px;border-left:4px solid #f0b429;padding:0;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff1f2;border-radius:8px;border-left:4px solid #e53e3e;padding:0;">
   <tr><td style="padding:16px 20px;">
-    <p style="margin:0;font-size:14px;color:#7a5c00;line-height:1.6;">
-      🪪 <strong>Te rugăm să accesezi PORTALUL DE PRACTICĂ</strong> care cere upload CI pentru a completa datele necesare fișei de evaluare ANR:<br>
-      <a href="[LINK_PORTAL]" style="color:#1e3a5f;font-weight:bold;">[LINK_PORTAL]</a>
+    <p style="margin:0;font-size:14px;color:#c53030;line-height:1.6;">
+      🪪 <strong style="color:#c53030;">Te rugăm să accesezi PORTALUL DE PRACTICĂ</strong> care cere upload CI pentru a completa datele necesare fișei de evaluare ANR:<br>
+      <a href="https://setsail-practica.vercel.app/portal?cod=${sess.access_code}" style="color:#c53030;font-weight:bold;text-decoration:underline;">https://setsail-practica.vercel.app/portal?cod=${sess.access_code}</a>
     </p>
   </td></tr>
+  </table>
+</td></tr>
+  </table>
+</td></tr>
   </table>
 </td></tr>
 
@@ -856,7 +860,7 @@ SetSail NauticSchool`,
 </td></tr>
 </table>
 </body>
-</html>`
+</html>`; }
   },
   { label: 'Modificare dată sesiune', subject: 'Modificare dată sesiune de practică', body: 'Stimate/Stimată cursant,\n\nVă informăm că sesiunea de practică a suferit modificări de dată.\n\nNoua dată: [data nouă]\nLocația: [locație]\n\nVă rugăm să confirmați participarea.\n\nCu stimă,\nEchipa SetSail' },
   { label: 'Documente necesare', subject: 'Documente necesare pentru examenul practic', body: 'Stimate/Stimată cursant,\n\nVă rugăm să aveți asupra dvs. la prezentare:\n- Cartea de identitate (original)\n- Adeverința de curs\n- Chitanța de plată taxă examen\n\nCu stimă,\nEchipa SetSail' },
@@ -1695,7 +1699,11 @@ Set Sail NauticSchool
                     <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none bg-white"
                       onChange={e=>{
                         const t = DROPDOWN_TEMPLATES[parseInt(e.target.value)] as any
-                        if(t){setMailSubject(t.subject);setMailBody(t.html || t.body)}
+                        if(t){
+                          setMailSubject(t.subject)
+                          const bodyVal = typeof t.html === 'function' ? t.html(sess) : (t.html || (typeof t.body === 'function' ? t.body(sess) : t.body))
+                          setMailBody(bodyVal)
+                        }
                         e.target.value = ''
                       }} defaultValue="">
                       <option value="" disabled>+ Alte template-uri...</option>
