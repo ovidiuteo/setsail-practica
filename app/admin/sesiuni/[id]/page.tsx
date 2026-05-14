@@ -1052,6 +1052,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
         <div className="space-y-2">
           {([
             ['Data start curs', sess.course_start_date ? new Date(sess.course_start_date).toLocaleDateString('ro-RO', {day:'2-digit',month:'long',year:'numeric'}) : '—'],
+            ['Data start practică', (sess as any).practice_start_date ? new Date((sess as any).practice_start_date).toLocaleDateString('ro-RO', {day:'2-digit',month:'long',year:'numeric'}) : '—'],
             ['Data practică', new Date(sess.session_date).toLocaleDateString('ro-RO', {day:'2-digit',month:'long',year:'numeric'})],
             ['Instructor', sess.instructors?.full_name],
             ['Evaluator ANR', sess.evaluators?.full_name],
@@ -1986,6 +1987,7 @@ export default function SessionDetailPage() {
     setEditingSession(sess.id)
     setEditSessionValues({
       session_date: sess.session_date,
+      practice_start_date: (sess as any).practice_start_date || '',
       location_id: (sess as any).location_id || '',
       boat_id: (sess as any).boat_id || '',
       evaluator_id: (sess as any).evaluator_id || '',
@@ -2281,6 +2283,7 @@ export default function SessionDetailPage() {
             <div className="grid grid-cols-2 gap-3">
               {[
                 ['Data start curs', 'course_start_date', 'date'],
+                ['Data start practică', 'practice_start_date', 'date'],
                 ['Data practică', 'session_date', 'date'],
                 ['Nr. solicitare', 'request_number', 'text'],
                 ['Locație detaliată', 'location_detail', 'text'],
