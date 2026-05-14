@@ -776,15 +776,9 @@ SetSail NauticSchool`,
   <tr><td style="padding:16px 20px;">
     <p style="margin:0;font-size:14px;color:#7a5c00;line-height:1.6;">
       🪪 <strong>Te rugăm să accesezi PORTALUL DE PRACTICĂ</strong> care cere upload CI pentru a completa datele necesare fișei de evaluare ANR:<br>
-      <a href="https://setsail-practica.vercel.app/portal?cod=${sess.access_code}" style="color:#7a5c00;font-weight:bold;text-decoration:underline;">https://setsail-practica.vercel.app/portal?cod=${sess.access_code}</a>
+      <a href="https://setsail-practica.vercel.app/portal?cod=${sess.access_code}" style="color:#1e3a5f;font-weight:bold;text-decoration:underline;">https://setsail-practica.vercel.app/portal?cod=${sess.access_code}</a>
     </p>
   </td></tr>
-  </table>
-</td></tr>
-  </table>
-</td></tr>
-  </table>
-</td></tr>
   </table>
 </td></tr>
 
