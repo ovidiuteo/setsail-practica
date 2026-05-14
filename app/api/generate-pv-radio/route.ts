@@ -2,9 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
 export async function POST(req: NextRequest) {
-  const { session_id } = await req.json()
-  const tip = req.nextUrl.searchParams.get('tip') || 'obtinere' // 'obtinere' | 'prelungire'
-  const format = req.nextUrl.searchParams.get('format') || 'docx' // 'docx' | 'pdf'
+  const body = await req.json()
+  const { session_id } = body
+  // Citim tip si format din query params (URL) sau din body
+  const tip = req.nextUrl.searchParams.get('tip') || body.tip || 'obtinere'
+  const format = req.nextUrl.searchParams.get('format') || body.format || 'docx'
   const isPrelungire = tip === 'prelungire'
 
   const supabase = createClient(
@@ -138,7 +140,7 @@ ${antetHtml}
   const {
     Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
     AlignmentType, BorderStyle, WidthType, ShadingType, ImageRun,
-    PageOrientation, convertMillimetersToTwip
+    convertMillimetersToTwip
   } = await import('docx')
 
   const border = { style: BorderStyle.SINGLE, size: 4, color: '000000' }
@@ -260,7 +262,7 @@ ${antetHtml}
     sections: [{
       properties: {
         page: {
-          size: { width: 11906, height: 16838, orientation: PageOrientation.LANDSCAPE },
+          size: { width: 16838, height: 11906, orientation: 'landscape' as any },
           margin: {
             top: convertMillimetersToTwip(15),
             right: convertMillimetersToTwip(15),
