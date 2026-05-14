@@ -123,11 +123,11 @@ export async function POST(req: NextRequest) {
     })
 
     const FN1 = new Paragraph({ spacing: { before: 0, after: 40 }, children: [
-      new TextRun({ text: '1', size: 18, font: 'Tahoma', verticalAlign: 'superScript' as any }),
+      new TextRun({ text: '1', size: 18, font: 'Tahoma', superScript: true }),
       t(' Se va menționa tipul certificatului: general (GOC-AERO; GOC-GMDSS ; GMDSS-LRC ); restrâns (ROC-AERO; ROC-GMDSS); CNI (pe căile de navigație interioară) Radioelectronist clasa I/ a-II-a.', false, 18)
     ]})
     const FN2 = new Paragraph({ spacing: { before: 0, after: 0 }, children: [
-      new TextRun({ text: '2', size: 18, font: 'Tahoma', verticalAlign: 'superScript' as any }),
+      new TextRun({ text: '2', size: 18, font: 'Tahoma', superScript: true }),
       t(' Se va menționa tipul serviciului: Serviciul mobil aeronautic și mobil aeronautic prin satelit (SMAS) Serviciul mobil maritim și mobil maritim prin satelit (SMMS) Serviciul radiotelefonic pe căile de navigație interioară (SRCNI)', false, 18)
     ]})
 
@@ -179,10 +179,10 @@ export async function POST(req: NextRequest) {
             t(' vă rog a-mi aproba '),
             tb('prelungirea valabilității'), t(' certificatului '),
             tb('GMDSS-LRC'),
-            new TextRun({ text: '1', size: 20, font: 'Tahoma', verticalAlign: 'superScript' as any }),
+            new TextRun({ text: '1', size: 20, font: 'Tahoma', superScript: true }),
             t(' de operator radiotelefonist în serviciul '),
             tb('SMMS'),
-            new TextRun({ text: '2', size: 20, font: 'Tahoma', verticalAlign: 'superScript' as any }),
+            new TextRun({ text: '2', size: 20, font: 'Tahoma', superScript: true }),
             t(', cu nr. '), dots(8), t(' din data '), dots(12), t('.'),
           ]}),
         )
@@ -196,10 +196,10 @@ export async function POST(req: NextRequest) {
             t(', e-mail: '), tb(mail),
             t(', vă rog a-mi aproba susținerea examenului pentru obținerea certificatului '),
             tb('GMDSS-LRC'),
-            new TextRun({ text: '1', size: 20, font: 'Tahoma', verticalAlign: 'superScript' as any }),
+            new TextRun({ text: '1', size: 20, font: 'Tahoma', superScript: true }),
             t(' de operator radio în serviciul '),
             tb('SMMS'),
-            new TextRun({ text: '2', size: 20, font: 'Tahoma', verticalAlign: 'superScript' as any }),
+            new TextRun({ text: '2', size: 20, font: 'Tahoma', superScript: true }),
             t(' în data de: '), tb(sessionDate),
             t(' la sediul '), tb('SC SETSAIL ADVERTISING SRL'),
             t(' din localitatea '), tb('București'), t(', sectorul/județul '), tb('1'), t('.'),
