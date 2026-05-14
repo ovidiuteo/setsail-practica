@@ -837,6 +837,19 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
   const isAbsent = sess.session_type === 'absent'
   const isRadio = (sess.class_caa || '').toLowerCase().includes('radio') || (sess.class_caa || '').toLowerCase().includes('lrc')
 
+  function resolveVars(text: string) {
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://setsail-practica.vercel.app'
+    const practiceStartDate = (sess as any).practice_start_date
+    const sessionDate = sess.session_date
+    return (text || '')
+      .replace(/{{link_portal}}/g, `${origin}/portal?cod=${sess.access_code}`)
+      .replace(/{{data_sesiune}}/g, sessionDate ? new Date(sessionDate).toLocaleDateString('ro-RO', {day:'2-digit', month:'long', year:'numeric'}) : '')
+      .replace(/{{locatie}}/g, sess.location_detail || sess.locations?.name || '')
+      .replace(/{{ambarcatiune}}/g, sess.boats?.name || '')
+      .replace(/{{zz_data_start_practica}}/g, practiceStartDate ? new Date(practiceStartDate).getDate().toString() : '')
+      .replace(/{{zz_llll_data_practica}}/g, sessionDate ? new Date(sessionDate).toLocaleDateString('ro-RO', {day:'2-digit', month:'long'}) : '')
+  }
+
   return (
     <div className="space-y-4">
       <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
@@ -1487,18 +1500,6 @@ Set Sail NauticSchool
                       acc[cat].push(t)
                       return acc
                     }, {} as Record<string, any[]>)
-                    const resolveVars = (text: string) => {
-                          const origin = typeof window !== 'undefined' ? window.location.origin : 'https://setsail-practica.vercel.app'
-                          const practiceStartDate = (sess as any).practice_start_date
-                          const sessionDate = sess.session_date
-                          return (text || '')
-                            .replace(/{{link_portal}}/g, `${origin}/portal?cod=${sess.access_code}`)
-                            .replace(/{{data_sesiune}}/g, sessionDate ? new Date(sessionDate).toLocaleDateString('ro-RO', {day:'2-digit', month:'long', year:'numeric'}) : '')
-                            .replace(/{{locatie}}/g, sess.location_detail || sess.locations?.name || '')
-                            .replace(/{{ambarcatiune}}/g, sess.boats?.name || '')
-                            .replace(/{{zz_data_start_practica}}/g, practiceStartDate ? new Date(practiceStartDate).getDate().toString() : '')
-                            .replace(/{{zz_llll_data_practica}}/g, sessionDate ? new Date(sessionDate).toLocaleDateString('ro-RO', {day:'2-digit', month:'long'}) : '')
-                        }
                     return (
                       <div className="space-y-3">
                         {Object.entries(grouped).map(([cat, items]: any) => (
