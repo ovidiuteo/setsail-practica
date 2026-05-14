@@ -117,7 +117,6 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
   const [moving, setMoving] = useState<string|null>(null)
   const [showMoveMenu, setShowMoveMenu] = useState<string|null>(null)
   const [showMovePrincipal, setShowMovePrincipal] = useState<string|null>(null)
-  const [showMovePrincipal, setShowMovePrincipal] = useState<string|null>(null)
   const [sortCol, setSortCol] = useState<string|null>(null)
   const [sortDir, setSortDir] = useState<'asc'|'desc'>('asc')
 
@@ -594,33 +593,6 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
                               S
                             </button>
                           )}
-                          {/* Muta la alta sesiune principala - sageata rosie */}
-                          {/* Buton muta la alta sesiune principala */
-                          <div className="relative">
-                            <button
-                              onClick={async(e)=>{
-                                e.stopPropagation()
-                                if (showMovePrincipal === s.id) { setShowMovePrincipal(null); return }
-                                setShowMovePrincipal(s.id)
-                              }}
-                              disabled={moving === s.id}
-                              title="Mută la altă sesiune principală"
-                              className="p-1.5 rounded border border-red-200 text-red-500 hover:text-red-700 hover:bg-red-50 transition-colors">
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                <line x1="5" y1="12" x2="19" y2="12"/>
-                                <polyline points="12 5 19 12 12 19"/>
-                              </svg>
-                            </button>
-                            {showMovePrincipal === s.id && (
-                              <OtherPrincipalMenu
-                                student={s}
-                                currentGroupIds={new Set(allSessions.map((x:any)=>x.id))}
-                                onSelect={(targetId)=>moveToPrincipalSession(s, targetId)}
-                                onClose={()=>setShowMovePrincipal(null)}
-                              />
-                            )}
-                          </div>
-
                           {/* Muta la alta sesiune principala - sageata rosie */}
                           {!isAbsent && (
                             <div className="relative">
@@ -1423,64 +1395,6 @@ Set Sail NauticSchool
           </div>
         </>
       )}
-    </div>
-  )
-}
-
-function OtherPrincipalMenu({ student, currentGroupIds, onSelect, onClose }: {
-  student: Student
-  currentGroupIds: Set<string>
-  onSelect: (sessionId: string) => void
-  onClose: () => void
-}) {
-  const [principals, setPrincipals] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    supabase.from('sessions')
-      .select('id, session_date, status, locations(name), class_caa')
-      .eq('session_type', 'principal')
-      .not('status', 'eq', 'completed')
-      .order('session_date', { ascending: true })
-      .then(({ data }) => {
-        // Exclude sesiunile din grupul curent
-        const others = (data || []).filter((s: any) => !currentGroupIds.has(s.id))
-        setPrincipals(others)
-        setLoading(false)
-      })
-  }, [])
-
-  const statusColors: Record<string, string> = {
-    draft: '#6b7280', active: '#d97706', focus: '#7c3aed', completed: '#059669'
-  }
-  const statusLabels: Record<string, string> = {
-    draft: 'Ciornă', active: 'Activă', focus: 'Focus', completed: 'Finalizată'
-  }
-
-  return (
-    <div className="absolute right-0 top-7 z-50 bg-white rounded-xl shadow-xl border border-gray-100 min-w-60 py-1"
-      onClick={e => e.stopPropagation()}>
-      <div className="px-3 py-1.5 text-xs text-gray-400 border-b border-gray-50 flex items-center justify-between">
-        <span>Mută la sesiunea:</span>
-        <button onClick={onClose} className="text-gray-300 hover:text-gray-500">✕</button>
-      </div>
-      {loading ? (
-        <div className="px-3 py-2 text-xs text-gray-400">Se încarcă...</div>
-      ) : principals.length === 0 ? (
-        <div className="px-3 py-2 text-xs text-gray-400">Nicio altă sesiune disponibilă</div>
-      ) : principals.map((p: any) => (
-        <button key={p.id} onClick={() => onSelect(p.id)}
-          className="w-full text-left px-3 py-2 text-xs hover:bg-red-50 transition-colors border-b border-gray-50 last:border-0">
-          <div className="font-medium text-gray-900">
-            {new Date(p.session_date).toLocaleDateString('ro-RO', {day:'2-digit', month:'long', year:'numeric'})}
-            {' · '}{p.locations?.name}
-          </div>
-          <div className="text-gray-400 mt-0.5 flex items-center gap-2">
-            <span style={{color: statusColors[p.status]}}>{statusLabels[p.status]}</span>
-            <span>· Clasa {p.class_caa?.replace(',','+')}</span>
-          </div>
-        </button>
-      ))}
     </div>
   )
 }
