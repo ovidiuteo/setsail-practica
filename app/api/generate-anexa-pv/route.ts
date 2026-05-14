@@ -196,8 +196,8 @@ ${antetHtml}
           rows: [new TableRow({ children: [
             cell([para([reg('')])], { b: noBorders, w: TW/2 }),
             cell([
-              para([bold('Nr. ................. din .................................', 17)], AlignmentType.RIGHT),
-              para([ital('(nr. identic cu nr. de ieșire al pv)', 15)], AlignmentType.RIGHT),
+              para([bold('Nr. ................. din .................................', 17)], AlignmentType.RIGHT as any),
+              para([ital('(nr. identic cu nr. de ieșire al pv)', 15)], AlignmentType.RIGHT as any),
             ], { b: noBorders, w: TW/2 }),
           ]})]
         }),
