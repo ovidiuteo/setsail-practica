@@ -251,7 +251,6 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
     setMoving(null)
   }
 
-  }
 
   async function markSailing(s: Student) {
     // Gasim sesiunea principala (parent) pentru a muta cursantul acolo
