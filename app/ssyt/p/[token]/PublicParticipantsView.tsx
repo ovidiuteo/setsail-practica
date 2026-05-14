@@ -1,17 +1,14 @@
 'use client'
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
-import { Mail, Phone, ChevronRight, Users, Search, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react'
+import { Mail, Phone, Users, Search, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react'
 
 type Participant = {
   id: string
-  first_name: string
-  last_name: string
   full_name: string
   email: string
   phone: string | null
   status: string
-  auth_status: string | null
   team_id: string | null
   membership_type: string | null
 }
@@ -26,10 +23,10 @@ type Team = {
 }
 
 type FilterValue = 'all_sections' | 'all_flat' | 'unassigned' | string
-type SortKey = 'full_name' | 'email' | 'phone' | 'membership_type' | 'status' | 'team'
+type SortKey = 'full_name' | 'email' | 'phone' | 'membership_type' | 'team'
 type SortDir = 'asc' | 'desc' | null
 
-export default function ParticipantsView({
+export default function PublicParticipantsView({
   participants,
   teams,
 }: {
@@ -67,7 +64,6 @@ export default function ParticipantsView({
     })
   }, [participants, filter, search])
 
-  // Sortare
   const sorted = useMemo(() => {
     if (!sortDir) return filtered
     const arr = [...filtered]
@@ -78,16 +74,10 @@ export default function ParticipantsView({
     arr.sort((a, b) => {
       let va: any, vb: any
       switch (sortKey) {
-        case 'full_name':
-          va = a.full_name; vb = b.full_name; break
-        case 'email':
-          va = a.email || ''; vb = b.email || ''; break
-        case 'phone':
-          va = a.phone || ''; vb = b.phone || ''; break
-        case 'membership_type':
-          va = a.membership_type || ''; vb = b.membership_type || ''; break
-        case 'status':
-          va = a.status || ''; vb = b.status || ''; break
+        case 'full_name': va = a.full_name; vb = b.full_name; break
+        case 'email': va = a.email || ''; vb = b.email || ''; break
+        case 'phone': va = a.phone || ''; vb = b.phone || ''; break
+        case 'membership_type': va = a.membership_type || ''; vb = b.membership_type || ''; break
         case 'team':
           va = a.team_id ? (teamMap[a.team_id]?.display_order || 999) : 9999
           vb = b.team_id ? (teamMap[b.team_id]?.display_order || 999) : 9999
@@ -104,7 +94,6 @@ export default function ParticipantsView({
       setSortKey(key)
       setSortDir('asc')
     } else {
-      // Ciclu: asc → desc → null → asc
       if (sortDir === 'asc') setSortDir('desc')
       else if (sortDir === 'desc') { setSortDir(null); setSortKey('full_name') }
       else setSortDir('asc')
@@ -117,7 +106,6 @@ export default function ParticipantsView({
 
   return (
     <div>
-      {/* Filtre */}
       <div className="flex items-center gap-2 mb-4 flex-wrap">
         <FilterButton active={filter === 'all_sections'} onClick={() => setFilter('all_sections')} color="#0a1628" label="Toți (secțiuni)" count={counts.all} />
         <FilterButton active={filter === 'all_flat'} onClick={() => setFilter('all_flat')} color="#0a1628" label="Toți (listă)" count={counts.all} />
@@ -127,7 +115,6 @@ export default function ParticipantsView({
         <FilterButton active={filter === 'unassigned'} onClick={() => setFilter('unassigned')} color="#9CA3AF" label="Nealocați" count={counts.unassigned} />
       </div>
 
-      {/* Search */}
       <div className="mb-4 relative max-w-md">
         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
         <input
@@ -150,14 +137,11 @@ export default function ParticipantsView({
           <p className="text-sm">Niciun participant nu corespunde filtrelor.</p>
         </div>
       ) : showSections ? (
-        // Sectiuni: pe echipe + nealocati
         <div className="space-y-6">
           {teams.map((t) => {
             const teamPeople = sorted.filter((p) => p.team_id === t.id)
             if (teamPeople.length === 0) return null
-            return (
-              <TeamSection key={t.id} team={t} participants={teamPeople} sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} showTeamCol={false} />
-            )
+            return <TeamSection key={t.id} team={t} participants={teamPeople} sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} showTeamCol={false} />
           })}
           {(() => {
             const unassigned = sorted.filter((p) => !p.team_id)
@@ -166,7 +150,6 @@ export default function ParticipantsView({
           })()}
         </div>
       ) : showFlat ? (
-        // Lista plata - un singur tabel
         <div className="rounded-lg overflow-hidden" style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
           <ParticipantsTable participants={sorted} teamColor="#0a1628" teams={teams} sortKey={sortKey} sortDir={sortDir} onSort={toggleSort} showTeamCol={true} />
         </div>
@@ -288,8 +271,6 @@ function ParticipantsTable({
             <SortableHeader label="Telefon" columnKey="phone" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
             {showTeamCol && <SortableHeader label="Echipă" columnKey="team" sortKey={sortKey} sortDir={sortDir} onSort={onSort} />}
             <SortableHeader label="Tip" columnKey="membership_type" sortKey={sortKey} sortDir={sortDir} onSort={onSort} align="center" />
-            <SortableHeader label="Status" columnKey="status" sortKey={sortKey} sortDir={sortDir} onSort={onSort} align="center" />
-            <th className="w-8"></th>
           </tr>
         </thead>
         <tbody>
@@ -299,15 +280,17 @@ function ParticipantsTable({
             return (
               <tr key={p.id} className="hover:bg-gray-50 transition" style={{ borderTop: '1px solid #f3f4f6' }}>
                 <td className="px-5 py-2.5">
-                  <Link href={`/ssyt/admin/participants/${p.id}`} className="font-medium hover:underline" style={{ color: '#0a1628' }}>
-                    {p.full_name}
-                  </Link>
+                  <span className="font-medium" style={{ color: '#0a1628' }}>{p.full_name}</span>
                 </td>
                 <td className="px-5 py-2.5 text-xs">
-                  <span className={`inline-flex items-center gap-1 ${isPlaceholder ? 'text-amber-600' : 'text-gray-700'}`}>
-                    <Mail size={11} className="text-gray-400" />
-                    <span className="font-mono">{p.email}</span>
-                  </span>
+                  {isPlaceholder ? (
+                    <span className="text-gray-300 italic">—</span>
+                  ) : (
+                    <a href={`mailto:${p.email}`} className="inline-flex items-center gap-1 text-gray-700 hover:underline">
+                      <Mail size={11} className="text-gray-400" />
+                      <span className="font-mono">{p.email}</span>
+                    </a>
+                  )}
                 </td>
                 <td className="px-5 py-2.5 text-xs text-gray-700">
                   {p.phone ? (
@@ -343,36 +326,11 @@ function ParticipantsTable({
                     <span className="text-gray-300">—</span>
                   )}
                 </td>
-                <td className="px-5 py-2.5 text-center">
-                  <StatusBadge status={p.status} />
-                </td>
-                <td className="pr-5">
-                  <Link href={`/ssyt/admin/participants/${p.id}`} className="text-gray-400 hover:text-gray-700">
-                    <ChevronRight size={16} />
-                  </Link>
-                </td>
               </tr>
             )
           })}
         </tbody>
       </table>
     </div>
-  )
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const colors: Record<string, string> = {
-    active: '#10B981',
-    accepted: '#3B82F6',
-    applied: '#F59E0B',
-    waitlist: '#8B5CF6',
-    inactive: '#6B7280',
-    rejected: '#EF4444',
-  }
-  const c = colors[status] || '#6B7280'
-  return (
-    <span className="text-xs font-medium px-2 py-1 rounded-full" style={{ background: `${c}15`, color: c }}>
-      {status}
-    </span>
   )
 }

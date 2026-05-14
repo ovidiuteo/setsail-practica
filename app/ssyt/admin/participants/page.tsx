@@ -2,29 +2,38 @@ import Link from 'next/link'
 import { Plus, Users } from 'lucide-react'
 import { supabase } from '@/lib/ssyt/supabase'
 import ParticipantsView from './ParticipantsView'
+import PublicLinkBar from '@/components/ssyt/admin/PublicLinkBar'
 
 export const dynamic = 'force-dynamic'
 
 export default async function AdminParticipantsPage() {
-  // Iau participantii cu membership-urile lor
   const { data: participantsRaw } = await supabase
     .from('ssyt_participants')
     .select(`
       id, first_name, last_name, full_name, email, phone, status, auth_status,
-      memberships:ssyt_team_memberships(
-        membership_type, status, team_id
-      )
+      memberships:ssyt_team_memberships(membership_type, status, team_id)
     `)
     .order('full_name')
 
-  // Iau echipele active sortate
   const { data: teams } = await supabase
     .from('ssyt_teams')
     .select('id, name, short_name, slug, color_primary, display_order')
     .eq('status', 'active')
     .order('display_order')
 
-  // Aplatizez: pentru fiecare participant, găsesc echipa activă
+  // Iau token-ul public activ pentru lista de participanti
+  const { data: tokens } = await supabase
+    .from('ssyt_public_tokens')
+    .select('token')
+    .eq('resource_type', 'participants_list')
+    .is('revoked_at', null)
+    .or(`expires_at.is.null,expires_at.gt.${new Date().toISOString()}`)
+    .order('created_at', { ascending: false })
+    .limit(1)
+
+  const publicToken = tokens?.[0]?.token || null
+  const publicPath = publicToken ? `/ssyt/p/${publicToken}` : null
+
   const participants = (participantsRaw || []).map((p: any) => {
     const activeMembership = (p.memberships || []).find((m: any) => m.status === 'active')
     return {
@@ -43,7 +52,7 @@ export default async function AdminParticipantsPage() {
 
   return (
     <div className="px-8 py-8 max-w-[1400px]">
-      <div className="flex items-end justify-between mb-6 flex-wrap gap-3">
+      <div className="flex items-end justify-between mb-4 flex-wrap gap-3">
         <div>
           <p className="text-xs font-medium uppercase tracking-wider mb-1" style={{ color: '#FF6B35' }}>SSYT 2026</p>
           <h1 className="text-3xl font-semibold tracking-tight" style={{ color: '#0a1628', letterSpacing: '-0.02em' }}>
@@ -62,10 +71,11 @@ export default async function AdminParticipantsPage() {
         </Link>
       </div>
 
-      <ParticipantsView
-        participants={participants}
-        teams={teams || []}
-      />
+      {publicPath && (
+        <PublicLinkBar publicPath={publicPath} label="Link public read-only" />
+      )}
+
+      <ParticipantsView participants={participants} teams={teams || []} />
     </div>
   )
 }
