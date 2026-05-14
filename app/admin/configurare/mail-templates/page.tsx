@@ -34,6 +34,8 @@ const VARIABLES_INFO: Record<string, string> = {
   adresa_locatie: 'Adresa completă a locației',
   zz_data_start_practica: 'Ziua din data start practică (ex: 18)',
   zz_llll_data_practica: 'Ziua și luna din data practică (ex: 20 mai)',
+  ora_start: 'Ora de start a practicii (ex: 9:30)',
+  ora_start: 'Ora de start a practicii (ex: 9:30)',
 }
 
 const EMPTY_TEMPLATE: Partial<Template> = {
