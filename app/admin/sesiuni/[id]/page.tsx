@@ -1022,37 +1022,64 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
             <h3 className="font-semibold text-sm text-gray-900 mb-3">Documente</h3>
             {isRadio ? (
               <div className="space-y-2">
-                {/* Documente Radio - PV + Anexa pentru Obtinere sau Prelungire */}
-                {(() => {
-                  const isPrelungire = (sess.class_caa||'').toLowerCase().includes('prelungire')
-                  const tipDoc = isPrelungire ? 'prelungire' : 'obtinere'
-                  const tipLabel = isPrelungire ? 'Prelungire LRC' : 'Obținere LRC'
-                  return (<>
-                    <button onClick={async()=>{setGPV(true);try{await generateDoc(`/api/generate-pv-radio?tip=${tipDoc}`,`PV_LRC_${tipDoc.toUpperCase()}_${sess.session_date}.docx`)}catch(e:any){alert(e.message)}setGPV(false)}}
-                      disabled={gPV||students.length===0} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#7c3aed'}}>
-                      <FileText size={13}/>{gPV?'Se generează...': `PV LRC ${tipLabel}`}
-                    </button>
-                    <button onClick={async()=>{try{
-                      const res=await fetch(`/api/generate-pv-radio?tip=${tipDoc}&format=pdf`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id})})
-                      const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>w.print(),800)}
-                    }catch(e:any){alert(e.message)}}}
-                      disabled={students.length===0} className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-medium border border-purple-200 text-purple-700 hover:bg-purple-50 disabled:opacity-50">
-                      <Download size={13}/>PDF PV LRC {tipLabel}
-                    </button>
-                    <div className="border-t border-gray-100 pt-2 mt-1"/>
-                    <button onClick={async()=>{try{await generateDoc(`/api/generate-anexa-pv?tip=${tipDoc}`,`Anexa_PV_LRC_${tipDoc.toUpperCase()}_${sess.session_date}.docx`)}catch(e:any){alert(e.message)}}}
-                      disabled={students.length===0} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#6d28d9'}}>
-                      <FileText size={13}/>Anexă PV LRC {tipLabel}
-                    </button>
-                    <button onClick={async()=>{try{
-                      const res=await fetch(`/api/generate-anexa-pv?tip=${tipDoc}&format=pdf`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id})})
-                      const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>w.print(),800)}
-                    }catch(e:any){alert(e.message)}}}
-                      disabled={students.length===0} className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-medium border border-purple-200 text-purple-700 hover:bg-purple-50 disabled:opacity-50">
-                      <Download size={13}/>PDF Anexă PV LRC {tipLabel}
-                    </button>
-                  </>)
-                })()}
+                {/* 1. PV Obtinere */}
+                <div className="flex gap-1.5">
+                  <button onClick={async()=>{setGPV(true);try{await generateDoc('/api/generate-pv-radio?tip=obtinere',`PV_LRC_OBTINERE_${sess.session_date}.docx`)}catch(e:any){alert(e.message)}setGPV(false)}}
+                    disabled={gPV||students.length===0} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#1d4ed8'}}>
+                    <FileText size={12}/>{gPV?'...':'PV Obținere LRC'}
+                  </button>
+                  <button onClick={async()=>{try{
+                    const res=await fetch('/api/generate-pv-radio?tip=obtinere&format=pdf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id})})
+                    const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>w.print(),800)}
+                  }catch(e:any){alert(e.message)}}}
+                    disabled={students.length===0} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#dc2626'}}>
+                    <Download size={12}/>PDF Obținere LRC
+                  </button>
+                </div>
+                {/* 2. Anexa Obtinere */}
+                <div className="flex gap-1.5">
+                  <button onClick={async()=>{try{await generateDoc('/api/generate-anexa-pv?tip=obtinere',`Anexa_PV_LRC_OBTINERE_${sess.session_date}.docx`)}catch(e:any){alert(e.message)}}}
+                    disabled={students.length===0} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#1d4ed8'}}>
+                    <FileText size={12}/>Anexă PV Obținere LRC
+                  </button>
+                  <button onClick={async()=>{try{
+                    const res=await fetch('/api/generate-anexa-pv?tip=obtinere&format=pdf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id})})
+                    const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>w.print(),800)}
+                  }catch(e:any){alert(e.message)}}}
+                    disabled={students.length===0} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#dc2626'}}>
+                    <Download size={12}/>PDF Anexă Obținere
+                  </button>
+                </div>
+                {/* Separator */}
+                <div className="border-t border-gray-100 pt-1 mt-1"/>
+                {/* 3. PV Prelungire */}
+                <div className="flex gap-1.5">
+                  <button onClick={async()=>{try{await generateDoc('/api/generate-pv-radio?tip=prelungire',`PV_LRC_PRELUNGIRE_${sess.session_date}.docx`)}catch(e:any){alert(e.message)}}}
+                    disabled={students.length===0} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#1d4ed8'}}>
+                    <FileText size={12}/>PV Prelungire LRC
+                  </button>
+                  <button onClick={async()=>{try{
+                    const res=await fetch('/api/generate-pv-radio?tip=prelungire&format=pdf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id})})
+                    const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>w.print(),800)}
+                  }catch(e:any){alert(e.message)}}}
+                    disabled={students.length===0} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#dc2626'}}>
+                    <Download size={12}/>PDF Prelungire LRC
+                  </button>
+                </div>
+                {/* 4. Anexa Prelungire */}
+                <div className="flex gap-1.5">
+                  <button onClick={async()=>{try{await generateDoc('/api/generate-anexa-pv?tip=prelungire',`Anexa_PV_LRC_PRELUNGIRE_${sess.session_date}.docx`)}catch(e:any){alert(e.message)}}}
+                    disabled={students.length===0} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#1d4ed8'}}>
+                    <FileText size={12}/>Anexă PV Prelungire LRC
+                  </button>
+                  <button onClick={async()=>{try{
+                    const res=await fetch('/api/generate-anexa-pv?tip=prelungire&format=pdf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id})})
+                    const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>w.print(),800)}
+                  }catch(e:any){alert(e.message)}}}
+                    disabled={students.length===0} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#dc2626'}}>
+                    <Download size={12}/>PDF Anexă Prelungire
+                  </button>
+                </div>
               </div>
             ) : (
               <div className="space-y-2">
