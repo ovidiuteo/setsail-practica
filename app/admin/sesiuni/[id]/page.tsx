@@ -4,31 +4,6 @@ import CIImageEditor from '@/components/CIImageEditor'
 import { supabase } from '@/lib/supabase'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-
-// Functie pura de aplicare variabile - FARA regex, fara escape issues
-function applyTemplateVars(text: string, sess: any): string {
-  if (!text) return ''
-  const origin = typeof window !== 'undefined'
-    ? window.location.origin
-    : 'https://setsail-practica.vercel.app'
-  const sd = sess.session_date || ''
-  const psd = sess.practice_start_date || ''
-  const vars: Record<string, string> = {
-    'link_portal':             origin + '/portal?cod=' + (sess.access_code || ''),
-    'data_sesiune':            sd ? new Date(sd).toLocaleDateString('ro-RO', {day:'2-digit', month:'long', year:'numeric'}) : '',
-    'locatie':                 sess.location_detail || sess.locations?.name || '',
-    'ambarcatiune':            sess.boats?.name || '',
-    'zz_data_start_practica':  psd ? String(new Date(psd).getDate()) : '',
-    'zz_llll_data_practica':   sd  ? new Date(sd).toLocaleDateString('ro-RO', {day:'2-digit', month:'long'}) : '',
-  }
-  let result = text
-  for (const [key, value] of Object.entries(vars)) {
-    // Simplu split/join - fara regex, fara escape
-    result = result.split('{{' + key + '}}').join(value)
-  }
-  return result
-}
-
 import { ArrowLeft, Download, FileText, Users, Copy, Plus, Trash2, Check, X, Pencil, GitBranch, ArrowRight, UserX, Mail, ChevronDown } from 'lucide-react'
 
 const statusMap: Record<string, { label: string; color: string; bg: string }> = {
@@ -862,7 +837,19 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
   const isAbsent = sess.session_type === 'absent'
   const isRadio = (sess.class_caa || '').toLowerCase().includes('radio') || (sess.class_caa || '').toLowerCase().includes('lrc')
 
-
+  const resolveVars = (text: string) => {
+    const origin = typeof window !== 'undefined' ? window.location.origin : 'https://setsail-practica.vercel.app'
+    const psd = (sess as any).practice_start_date
+    const sd = sess.session_date
+    let r = text || ''
+    r = r.split('{{link_portal}}').join(origin + '/portal?cod=' + sess.access_code)
+    r = r.split('{{data_sesiune}}').join(sd ? new Date(sd).toLocaleDateString('ro-RO', {day:'2-digit', month:'long', year:'numeric'}) : '')
+    r = r.split('{{locatie}}').join(sess.location_detail || sess.locations?.name || '')
+    r = r.split('{{ambarcatiune}}').join(sess.boats?.name || '')
+    r = r.split('{{zz_data_start_practica}}').join(psd ? String(new Date(psd).getDate()) : '')
+    r = r.split('{{zz_llll_data_practica}}').join(sd ? new Date(sd).toLocaleDateString('ro-RO', {day:'2-digit', month:'long'}) : '')
+    return r
+  }
 
   return (
     <div className="space-y-4">
@@ -1523,9 +1510,9 @@ Set Sail NauticSchool
                               {items.map((t: any) => (
                                 <button key={t.id}
                                   onClick={()=>{
-                                    setMailSubject(applyTemplateVars(t.subject, sess))
+                                    setMailSubject(resolveVars(t.subject))
                                     const rawBody = t.body_html || t.body_text || ''
-                                    setMailBody(applyTemplateVars(rawBody, sess))
+                                    setMailBody(resolveVars(rawBody))
                                   }}
                                   className="text-left px-3 py-2 rounded-lg text-xs border border-gray-200 hover:bg-blue-50 hover:border-blue-200 transition-colors">
                                   {t.label}
