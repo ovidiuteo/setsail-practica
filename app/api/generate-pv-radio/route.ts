@@ -285,8 +285,8 @@ ${antetHtml}
           columnWidths: [Math.floor(TW/2), Math.ceil(TW/2)],
           rows: [
             new TableRow({ children: [
-              cell([para([bold('Președinte comisie:', 17)]), para([reg('')]), para([reg('...............................................')])], { borders: { top: { style: BorderStyle.NONE, size:0,color:'fff'}, bottom:{style:BorderStyle.NONE,size:0,color:'fff'}, left:{style:BorderStyle.NONE,size:0,color:'fff'}, right:{style:BorderStyle.NONE,size:0,color:'fff'}}, w: TW/2 }),
-              cell([para([bold('Membrii:', 17)]), para([reg('')]), para([reg('...............................................')]), para([reg('')]), para([reg('...............................................')])], { borders: { top: { style: BorderStyle.NONE, size:0,color:'fff'}, bottom:{style:BorderStyle.NONE,size:0,color:'fff'}, left:{style:BorderStyle.NONE,size:0,color:'fff'}, right:{style:BorderStyle.NONE,size:0,color:'fff'}}, w: TW/2 }),
+              cell([para([bold('Președinte comisie:', 17)]), para([reg('')]), para([reg('...............................................')])], { borders: { top: { style: BorderStyle.NONE, size:0,color:'FFFFFF'}, bottom:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}, left:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}, right:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}}, w: TW/2 }),
+              cell([para([bold('Membrii:', 17)]), para([reg('')]), para([reg('...............................................')]), para([reg('')]), para([reg('...............................................')])], { borders: { top: { style: BorderStyle.NONE, size:0,color:'FFFFFF'}, bottom:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}, left:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}, right:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}}, w: TW/2 }),
             ]})
           ]
         }),
