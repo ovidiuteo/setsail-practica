@@ -869,6 +869,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
 
   const st = statusMap[sess.status] || statusMap.draft
   const isAbsent = sess.session_type === 'absent'
+  const isRadio = (sess.class_caa || '').toLowerCase().includes('radio') || (sess.class_caa || '').toLowerCase().includes('lrc')
 
   return (
     <div className="space-y-4">
@@ -1013,26 +1014,37 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
 
           <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
             <h3 className="font-semibold text-sm text-gray-900 mb-3">Documente</h3>
-            <div className="space-y-2">
-              <button onClick={async()=>{setGPV(true);try{await generateDoc('/api/generate-pv',`PV_${sess.session_date}.docx`)}catch(e:any){alert(e.message)}setGPV(false)}}
-                disabled={gPV||students.length===0} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#0a1628'}}>
-                <FileText size={13}/>{gPV?'Se generează...':'Proces Verbal (Anexa 12)'}
-              </button>
-              <button onClick={async()=>{setGFise(true);try{await generateDoc('/api/generate-fise',`Fise_${sess.session_date}.docx`)}catch(e:any){alert(e.message)}setGFise(false)}}
-                disabled={gFise||students.length===0} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-medium border border-gray-200 hover:bg-gray-50 disabled:opacity-50">
-                <Download size={13}/>{gFise?'Se generează...':'Fișe DOCX (Anexa 10)'}
-              </button>
-              <button onClick={async()=>{setGPDF(true);try{
-                const res=await fetch('/api/generate-fise-pdf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id})})
-                const isPdfFallback=res.headers.get('X-Pdf-Fallback')==='true'
-                const blob=await res.blob();const url=URL.createObjectURL(blob)
-                if(isPdfFallback){const win=window.open(url,'_blank');if(win)win.onload=()=>win.print()}
-                else{const a=document.createElement('a');a.href=url;a.download=`Fise_${sess.session_date}.pdf`;a.click()}
-              }catch(e:any){alert(e.message)}setGPDF(false)}}
-                disabled={gPDF||students.length===0} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-medium border border-red-100 text-red-700 hover:bg-red-50 disabled:opacity-50">
-                <Download size={13}/>{gPDF?'Se generează...':'Fișe PDF cu semnături'}
-              </button>
-            </div>
+            {isRadio ? (
+              <div className="space-y-2">
+                {/* Documente Radio */}
+                <button onClick={async()=>{setGPV(true);try{await generateDoc('/api/generate-pv-radio',`PV_Radio_${sess.session_date}.docx`)}catch(e:any){alert(e.message)}setGPV(false)}}
+                  disabled={gPV||students.length===0} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#7c3aed'}}>
+                  <FileText size={13}/>{gPV?'Se generează...':'Proces Verbal Radio'}
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {/* Documente standard */}
+                <button onClick={async()=>{setGPV(true);try{await generateDoc('/api/generate-pv',`PV_${sess.session_date}.docx`)}catch(e:any){alert(e.message)}setGPV(false)}}
+                  disabled={gPV||students.length===0} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#0a1628'}}>
+                  <FileText size={13}/>{gPV?'Se generează...':'Proces Verbal (Anexa 12)'}
+                </button>
+                <button onClick={async()=>{setGFise(true);try{await generateDoc('/api/generate-fise',`Fise_${sess.session_date}.docx`)}catch(e:any){alert(e.message)}setGFise(false)}}
+                  disabled={gFise||students.length===0} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-medium border border-gray-200 hover:bg-gray-50 disabled:opacity-50">
+                  <Download size={13}/>{gFise?'Se generează...':'Fișe DOCX (Anexa 10)'}
+                </button>
+                <button onClick={async()=>{setGPDF(true);try{
+                  const res=await fetch('/api/generate-fise-pdf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id})})
+                  const isPdfFallback=res.headers.get('X-Pdf-Fallback')==='true'
+                  const blob=await res.blob();const url=URL.createObjectURL(blob)
+                  if(isPdfFallback){const win=window.open(url,'_blank');if(win)win.onload=()=>win.print()}
+                  else{const a=document.createElement('a');a.href=url;a.download=`Fise_${sess.session_date}.pdf`;a.click()}
+                }catch(e:any){alert(e.message)}setGPDF(false)}}
+                  disabled={gPDF||students.length===0} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-medium border border-red-100 text-red-700 hover:bg-red-50 disabled:opacity-50">
+                  <Download size={13}/>{gPDF?'Se generează...':'Fișe PDF cu semnături'}
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Notificare ANR */}
@@ -1042,10 +1054,10 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
               setShowNotif(s=>!s)
             }} className="w-full flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-400">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={isRadio ? '#7c3aed' : '#9ca3af'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
                 </svg>
-                <h3 className="font-semibold text-sm text-gray-900">Notificare ANR</h3>
+                <h3 className="font-semibold text-sm text-gray-900">{isRadio ? 'Notificare ANCOM' : 'Notificare ANR'}</h3>
               </div>
               <ChevronDown size={14} className={`text-gray-400 transition-transform ${showNotif?'rotate-180':''}`}/>
             </button>
@@ -1925,7 +1937,7 @@ export default function SessionDetailPage() {
                   {type==='select-class' ? (
                     <select className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs w-full focus:outline-none focus:ring-1 focus:ring-blue-400"
                       value={editSessionValues[key]} onChange={e=>setEditSessionValues((v:any)=>({...v,[key]:e.target.value}))}>
-                      {['A','B','C','D','C,D','Radio'].map(c=><option key={c} value={c}>{c.replace(',','+')}</option>)}
+                      {['A','B','C','D','C,D','Radio','Obtinere LRC','Prelungire LRC'].map(c=><option key={c} value={c}>{c}</option>)}
                     </select>
                   ) : (
                     <input type={type} className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs w-full focus:outline-none focus:ring-1 focus:ring-blue-400"
