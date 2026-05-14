@@ -643,229 +643,12 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
   )
 }
 
-const QUICK_TEMPLATES = [
-  {
-    label: '🔗 Link portal',
-    subject: 'Acces portal cursanți - SetSail Practică',
-    body: (sess: any) => {
-      const origin = typeof window !== 'undefined' ? window.location.origin : 'https://setsail-practica.vercel.app'
-      const link = `${origin}/portal?cod=${sess.access_code}`
-      return `Stimate/Stimată cursant,
+// Template-urile sunt incarcate din DB (mail_templates) in SidebarCard
 
-Vă rugăm să accesați portalul SetSail Practică și să completați datele personale (serie CI, număr CI, semnătură) înainte de data sesiunii.
-
-Link portal: ${link}
-
-Data sesiunii: ${new Date(sess.session_date).toLocaleDateString('ro-RO', {day:'2-digit', month:'long', year:'numeric'})}
-Locația: ${sess.location_detail || sess.locations?.name || ''}
-
-Vă mulțumim,
-Echipa SetSail`
-    },
-  },
-  {
-    label: '⏰ Completați portalul',
-    subject: 'Reminder: date lipsă în portal - SetSail Practică',
-    body: (sess: any) => {
-      const origin = typeof window !== 'undefined' ? window.location.origin : 'https://setsail-practica.vercel.app'
-      const link = `${origin}/portal?cod=${sess.access_code}`
-      return `Stimate/Stimată cursant,
-
-Am observat că nu ați completat încă datele personale în portalul SetSail Practică. Sesiunea de practică se apropie și avem nevoie de datele dvs. (serie CI, număr CI) pentru a putea emite documentele oficiale.
-
-Vă rugăm să accesați portalul cât mai curând:
-${link}
-
-Data sesiunii: ${new Date(sess.session_date).toLocaleDateString('ro-RO', {day:'2-digit', month:'long', year:'numeric'})}
-
-Vă mulțumim,
-Echipa SetSail`
-    },
-  },
-  {
-    label: '📅 Reminder sesiune',
-    subject: 'Reminder: sesiunea de practică are loc mâine',
-    body: (sess: any) => `Stimate/Stimată cursant,\n\nVă reamintim că sesiunea de practică de conducere a ambarcațiunii de agrement are loc mâine.\n\nData: ${new Date(sess.session_date).toLocaleDateString('ro-RO', {day:'2-digit', month:'long', year:'numeric'})}\nLocația: ${sess.location_detail || sess.locations?.name || ''}\nAmbarcațiunea: ${sess.boats?.name || ''}\n\nVă rugăm să fiți prezenți cu 15 minute înainte și să aveți cartea de identitate la dumneavoastră.\n\nSucces!\nEchipa SetSail`,
-  },
-]
-
-const DROPDOWN_TEMPLATES = [
-  {
-    label: '⛵ Practică 18-20 mai - Detalii organizatorice',
-    subject: '⛵ Practică navigație 18-20 mai - Detalii organizatorice',
-    body: (sess: any) => `Ahoy,
-
-În perioada 18-20 mai ne vom întâlni pentru cele 3 zile de practică. Ne vedem la ora 9:30 în marina Limanu (LifeHarbour), unde vom forma echipajele și veți face cunoștință cu instructorii Set Sail.
-
-Ne așteaptă trei zile frumoase, pline de navigație și voie bună! 🙂⛵
-
-Program luni – miercuri:
-Manevre cu motorul și navigație cu vele – în funcție de condițiile meteo, vom decide ce zi dedicăm manevrelor și ce zi navigației cu vele.
-Miercuri la ora 10:00 este proba practică cu ANR, urmează testarea internă SetSail și o ultimă tură de navigație sau manevre până spre 18:00.
-Pauza de prânz este între 14:00 și 16:00, timp numai bun de relaxare și socializare.
-
-Dacă ești sensibil la valuri, ia cu tine Emetix sau ceva echivalent.
-Vom face poze, iar unele vor ajunge pe paginile noastre de social media. Dacă nu vrei să apari, spune-ne.
-
-Te rugăm să accesezi PORTALUL DE PRACTICĂ care cere upload CI pentru a completa datele necesare fișei de evaluare ANR: \${typeof window !== 'undefined' ? window.location.origin : 'https://setsail-practica.vercel.app'}/portal?cod=\${sess.access_code}
-
-Pe mare va fi chiar frig seara, așa că mai bine pregătit decât surprins!
-
-Echipament obligatoriu:
-pantofi sport și pantaloni lungi sport (impermeabili dacă e prognoză de ploaie), tricou cu mânecă lungă, hanorac, geacă de vânt, geacă groasă, căciulă, șapcă, cremă cu protecție solară.
-
-Echipament recomandat:
-pantaloni de yachting, geacă și mănuși de yachting, încălțăminte de yachting, polar, sac marinar (drybag), cizme de cauciuc de yachting, salopetă de yachting, cagulă.
-
-Ploaia în sine nu ne deranjează foarte tare — navigatorii sunt destul de obișnuiți cu apa. ⛵🙂 Practica se desfășoară normal chiar dacă plouă, atât timp cât condițiile sunt sigure.
-Amânăm ieșirile doar în caz de vreme extremă, de exemplu vânt puternic (peste 25–30 noduri) sau temperaturi foarte scăzute, sub aproximativ 5–7°C.
-
-Persoane de contact (Marina Limanu):
-Paula Drugan – 0722 488 973
-Ovidiu Drugan – 0735 557 337
-
-Vă așteptăm la bord!
-SetSail NauticSchool`,
-    html: (sess: any) => `<!DOCTYPE html>
-<html lang="ro">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Practică navigație</title></head>
-<body style="margin:0;padding:0;background:#f4f6f9;font-family:Arial,Helvetica,sans-serif;">
-<table width="100%" cellpadding="0" cellspacing="0" style="background:#f4f6f9;padding:24px 0;">
-<tr><td align="center">
-<table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:12px;overflow:hidden;box-shadow:0 2px 12px rgba(0,0,0,0.08);">
-
-<!-- HEADER -->
-<tr><td style="background:#1e3a5f;padding:32px 40px;text-align:center;">
-  <div style="font-size:28px;margin-bottom:8px;">⛵</div>
-  <div style="color:#ffffff;font-size:22px;font-weight:bold;letter-spacing:0.5px;">SetSail NauticSchool</div>
-  <div style="color:#f0b429;font-size:13px;margin-top:4px;letter-spacing:1px;text-transform:uppercase;">Practică navigație</div>
-</td></tr>
-
-<!-- SALUT -->
-<tr><td style="padding:32px 40px 0 40px;">
-  <p style="margin:0;font-size:18px;font-weight:bold;color:#1e3a5f;">Ahoy! 👋</p>
-  <p style="margin:12px 0 0 0;font-size:15px;color:#444;line-height:1.7;">
-    În perioada <strong>18-20 mai</strong> ne vom întâlni pentru cele 3 zile de practică. Ne vedem la <strong>ora 9:30</strong> în marina Limanu (LifeHarbour), unde vom forma echipajele și veți face cunoștință cu instructorii Set Sail.
-  </p>
-  <p style="margin:12px 0 0 0;font-size:15px;color:#444;line-height:1.7;">
-    Ne așteaptă trei zile frumoase, pline de navigație și voie bună! 🙂⛵
-  </p>
-</td></tr>
-
-<!-- PROGRAM -->
-<tr><td style="padding:24px 40px 0 40px;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#e8f4fd;border-radius:8px;border-left:4px solid #1e90ff;padding:0;">
-  <tr><td style="padding:18px 20px;">
-    <div style="font-size:14px;font-weight:bold;color:#1e3a5f;margin-bottom:10px;text-transform:uppercase;letter-spacing:0.5px;">📅 Program luni – miercuri</div>
-    <p style="margin:0 0 8px 0;font-size:14px;color:#333;line-height:1.6;">
-      <strong>Manevre cu motorul și navigație cu vele</strong> – în funcție de condițiile meteo, vom decide ce zi dedicăm manevrelor și ce zi navigației cu vele.
-    </p>
-    <p style="margin:0 0 8px 0;font-size:14px;color:#333;line-height:1.6;">
-      <strong>Miercuri la ora 10:00</strong> este proba practică cu ANR, urmează testarea internă SetSail și o ultimă tură de navigație sau manevre până spre 18:00.
-    </p>
-    <p style="margin:0;font-size:14px;color:#333;line-height:1.6;">
-      Pauza de prânz este între <strong>14:00 și 16:00</strong>, timp numai bun de relaxare și socializare.
-    </p>
-  </td></tr>
-  </table>
-</td></tr>
-
-<!-- PORTAL -->
-<tr><td style="padding:20px 40px 0 40px;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff3cd;border-radius:8px;border-left:4px solid #e53e3e;padding:0;">
-  <tr><td style="padding:16px 20px;">
-    <p style="margin:0;font-size:14px;color:#7a5c00;line-height:1.6;">
-      🪪 <strong>Te rugăm să accesezi PORTALUL DE PRACTICĂ</strong> care cere upload CI pentru a completa datele necesare fișei de evaluare ANR:<br>
-      <a href="https://setsail-practica.vercel.app/portal?cod=${sess.access_code}" style="color:#1e3a5f;font-weight:bold;text-decoration:underline;">https://setsail-practica.vercel.app/portal?cod=${sess.access_code}</a>
-    </p>
-  </td></tr>
-  </table>
-</td></tr>
-
-<!-- INFO DIVERSE -->
-<tr><td style="padding:20px 40px 0 40px;">
-  <p style="margin:0;font-size:14px;color:#555;line-height:1.7;">
-    Dacă ești sensibil la valuri, ia cu tine <strong>Emetix</strong> sau ceva echivalent.<br>
-    Vom face poze, iar unele vor ajunge pe paginile noastre de social media. Dacă nu vrei să apari, spune-ne.
-  </p>
-</td></tr>
-
-<!-- ECHIPAMENT OBLIGATORIU -->
-<tr><td style="padding:20px 40px 0 40px;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff8e1;border-radius:8px;border-left:4px solid #f0b429;padding:0;">
-  <tr><td style="padding:18px 20px;">
-    <div style="font-size:14px;font-weight:bold;color:#7a5c00;margin-bottom:10px;">🎒 Echipament obligatoriu</div>
-    <p style="margin:0;font-size:13px;color:#555;line-height:1.8;">
-      pantofi sport și pantaloni lungi sport (impermeabili dacă e prognoză de ploaie), tricou cu mânecă lungă, hanorac, geacă de vânt, geacă groasă, căciulă, șapcă, cremă cu protecție solară.
-    </p>
-  </td></tr>
-  </table>
-</td></tr>
-
-<!-- ECHIPAMENT RECOMANDAT -->
-<tr><td style="padding:16px 40px 0 40px;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#e8f5e9;border-radius:8px;border-left:4px solid #43a047;padding:0;">
-  <tr><td style="padding:18px 20px;">
-    <div style="font-size:14px;font-weight:bold;color:#2e7d32;margin-bottom:10px;">⭐ Echipament recomandat</div>
-    <p style="margin:0;font-size:13px;color:#555;line-height:1.8;">
-      pantaloni de yachting, geacă și mănuși de yachting, încălțăminte de yachting, polar, sac marinar (drybag), cizme de cauciuc de yachting, salopetă de yachting, cagulă.
-    </p>
-  </td></tr>
-  </table>
-</td></tr>
-
-<!-- VREME -->
-<tr><td style="padding:20px 40px 0 40px;">
-  <p style="margin:0;font-size:14px;color:#555;line-height:1.7;">
-    Ploaia în sine nu ne deranjează foarte tare — navigatorii sunt destul de obișnuiți cu apa. ⛵🙂 Practica se desfășoară normal chiar dacă plouă, atât timp cât condițiile sunt sigure.<br><br>
-    Amânăm ieșirile doar în caz de <strong>vreme extremă</strong>, de exemplu vânt puternic (peste 25–30 noduri) sau temperaturi foarte scăzute, sub aproximativ 5–7°C.<br><br>
-    Dacă apar condiții care țin de siguranță, anunțăm cât putem de repede orice modificare.
-  </p>
-</td></tr>
-
-<!-- CONTACT -->
-<tr><td style="padding:24px 40px 0 40px;">
-  <table width="100%" cellpadding="0" cellspacing="0" style="background:#1e3a5f;border-radius:8px;padding:0;">
-  <tr><td style="padding:20px 24px;">
-    <div style="font-size:14px;font-weight:bold;color:#f0b429;margin-bottom:12px;">📞 Persoane de contact (Marina Limanu)</div>
-    <table cellpadding="0" cellspacing="0">
-      <tr>
-        <td style="padding:4px 0;">
-          <span style="color:#ffffff;font-size:14px;">Paula Drugan &nbsp;</span>
-          <a href="tel:0722488973" style="color:#f0b429;font-weight:bold;text-decoration:none;font-size:14px;">0722 488 973</a>
-        </td>
-      </tr>
-      <tr>
-        <td style="padding:4px 0;">
-          <span style="color:#ffffff;font-size:14px;">Ovidiu Drugan &nbsp;</span>
-          <a href="tel:0735557337" style="color:#f0b429;font-weight:bold;text-decoration:none;font-size:14px;">0735 557 337</a>
-        </td>
-      </tr>
-    </table>
-  </td></tr>
-  </table>
-</td></tr>
-
-<!-- FOOTER -->
-<tr><td style="padding:32px 40px;text-align:center;border-top:1px solid #eee;margin-top:24px;">
-  <p style="margin:0 0 8px 0;font-size:16px;font-weight:bold;color:#1e3a5f;">Vă așteptăm la bord! ⚓</p>
-  <p style="margin:0;font-size:13px;color:#888;">SetSail NauticSchool</p>
-</td></tr>
-
-</table>
-</td></tr>
-</table>
-</body>
-</html>`
-  },
-  { label: 'Modificare dată sesiune', subject: 'Modificare dată sesiune de practică', body: 'Stimate/Stimată cursant,\n\nVă informăm că sesiunea de practică a suferit modificări de dată.\n\nNoua dată: [data nouă]\nLocația: [locație]\n\nVă rugăm să confirmați participarea.\n\nCu stimă,\nEchipa SetSail' },
-  { label: 'Documente necesare', subject: 'Documente necesare pentru examenul practic', body: 'Stimate/Stimată cursant,\n\nVă rugăm să aveți asupra dvs. la prezentare:\n- Cartea de identitate (original)\n- Adeverința de curs\n- Chitanța de plată taxă examen\n\nCu stimă,\nEchipa SetSail' },
-  { label: 'Felicitări promovare', subject: 'Felicitări pentru promovarea examenului practic!', body: 'Stimate/Stimată cursant,\n\nVă felicităm pentru promovarea cu succes a examenului practic!\n\nCertificatul dumneavoastră va fi emis în cel mai scurt timp.\n\nCu stimă,\nEchipa SetSail' },
-  { label: 'Informații locație', subject: 'Informații locație examen practic', body: 'Stimate/Stimată cursant,\n\nVă transmitem detalii despre locația sesiunii de practică:\n\n[adresa locației]\n\nVă recomandăm să sosiți cu 15 minute înainte.\n\nCu stimă,\nEchipa SetSail' },
-]
 
 function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions, allStudents, onEditSession }:
   { sess: Session, students: Student[], allStatuses: string[], onStatusChange:(sid:string,status:string)=>void, allSessions: Session[], allStudents: Record<string,Student[]>, onEditSession:(s:Session)=>void }) {
+  const [dbTemplates, setDbTemplates] = useState<any[]>([])
   const [gPV, setGPV] = useState(false)
   const [gFise, setGFise] = useState(false)
   const [gPDF, setGPDF] = useState(false)
@@ -876,6 +659,15 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
   const [gNotif, setGNotif] = useState(false)
   const [notifSaved, setNotifSaved] = useState(false)
   const notifScanRef = useRef<HTMLInputElement|null>(null)
+
+  // Incarcam template-urile din DB
+  useEffect(() => {
+    supabase.from('mail_templates')
+      .select('*')
+      .eq('activ', true)
+      .order('categorie').order('label')
+      .then(({ data }) => setDbTemplates(data || []))
+  }, [])
 
   const [copied, setCopied] = useState(false)
   const [showMail, setShowMail] = useState(false)
@@ -1682,46 +1474,55 @@ Set Sail NauticSchool
                     value={mailBody} onChange={e=>setMailBody(e.target.value)} placeholder="Scrie sau selectează un template..."/>
                 </div>
 
-                {/* Template-uri rapide */}
+                {/* Template-uri din DB */}
                 <div>
-                  <div className="text-xs text-gray-400 mb-1.5">Template-uri rapide:</div>
-                  <div className="flex flex-col gap-1.5">
-                    {QUICK_TEMPLATES.map((t,i) => (
-                      <button key={i} onClick={()=>{setMailSubject(t.subject);setMailBody(t.body(sess))}}
-                        className="text-left px-3 py-2 rounded-lg text-xs border border-gray-200 hover:bg-blue-50 hover:border-blue-200 transition-colors">
-                        {t.label}
-                      </button>
-                    ))}
-                    {/* Dropdown template-uri extra */}
-                    <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none bg-white"
-                      onChange={e=>{
-                        const t = DROPDOWN_TEMPLATES[parseInt(e.target.value)] as any
-                        if(t){
-                          setMailSubject(t.subject)
-                          const rawBody = typeof t.html === 'function' ? t.html(sess) : (t.html || (typeof t.body === 'function' ? t.body(sess) : t.body))
-                          // Rezolvam variabilele {{var}} cu valorile din sesiunea curenta
+                  {dbTemplates.length === 0 ? (
+                    <div className="text-xs text-gray-400 italic">Se încarcă template-urile...</div>
+                  ) : (() => {
+                    // Grupam pe categorii
+                    const CATS: Record<string,string> = { portal:'🔗 Portal', practica:'⛵ Practică', organizatoric:'📋 Organizatoric', rezultate:'🏆 Rezultate', general:'📧 General' }
+                    const grouped = dbTemplates.reduce((acc: any, t: any) => {
+                      const cat = t.categorie || 'general'
+                      if (!acc[cat]) acc[cat] = []
+                      acc[cat].push(t)
+                      return acc
+                    }, {} as Record<string, any[]>)
+                    const resolveVars = (text: string) => {
                           const origin = typeof window !== 'undefined' ? window.location.origin : 'https://setsail-practica.vercel.app'
                           const practiceStartDate = (sess as any).practice_start_date
                           const sessionDate = sess.session_date
-                          const zzStartPractica = practiceStartDate ? new Date(practiceStartDate).getDate().toString() : ''
-                          const zzLlllDataPractica = sessionDate ? new Date(sessionDate).toLocaleDateString('ro-RO', {day:'2-digit', month:'long'}) : ''
-                          const bodyVal = (rawBody || '')
+                          return (text || '')
                             .replace(/{{link_portal}}/g, `${origin}/portal?cod=${sess.access_code}`)
                             .replace(/{{data_sesiune}}/g, sessionDate ? new Date(sessionDate).toLocaleDateString('ro-RO', {day:'2-digit', month:'long', year:'numeric'}) : '')
                             .replace(/{{locatie}}/g, sess.location_detail || sess.locations?.name || '')
                             .replace(/{{ambarcatiune}}/g, sess.boats?.name || '')
-                            .replace(/{{zz_data_start_practica}}/g, zzStartPractica)
-                            .replace(/{{zz_llll_data_practica}}/g, zzLlllDataPractica)
-                          setMailBody(bodyVal)
+                            .replace(/{{zz_data_start_practica}}/g, practiceStartDate ? new Date(practiceStartDate).getDate().toString() : '')
+                            .replace(/{{zz_llll_data_practica}}/g, sessionDate ? new Date(sessionDate).toLocaleDateString('ro-RO', {day:'2-digit', month:'long'}) : '')
                         }
-                        e.target.value = ''
-                      }} defaultValue="">
-                      <option value="" disabled>+ Alte template-uri...</option>
-                      {DROPDOWN_TEMPLATES.map((t,i)=>(
-                        <option key={i} value={i}>{(t as any).label}</option>
-                      ))}
-                    </select>
-                  </div>
+                    return (
+                      <div className="space-y-3">
+                        {Object.entries(grouped).map(([cat, items]: any) => (
+                          <div key={cat}>
+                            <div className="text-xs text-gray-400 font-medium mb-1">{CATS[cat] || cat}</div>
+                            <div className="flex flex-col gap-1">
+                              {items.map((t: any) => (
+                                <button key={t.id}
+                                  onClick={()=>{
+                                    setMailSubject(resolveVars(t.subject))
+                                    const rawBody = t.body_html || t.body_text || ''
+                                    setMailBody(resolveVars(rawBody))
+                                  }}
+                                  className="text-left px-3 py-2 rounded-lg text-xs border border-gray-200 hover:bg-blue-50 hover:border-blue-200 transition-colors">
+                                  {t.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )
+                  })()}
+                </div>
                 </div>
 
                 {/* Buton deschide Gmail */}
