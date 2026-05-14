@@ -866,8 +866,8 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
     const blob = await res.blob()
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click()
   }
-  async function generateDocRadio(endpoint: string, filename: string) {
-    const res = await fetch(endpoint, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id})})
+  async function generateDocRadio(endpoint: string, filename: string, tip: string, format: string) {
+    const res = await fetch(endpoint, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id, tip, format})})
     if (!res.ok) throw new Error(await res.text())
     const blob = await res.blob()
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click()
@@ -1018,18 +1018,85 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
             <div className="mt-3 text-xs text-gray-400 text-center">{students.filter(s=>s.portal_status==='signed').length}/{students.filter(s=>!s.only_sailing).length} cursanți au semnat</div>
           </div>
 
+          {/* Instiintari ANCOM - doar pentru sesiuni Radio */}
+          {isRadio && (
+            <div className="bg-white rounded-xl p-5 shadow-sm border border-purple-100">
+              <h3 className="font-semibold text-sm text-gray-900 mb-3">Înștiințări ANCOM</h3>
+              <div className="space-y-2">
+                {/* 1. Curs Obtinere */}
+                <div className="flex gap-1.5">
+                  <button onClick={async()=>{try{await generateDocRadio('/api/generate-instiintare-ancom',`Instiintare_ANCOM_curs-obtinere_${sess.session_date}.docx`,'curs-obtinere','docx')}catch(e:any){alert(e.message)}}}
+                    disabled={false} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium text-white" style={{background:'#1d4ed8'}}>
+                    <FileText size={11}/>Curs Obținere
+                  </button>
+                  <button onClick={async()=>{try{
+                    const res=await fetch('/api/generate-instiintare-ancom',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id,tip:'curs-obtinere',format:'pdf'})})
+                    const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>w.print(),800)}
+                  }catch(e:any){alert(e.message)}}}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium text-white" style={{background:'#dc2626'}}>
+                    <Download size={11}/>PDF Curs Obținere
+                  </button>
+                </div>
+                {/* 2. Examen Obtinere */}
+                <div className="flex gap-1.5">
+                  <button onClick={async()=>{try{await generateDocRadio('/api/generate-instiintare-ancom',`Instiintare_ANCOM_examen-obtinere_${sess.session_date}.docx`,'examen-obtinere','docx')}catch(e:any){alert(e.message)}}}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium text-white" style={{background:'#1d4ed8'}}>
+                    <FileText size={11}/>Examen Obținere
+                  </button>
+                  <button onClick={async()=>{try{
+                    const res=await fetch('/api/generate-instiintare-ancom',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id,tip:'examen-obtinere',format:'pdf'})})
+                    const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>w.print(),800)}
+                  }catch(e:any){alert(e.message)}}}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium text-white" style={{background:'#dc2626'}}>
+                    <Download size={11}/>PDF Examen Obținere
+                  </button>
+                </div>
+                {/* Separator */}
+                <div className="border-t border-gray-100 pt-1 mt-1"/>
+                {/* 3. Curs Prelungire */}
+                <div className="flex gap-1.5">
+                  <button onClick={async()=>{try{await generateDocRadio('/api/generate-instiintare-ancom',`Instiintare_ANCOM_curs-prelungire_${sess.session_date}.docx`,'curs-prelungire','docx')}catch(e:any){alert(e.message)}}}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium text-white" style={{background:'#1d4ed8'}}>
+                    <FileText size={11}/>Curs Prelungire
+                  </button>
+                  <button onClick={async()=>{try{
+                    const res=await fetch('/api/generate-instiintare-ancom',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id,tip:'curs-prelungire',format:'pdf'})})
+                    const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>w.print(),800)}
+                  }catch(e:any){alert(e.message)}}}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium text-white" style={{background:'#dc2626'}}>
+                    <Download size={11}/>PDF Curs Prelungire
+                  </button>
+                </div>
+                {/* 4. Examen Prelungire */}
+                <div className="flex gap-1.5">
+                  <button onClick={async()=>{try{await generateDocRadio('/api/generate-instiintare-ancom',`Instiintare_ANCOM_examen-prelungire_${sess.session_date}.docx`,'examen-prelungire','docx')}catch(e:any){alert(e.message)}}}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium text-white" style={{background:'#1d4ed8'}}>
+                    <FileText size={11}/>Examen Prelungire
+                  </button>
+                  <button onClick={async()=>{try{
+                    const res=await fetch('/api/generate-instiintare-ancom',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id,tip:'examen-prelungire',format:'pdf'})})
+                    const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>w.print(),800)}
+                  }catch(e:any){alert(e.message)}}}
+                    className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium text-white" style={{background:'#dc2626'}}>
+                    <Download size={11}/>PDF Examen Prelungire
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
             <h3 className="font-semibold text-sm text-gray-900 mb-3">Documente</h3>
             {isRadio ? (
               <div className="space-y-2">
                 {/* 1. PV Obtinere */}
                 <div className="flex gap-1.5">
-                  <button onClick={async()=>{setGPV(true);try{await generateDoc('/api/generate-pv-radio?tip=obtinere',`PV_LRC_OBTINERE_${sess.session_date}.docx`)}catch(e:any){alert(e.message)}setGPV(false)}}
+                  <button onClick={async()=>{setGPV(true);try{await generateDocRadio('/api/generate-pv-radio',`PV_LRC_OBTINERE_${sess.session_date}.docx`,'obtinere','docx')}catch(e:any){alert(e.message)}setGPV(false)}}
                     disabled={gPV||students.length===0} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#1d4ed8'}}>
                     <FileText size={12}/>{gPV?'...':'PV Obținere LRC'}
                   </button>
                   <button onClick={async()=>{try{
-                    const res=await fetch('/api/generate-pv-radio?tip=obtinere&format=pdf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id})})
+                    const res=await fetch('/api/generate-pv-radio',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id,tip:'obtinere',format:'pdf'})})
                     const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>w.print(),800)}
                   }catch(e:any){alert(e.message)}}}
                     disabled={students.length===0} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#dc2626'}}>
@@ -1038,12 +1105,12 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                 </div>
                 {/* 2. Anexa Obtinere */}
                 <div className="flex gap-1.5">
-                  <button onClick={async()=>{try{await generateDoc('/api/generate-anexa-pv?tip=obtinere',`Anexa_PV_LRC_OBTINERE_${sess.session_date}.docx`)}catch(e:any){alert(e.message)}}}
+                  <button onClick={async()=>{try{await generateDocRadio('/api/generate-anexa-pv',`Anexa_PV_LRC_OBTINERE_${sess.session_date}.docx`,'obtinere','docx')}catch(e:any){alert(e.message)}}}
                     disabled={students.length===0} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#1d4ed8'}}>
                     <FileText size={12}/>Anexă PV Obținere LRC
                   </button>
                   <button onClick={async()=>{try{
-                    const res=await fetch('/api/generate-anexa-pv?tip=obtinere&format=pdf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id})})
+                    const res=await fetch('/api/generate-anexa-pv',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id,tip:'obtinere',format:'pdf'})})
                     const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>w.print(),800)}
                   }catch(e:any){alert(e.message)}}}
                     disabled={students.length===0} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#dc2626'}}>
@@ -1054,12 +1121,12 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                 <div className="border-t border-gray-100 pt-1 mt-1"/>
                 {/* 3. PV Prelungire */}
                 <div className="flex gap-1.5">
-                  <button onClick={async()=>{try{await generateDoc('/api/generate-pv-radio?tip=prelungire',`PV_LRC_PRELUNGIRE_${sess.session_date}.docx`)}catch(e:any){alert(e.message)}}}
+                  <button onClick={async()=>{try{await generateDocRadio('/api/generate-pv-radio',`PV_LRC_PRELUNGIRE_${sess.session_date}.docx`,'prelungire','docx')}catch(e:any){alert(e.message)}}}
                     disabled={students.length===0} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#1d4ed8'}}>
                     <FileText size={12}/>PV Prelungire LRC
                   </button>
                   <button onClick={async()=>{try{
-                    const res=await fetch('/api/generate-pv-radio?tip=prelungire&format=pdf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id})})
+                    const res=await fetch('/api/generate-pv-radio',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id,tip:'prelungire',format:'pdf'})})
                     const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>w.print(),800)}
                   }catch(e:any){alert(e.message)}}}
                     disabled={students.length===0} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#dc2626'}}>
@@ -1068,12 +1135,12 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                 </div>
                 {/* 4. Anexa Prelungire */}
                 <div className="flex gap-1.5">
-                  <button onClick={async()=>{try{await generateDoc('/api/generate-anexa-pv?tip=prelungire',`Anexa_PV_LRC_PRELUNGIRE_${sess.session_date}.docx`)}catch(e:any){alert(e.message)}}}
+                  <button onClick={async()=>{try{await generateDocRadio('/api/generate-anexa-pv',`Anexa_PV_LRC_PRELUNGIRE_${sess.session_date}.docx`,'prelungire','docx')}catch(e:any){alert(e.message)}}}
                     disabled={students.length===0} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#1d4ed8'}}>
                     <FileText size={12}/>Anexă PV Prelungire LRC
                   </button>
                   <button onClick={async()=>{try{
-                    const res=await fetch('/api/generate-anexa-pv?tip=prelungire&format=pdf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id})})
+                    const res=await fetch('/api/generate-anexa-pv',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id,tip:'prelungire',format:'pdf'})})
                     const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>w.print(),800)}
                   }catch(e:any){alert(e.message)}}}
                     disabled={students.length===0} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#dc2626'}}>
