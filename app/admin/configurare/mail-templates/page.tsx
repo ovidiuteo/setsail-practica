@@ -32,6 +32,8 @@ const VARIABLES_INFO: Record<string, string> = {
   ambarcatiune: 'Numele ambarcațiunii (ex: SetSail)',
   data_noua: 'Noua dată (pentru modificări)',
   adresa_locatie: 'Adresa completă a locației',
+  zz_data_start_practica: 'Ziua din data start practică (ex: 18)',
+  zz_llll_data_practica: 'Ziua și luna din data practică (ex: 20 mai)',
 }
 
 const EMPTY_TEMPLATE: Partial<Template> = {

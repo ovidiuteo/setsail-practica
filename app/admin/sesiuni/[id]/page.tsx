@@ -1698,7 +1698,20 @@ Set Sail NauticSchool
                         const t = DROPDOWN_TEMPLATES[parseInt(e.target.value)] as any
                         if(t){
                           setMailSubject(t.subject)
-                          const bodyVal = typeof t.html === 'function' ? t.html(sess) : (t.html || (typeof t.body === 'function' ? t.body(sess) : t.body))
+                          const rawBody = typeof t.html === 'function' ? t.html(sess) : (t.html || (typeof t.body === 'function' ? t.body(sess) : t.body))
+                          // Rezolvam variabilele {{var}} cu valorile din sesiunea curenta
+                          const origin = typeof window !== 'undefined' ? window.location.origin : 'https://setsail-practica.vercel.app'
+                          const practiceStartDate = (sess as any).practice_start_date
+                          const sessionDate = sess.session_date
+                          const zzStartPractica = practiceStartDate ? new Date(practiceStartDate).getDate().toString() : ''
+                          const zzLlllDataPractica = sessionDate ? new Date(sessionDate).toLocaleDateString('ro-RO', {day:'2-digit', month:'long'}) : ''
+                          const bodyVal = (rawBody || '')
+                            .replace(/{{link_portal}}/g, `${origin}/portal?cod=${sess.access_code}`)
+                            .replace(/{{data_sesiune}}/g, sessionDate ? new Date(sessionDate).toLocaleDateString('ro-RO', {day:'2-digit', month:'long', year:'numeric'}) : '')
+                            .replace(/{{locatie}}/g, sess.location_detail || sess.locations?.name || '')
+                            .replace(/{{ambarcatiune}}/g, sess.boats?.name || '')
+                            .replace(/{{zz_data_start_practica}}/g, zzStartPractica)
+                            .replace(/{{zz_llll_data_practica}}/g, zzLlllDataPractica)
                           setMailBody(bodyVal)
                         }
                         e.target.value = ''
