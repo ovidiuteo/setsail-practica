@@ -60,7 +60,7 @@ type Student = {
   signature_pool?: boolean
   signature_random?: string
 }
-type Session = { id: string; session_date: string; course_start_date?: string; status: string; session_type: string; access_code: string; class_caa: string; request_number?: string; location_detail?: string; parent_session_id?: string; is_clone?: boolean; locations?: any; boats?: any; evaluators?: any; instructors?: any }
+type Session = { id: string; session_date: string; course_start_date?: string; status: string; session_type: string; access_code: string; class_caa: string; request_number?: string; location_detail?: string; parent_session_id?: string; is_clone?: boolean; locations?: any; boats?: any; evaluators?: any; instructors?: any; contact_person_ids?: string[]; practice_start_date?: string; practice_start_time?: string }
 
 const EMPTY_ST = { full_name:'', cnp:'', email:'', phone:'', birth_date:'', ci_series:'', ci_number:'', address:'', county:'', class_caa:'C,D' }
 
@@ -896,6 +896,8 @@ SetSail NauticSchool`,
 function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions, allStudents, onEditSession }:
   { sess: Session, students: Student[], allStatuses: string[], onStatusChange:(sid:string,status:string)=>void, allSessions: Session[], allStudents: Record<string,Student[]>, onEditSession:(s:Session)=>void }) {
   const [dbTemplates, setDbTemplates] = useState<any[]>([])
+  const [allContacts, setAllContacts] = useState<any[]>([])
+  const [sessionContactIds, setSessionContactIds] = useState<string[]>(sess.contact_person_ids || [])
   const [gPV, setGPV] = useState(false)
   const [gFise, setGFise] = useState(false)
   const [gPDF, setGPDF] = useState(false)
@@ -912,6 +914,9 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
       .select('*').eq('activ', true)
       .order('categorie').order('label')
       .then(({ data }) => setDbTemplates(data || []))
+    supabase.from('contact_persons')
+      .select('*').eq('activ', true).order('full_name')
+      .then(({ data }) => setAllContacts(data || []))
   }, [])
 
   const [copied, setCopied] = useState(false)
@@ -1106,6 +1111,38 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
             </div>
           ))}
         </div>
+        {/* Persoane de contact sesiune */}
+        {!isAbsent && allContacts.length > 0 && (
+          <div className="mt-4 pt-3 border-t border-gray-100">
+            <div className="text-xs text-gray-400 mb-2">Persoane de contact</div>
+            <div className="space-y-1.5">
+              {allContacts.map((c: any) => (
+                <label key={c.id} className="flex items-center gap-2 cursor-pointer group">
+                  <input type="checkbox"
+                    checked={sessionContactIds.includes(c.id)}
+                    onChange={async (e) => {
+                      const newIds = e.target.checked
+                        ? [...sessionContactIds, c.id]
+                        : sessionContactIds.filter((id: string) => id !== c.id)
+                      setSessionContactIds(newIds)
+                      await supabase.from('sessions').update({ contact_person_ids: newIds }).eq('id', sess.id)
+                    }}
+                    className="rounded"
+                  />
+                  <div className="flex-1 min-w-0">
+                    <span className="text-xs font-medium text-gray-800">{c.full_name}</span>
+                    <a href={`tel:${c.phone.replace(/\s/g,'')}`}
+                      className="text-xs text-blue-600 ml-2 hover:underline"
+                      onClick={e => e.stopPropagation()}>
+                      {c.phone}
+                    </a>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Statistici cursanti */}
         {!isAbsent && (
           <div className="mt-4 p-3 bg-gray-50 rounded-xl border border-gray-100">
