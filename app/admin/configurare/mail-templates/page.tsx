@@ -35,10 +35,14 @@ const VARIABLES_INFO: Record<string, string> = {
   zz_data_start_practica: 'Ziua din data start practică (ex: 18)',
   zz_llll_data_practica: 'Ziua și luna din data practică (ex: 20 mai)',
   ora_start: 'Ora de start a practicii (ex: 9:30)',
-  pers_cont_1: 'Prima persoană de contact bifată (Nume   Telefon)',
-  pers_cont_2: 'A doua persoană de contact bifată (Nume   Telefon)',
-  pers_cont_3: 'A treia persoană de contact bifată (Nume   Telefon)',
-  pers_cont_4: 'A patra persoană de contact bifată (Nume   Telefon)',
+  pers_cont_1: 'Numele primei persoane de contact bifate',
+  pers_cont_2: 'Numele celei de-a doua persoane de contact',
+  pers_cont_3: 'Numele celei de-a treia persoane de contact',
+  pers_cont_4: 'Numele celei de-a patra persoane de contact',
+  tel_cont_1: 'Telefonul primei persoane de contact',
+  tel_cont_2: 'Telefonul celei de-a doua persoane de contact',
+  tel_cont_3: 'Telefonul celei de-a treia persoane de contact',
+  tel_cont_4: 'Telefonul celei de-a patra persoane de contact',
 }
 
 const EMPTY_TEMPLATE: Partial<Template> = {
