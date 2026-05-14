@@ -32,10 +32,14 @@ function applyTemplate(text: string, sess: any, contacts?: any[]): string {
     .filter((c: any) => contactIds.includes(c.id))
     .sort((a: any, b: any) => a.full_name.localeCompare(b.full_name, 'ro'))
   const contactVars: Record<string, string> = {
-    'pers_cont_1': selected[0] ? selected[0].full_name + '   ' + selected[0].phone : '',
-    'pers_cont_2': selected[1] ? selected[1].full_name + '   ' + selected[1].phone : '',
-    'pers_cont_3': selected[2] ? selected[2].full_name + '   ' + selected[2].phone : '',
-    'pers_cont_4': selected[3] ? selected[3].full_name + '   ' + selected[3].phone : '',
+    'pers_cont_1': selected[0]?.full_name || '',
+    'pers_cont_2': selected[1]?.full_name || '',
+    'pers_cont_3': selected[2]?.full_name || '',
+    'pers_cont_4': selected[3]?.full_name || '',
+    'tel_cont_1':  selected[0]?.phone || '',
+    'tel_cont_2':  selected[1]?.phone || '',
+    'tel_cont_3':  selected[2]?.phone || '',
+    'tel_cont_4':  selected[3]?.phone || '',
   }
   let result = text
   for (const [key, val] of Object.entries({ ...vars, ...contactVars })) {
