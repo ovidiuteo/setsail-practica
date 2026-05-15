@@ -23,6 +23,7 @@ const INFO_FIELDS: InfoRow[] = [
   { key: 'adresa_punct_lucru',   label: 'Adresă punct de lucru',    placeholder: 'Str. Exemplu nr. 1, București', value: '' },
   { key: 'adresa_baza_limanu',   label: 'Adresă bază Limanu',       placeholder: 'Marina Limanu, jud. Constanța', value: '' },
   { key: 'adresa_marina',        label: 'Adresă marinǎ/bază',       placeholder: 'Marina ...', value: '' },
+  { key: 'protocol_ancom_valabil_pana', label: 'Protocol ANCOM — valabil până la', placeholder: '31.12.2026', value: '' },
 ]
 
 const DOC_TIPS = [
