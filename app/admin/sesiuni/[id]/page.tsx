@@ -1169,18 +1169,18 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
             ['Decizie ANR', sess.evaluators?.decision_number],
             ['Ambarcațiune', sess.boats?.name||'—'],
             ['Clasa CAA', sess.class_caa],
-            ['Nr. solicitare', sess.request_number||'—'],
-            ['Nr. document ANCOM', (sess as any).nr_document_ancom||'—'],
+            ['Nr. înștiințări', sess.request_number||'—'],
+            ['Nr. documente PV', (sess as any).nr_document_ancom||'—'],
             ['Locație detaliată', sess.location_detail||'—'],
           ] as [string,string][]).map(([label,value]) => (
             <div key={label} className="flex justify-between gap-2">
               <span className="text-gray-400 text-xs shrink-0">{label}</span>
-              {label === 'Nr. solicitare' ? (
+              {label === 'Nr. înștiințări' ? (
                 <button onClick={()=>openNrModal('solicitare')}
                   className="text-xs font-medium text-blue-600 hover:underline text-right">
                   {value === '—' ? '+ Alocă număr' : value}
                 </button>
-              ) : label === 'Nr. document ANCOM' ? (
+              ) : label === 'Nr. documente PV' ? (
                 <button onClick={()=>openNrModal('document')}
                   className="text-xs font-medium text-purple-600 hover:underline text-right">
                   {value === '—' ? '+ Alocă număr' : value}
@@ -2023,7 +2023,7 @@ Set Sail NauticSchool
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
             <div className="flex items-center justify-between p-5 border-b border-gray-100">
               <h3 className="font-semibold text-gray-900">
-                {showNrModal === 'solicitare' ? 'Numere solicitare' : 'Numere document'} ANCOM
+                {showNrModal === 'solicitare' ? 'Nr. înștiințări ANCOM' : 'Nr. documente PV (LRC)'}
               </h3>
               <button onClick={()=>setShowNrModal(null)} className="p-1 rounded hover:bg-gray-100 text-gray-400">
                 <X size={16}/>
@@ -2071,7 +2071,7 @@ Set Sail NauticSchool
                 {nrModalData.filter((r:any) => r.tip === showNrModal).length > 0 && (
                   <div>
                     <div className="text-xs text-gray-400 font-medium mb-2">
-                      Istoric {showNrModal === 'solicitare' ? 'solicitări' : 'documente'}
+                      Istoric {showNrModal === 'solicitare' ? 'înștiințări' : 'documente PV'}
                     </div>
                     <div className="space-y-0.5 max-h-44 overflow-y-auto">
                       {nrModalData
@@ -2632,7 +2632,7 @@ export default function SessionDetailPage() {
                 ['Data start curs', 'course_start_date', 'date'],
                 ['Data start practică', 'practice_start_date', 'date'],
                 ['Data practică', 'session_date', 'date'],
-                ['Nr. solicitare', 'request_number', 'text'],
+                ['Nr. înștiințări', 'request_number', 'text'],
                 ['Locație detaliată', 'location_detail', 'text'],
                 ['Clasa CAA', 'class_caa', 'select-class'],
               ].map(([label, key, type]) => (
