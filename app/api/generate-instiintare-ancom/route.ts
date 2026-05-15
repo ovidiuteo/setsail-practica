@@ -201,7 +201,7 @@ export async function POST(req: NextRequest) {
   <div class="antet">${antetHtml}</div>
 
   <!-- Nr si data -->
-  <div class="nr-data"><strong>${nrCurent || '......'} / ${dataNrFormatat}</strong></div>
+  <div class="nr-data"><strong>Nr. ${nrCurent || '......'} / ${dataNrFormatat}</strong></div>
 
   <!-- Catre -->
   <div class="catre">
@@ -324,7 +324,7 @@ export async function POST(req: NextRequest) {
         },
         children: [
           ...headerImg,
-          para([reg((nrCurent || '......') + ' / ' + dataNrFormatat)], AlignmentType.RIGHT as any, 200),
+          para([reg('Nr. ' + (nrCurent || '......') + ' / ' + dataNrFormatat)], AlignmentType.RIGHT as any, 200),
           new Paragraph({ spacing: { before: 200, after: 60 }, children: [bold('Către,')] }),
           new Paragraph({ spacing: { before: 0, after: 0 }, children: [reg('AUTORITATEA NAȚIONALĂ PENTRU ADMINISTRARE')] }),
           new Paragraph({ spacing: { before: 0, after: 200 }, children: [reg('ȘI REGLEMENTARE ÎN COMUNICAȚII')] }),
