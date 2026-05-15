@@ -911,6 +911,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
   const [authSubject, setAuthSubject] = useState('')
   const [authBody, setAuthBody] = useState('')
   const [authCopied, setAuthCopied] = useState(false)
+  const [selectedAuthCategory, setSelectedAuthCategory] = useState<string | null>(null)
   const [showNrModal, setShowNrModal] = useState<'solicitare'|'document'|null>(null)
   const [nrModalData, setNrModalData] = useState<any[]>([])
   const [nrModalNext, setNrModalNext] = useState(1)
@@ -1856,6 +1857,7 @@ Set Sail NauticSchool
                               const rawBody = t.body_html || t.body_text || ''
                               setAuthSubject(applyTemplate(t.subject, sess, allContacts))
                               setAuthBody(applyTemplate(rawBody, sess, allContacts))
+                              setSelectedAuthCategory(catKey)
                             }}
                             className="text-left px-3 py-2 rounded-lg text-xs border border-gray-200 hover:bg-blue-50 hover:border-blue-200 transition-colors">
                             {t.label}
@@ -1872,6 +1874,39 @@ Set Sail NauticSchool
                   style={{background:'#0a1628'}}>
                   <Mail size={13}/> Deschide în Gmail
                 </a>
+                {/* Buton ATAS toate instiintarile - apare doar daca template-ul selectat e ANCOM */}
+                {selectedAuthCategory === 'ancom' && (
+                  <>
+                    <button onClick={async()=>{
+                      try {
+                        // 1. Deschide PDF cu TOATE Instiintarile in tab nou + auto-print (Save as PDF)
+                        const res = await fetch('/api/generate-instiintare-ancom-toate',{
+                          method:'POST',
+                          headers:{'Content-Type':'application/json'},
+                          body: JSON.stringify({session_id: sess.id})
+                        })
+                        if (!res.ok) { const e = await res.text(); throw new Error(e) }
+                        const html = await res.text()
+                        const wPdf = window.open('', '_blank')
+                        if (wPdf) {
+                          wPdf.document.write(html)
+                          wPdf.document.close()
+                          setTimeout(() => wPdf.print(), 1200)
+                        }
+                        // 2. Imediat dupa, deschide Gmail intr-un alt tab
+                        const gmailUrl = `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(sess.evaluators?.email_oficial||'secretariat@ancom.ro')}${sess.evaluators?.email_personal?'&cc='+encodeURIComponent(sess.evaluators.email_personal):''}&bcc=${encodeURIComponent('office@setsail.ro')}&su=${encodeURIComponent(authSubject)}&body=${encodeURIComponent(authBody)}`
+                        setTimeout(() => window.open(gmailUrl, '_blank'), 600)
+                      } catch(e:any) { alert(e.message) }
+                    }}
+                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-semibold text-white"
+                      style={{background:'#7c3aed'}}>
+                      <Download size={13}/> Salvează PDF + Deschide Gmail
+                    </button>
+                    <p className="text-xs text-gray-400 text-center -mt-1">
+                      După deschidere atașează PDF-ul salvat la mailul Gmail
+                    </p>
+                  </>
+                )}
               </div>
             )}
           </div>
