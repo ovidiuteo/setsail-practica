@@ -24,6 +24,21 @@ export async function POST(req: NextRequest) {
 
     if (!session) return NextResponse.json({ error: 'Session not found' }, { status: 404 })
 
+    // Aducem persoanele de contact bifate la sesiune, sortate alfabetic
+    const contactIds: string[] = session.contact_person_ids || []
+    let persContact1 = 'Drugan Ovidiu'
+    let persContact2 = 'Drugan Sorin'
+    if (contactIds.length > 0) {
+      const { data: contacts } = await supabase
+        .from('contact_persons')
+        .select('id, full_name')
+        .in('id', contactIds)
+        .order('full_name')
+      const sorted = (contacts || []).sort((a: any, b: any) => a.full_name.localeCompare(b.full_name, 'ro'))
+      if (sorted[0]) persContact1 = sorted[0].full_name
+      if (sorted[1]) persContact2 = sorted[1].full_name
+    }
+
     // Aducem antetul radio si stampila cu semnatura
     const { data: antetDoc } = await supabase
       .from('setsail_documents')
@@ -123,11 +138,11 @@ export async function POST(req: NextRequest) {
     } else if (isExamen && !isPrelungire) {
       titluDoc = 'Înștiințare organizare examen obținere LRC'
       subiect = 'Înștiințare cu privire la data de desfășurare a examenului în vederea obținerii certificatelor de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit de tip GMDSS-LRC'
-      corpText = `Subscrisa SC SET SAIL ADVERTISING SRL, cu datele de identificare din antet, în baza pct. 3, lit. a) și c) din cadrul protocolului de colaborare dintre instituțiile noastre valabil până la data de ${protocolValabilPana}, vă înștiințăm că pe data de ${sessionDate}, organizam o sesiune de examinare în vederea obținerii certificatelor de operator radio, online.\n\nMembrii comisiei de examinare vor fi:\n- Drugan Ovidiu, instructor SetSail, deținător al certificatului de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit GMDSS-LRC\n- Drugan Sorin, deținător al certificatului de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit GMDSS-LRC`
+      corpText = `Subscrisa SC SET SAIL ADVERTISING SRL, cu datele de identificare din antet, în baza pct. 3, lit. a) și c) din cadrul protocolului de colaborare dintre instituțiile noastre valabil până la data de ${protocolValabilPana}, vă înștiințăm că pe data de ${sessionDate}, organizam o sesiune de examinare în vederea obținerii certificatelor de operator radio, online.\n\nMembrii comisiei de examinare vor fi:\n- ${persContact1}, deținător al certificatului de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit GMDSS-LRC\n- ${persContact2}, deținător al certificatului de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit GMDSS-LRC`
     } else {
       titluDoc = 'Înștiințare organizare examen prelungire LRC'
       subiect = 'Înștiințare cu privire la data de desfășurare a examenului în vederea prelungirii valabilității certificatelor de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit de tip GMDSS-LRC'
-      corpText = `Subscrisa SC SET SAIL ADVERTISING SRL, cu datele de identificare din antet, în baza pct. 3, lit. a) și c) din cadrul protocolului de colaborare dintre instituțiile noastre valabil până la data de ${protocolValabilPana}, vă înștiințăm că pe data de ${sessionDate}, orele 19.00, organizam o sesiune de examinare în vederea prelungirii valabilității certificatelor de operator radio, online.\n\nMembrii comisiei de examinare vor fi:\n- Drugan Ovidiu, instructor SetSail, deținător al certificatului de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit GMDSS-LRC\n- Drugan Sorin, deținător al certificatului de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit GMDSS-LRC`
+      corpText = `Subscrisa SC SET SAIL ADVERTISING SRL, cu datele de identificare din antet, în baza pct. 3, lit. a) și c) din cadrul protocolului de colaborare dintre instituțiile noastre valabil până la data de ${protocolValabilPana}, vă înștiințăm că pe data de ${sessionDate}, orele 19.00, organizam o sesiune de examinare în vederea prelungirii valabilității certificatelor de operator radio, online.\n\nMembrii comisiei de examinare vor fi:\n- ${persContact1}, deținător al certificatului de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit GMDSS-LRC\n- ${persContact2}, deținător al certificatului de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit GMDSS-LRC`
     }
 
     if (format === 'pdf') {
