@@ -75,14 +75,13 @@ export async function POST(req: NextRequest) {
       corpText = `Subscrisa SC SET SAIL ADVERTISING SRL, cu datele de identificare din antet, în baza pct. 3, lit. a) și c) din cadrul protocolului de colaborare dintre instituțiile noastre valabil până la data de 31.12.2026, vă înștiințăm că pe data de ${sessionDate}, orele 19.00, organizam o sesiune de examinare în vederea prelungirii valabilității certificatelor de operator radio, online.\n\nMembrii comisiei de examinare vor fi:\n- Drugan Ovidiu, instructor SetSail, deținător al certificatului de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit GMDSS-LRC\n- Drugan Sorin, deținător al certificatului de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit GMDSS-LRC`
     }
 
-    // ─── PDF ───────────────────────────────────────────────────────────────
     if (format === 'pdf') {
       const antetHtml = antetDoc?.file_data
-        ? `<img src="${antetDoc.file_data}" style="max-width:100%;height:auto;max-height:90px;display:block;"/>`
+        ? `<img src="${antetDoc.file_data}" style="max-width:100%;height:auto;max-height:117px;display:block;"/>`
         : `<div style="font-weight:bold;font-size:13pt;text-align:center;">S.C. SET SAIL ADVERTISING S.R.L.</div>`
 
       const stampilaHtml = stampilaDoc?.file_data
-        ? `<img src="${stampilaDoc.file_data}" style="height:110px;width:auto;display:block;"/>`
+        ? `<img src="${stampilaDoc.file_data}" style="height:110px;width:auto;display:block;margin:0 auto;"/>`
         : `<div style="font-style:italic;color:#666;">Semnătură și ștampilă</div>`
 
       // Construim paragrafele corpului
@@ -101,7 +100,7 @@ export async function POST(req: NextRequest) {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>${titluDoc}</title>
 <style>
-  @page { size: A4 portrait; margin: 20mm; }
+  @page { size: A4 portrait; margin: 4mm 20mm 20mm 20mm; }
   @media print {
     html, body { background: white !important; padding: 0 !important; }
     body { box-shadow: none !important; margin: 0 !important; padding: 0 !important; width: auto !important; }
@@ -116,31 +115,29 @@ export async function POST(req: NextRequest) {
     width: 170mm;
     min-height: 257mm;
     margin: 0 auto;
-    padding: 20mm;
+    padding: 4mm 20mm 20mm 20mm;
     box-shadow: 0 0 20px rgba(0,0,0,0.3);
     box-sizing: border-box;
-    position: relative;
   }
-  .antet { margin-bottom: 16px; }
-  .nr-data { text-align: right; margin: 16px 0 20px 0; font-size: 11pt; }
-  .catre { margin: 0 0 20px 0; }
-  .catre p { margin: 2px 0; font-size: 11pt; }
-  .subiect { margin: 16px 0 24px 0; font-size: 11pt; }
-  .subiect-label { font-weight: bold; }
-  .titlu-centrat { text-align: center; font-size: 13pt; font-weight: bold; margin: 28px 0 24px 0; }
+  .antet { margin-bottom: 10px; }
+  .nr-data { text-align: right; margin: 10px 0 14px 0; font-size: 11pt; }
+  .catre { margin: 0 0 14px 0; line-height: 1; }
+  .catre p { margin: 2px 0; font-size: 11pt; line-height: 1; }
+  .subiect { margin: 10px 0 18px 0; font-size: 11pt; line-height: 1; }
+  .titlu-centrat { text-align: center; font-size: 13pt; font-weight: bold; margin: 22px 0 18px 0; }
   .corp { font-size: 11pt; }
   .semnatura-bloc {
-    margin-top: 48px;
+    margin-top: 36px;
     display: flex;
     justify-content: flex-end;
   }
   .semnatura-dreapta {
     text-align: center;
-    min-width: 180px;
+    min-width: 200px;
   }
-  .semnatura-dreapta .firma { font-weight: bold; font-size: 11pt; margin-bottom: 4px; }
-  .semnatura-dreapta .director { font-size: 10.5pt; margin-bottom: 12px; }
-  .semnatura-dreapta .stampila-img { margin: 0 auto; }
+  .semnatura-dreapta .cu-stima { font-size: 11pt; margin-bottom: 2px; }
+  .semnatura-dreapta .firma { font-weight: bold; font-size: 11pt; margin-bottom: 2px; }
+  .semnatura-dreapta .director { font-size: 10.5pt; margin-bottom: 6px; }
 </style>
 </head>
 <body>
@@ -160,7 +157,7 @@ export async function POST(req: NextRequest) {
 
   <!-- Subiect -->
   <div class="subiect">
-    <span class="subiect-label">Subiect: </span><em>${subiect}</em>
+    <span style="font-weight:bold;">Subiect: </span><em>${subiect}</em>
   </div>
 
   <!-- Titlu -->
@@ -172,10 +169,10 @@ export async function POST(req: NextRequest) {
   <!-- Semnatura -->
   <div class="semnatura-bloc">
     <div class="semnatura-dreapta">
-      <div class="firma">Cu stimă,</div>
+      <div class="cu-stima">Cu stimă,</div>
       <div class="firma">SC SET SAIL ADVERTISING SRL</div>
       <div class="director">director Cobianu Drugan Corina</div>
-      <div class="stampila-img">${stampilaHtml}</div>
+      ${stampilaHtml}
     </div>
   </div>
 
