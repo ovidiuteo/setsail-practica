@@ -984,6 +984,8 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
       await supabase.from('sessions').update({ nr_document_ancom: String(first) + '-' + String(first+3) }).eq('id', sess.id)
     }
     setShowNrModal(null)
+    // Refresh pagina ca sa apara noile numere
+    window.location.reload()
   }
 
   const [copied, setCopied] = useState(false)
@@ -2333,14 +2335,17 @@ export default function SessionDetailPage() {
   function startEditSession(sess: Session) {
     setEditingSession(sess.id)
     setEditSessionValues({
+      course_start_date: (sess as any).course_start_date || '',
       session_date: sess.session_date,
       practice_start_date: (sess as any).practice_start_date || '',
+      practice_start_time: (sess as any).practice_start_time || '9:30',
       location_id: (sess as any).location_id || '',
       boat_id: (sess as any).boat_id || '',
       evaluator_id: (sess as any).evaluator_id || '',
       instructor_id: (sess as any).instructor_id || '',
       class_caa: sess.class_caa || 'C,D',
       request_number: sess.request_number || '',
+      nr_document_ancom: (sess as any).nr_document_ancom || '',
       location_detail: sess.location_detail || '',
     })
   }
@@ -2633,6 +2638,7 @@ export default function SessionDetailPage() {
                 ['Data start practică', 'practice_start_date', 'date'],
                 ['Data practică', 'session_date', 'date'],
                 ['Nr. înștiințări', 'request_number', 'text'],
+                ['Nr. documente PV', 'nr_document_ancom', 'text'],
                 ['Locație detaliată', 'location_detail', 'text'],
                 ['Clasa CAA', 'class_caa', 'select-class'],
               ].map(([label, key, type]) => (
