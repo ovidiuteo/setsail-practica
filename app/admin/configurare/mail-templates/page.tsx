@@ -35,6 +35,8 @@ const VARIABLES_INFO: Record<string, string> = {
   zz_data_start_practica: 'Ziua din data start practică (ex: 18)',
   zz_llll_data_practica: 'Ziua și luna din data practică (ex: 20 mai)',
   ora_start: 'Ora de start a practicii (ex: 9:30)',
+  zz_data_start_curs: 'Ziua din data start curs (ex: 18)',
+  zz_llll_aaaa_data_practica: 'Ziua, luna și anul din data practică (ex: 20 mai 2026)',
   pers_cont_1: 'Numele primei persoane de contact bifate',
   pers_cont_2: 'Numele celei de-a doua persoane de contact',
   pers_cont_3: 'Numele celei de-a treia persoane de contact',
