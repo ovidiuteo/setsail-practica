@@ -6,29 +6,22 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Download, FileText, Users, Copy, Plus, Trash2, Check, X, Pencil, GitBranch, ArrowRight, UserX, Mail, ChevronDown } from 'lucide-react'
 
-// ─────────────────────────────────────────────
-// Functie pura de aplicare variabile - modul level
-// Primeste text + sess + contacts[], returneaza text cu variabilele inlocuite
-// ─────────────────────────────────────────────
 function applyTemplate(text: string, sess: any, contacts?: any[]): string {
   if (!text) return ''
-  const origin = typeof window !== 'undefined'
-    ? window.location.origin
-    : 'https://setsail-practica.vercel.app'
+  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://setsail-practica.vercel.app'
   const sd  = sess?.session_date || ''
   const psd = sess?.practice_start_date || ''
   const vars: Record<string, string> = {
-    'link_portal':            origin + '/portal?cod=' + (sess?.access_code || ''),
-    'data_sesiune':           sd  ? new Date(sd).toLocaleDateString('ro-RO', {day:'2-digit', month:'long', year:'numeric'}) : '',
-    'locatie':                sess?.location_detail || sess?.locations?.name || '',
-    'ambarcatiune':           sess?.boats?.name || '',
-    'zz_data_start_practica': psd ? String(new Date(psd).getDate()) : '',
-    'zz_llll_data_practica':  sd  ? new Date(sd).toLocaleDateString('ro-RO', {day:'2-digit', month:'long'}) : '',
-    'ora_start':              sess?.practice_start_time || '9:30',
-    'zz_data_start_curs':     sess?.course_start_date ? String(new Date(sess.course_start_date).getDate()) : '',
-    'zz_llll_aaaa_data_practica': sd ? new Date(sd).toLocaleDateString('ro-RO', {day:'2-digit', month:'long', year:'numeric'}) : '',
+    'link_portal':                origin + '/portal?cod=' + (sess?.access_code || ''),
+    'data_sesiune':               sd  ? new Date(sd).toLocaleDateString('ro-RO', {day:'2-digit', month:'long', year:'numeric'}) : '',
+    'locatie':                    sess?.location_detail || sess?.locations?.name || '',
+    'ambarcatiune':               sess?.boats?.name || '',
+    'zz_data_start_practica':     psd ? String(new Date(psd).getDate()) : '',
+    'zz_llll_data_practica':      sd  ? new Date(sd).toLocaleDateString('ro-RO', {day:'2-digit', month:'long'}) : '',
+    'ora_start':                  sess?.practice_start_time || '9:30',
+    'zz_data_start_curs':         sess?.course_start_date ? String(new Date(sess.course_start_date).getDate()) : '',
+    'zz_llll_aaaa_data_practica': sd  ? new Date(sd).toLocaleDateString('ro-RO', {day:'2-digit', month:'long', year:'numeric'}) : '',
   }
-  // Persoane de contact: filtrate dupa id-urile bifate, sortate alfabetic
   const contactIds: string[] = sess?.contact_person_ids || []
   const selected = (contacts || [])
     .filter((c: any) => contactIds.includes(c.id))
@@ -914,6 +907,10 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
   const [dbTemplates, setDbTemplates] = useState<any[]>([])
   const [allContacts, setAllContacts] = useState<any[]>([])
   const [sessionContactIds, setSessionContactIds] = useState<string[]>(sess.contact_person_ids || [])
+  const [showMailAuth, setShowMailAuth] = useState(false)
+  const [authSubject, setAuthSubject] = useState('')
+  const [authBody, setAuthBody] = useState('')
+  const [authCopied, setAuthCopied] = useState(false)
   const [gPV, setGPV] = useState(false)
   const [gFise, setGFise] = useState(false)
   const [gPDF, setGPDF] = useState(false)
@@ -926,12 +923,9 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
   const notifScanRef = useRef<HTMLInputElement|null>(null)
 
   useEffect(() => {
-    supabase.from('mail_templates')
-      .select('*').eq('activ', true)
-      .order('categorie').order('label')
+    supabase.from('mail_templates').select('*').eq('activ', true).order('categorie').order('label')
       .then(({ data }) => setDbTemplates(data || []))
-    supabase.from('contact_persons')
-      .select('*').eq('activ', true).order('full_name')
+    supabase.from('contact_persons').select('*').eq('activ', true).order('full_name')
       .then(({ data }) => setAllContacts(data || []))
   }, [])
 
@@ -941,9 +935,6 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
   const [mailSubject, setMailSubject] = useState('')
   const [mailBody, setMailBody] = useState('')
   const [mailCopied, setMailCopied] = useState<string|null>(null)
-  const [authSubject, setAuthSubject] = useState('')
-  const [authBody, setAuthBody] = useState('')
-  const [authCopied, setAuthCopied] = useState(false)
   const [selectedEmails, setSelectedEmails] = useState<string[]>(
     () => students.filter(s=>s.email).map(s=>s.email)
   )
@@ -1114,7 +1105,6 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
           {([
             ['Data start curs', sess.course_start_date ? new Date(sess.course_start_date).toLocaleDateString('ro-RO', {day:'2-digit',month:'long',year:'numeric'}) : '—'],
             ['Data start practică', (sess as any).practice_start_date ? new Date((sess as any).practice_start_date).toLocaleDateString('ro-RO', {day:'2-digit',month:'long',year:'numeric'}) : '—'],
-            ['Ora start', (sess as any).practice_start_time || '9:30'],
             ['Data practică', new Date(sess.session_date).toLocaleDateString('ro-RO', {day:'2-digit',month:'long',year:'numeric'})],
             ['Instructor', sess.instructors?.full_name],
             ['Evaluator ANR', sess.evaluators?.full_name],
@@ -1130,101 +1120,109 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
             </div>
           ))}
         </div>
-        {/* Mailing autoritati */}
-      {!isAbsent && (
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-          <h3 className="font-semibold text-sm text-gray-900 mb-3">
-            {isRadio ? '📡 Mailing ANCOM' : '⚓ Mailing ANR'}
-          </h3>
-          <div className="space-y-2">
-            {/* Adrese */}
-            <div className="grid grid-cols-1 gap-1.5">
+        {/* Mailing autoritati - colapsabil, identic cu cursanti */}
+        {!isAbsent && (
+          <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+            <button onClick={()=>setShowMailAuth(!showMailAuth)}
+              className="w-full flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-400 w-7">TO</span>
-                <div className="flex-1 text-xs font-medium text-gray-700 bg-gray-50 rounded px-2 py-1.5 select-all">
-                  {sess.evaluators?.email_oficial || (isRadio ? 'secretariat@ancom.ro' : 'autorizari@rna.ro')}
-                </div>
+                <Mail size={14} className="text-gray-400"/>
+                <h3 className="font-semibold text-sm text-gray-900">
+                  {isRadio ? 'Mailing ANCOM' : 'Mailing ANR'}
+                </h3>
               </div>
-              {isRadio && sess.evaluators?.email_personal && (
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-400 w-7">CC</span>
-                  <div className="flex-1 text-xs font-medium text-gray-700 bg-gray-50 rounded px-2 py-1.5 select-all">
-                    {sess.evaluators.email_personal}
-                  </div>
-                </div>
-              )}
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-400 w-7">BCC</span>
-                <div className="flex-1 text-xs font-medium text-gray-700 bg-gray-50 rounded px-2 py-1.5 select-all">
-                  office@setsail.ro
-                </div>
-              </div>
-            </div>
-            {/* Template-uri */}
-            {(() => {
-              const catKey = isRadio ? 'ancom' : 'anr'
-              const authTemplates = dbTemplates.filter((t: any) => t.categorie === catKey)
-              if (authTemplates.length === 0) return null
-              return (
-                <div className="border-t border-gray-100 pt-2">
-                  <div className="flex flex-col gap-1">
-                    {authTemplates.map((t: any) => (
-                      <button key={t.id}
-                        onClick={()=>{
-                          const rawBody = t.body_html || t.body_text || ''
-                          setAuthSubject(applyTemplate(t.subject, sess, allContacts))
-                          setAuthBody(applyTemplate(rawBody, sess, allContacts))
-                        }}
-                        className="text-left px-3 py-2 rounded-lg text-xs border border-gray-200 hover:bg-blue-50 hover:border-blue-200 transition-colors">
-                        {t.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              )
-            })()}
-            {/* Subiect */}
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs text-gray-400">Subiect</span>
-                <button onClick={()=>{navigator.clipboard.writeText(authSubject)}} className="text-xs text-blue-500 hover:underline">Copiază</button>
-              </div>
-              <input value={authSubject} onChange={e=>setAuthSubject(e.target.value)}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-300"
-                placeholder="Subiect email..." />
-            </div>
-            {/* Mesaj */}
-            <div>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs text-gray-400">Mesaj</span>
-                <button onClick={()=>{navigator.clipboard.writeText(authBody);setAuthCopied(true);setTimeout(()=>setAuthCopied(false),2000)}}
-                  className="text-xs text-blue-500 hover:underline">
-                  {authCopied ? '✓ Copiat!' : 'Copiază tot'}
-                </button>
-              </div>
-              <textarea value={authBody} onChange={e=>setAuthBody(e.target.value)} rows={5}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none font-mono"
-                placeholder="Selectează un template sau scrie mesajul..." />
-            </div>
-            {/* Buton Gmail */}
-            <button onClick={()=>{
-              const to = encodeURIComponent(sess.evaluators?.email_oficial || (isRadio ? 'secretariat@ancom.ro' : 'autorizari@rna.ro'))
-              const cc = isRadio && sess.evaluators?.email_personal ? '&cc=' + encodeURIComponent(sess.evaluators.email_personal) : ''
-              const bcc = encodeURIComponent('office@setsail.ro')
-              const su = encodeURIComponent(authSubject)
-              const body = encodeURIComponent(authBody)
-              window.open('https://mail.google.com/mail/?view=cm&to=' + to + cc + '&bcc=' + bcc + '&su=' + su + '&body=' + body, '_blank')
-            }}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium text-white"
-              style={{background:'#0a1628'}}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.91 1.528-1.145C21.69 2.28 24 3.434 24 5.457z"/></svg>
-              Deschide în Gmail
+              <ChevronDown size={14} className={`text-gray-400 transition-transform ${showMailAuth?'rotate-180':''}`}/>
             </button>
+            {showMailAuth && (
+              <div className="mt-4 space-y-3">
+                {/* TO */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs text-gray-400">TO</label>
+                    <button onClick={()=>navigator.clipboard.writeText(sess.evaluators?.email_oficial||(isRadio?'secretariat@ancom.ro':'autorizari@rna.ro'))}
+                      className="text-xs text-blue-500 hover:text-blue-700 flex items-center gap-1">
+                      <Copy size={11}/>Copiază
+                    </button>
+                  </div>
+                  <div className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-700 bg-gray-50 select-all">
+                    {sess.evaluators?.email_oficial || (isRadio ? 'secretariat@ancom.ro' : 'autorizari@rna.ro')}
+                  </div>
+                </div>
+                {isRadio && sess.evaluators?.email_personal && (
+                  <div>
+                    <label className="text-xs text-gray-400 block mb-1">CC</label>
+                    <div className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-700 bg-gray-50 select-all">
+                      {sess.evaluators.email_personal}
+                    </div>
+                  </div>
+                )}
+                <div>
+                  <label className="text-xs text-gray-400 block mb-1">BCC</label>
+                  <div className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-700 bg-gray-50 select-all">
+                    office@setsail.ro
+                  </div>
+                </div>
+                {/* Subiect */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs text-gray-400">Subiect</label>
+                    <button onClick={()=>navigator.clipboard.writeText(authSubject)}
+                      className="text-xs text-blue-500 hover:text-blue-700 flex items-center gap-1">
+                      <Copy size={11}/>Copiază
+                    </button>
+                  </div>
+                  <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+                    value={authSubject} onChange={e=>setAuthSubject(e.target.value)} placeholder="Subiect email..."/>
+                </div>
+                {/* Mesaj */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs text-gray-400">Mesaj</label>
+                    <button onClick={()=>{navigator.clipboard.writeText(authBody);setAuthCopied(true);setTimeout(()=>setAuthCopied(false),2000)}}
+                      className="text-xs text-blue-500 hover:text-blue-700 flex items-center gap-1">
+                      <Copy size={11}/>{authCopied?'Copiat!':'Copiază tot'}
+                    </button>
+                  </div>
+                  <textarea rows={6} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400 resize-y font-mono"
+                    value={authBody} onChange={e=>setAuthBody(e.target.value)} placeholder="Scrie sau selectează un template..."/>
+                </div>
+                {/* Template-uri autoritate - sub mesaj */}
+                {(() => {
+                  const catKey = isRadio ? 'ancom' : 'anr'
+                  const authTemplates = dbTemplates.filter((t: any) => t.categorie === catKey)
+                  if (authTemplates.length === 0) return null
+                  return (
+                    <div>
+                      <div className="text-xs text-gray-400 font-medium mb-1">{isRadio ? '📡 ANCOM' : '⚓ ANR'}</div>
+                      <div className="flex flex-col gap-1">
+                        {authTemplates.map((t: any) => (
+                          <button key={t.id}
+                            onClick={()=>{
+                              const rawBody = t.body_html || t.body_text || ''
+                              setAuthSubject(applyTemplate(t.subject, sess, allContacts))
+                              setAuthBody(applyTemplate(rawBody, sess, allContacts))
+                            }}
+                            className="text-left px-3 py-2 rounded-lg text-xs border border-gray-200 hover:bg-blue-50 hover:border-blue-200 transition-colors">
+                            {t.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })()}
+                {/* Gmail */}
+                <a href={`https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(sess.evaluators?.email_oficial||(isRadio?'secretariat@ancom.ro':'autorizari@rna.ro'))}${isRadio&&sess.evaluators?.email_personal?'&cc='+encodeURIComponent(sess.evaluators.email_personal):''}&bcc=${encodeURIComponent('office@setsail.ro')}&su=${encodeURIComponent(authSubject)}&body=${encodeURIComponent(authBody)}`}
+                  target="_blank" rel="noopener noreferrer"
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-medium text-white"
+                  style={{background:'#0a1628'}}>
+                  <Mail size={13}/> Deschide în Gmail
+                </a>
+              </div>
+            )}
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Persoane de contact sesiune */}
+        {/* Persoane de contact sesiune */}
         {!isAbsent && allContacts.length > 0 && (
           <div className="mt-4 pt-3 border-t border-gray-100">
             <div className="text-xs text-gray-400 mb-2">Persoane de contact</div>
@@ -1244,7 +1242,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                   />
                   <div className="flex-1 min-w-0">
                     <span className="text-xs font-medium text-gray-800">{c.full_name}</span>
-                    <a href={`tel:${c.phone.replace(/\s/g,'')}`}
+                    <a href={'tel:' + c.phone.replace(/ /g,'')}
                       className="text-xs text-blue-600 ml-2 hover:underline"
                       onClick={e => e.stopPropagation()}>
                       {c.phone}
@@ -1870,24 +1868,23 @@ Set Sail NauticSchool
                     value={mailBody} onChange={e=>setMailBody(e.target.value)} placeholder="Scrie sau selectează un template..."/>
                 </div>
 
-                {/* Template-uri din DB - grupate pe categorii */}
+                {/* Template-uri din DB - grupate pe categorii, exclud anr/ancom */}
                 <div>
                   {dbTemplates.length === 0 ? (
                     <div className="text-xs text-gray-400 italic">Se încarcă template-urile...</div>
                   ) : (() => {
                     const CATS: Record<string,string> = {
                       portal:'🔗 Portal', practica:'⛵ Practică',
-                      organizatoric:'📋 Organizatoric', rezultate:'🏆 Rezultate',
-                      anr:'⚓ ANR', ancom:'📡 ANCOM', general:'📧 General'
+                      organizatoric:'📋 Organizatoric', rezultate:'🏆 Rezultate', general:'📧 General'
                     }
-                    // Excludem anr/ancom din mailing cursanti
-                    const cursantiTemplates = dbTemplates.filter((t: any) => t.categorie !== 'anr' && t.categorie !== 'ancom')
-                    const grouped = cursantiTemplates.reduce((acc: Record<string,any[]>, t: any) => {
-                      const cat = t.categorie || 'general'
-                      if (!acc[cat]) acc[cat] = []
-                      acc[cat].push(t)
-                      return acc
-                    }, {})
+                    const grouped = dbTemplates
+                      .filter((t: any) => t.categorie !== 'anr' && t.categorie !== 'ancom')
+                      .reduce((acc: Record<string,any[]>, t: any) => {
+                        const cat = t.categorie || 'general'
+                        if (!acc[cat]) acc[cat] = []
+                        acc[cat].push(t)
+                        return acc
+                      }, {})
                     return (
                       <div className="space-y-3">
                         {Object.entries(grouped).map(([cat, items]) => (
@@ -2190,7 +2187,6 @@ export default function SessionDetailPage() {
     setEditSessionValues({
       session_date: sess.session_date,
       practice_start_date: (sess as any).practice_start_date || '',
-      practice_start_time: (sess as any).practice_start_time || '9:30',
       location_id: (sess as any).location_id || '',
       boat_id: (sess as any).boat_id || '',
       evaluator_id: (sess as any).evaluator_id || '',
@@ -2487,7 +2483,6 @@ export default function SessionDetailPage() {
               {[
                 ['Data start curs', 'course_start_date', 'date'],
                 ['Data start practică', 'practice_start_date', 'date'],
-                ['Ora start', 'practice_start_time', 'text'],
                 ['Data practică', 'session_date', 'date'],
                 ['Nr. solicitare', 'request_number', 'text'],
                 ['Locație detaliată', 'location_detail', 'text'],
