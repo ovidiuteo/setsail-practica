@@ -1407,6 +1407,17 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                     <Download size={11}/>PDF Examen Prelungire
                   </button>
                 </div>
+                {/* Buton mare: TOATE Instiintarile intr-un singur PDF */}
+                <div className="border-t border-gray-200 pt-2 mt-2">
+                  <button onClick={async()=>{try{
+                    const res=await fetch('/api/generate-instiintare-ancom-toate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id})})
+                    if(!res.ok){const e=await res.text();throw new Error(e)}
+                    const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>w.print(),1200)}
+                  }catch(e:any){alert(e.message)}}}
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold text-white" style={{background:'#7c3aed'}}>
+                    <Download size={14}/>TOATE Înștiințările PDF
+                  </button>
+                </div>
               </div>
             </div>
           )}
@@ -1506,6 +1517,17 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                   }catch(e:any){alert(e.message)}}}
                     disabled={students.length===0} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#dc2626'}}>
                     <Download size={12}/>PDF Anexă Prelungire
+                  </button>
+                </div>
+                {/* Buton mare: TOATE documentele radio intr-un singur PDF */}
+                <div className="border-t border-gray-200 pt-2 mt-2">
+                  <button onClick={async()=>{try{
+                    const res=await fetch('/api/generate-documente-radio-toate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id})})
+                    if(!res.ok){const e=await res.text();throw new Error(e)}
+                    const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>w.print(),1200)}
+                  }catch(e:any){alert(e.message)}}}
+                    disabled={students.length===0} className="w-full flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold text-white disabled:opacity-50" style={{background:'#7c3aed'}}>
+                    <Download size={14}/>TOATE Documentele PDF
                   </button>
                 </div>
               </div>
