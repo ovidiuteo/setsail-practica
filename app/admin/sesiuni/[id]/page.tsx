@@ -941,6 +941,9 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
   const [mailSubject, setMailSubject] = useState('')
   const [mailBody, setMailBody] = useState('')
   const [mailCopied, setMailCopied] = useState<string|null>(null)
+  const [authSubject, setAuthSubject] = useState('')
+  const [authBody, setAuthBody] = useState('')
+  const [authCopied, setAuthCopied] = useState(false)
   const [selectedEmails, setSelectedEmails] = useState<string[]>(
     () => students.filter(s=>s.email).map(s=>s.email)
   )
@@ -1134,57 +1137,43 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
             {isRadio ? '📡 Mailing ANCOM' : '⚓ Mailing ANR'}
           </h3>
           <div className="space-y-2">
-            {/* TO */}
-            <div>
-              <div className="text-xs text-gray-400 mb-1">TO</div>
-              <div className="text-xs font-medium text-gray-700 bg-gray-50 rounded px-2 py-1.5 select-all">
-                {sess.evaluators?.email_oficial || (isRadio ? 'secretariat@ancom.ro' : 'autorizari@rna.ro')}
-              </div>
-            </div>
-            {/* CC - doar ANCOM */}
-            {isRadio && sess.evaluators?.email_personal && (
-              <div>
-                <div className="text-xs text-gray-400 mb-1">CC</div>
-                <div className="text-xs font-medium text-gray-700 bg-gray-50 rounded px-2 py-1.5 select-all">
-                  {sess.evaluators.email_personal}
+            {/* Adrese */}
+            <div className="grid grid-cols-1 gap-1.5">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-400 w-7">TO</span>
+                <div className="flex-1 text-xs font-medium text-gray-700 bg-gray-50 rounded px-2 py-1.5 select-all">
+                  {sess.evaluators?.email_oficial || (isRadio ? 'secretariat@ancom.ro' : 'autorizari@rna.ro')}
                 </div>
               </div>
-            )}
-            {/* BCC */}
-            <div>
-              <div className="text-xs text-gray-400 mb-1">BCC</div>
-              <div className="text-xs font-medium text-gray-700 bg-gray-50 rounded px-2 py-1.5 select-all">
-                office@setsail.ro
+              {isRadio && sess.evaluators?.email_personal && (
+                <div className="flex items-center gap-2">
+                  <span className="text-xs text-gray-400 w-7">CC</span>
+                  <div className="flex-1 text-xs font-medium text-gray-700 bg-gray-50 rounded px-2 py-1.5 select-all">
+                    {sess.evaluators.email_personal}
+                  </div>
+                </div>
+              )}
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-gray-400 w-7">BCC</span>
+                <div className="flex-1 text-xs font-medium text-gray-700 bg-gray-50 rounded px-2 py-1.5 select-all">
+                  office@setsail.ro
+                </div>
               </div>
             </div>
-            {/* Buton deschide Gmail */}
-            <button
-              onClick={() => {
-                const to = encodeURIComponent(sess.evaluators?.email_oficial || (isRadio ? 'secretariat@ancom.ro' : 'autorizari@rna.ro'))
-                const cc = isRadio && sess.evaluators?.email_personal ? '&cc=' + encodeURIComponent(sess.evaluators.email_personal) : ''
-                const bcc = encodeURIComponent('office@setsail.ro')
-                window.open('https://mail.google.com/mail/?view=cm&to=' + to + cc + '&bcc=' + bcc, '_blank')
-              }}
-              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium text-white mt-1"
-              style={{background:'#0a1628'}}>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.91 1.528-1.145C21.69 2.28 24 3.434 24 5.457z"/></svg>
-              Deschide în Gmail
-            </button>
-            {/* Template-uri autoritate */}
+            {/* Template-uri */}
             {(() => {
               const catKey = isRadio ? 'ancom' : 'anr'
               const authTemplates = dbTemplates.filter((t: any) => t.categorie === catKey)
               if (authTemplates.length === 0) return null
               return (
-                <div className="mt-3 pt-3 border-t border-gray-100">
-                  <div className="text-xs text-gray-400 mb-2">Template-uri {isRadio ? 'ANCOM' : 'ANR'}</div>
+                <div className="border-t border-gray-100 pt-2">
                   <div className="flex flex-col gap-1">
                     {authTemplates.map((t: any) => (
                       <button key={t.id}
                         onClick={()=>{
                           const rawBody = t.body_html || t.body_text || ''
-                          setMailSubject(applyTemplate(t.subject, sess, allContacts))
-                          setMailBody(applyTemplate(rawBody, sess, allContacts))
+                          setAuthSubject(applyTemplate(t.subject, sess, allContacts))
+                          setAuthBody(applyTemplate(rawBody, sess, allContacts))
                         }}
                         className="text-left px-3 py-2 rounded-lg text-xs border border-gray-200 hover:bg-blue-50 hover:border-blue-200 transition-colors">
                         {t.label}
@@ -1194,6 +1183,43 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                 </div>
               )
             })()}
+            {/* Subiect */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs text-gray-400">Subiect</span>
+                <button onClick={()=>{navigator.clipboard.writeText(authSubject)}} className="text-xs text-blue-500 hover:underline">Copiază</button>
+              </div>
+              <input value={authSubject} onChange={e=>setAuthSubject(e.target.value)}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-300"
+                placeholder="Subiect email..." />
+            </div>
+            {/* Mesaj */}
+            <div>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs text-gray-400">Mesaj</span>
+                <button onClick={()=>{navigator.clipboard.writeText(authBody);setAuthCopied(true);setTimeout(()=>setAuthCopied(false),2000)}}
+                  className="text-xs text-blue-500 hover:underline">
+                  {authCopied ? '✓ Copiat!' : 'Copiază tot'}
+                </button>
+              </div>
+              <textarea value={authBody} onChange={e=>setAuthBody(e.target.value)} rows={5}
+                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none font-mono"
+                placeholder="Selectează un template sau scrie mesajul..." />
+            </div>
+            {/* Buton Gmail */}
+            <button onClick={()=>{
+              const to = encodeURIComponent(sess.evaluators?.email_oficial || (isRadio ? 'secretariat@ancom.ro' : 'autorizari@rna.ro'))
+              const cc = isRadio && sess.evaluators?.email_personal ? '&cc=' + encodeURIComponent(sess.evaluators.email_personal) : ''
+              const bcc = encodeURIComponent('office@setsail.ro')
+              const su = encodeURIComponent(authSubject)
+              const body = encodeURIComponent(authBody)
+              window.open('https://mail.google.com/mail/?view=cm&to=' + to + cc + '&bcc=' + bcc + '&su=' + su + '&body=' + body, '_blank')
+            }}
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium text-white"
+              style={{background:'#0a1628'}}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.91 1.528-1.145C21.69 2.28 24 3.434 24 5.457z"/></svg>
+              Deschide în Gmail
+            </button>
           </div>
         </div>
       )}
