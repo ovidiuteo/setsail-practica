@@ -966,37 +966,22 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
     if (!showNrModal) return
     const tip = showNrModal
     const first = nrModalNext
-    const isRadioSession = (sess.class_caa||'').toLowerCase().includes('radio') || (sess.class_caa||'').toLowerCase().includes('lrc')
-    
-    if (isRadioSession) {
-      // Aloca 4 numere consecutive
-      const tips = showNrModal === 'solicitare' ? SOL_TIPS : DOC_TIPS
+    // Intotdeauna alocam 4 numere consecutive (cate 4 tipuri per serie)
+    const tips = tip === 'solicitare' ? SOL_TIPS : DOC_TIPS
     const rows = tips.map((d, i) => ({
-        numar: first + i,
-        data_notificare: nrModalDate,
-        document: d.label,
-        document_tip: d.key,
-        session_id: sess.id,
-        tip,
-      }))
-      await supabase.from('notification_numbers').insert(rows)
-      // Salvam primul numar in sesiune
-      if (tip === 'solicitare') {
-        await supabase.from('sessions').update({ request_number: String(first) + '-' + String(first+3) }).eq('id', sess.id)
-      } else {
-        await supabase.from('sessions').update({ nr_document_ancom: String(first) + '-' + String(first+3) }).eq('id', sess.id)
-      }    } else {
-      // Sesiune normala - un singur numar
-      await supabase.from('notification_numbers').insert({
-        numar: first,
-        data_notificare: nrModalDate,
-        document: 'Sesiune ' + sess.session_date,
-        session_id: sess.id,
-        tip,
-      })
-      if (tip === 'solicitare') {
-        await supabase.from('sessions').update({ request_number: String(first) + '/' + nrModalDate.slice(0,7).replace('-','.') }).eq('id', sess.id)
-      }
+      numar: first + i,
+      data_notificare: nrModalDate,
+      document: d.label,
+      document_tip: d.key,
+      session_id: sess.id,
+      tip,
+    }))
+    await supabase.from('notification_numbers').insert(rows)
+    // Salvam intervalul in sesiune
+    if (tip === 'solicitare') {
+      await supabase.from('sessions').update({ request_number: String(first) + '-' + String(first+3) }).eq('id', sess.id)
+    } else {
+      await supabase.from('sessions').update({ nr_document_ancom: String(first) + '-' + String(first+3) }).eq('id', sess.id)
     }
     setShowNrModal(null)
   }
