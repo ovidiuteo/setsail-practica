@@ -11,7 +11,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'session_id required' }, { status: 400 })
     }
 
-    const tipuri = ['curs-obtinere', 'curs-prelungire', 'examen-obtinere', 'examen-prelungire']
+    const tipuri = ['curs-obtinere', 'examen-obtinere', 'curs-prelungire', 'examen-prelungire']
 
     const origin = req.nextUrl.origin
 
