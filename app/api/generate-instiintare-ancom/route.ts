@@ -123,7 +123,7 @@ export async function POST(req: NextRequest) {
   .nr-data { text-align: right; margin: 10px 0 14px 0; font-size: 11pt; }
   .catre { margin: 0 0 14px 0; line-height: 1; }
   .catre p { margin: 2px 0; font-size: 11pt; line-height: 1; }
-  .subiect { margin: 10px 0 18px 0; font-size: 11pt; line-height: 1; }
+  .subiect { margin: 10px 0 18px 0; font-size: 11pt; line-height: 1.22; }
   .titlu-centrat { text-align: center; font-size: 13pt; font-weight: bold; margin: 22px 0 18px 0; }
   .corp { font-size: 11pt; }
   .semnatura-bloc {
@@ -137,7 +137,7 @@ export async function POST(req: NextRequest) {
   }
   .semnatura-dreapta .cu-stima { font-size: 11pt; margin-bottom: 2px; }
   .semnatura-dreapta .firma { font-weight: bold; font-size: 11pt; margin-bottom: 2px; }
-  .semnatura-dreapta .director { font-size: 10.5pt; margin-bottom: 6px; }
+  .semnatura-dreapta .director { font-size: 10.5pt; margin-bottom: 0; }
 </style>
 </head>
 <body>
