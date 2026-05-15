@@ -911,6 +911,11 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
   const [authSubject, setAuthSubject] = useState('')
   const [authBody, setAuthBody] = useState('')
   const [authCopied, setAuthCopied] = useState(false)
+  const [showNrModal, setShowNrModal] = useState(false)
+  const [nrModalData, setNrModalData] = useState<any[]>([])
+  const [nrModalNext, setNrModalNext] = useState(1)
+  const [nrModalDate, setNrModalDate] = useState(new Date().toISOString().slice(0,10))
+  const [nrModalLoading, setNrModalLoading] = useState(false)
   const [gPV, setGPV] = useState(false)
   const [gFise, setGFise] = useState(false)
   const [gPDF, setGPDF] = useState(false)
@@ -928,6 +933,34 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
     supabase.from('contact_persons').select('*').eq('activ', true).order('full_name')
       .then(({ data }) => setAllContacts(data || []))
   }, [])
+
+  async function openNrModal() {
+    setShowNrModal(true)
+    setNrModalLoading(true)
+    const { data } = await supabase
+      .from('notification_numbers')
+      .select('*')
+      .order('numar', { ascending: false })
+    const history = data || []
+    setNrModalData(history)
+    const maxNr = history.length > 0 ? Math.max(...history.map((r:any) => r.numar)) : 0
+    setNrModalNext(maxNr + 1)
+    setNrModalLoading(false)
+  }
+
+  async function confirmNrModal() {
+    const numar = nrModalNext
+    const doc = `Sesiune ${sess.session_date}`
+    await supabase.from('notification_numbers').insert({
+      numar,
+      data_notificare: nrModalDate,
+      document: doc,
+      session_id: sess.id,
+    })
+    // Salvam si in sesiune
+    await supabase.from('sessions').update({ request_number: String(numar) + '/' + nrModalDate.slice(0,7).replace('-','.') }).eq('id', sess.id)
+    setShowNrModal(false)
+  }
 
   const [copied, setCopied] = useState(false)
   const [showMail, setShowMail] = useState(false)
@@ -1098,6 +1131,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
   const isRadio = (sess.class_caa || '').toLowerCase().includes('radio') || (sess.class_caa || '').toLowerCase().includes('lrc')
 
   return (
+    <>
     <div className="space-y-4">
       <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
         <h3 className="font-semibold text-sm text-gray-900 mb-3">Detalii sesiune</h3>
@@ -1116,112 +1150,17 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
           ] as [string,string][]).map(([label,value]) => (
             <div key={label} className="flex justify-between gap-2">
               <span className="text-gray-400 text-xs shrink-0">{label}</span>
-              <span className="text-gray-900 text-xs text-right font-medium">{value}</span>
+              {label === 'Nr. solicitare' ? (
+                <button onClick={openNrModal}
+                  className="text-xs font-medium text-blue-600 hover:underline text-right">
+                  {value === '—' ? '+ Alocă număr' : value}
+                </button>
+              ) : (
+                <span className="text-gray-900 text-xs text-right font-medium">{value}</span>
+              )}
             </div>
           ))}
         </div>
-        {/* Mailing autoritati - colapsabil, identic cu cursanti */}
-        {!isAbsent && (
-          <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-            <button onClick={()=>setShowMailAuth(!showMailAuth)}
-              className="w-full flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Mail size={14} className="text-gray-400"/>
-                <h3 className="font-semibold text-sm text-gray-900">
-                  {isRadio ? 'Mailing ANCOM' : 'Mailing ANR'}
-                </h3>
-              </div>
-              <ChevronDown size={14} className={`text-gray-400 transition-transform ${showMailAuth?'rotate-180':''}`}/>
-            </button>
-            {showMailAuth && (
-              <div className="mt-4 space-y-3">
-                {/* TO */}
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs text-gray-400">TO</label>
-                    <button onClick={()=>navigator.clipboard.writeText(sess.evaluators?.email_oficial||(isRadio?'secretariat@ancom.ro':'autorizari@rna.ro'))}
-                      className="text-xs text-blue-500 hover:text-blue-700 flex items-center gap-1">
-                      <Copy size={11}/>Copiază
-                    </button>
-                  </div>
-                  <div className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-700 bg-gray-50 select-all">
-                    {sess.evaluators?.email_oficial || (isRadio ? 'secretariat@ancom.ro' : 'autorizari@rna.ro')}
-                  </div>
-                </div>
-                {isRadio && sess.evaluators?.email_personal && (
-                  <div>
-                    <label className="text-xs text-gray-400 block mb-1">CC</label>
-                    <div className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-700 bg-gray-50 select-all">
-                      {sess.evaluators.email_personal}
-                    </div>
-                  </div>
-                )}
-                <div>
-                  <label className="text-xs text-gray-400 block mb-1">BCC</label>
-                  <div className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-700 bg-gray-50 select-all">
-                    office@setsail.ro
-                  </div>
-                </div>
-                {/* Subiect */}
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs text-gray-400">Subiect</label>
-                    <button onClick={()=>navigator.clipboard.writeText(authSubject)}
-                      className="text-xs text-blue-500 hover:text-blue-700 flex items-center gap-1">
-                      <Copy size={11}/>Copiază
-                    </button>
-                  </div>
-                  <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
-                    value={authSubject} onChange={e=>setAuthSubject(e.target.value)} placeholder="Subiect email..."/>
-                </div>
-                {/* Mesaj */}
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs text-gray-400">Mesaj</label>
-                    <button onClick={()=>{navigator.clipboard.writeText(authBody);setAuthCopied(true);setTimeout(()=>setAuthCopied(false),2000)}}
-                      className="text-xs text-blue-500 hover:text-blue-700 flex items-center gap-1">
-                      <Copy size={11}/>{authCopied?'Copiat!':'Copiază tot'}
-                    </button>
-                  </div>
-                  <textarea rows={6} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400 resize-y font-mono"
-                    value={authBody} onChange={e=>setAuthBody(e.target.value)} placeholder="Scrie sau selectează un template..."/>
-                </div>
-                {/* Template-uri autoritate - sub mesaj */}
-                {(() => {
-                  const catKey = isRadio ? 'ancom' : 'anr'
-                  const authTemplates = dbTemplates.filter((t: any) => t.categorie === catKey)
-                  if (authTemplates.length === 0) return null
-                  return (
-                    <div>
-                      <div className="text-xs text-gray-400 font-medium mb-1">{isRadio ? '📡 ANCOM' : '⚓ ANR'}</div>
-                      <div className="flex flex-col gap-1">
-                        {authTemplates.map((t: any) => (
-                          <button key={t.id}
-                            onClick={()=>{
-                              const rawBody = t.body_html || t.body_text || ''
-                              setAuthSubject(applyTemplate(t.subject, sess, allContacts))
-                              setAuthBody(applyTemplate(rawBody, sess, allContacts))
-                            }}
-                            className="text-left px-3 py-2 rounded-lg text-xs border border-gray-200 hover:bg-blue-50 hover:border-blue-200 transition-colors">
-                            {t.label}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  )
-                })()}
-                {/* Gmail */}
-                <a href={`https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(sess.evaluators?.email_oficial||(isRadio?'secretariat@ancom.ro':'autorizari@rna.ro'))}${isRadio&&sess.evaluators?.email_personal?'&cc='+encodeURIComponent(sess.evaluators.email_personal):''}&bcc=${encodeURIComponent('office@setsail.ro')}&su=${encodeURIComponent(authSubject)}&body=${encodeURIComponent(authBody)}`}
-                  target="_blank" rel="noopener noreferrer"
-                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-medium text-white"
-                  style={{background:'#0a1628'}}>
-                  <Mail size={13}/> Deschide în Gmail
-                </a>
-              </div>
-            )}
-          </div>
-        )}
-
         {/* Persoane de contact sesiune */}
         {!isAbsent && allContacts.length > 0 && (
           <div className="mt-4 pt-3 border-t border-gray-100">
@@ -1782,6 +1721,109 @@ Set Sail NauticSchool
             )}
           </div>
 
+        {/* Mailing autoritati - colapsabil, identic cu cursanti */}
+        {!isAbsent && (
+          <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+            <button onClick={()=>setShowMailAuth(!showMailAuth)}
+              className="w-full flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Mail size={14} style={{color: isRadio ? '#7c3aed' : '#1d4ed8'}}/>
+                <h3 className="font-semibold text-sm" style={{color: isRadio ? '#7c3aed' : '#1d4ed8'}}>
+                  {isRadio ? 'Mailing ANCOM' : 'Mailing ANR'}
+                </h3>
+              </div>
+              <ChevronDown size={14} className={`text-gray-400 transition-transform ${showMailAuth?'rotate-180':''}`}/>
+            </button>
+            {showMailAuth && (
+              <div className="mt-4 space-y-3">
+                {/* TO */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs text-gray-400">TO</label>
+                    <button onClick={()=>navigator.clipboard.writeText(sess.evaluators?.email_oficial||(isRadio?'secretariat@ancom.ro':'autorizari@rna.ro'))}
+                      className="text-xs text-blue-500 hover:text-blue-700 flex items-center gap-1">
+                      <Copy size={11}/>Copiază
+                    </button>
+                  </div>
+                  <div className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-700 bg-gray-50 select-all">
+                    {sess.evaluators?.email_oficial || (isRadio ? 'secretariat@ancom.ro' : 'autorizari@rna.ro')}
+                  </div>
+                </div>
+                {isRadio && sess.evaluators?.email_personal && (
+                  <div>
+                    <label className="text-xs text-gray-400 block mb-1">CC</label>
+                    <div className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-700 bg-gray-50 select-all">
+                      {sess.evaluators.email_personal}
+                    </div>
+                  </div>
+                )}
+                <div>
+                  <label className="text-xs text-gray-400 block mb-1">BCC</label>
+                  <div className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-700 bg-gray-50 select-all">
+                    office@setsail.ro
+                  </div>
+                </div>
+                {/* Subiect */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs text-gray-400">Subiect</label>
+                    <button onClick={()=>navigator.clipboard.writeText(authSubject)}
+                      className="text-xs text-blue-500 hover:text-blue-700 flex items-center gap-1">
+                      <Copy size={11}/>Copiază
+                    </button>
+                  </div>
+                  <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
+                    value={authSubject} onChange={e=>setAuthSubject(e.target.value)} placeholder="Subiect email..."/>
+                </div>
+                {/* Mesaj */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs text-gray-400">Mesaj</label>
+                    <button onClick={()=>{navigator.clipboard.writeText(authBody);setAuthCopied(true);setTimeout(()=>setAuthCopied(false),2000)}}
+                      className="text-xs text-blue-500 hover:text-blue-700 flex items-center gap-1">
+                      <Copy size={11}/>{authCopied?'Copiat!':'Copiază tot'}
+                    </button>
+                  </div>
+                  <textarea rows={6} className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400 resize-y font-mono"
+                    value={authBody} onChange={e=>setAuthBody(e.target.value)} placeholder="Scrie sau selectează un template..."/>
+                </div>
+                {/* Template-uri autoritate - sub mesaj */}
+                {(() => {
+                  const catKey = isRadio ? 'ancom' : 'anr'
+                  const authTemplates = dbTemplates.filter((t: any) => t.categorie === catKey)
+                  if (authTemplates.length === 0) return null
+                  return (
+                    <div>
+                      <div className="text-xs text-gray-400 font-medium mb-1">{isRadio ? '📡 ANCOM' : '⚓ ANR'}</div>
+                      <div className="flex flex-col gap-1">
+                        {authTemplates.map((t: any) => (
+                          <button key={t.id}
+                            onClick={()=>{
+                              const rawBody = t.body_html || t.body_text || ''
+                              setAuthSubject(applyTemplate(t.subject, sess, allContacts))
+                              setAuthBody(applyTemplate(rawBody, sess, allContacts))
+                            }}
+                            className="text-left px-3 py-2 rounded-lg text-xs border border-gray-200 hover:bg-blue-50 hover:border-blue-200 transition-colors">
+                            {t.label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )
+                })()}
+                {/* Gmail */}
+                <a href={`https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(sess.evaluators?.email_oficial||(isRadio?'secretariat@ancom.ro':'autorizari@rna.ro'))}${isRadio&&sess.evaluators?.email_personal?'&cc='+encodeURIComponent(sess.evaluators.email_personal):''}&bcc=${encodeURIComponent('office@setsail.ro')}&su=${encodeURIComponent(authSubject)}&body=${encodeURIComponent(authBody)}`}
+                  target="_blank" rel="noopener noreferrer"
+                  className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-medium text-white"
+                  style={{background:'#0a1628'}}>
+                  <Mail size={13}/> Deschide în Gmail
+                </a>
+              </div>
+            )}
+          </div>
+        )}
+
+
           {/* Mailing */}
           <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
             <button onClick={()=>{
@@ -1944,6 +1986,65 @@ Set Sail NauticSchool
         </>
       )}
     </div>
+
+      {/* Modal Nr. Notificare */}
+      {showNrModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-40 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between p-5 border-b border-gray-100">
+              <h3 className="font-semibold text-gray-900">Număr notificare</h3>
+              <button onClick={()=>setShowNrModal(false)} className="p-1 rounded hover:bg-gray-100 text-gray-400">
+                <X size={16}/>
+              </button>
+            </div>
+            <div className="p-5">
+              {nrModalLoading ? (
+                <div className="text-center text-gray-400 py-6">Se încarcă...</div>
+              ) : (<>
+                {/* Numarul urmator + data picker */}
+                <div className="flex items-center gap-3 mb-5">
+                  <div className="flex-1">
+                    <div className="text-xs text-gray-400 mb-1">Numărul următor disponibil</div>
+                    <div className="flex items-center gap-2">
+                      <input type="number" value={nrModalNext} onChange={e=>setNrModalNext(parseInt(e.target.value)||1)}
+                        className="w-24 border-2 border-blue-400 rounded-lg px-3 py-2 text-lg font-bold text-blue-700 text-center focus:outline-none focus:ring-2 focus:ring-blue-300"/>
+                    </div>
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-xs text-gray-400 mb-1">Data</div>
+                    <input type="date" value={nrModalDate} onChange={e=>setNrModalDate(e.target.value)}
+                      className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"/>
+                  </div>
+                </div>
+
+                {/* Buton confirmare */}
+                <button onClick={confirmNrModal}
+                  className="w-full py-2.5 rounded-xl text-sm font-medium text-white mb-4"
+                  style={{background:'#0a1628'}}>
+                  ✓ Alocă numărul {nrModalNext} / {nrModalDate.split('-').reverse().join('.')}
+                </button>
+
+                {/* Istoric */}
+                {nrModalData.length > 0 && (
+                  <div>
+                    <div className="text-xs text-gray-400 font-medium mb-2">Istoric numere alocate</div>
+                    <div className="space-y-1 max-h-48 overflow-y-auto">
+                      {nrModalData.map((r:any) => (
+                        <div key={r.id} className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-gray-50 text-xs">
+                          <span className="font-bold text-gray-900 w-8">{r.numar}</span>
+                          <span className="text-gray-400">{new Date(r.data_notificare).toLocaleDateString('ro-RO')}</span>
+                          <span className="text-gray-600 flex-1 text-right truncate ml-2">{r.document}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>)}
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   )
 }
 
