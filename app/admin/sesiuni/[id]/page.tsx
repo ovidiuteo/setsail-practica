@@ -1127,7 +1127,54 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
             </div>
           ))}
         </div>
-        {/* Persoane de contact sesiune */}
+        {/* Mailing autoritati */}
+      {!isAbsent && (
+        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+          <h3 className="font-semibold text-sm text-gray-900 mb-3">
+            {isRadio ? '📡 Mailing ANCOM' : '⚓ Mailing ANR'}
+          </h3>
+          <div className="space-y-2">
+            {/* TO */}
+            <div>
+              <div className="text-xs text-gray-400 mb-1">TO</div>
+              <div className="text-xs font-medium text-gray-700 bg-gray-50 rounded px-2 py-1.5 select-all">
+                {sess.evaluators?.email_oficial || (isRadio ? 'secretariat@ancom.ro' : 'autorizari@rna.ro')}
+              </div>
+            </div>
+            {/* CC - doar ANCOM */}
+            {isRadio && sess.evaluators?.email_personal && (
+              <div>
+                <div className="text-xs text-gray-400 mb-1">CC</div>
+                <div className="text-xs font-medium text-gray-700 bg-gray-50 rounded px-2 py-1.5 select-all">
+                  {sess.evaluators.email_personal}
+                </div>
+              </div>
+            )}
+            {/* BCC */}
+            <div>
+              <div className="text-xs text-gray-400 mb-1">BCC</div>
+              <div className="text-xs font-medium text-gray-700 bg-gray-50 rounded px-2 py-1.5 select-all">
+                office@setsail.ro
+              </div>
+            </div>
+            {/* Buton deschide Gmail */}
+            <button
+              onClick={() => {
+                const to = encodeURIComponent(sess.evaluators?.email_oficial || (isRadio ? 'secretariat@ancom.ro' : 'autorizari@rna.ro'))
+                const cc = isRadio && sess.evaluators?.email_personal ? '&cc=' + encodeURIComponent(sess.evaluators.email_personal) : ''
+                const bcc = encodeURIComponent('office@setsail.ro')
+                window.open('https://mail.google.com/mail/?view=cm&to=' + to + cc + '&bcc=' + bcc, '_blank')
+              }}
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-medium text-white mt-1"
+              style={{background:'#0a1628'}}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-3.819V11.73L12 16.64l-6.545-4.91v9.273H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-2.023 2.309-3.178 3.927-1.964L5.455 4.64 12 9.548l6.545-4.91 1.528-1.145C21.69 2.28 24 3.434 24 5.457z"/></svg>
+              Deschide în Gmail
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Persoane de contact sesiune */}
         {!isAbsent && allContacts.length > 0 && (
           <div className="mt-4 pt-3 border-t border-gray-100">
             <div className="text-xs text-gray-400 mb-2">Persoane de contact</div>
