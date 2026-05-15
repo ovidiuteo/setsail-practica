@@ -24,18 +24,18 @@ export async function POST(req: NextRequest) {
 
     if (!session) return NextResponse.json({ error: 'Session not found' }, { status: 404 })
 
-    const { data: info } = await supabase
-      .from('setsail_info')
-      .select('key, value')
-
+    // Aducem antetul radio si stampila cu semnatura
     const { data: antetDoc } = await supabase
       .from('setsail_documents')
       .select('file_data')
       .eq('tip', 'antet_radio')
       .single()
 
-    const infoMap: Record<string, string> = {}
-    for (const row of info || []) infoMap[row.key] = row.value
+    const { data: stampilaDoc } = await supabase
+      .from('setsail_documents')
+      .select('file_data')
+      .eq('tip', 'stampila_cu_semnatura')
+      .single()
 
     const sessionDate = new Date(session.session_date).toLocaleDateString('ro-RO', {
       day: '2-digit', month: 'long', year: 'numeric'
@@ -44,95 +44,163 @@ export async function POST(req: NextRequest) {
       ? new Date(session.course_start_date).toLocaleDateString('ro-RO', { day: '2-digit', month: 'long', year: 'numeric' })
       : sessionDate
     const dateStr = session.session_date.replace(/-/g, '_')
+    const dataCurenta = new Date(session.session_date).toLocaleDateString('ro-RO')
 
-    // Notificarea are o singura data ca "1/5.02.2026" - un numar secvential si data
-    // Vom lasa campul de nr gol (se completeaza manual)
-
-    // Construim textul subiectului si corpului in functie de tip
     const isPrelungire = tip.includes('prelungire')
     const isExamen = tip.includes('examen')
+
+    const perioadaCurs = courseStartDate === sessionDate
+      ? sessionDate
+      : `${courseStartDate} - ${sessionDate}`
 
     let subiect = ''
     let corpText = ''
     let titluDoc = ''
 
-    const cursStart = courseStartDate
-    const cursEnd = sessionDate
-    const perioadaCurs = cursStart === cursEnd
-      ? cursEnd
-      : `${cursStart} - ${cursEnd}`
-
     if (!isExamen && !isPrelungire) {
-      // curs-obtinere
       titluDoc = 'Înștiințare organizare curs obținere LRC'
       subiect = 'Înștiințare cu privire la data de începere a cursului de pregătire în vederea obținerii certificatelor de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit de tip GMDSS-LRC'
       corpText = `Subscrisa SC SET SAIL ADVERTISING SRL, cu datele de identificare din antet, în baza pct. 3, lit. a) și c) din cadrul protocolului de colaborare dintre instituțiile noastre valabil până la data de 31.12.2026, vă înștiințăm că vom organiza un curs de pregătire în vederea obținerii certificatelor de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit de tip GMDSS-LRC în perioada ${perioadaCurs}.\n\nLocul de desfășurare al cursului este online.`
     } else if (!isExamen && isPrelungire) {
-      // curs-prelungire
       titluDoc = 'Înștiințare organizare curs reconfirmare LRC'
       subiect = 'Înștiințare cu privire la data de începere a cursului de reconfirmare în vederea prelungirii valabilității certificatelor de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit de tip GMDSS-LRC'
       corpText = `Subscrisa SC SET SAIL ADVERTISING SRL, cu datele de identificare din antet, în baza pct. 3, lit. a) și c) din cadrul protocolului de colaborare dintre instituțiile noastre valabil până la data de 31.12.2026, vă înștiințăm că vom organiza un curs de reconfirmare în vederea prelungirii valabilității certificatelor de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit de tip GMDSS-LRC în perioada ${perioadaCurs}.\n\nLocul de desfășurare al cursului este online.`
     } else if (isExamen && !isPrelungire) {
-      // examen-obtinere
       titluDoc = 'Înștiințare organizare examen obținere LRC'
       subiect = 'Înștiințare cu privire la data de desfășurare a examenului în vederea obținerii certificatelor de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit de tip GMDSS-LRC'
-      const eval1 = session.evaluators?.full_name || '...'
       corpText = `Subscrisa SC SET SAIL ADVERTISING SRL, cu datele de identificare din antet, în baza pct. 3, lit. a) și c) din cadrul protocolului de colaborare dintre instituțiile noastre valabil până la data de 31.12.2026, vă înștiințăm că pe data de ${sessionDate}, organizam o sesiune de examinare în vederea obținerii certificatelor de operator radio, online.\n\nMembrii comisiei de examinare vor fi:\n- Drugan Ovidiu, instructor SetSail, deținător al certificatului de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit GMDSS-LRC\n- Drugan Sorin, deținător al certificatului de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit GMDSS-LRC`
     } else {
-      // examen-prelungire
       titluDoc = 'Înștiințare organizare examen prelungire LRC'
       subiect = 'Înștiințare cu privire la data de desfășurare a examenului în vederea prelungirii valabilității certificatelor de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit de tip GMDSS-LRC'
       corpText = `Subscrisa SC SET SAIL ADVERTISING SRL, cu datele de identificare din antet, în baza pct. 3, lit. a) și c) din cadrul protocolului de colaborare dintre instituțiile noastre valabil până la data de 31.12.2026, vă înștiințăm că pe data de ${sessionDate}, orele 19.00, organizam o sesiune de examinare în vederea prelungirii valabilității certificatelor de operator radio, online.\n\nMembrii comisiei de examinare vor fi:\n- Drugan Ovidiu, instructor SetSail, deținător al certificatului de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit GMDSS-LRC\n- Drugan Sorin, deținător al certificatului de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit GMDSS-LRC`
     }
 
-    // PDF
+    // ─── PDF ───────────────────────────────────────────────────────────────
     if (format === 'pdf') {
       const antetHtml = antetDoc?.file_data
-        ? `<div style="text-align:center;margin-bottom:8px;"><img src="${antetDoc.file_data}" style="max-width:100%;height:auto;max-height:85px;"/></div>`
-        : '<div style="text-align:center;font-weight:bold;font-size:13pt;">S.C. SET SAIL ADVERTISING S.R.L.</div>'
+        ? `<img src="${antetDoc.file_data}" style="max-width:100%;height:auto;max-height:90px;display:block;"/>`
+        : `<div style="font-weight:bold;font-size:13pt;text-align:center;">S.C. SET SAIL ADVERTISING S.R.L.</div>`
 
-      const corpHtml = corpText.split('\n').map(line =>
-        line.trim() ? `<p style="text-indent:${line.startsWith('-') ? '0' : '40px'};margin:4px 0;">${line}</p>` : '<p style="margin:8px 0;"></p>'
-      ).join('')
+      const stampilaHtml = stampilaDoc?.file_data
+        ? `<img src="${stampilaDoc.file_data}" style="height:110px;width:auto;display:block;"/>`
+        : `<div style="font-style:italic;color:#666;">Semnătură și ștampilă</div>`
+
+      // Construim paragrafele corpului
+      const paragraphs = corpText.split('\n').map(line => {
+        if (!line.trim()) return `<p style="margin:6px 0;"></p>`
+        if (line.startsWith('-')) {
+          return `<p style="margin:4px 0 4px 30px;">${line}</p>`
+        }
+        return `<p style="margin:6px 0;text-indent:40px;text-align:justify;">${line}</p>`
+      }).join('')
 
       const html = `<!DOCTYPE html>
-<html><head><meta charset="UTF-8">
+<html lang="ro">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${titluDoc}</title>
 <style>
-  @page { size: A4; margin: 20mm; }
-  @media print { html,body{background:white!important;padding:0!important;} body{box-shadow:none!important;margin:0!important;padding:0!important;width:auto!important;} }
-  html { background:#e0e0e0; padding:20px; }
-  body { font-family:Arial,sans-serif; font-size:11pt; background:#fff; width:170mm; margin:0 auto; padding:20mm; box-shadow:0 0 20px rgba(0,0,0,0.3); line-height:1.5; }
+  @page { size: A4 portrait; margin: 20mm; }
+  @media print {
+    html, body { background: white !important; padding: 0 !important; }
+    body { box-shadow: none !important; margin: 0 !important; padding: 0 !important; width: auto !important; }
+    .no-print { display: none !important; }
+  }
+  html { background: #e0e0e0; padding: 20px; }
+  body {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 11pt;
+    line-height: 1.55;
+    background: #fff;
+    width: 170mm;
+    min-height: 257mm;
+    margin: 0 auto;
+    padding: 20mm;
+    box-shadow: 0 0 20px rgba(0,0,0,0.3);
+    box-sizing: border-box;
+    position: relative;
+  }
+  .antet { margin-bottom: 16px; }
+  .nr-data { text-align: right; margin: 16px 0 20px 0; font-size: 11pt; }
+  .catre { margin: 0 0 20px 0; }
+  .catre p { margin: 2px 0; font-size: 11pt; }
+  .subiect { margin: 16px 0 24px 0; font-size: 11pt; }
+  .subiect-label { font-weight: bold; }
+  .titlu-centrat { text-align: center; font-size: 13pt; font-weight: bold; margin: 28px 0 24px 0; }
+  .corp { font-size: 11pt; }
+  .semnatura-bloc {
+    margin-top: 48px;
+    display: flex;
+    justify-content: flex-end;
+  }
+  .semnatura-dreapta {
+    text-align: center;
+    min-width: 180px;
+  }
+  .semnatura-dreapta .firma { font-weight: bold; font-size: 11pt; margin-bottom: 4px; }
+  .semnatura-dreapta .director { font-size: 10.5pt; margin-bottom: 12px; }
+  .semnatura-dreapta .stampila-img { margin: 0 auto; }
 </style>
-</head><body>
-${antetHtml}
-<p style="text-align:right;margin-top:20px;"><strong>...... / ${new Date(session.session_date).toLocaleDateString('ro-RO')}</strong></p>
-<p><strong>Către,</strong><br>AUTORITATEA NAȚIONALĂ PENTRU ADMINISTRARE<br>ȘI REGLEMENTARE ÎN COMUNICAȚII</p>
-<p style="margin-top:20px;"><strong>Subiect:</strong> <em>${subiect}</em></p>
-<p style="text-align:center;font-size:14pt;margin:30px 0;"><strong>Domnule Președinte,</strong></p>
-${corpHtml}
-<div style="margin-top:50px;text-align:right;">
-  <p>Cu stimă,<br><strong>SC SET SAIL ADVERTISING SRL</strong><br>director Cobianu Drugan Corina</p>
-  <div style="height:80px;"></div>
-</div>
-</body></html>`
+</head>
+<body>
 
-      return new NextResponse(html, { headers: { 'Content-Type': 'text/html; charset=utf-8' } })
+  <!-- Antet -->
+  <div class="antet">${antetHtml}</div>
+
+  <!-- Nr si data -->
+  <div class="nr-data"><strong>...... / ${dataCurenta}</strong></div>
+
+  <!-- Catre -->
+  <div class="catre">
+    <p><strong>Către,</strong></p>
+    <p>AUTORITATEA NAȚIONALĂ PENTRU ADMINISTRARE</p>
+    <p>ȘI REGLEMENTARE ÎN COMUNICAȚII</p>
+  </div>
+
+  <!-- Subiect -->
+  <div class="subiect">
+    <span class="subiect-label">Subiect: </span><em>${subiect}</em>
+  </div>
+
+  <!-- Titlu -->
+  <div class="titlu-centrat">Domnule Președinte,</div>
+
+  <!-- Corp -->
+  <div class="corp">${paragraphs}</div>
+
+  <!-- Semnatura -->
+  <div class="semnatura-bloc">
+    <div class="semnatura-dreapta">
+      <div class="firma">Cu stimă,</div>
+      <div class="firma">SC SET SAIL ADVERTISING SRL</div>
+      <div class="director">director Cobianu Drugan Corina</div>
+      <div class="stampila-img">${stampilaHtml}</div>
+    </div>
+  </div>
+
+</body>
+</html>`
+
+      return new NextResponse(html, {
+        headers: { 'Content-Type': 'text/html; charset=utf-8' }
+      })
     }
 
-    // DOCX
+    // ─── DOCX ──────────────────────────────────────────────────────────────
     const {
       Document, Packer, Paragraph, TextRun, AlignmentType,
-      convertMillimetersToTwip, ImageRun, UnderlineType
+      convertMillimetersToTwip, ImageRun
     } = await import('docx')
 
     const bold = (t: string, sz = 22) => new TextRun({ text: t, bold: true, size: sz, font: 'Arial' })
-    const reg = (t: string, sz = 22) => new TextRun({ text: t, size: sz, font: 'Arial' })
+    const reg  = (t: string, sz = 22) => new TextRun({ text: t, size: sz, font: 'Arial' })
     const ital = (t: string, sz = 22) => new TextRun({ text: t, italics: true, size: sz, font: 'Arial' })
     const boldItal = (t: string, sz = 22) => new TextRun({ text: t, bold: true, italics: true, size: sz, font: 'Arial' })
-    const para = (ch: any[], align = AlignmentType.LEFT, sp = 120, indent?: number) =>
-      new Paragraph({ alignment: align as any, spacing: { before: sp, after: sp }, indent: indent ? { firstLine: indent } : undefined, children: ch })
+    const para = (ch: any[], align = AlignmentType.LEFT as any, sp = 120, indent?: number) =>
+      new Paragraph({ alignment: align, spacing: { before: sp, after: sp }, indent: indent ? { firstLine: indent } : undefined, children: ch })
 
-    // Antet imagine
+    // Antet
     let headerImg: any[] = []
     if (antetDoc?.file_data) {
       try {
@@ -143,6 +211,21 @@ ${corpHtml}
           alignment: AlignmentType.CENTER as any,
           spacing: { after: 200 },
           children: [new ImageRun({ data: buf, type: mt as any, transformation: { width: 600, height: 65 } })]
+        })]
+      } catch(e) { console.error(e) }
+    }
+
+    // Stampila cu semnatura
+    let stampilaImg: any[] = []
+    if (stampilaDoc?.file_data) {
+      try {
+        const base64 = stampilaDoc.file_data.includes(',') ? stampilaDoc.file_data.split(',')[1] : stampilaDoc.file_data
+        const buf = Buffer.from(base64, 'base64')
+        const mt = stampilaDoc.file_data.includes('png') ? 'png' : 'jpg'
+        stampilaImg = [new Paragraph({
+          alignment: AlignmentType.RIGHT as any,
+          spacing: { before: 120, after: 0 },
+          children: [new ImageRun({ data: buf, type: mt as any, transformation: { width: 160, height: 110 } })]
         })]
       } catch(e) { console.error(e) }
     }
@@ -160,22 +243,17 @@ ${corpHtml}
           children: [reg(line)]
         }))
       } else {
-        // Gasim textul bold (datele)
-        const children: any[] = []
-        // Procesam textul pentru bold pe date
-        const boldParts = line.split(/(\d{1,2} \w+ \d{4}|\d{1,2}\.\d{1,2}\.\d{4}|[\d]+ - [\d\w ]+\d{4})/g)
-        for (const part of boldParts) {
-          if (/\d{1,2} \w+ \d{4}/.test(part) || /\d{1,2}\.\d{1,2}\.\d{4}/.test(part)) {
-            children.push(bold(part))
-          } else {
-            children.push(reg(part, 22))
-          }
-        }
+        const boldParts = line.split(/(\d{1,2} \w+ \d{4}|\d{1,2}\.\d{1,2}\.\d{4})/g)
+        const children: any[] = boldParts.map(part =>
+          /\d{1,2} \w+ \d{4}/.test(part) || /\d{1,2}\.\d{1,2}\.\d{4}/.test(part)
+            ? bold(part)
+            : reg(part)
+        )
         corpParas.push(new Paragraph({
           alignment: AlignmentType.JUSTIFIED as any,
           spacing: { before: 80, after: 80 },
           indent: { firstLine: 720 },
-          children: children.length > 0 ? children : [reg(line)]
+          children
         }))
       }
     }
@@ -194,37 +272,30 @@ ${corpHtml}
         },
         children: [
           ...headerImg,
-          // Nr si data - aliniat dreapta
-          para([reg('...... / ' + new Date(session.session_date).toLocaleDateString('ro-RO'))], AlignmentType.RIGHT as any, 200),
-          // Catre
+          para([reg('...... / ' + dataCurenta)], AlignmentType.RIGHT as any, 200),
           new Paragraph({ spacing: { before: 200, after: 60 }, children: [bold('Către,')] }),
           new Paragraph({ spacing: { before: 0, after: 0 }, children: [reg('AUTORITATEA NAȚIONALĂ PENTRU ADMINISTRARE')] }),
           new Paragraph({ spacing: { before: 0, after: 200 }, children: [reg('ȘI REGLEMENTARE ÎN COMUNICAȚII')] }),
-          // Subiect
           new Paragraph({
             spacing: { before: 200, after: 200 },
             children: [bold('Subiect:   '), boldItal(subiect)]
           }),
-          // Domnule Presedinte
           para([bold('Domnule Președinte,', 26)], AlignmentType.CENTER as any, 300),
-          // Corp
           ...corpParas,
-          // Semnatura
           new Paragraph({ spacing: { before: 600, after: 0 }, alignment: AlignmentType.RIGHT as any, children: [reg('Cu stimă,')] }),
           new Paragraph({ spacing: { before: 60, after: 0 }, alignment: AlignmentType.RIGHT as any, children: [bold('SC SET SAIL ADVERTISING SRL')] }),
           new Paragraph({ spacing: { before: 60, after: 0 }, alignment: AlignmentType.RIGHT as any, children: [reg('director Cobianu Drugan Corina')] }),
-          new Paragraph({ spacing: { before: 800, after: 0 }, children: [] }),
+          ...stampilaImg,
+          new Paragraph({ spacing: { before: 200, after: 0 }, children: [] }),
         ]
       }]
     })
 
     const buffer = await Packer.toBuffer(doc)
-    const filename = `Instiintare_ANCOM_${tip}_${dateStr}.docx`
-
     return new NextResponse(buffer as unknown as BodyInit, {
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'Content-Disposition': `attachment; filename="${filename}"`
+        'Content-Disposition': `attachment; filename="Instiintare_ANCOM_${tip}_${dateStr}.docx"`
       }
     })
 
