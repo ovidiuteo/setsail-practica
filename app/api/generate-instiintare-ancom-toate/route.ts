@@ -31,11 +31,9 @@ export async function POST(req: NextRequest) {
       }
 
       const html = await res.text()
-      htmlParts.push(extractBodyAndStyle(html, tip))
+      htmlParts.push(extractBody(html))
     }
 
-    // Combinam intr-un singur HTML.
-    // Fiecare instiintare e intr-un <section> cu page-break-after.
     const combined = `<!DOCTYPE html>
 <html lang="ro">
 <head>
@@ -55,6 +53,12 @@ export async function POST(req: NextRequest) {
     .doc-section {
       page-break-after: always;
       break-after: page;
+      box-shadow: none !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      width: auto !important;
+      min-height: 0 !important;
+      max-width: none !important;
     }
     .doc-section:last-child {
       page-break-after: auto;
@@ -66,13 +70,14 @@ export async function POST(req: NextRequest) {
   body {
     font-family: Arial, Helvetica, sans-serif;
     font-size: 11pt;
+    line-height: 1.55;
     margin: 0;
     padding: 0;
     background: #e0e0e0;
   }
   .doc-section {
     background: #fff;
-    width: 210mm;
+    max-width: 210mm;
     min-height: 297mm;
     margin: 20px auto;
     padding: 5mm 18mm 15mm 18mm;
@@ -85,7 +90,7 @@ export async function POST(req: NextRequest) {
     page-break-after: auto;
     break-after: auto;
   }
-  /* Reset stiluri locale - paragrafele din document */
+  /* Stiluri locale - paragrafele din document */
   .doc-section p { margin: 6px 0; }
   .doc-section .antet { margin-bottom: 10px; }
   .doc-section .nr-data { text-align: right; margin: 10px 0 14px 0; font-size: 11pt; }
@@ -118,9 +123,7 @@ ${htmlParts.map(p => `<section class="doc-section">${p}</section>`).join('\n')}
 }
 
 // Extrage continutul dintre <body> si </body> dintr-un HTML complet.
-function extractBodyAndStyle(html: string, _tip: string): string {
+function extractBody(html: string): string {
   const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)<\/body>/i)
-  if (!bodyMatch) return ''
-  // Eliminam eventualele paragrafe de tip "padding wrapper" - returnam doar continutul
-  return bodyMatch[1]
+  return bodyMatch ? bodyMatch[1] : ''
 }
