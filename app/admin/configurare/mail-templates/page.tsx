@@ -22,6 +22,8 @@ const CATEGORII = [
   { value: 'practica', label: '⛵ Practică', color: '#f59e0b' },
   { value: 'organizatoric', label: '📋 Organizatoric', color: '#8b5cf6' },
   { value: 'rezultate', label: '🏆 Rezultate', color: '#10b981' },
+  { value: 'anr', label: '⚓ ANR', color: '#0369a1' },
+  { value: 'ancom', label: '📡 ANCOM', color: '#7c3aed' },
   { value: 'general', label: '📧 General', color: '#6b7280' },
 ]
 
