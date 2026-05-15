@@ -47,17 +47,38 @@ export async function POST(req: NextRequest) {
     const protocolValabilPana = infoMap['protocol_ancom_valabil_pana'] || '31.12.2026'
 
     // Aducem numerele de solicitare alocate pentru aceasta sesiune
-    const { data: nrRows } = await supabase
+    // Intai cautam dupa session_id, daca nu gasim luam ultimele alocate global
+    const { data: nrRowsSession } = await supabase
       .from('notification_numbers')
       .select('numar, document_tip, data_notificare, tip')
       .eq('session_id', session_id)
       .eq('tip', 'solicitare')
       .order('numar')
+    
+    const { data: nrRowsAll } = await supabase
+      .from('notification_numbers')
+      .select('numar, document_tip, data_notificare, tip')
+      .eq('tip', 'solicitare')
+      .order('numar', { ascending: false })
+
+    // Folosim session_id specific daca exista, altfel ultimele globale per document_tip
+    const nrRows = (nrRowsSession && nrRowsSession.length > 0) ? nrRowsSession : []
+    
     const nrMap: Record<string, number> = {}
-    for (const row of nrRows || []) {
+    for (const row of nrRows) {
       if (row.document_tip) nrMap[row.document_tip] = row.numar
     }
-    // Numarul si data pentru tipul curent
+    // Daca nu avem per sesiune, luam ultimul global per document_tip
+    if (Object.keys(nrMap).length === 0 && nrRowsAll && nrRowsAll.length > 0) {
+      const seen = new Set<string>()
+      for (const row of nrRowsAll) {
+        if (row.document_tip && !seen.has(row.document_tip)) {
+          nrMap[row.document_tip] = row.numar
+          seen.add(row.document_tip)
+        }
+      }
+    }
+
     const nrTipMap: Record<string, string> = {
       'curs-obtinere':    'curs-obtinere',
       'curs-prelungire':  'curs-prelungire',
@@ -65,10 +86,11 @@ export async function POST(req: NextRequest) {
       'examen-prelungire':'examen-prelungire',
     }
     const nrCurent = nrMap[nrTipMap[tip]] ? String(nrMap[nrTipMap[tip]]) : ''
-    const dataNrRow = (nrRows || []).find((r: any) => r.document_tip === tip)
+    const allRows = [...(nrRowsSession || []), ...(nrRowsAll || [])]
+    const dataNrRow = allRows.find((r: any) => r.document_tip === tip)
     const dataNrFormatat = dataNrRow
       ? new Date(dataNrRow.data_notificare).toLocaleDateString('ro-RO')
-      : new Date().toLocaleDateString('ro-RO')
+      : new Date(session.session_date).toLocaleDateString('ro-RO')
 
     const sessionDate = new Date(session.session_date).toLocaleDateString('ro-RO', {
       day: '2-digit', month: 'long', year: 'numeric'
