@@ -911,7 +911,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
   const [authSubject, setAuthSubject] = useState('')
   const [authBody, setAuthBody] = useState('')
   const [authCopied, setAuthCopied] = useState(false)
-  const [showNrModal, setShowNrModal] = useState(false)
+  const [showNrModal, setShowNrModal] = useState<'solicitare'|'document'|null>(null)
   const [nrModalData, setNrModalData] = useState<any[]>([])
   const [nrModalNext, setNrModalNext] = useState(1)
   const [nrModalDate, setNrModalDate] = useState(new Date().toISOString().slice(0,10))
@@ -934,9 +934,23 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
       .then(({ data }) => setAllContacts(data || []))
   }, [])
 
-  async function openNrModal() {
-    setShowNrModal(true)
+  const SOL_TIPS = [
+    { key: 'curs-obtinere',    label: 'Curs Obținere LRC' },
+    { key: 'examen-obtinere',  label: 'Examen Obținere LRC' },
+    { key: 'curs-prelungire',  label: 'Curs Prelungire LRC' },
+    { key: 'examen-prelungire',label: 'Examen Prelungire LRC' },
+  ]
+  const DOC_TIPS = [
+    { key: 'pv-obtinere',      label: 'PV Obținere LRC' },
+    { key: 'anexa-pv-obtinere',label: 'Anexă PV Obținere LRC' },
+    { key: 'pv-prelungire',    label: 'PV Prelungire LRC' },
+    { key: 'anexa-pv-prelungire', label: 'Anexă PV Prelungire LRC' },
+  ]
+
+  async function openNrModal(tip: 'solicitare'|'document') {
+    setShowNrModal(tip)
     setNrModalLoading(true)
+    setNrModalDate(new Date().toISOString().slice(0,10))
     const { data } = await supabase
       .from('notification_numbers')
       .select('*')
@@ -949,17 +963,42 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
   }
 
   async function confirmNrModal() {
-    const numar = nrModalNext
-    const doc = `Sesiune ${sess.session_date}`
-    await supabase.from('notification_numbers').insert({
-      numar,
-      data_notificare: nrModalDate,
-      document: doc,
-      session_id: sess.id,
-    })
-    // Salvam si in sesiune
-    await supabase.from('sessions').update({ request_number: String(numar) + '/' + nrModalDate.slice(0,7).replace('-','.') }).eq('id', sess.id)
-    setShowNrModal(false)
+    if (!showNrModal) return
+    const tip = showNrModal
+    const first = nrModalNext
+    const isRadioSession = (sess.class_caa||'').toLowerCase().includes('radio') || (sess.class_caa||'').toLowerCase().includes('lrc')
+    
+    if (isRadioSession) {
+      // Aloca 4 numere consecutive
+      const tips = showNrModal === 'solicitare' ? SOL_TIPS : DOC_TIPS
+    const rows = tips.map((d, i) => ({
+        numar: first + i,
+        data_notificare: nrModalDate,
+        document: d.label,
+        document_tip: d.key,
+        session_id: sess.id,
+        tip,
+      }))
+      await supabase.from('notification_numbers').insert(rows)
+      // Salvam primul numar in sesiune
+      if (tip === 'solicitare') {
+        await supabase.from('sessions').update({ request_number: String(first) + '-' + String(first+3) }).eq('id', sess.id)
+      } else {
+        await supabase.from('sessions').update({ nr_document_ancom: String(first) + '-' + String(first+3) }).eq('id', sess.id)
+      }    } else {
+      // Sesiune normala - un singur numar
+      await supabase.from('notification_numbers').insert({
+        numar: first,
+        data_notificare: nrModalDate,
+        document: 'Sesiune ' + sess.session_date,
+        session_id: sess.id,
+        tip,
+      })
+      if (tip === 'solicitare') {
+        await supabase.from('sessions').update({ request_number: String(first) + '/' + nrModalDate.slice(0,7).replace('-','.') }).eq('id', sess.id)
+      }
+    }
+    setShowNrModal(null)
   }
 
   const [copied, setCopied] = useState(false)
@@ -1146,13 +1185,19 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
             ['Ambarcațiune', sess.boats?.name||'—'],
             ['Clasa CAA', sess.class_caa],
             ['Nr. solicitare', sess.request_number||'—'],
+            ['Nr. document ANCOM', (sess as any).nr_document_ancom||'—'],
             ['Locație detaliată', sess.location_detail||'—'],
           ] as [string,string][]).map(([label,value]) => (
             <div key={label} className="flex justify-between gap-2">
               <span className="text-gray-400 text-xs shrink-0">{label}</span>
               {label === 'Nr. solicitare' ? (
-                <button onClick={openNrModal}
+                <button onClick={()=>openNrModal('solicitare')}
                   className="text-xs font-medium text-blue-600 hover:underline text-right">
+                  {value === '—' ? '+ Alocă număr' : value}
+                </button>
+              ) : label === 'Nr. document ANCOM' ? (
+                <button onClick={()=>openNrModal('document')}
+                  className="text-xs font-medium text-purple-600 hover:underline text-right">
                   {value === '—' ? '+ Alocă număr' : value}
                 </button>
               ) : (
@@ -1992,8 +2037,10 @@ Set Sail NauticSchool
         <div className="fixed inset-0 bg-black bg-opacity-40 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
             <div className="flex items-center justify-between p-5 border-b border-gray-100">
-              <h3 className="font-semibold text-gray-900">Număr notificare</h3>
-              <button onClick={()=>setShowNrModal(false)} className="p-1 rounded hover:bg-gray-100 text-gray-400">
+              <h3 className="font-semibold text-gray-900">
+                {showNrModal === 'solicitare' ? 'Numere solicitare' : 'Numere document'} ANCOM
+              </h3>
+              <button onClick={()=>setShowNrModal(null)} className="p-1 rounded hover:bg-gray-100 text-gray-400">
                 <X size={16}/>
               </button>
             </div>
@@ -2001,39 +2048,54 @@ Set Sail NauticSchool
               {nrModalLoading ? (
                 <div className="text-center text-gray-400 py-6">Se încarcă...</div>
               ) : (<>
-                {/* Numarul urmator + data picker */}
-                <div className="flex items-center gap-3 mb-5">
+                {/* Numarul de start + data picker */}
+                <div className="flex items-center gap-3 mb-4">
                   <div className="flex-1">
-                    <div className="text-xs text-gray-400 mb-1">Numărul următor disponibil</div>
-                    <div className="flex items-center gap-2">
-                      <input type="number" value={nrModalNext} onChange={e=>setNrModalNext(parseInt(e.target.value)||1)}
-                        className="w-24 border-2 border-blue-400 rounded-lg px-3 py-2 text-lg font-bold text-blue-700 text-center focus:outline-none focus:ring-2 focus:ring-blue-300"/>
-                    </div>
+                    <div className="text-xs text-gray-400 mb-1">Primul număr disponibil</div>
+                    <input type="number" value={nrModalNext} onChange={e=>setNrModalNext(parseInt(e.target.value)||1)}
+                      className="w-full border-2 border-blue-400 rounded-lg px-3 py-2 text-lg font-bold text-blue-700 text-center focus:outline-none focus:ring-2 focus:ring-blue-300"/>
                   </div>
                   <div className="flex-1">
-                    <div className="text-xs text-gray-400 mb-1">Data</div>
+                    <div className="text-xs text-gray-400 mb-1">Data (aceeași pentru toate 4)</div>
                     <input type="date" value={nrModalDate} onChange={e=>setNrModalDate(e.target.value)}
                       className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"/>
                   </div>
                 </div>
 
+                {/* Preview cele 4 numere */}
+                <div className="bg-gray-50 rounded-xl p-3 mb-4 space-y-1.5">
+                  <div className="text-xs text-gray-400 font-medium mb-2">Se vor aloca:</div>
+                  {(showNrModal === 'solicitare' ? SOL_TIPS : DOC_TIPS).map((d,i) => (
+                    <div key={d.key} className="flex items-center justify-between text-xs">
+                      <span className="text-gray-600">{d.label}</span>
+                      <span className="font-bold text-blue-700 bg-blue-50 px-2 py-0.5 rounded">
+                        {nrModalNext + i} / {nrModalDate.split('-').reverse().join('.')}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+
                 {/* Buton confirmare */}
                 <button onClick={confirmNrModal}
-                  className="w-full py-2.5 rounded-xl text-sm font-medium text-white mb-4"
+                  className="w-full py-2.5 rounded-xl text-sm font-medium text-white mb-5"
                   style={{background:'#0a1628'}}>
-                  ✓ Alocă numărul {nrModalNext} / {nrModalDate.split('-').reverse().join('.')}
+                  ✓ Alocă numerele {nrModalNext}–{nrModalNext+3}
                 </button>
 
                 {/* Istoric */}
-                {nrModalData.length > 0 && (
+                {nrModalData.filter((r:any) => r.tip === showNrModal).length > 0 && (
                   <div>
-                    <div className="text-xs text-gray-400 font-medium mb-2">Istoric numere alocate</div>
-                    <div className="space-y-1 max-h-48 overflow-y-auto">
-                      {nrModalData.map((r:any) => (
-                        <div key={r.id} className="flex items-center justify-between py-1.5 px-2 rounded-lg hover:bg-gray-50 text-xs">
-                          <span className="font-bold text-gray-900 w-8">{r.numar}</span>
-                          <span className="text-gray-400">{new Date(r.data_notificare).toLocaleDateString('ro-RO')}</span>
-                          <span className="text-gray-600 flex-1 text-right truncate ml-2">{r.document}</span>
+                    <div className="text-xs text-gray-400 font-medium mb-2">
+                      Istoric {showNrModal === 'solicitare' ? 'solicitări' : 'documente'}
+                    </div>
+                    <div className="space-y-0.5 max-h-44 overflow-y-auto">
+                      {nrModalData
+                        .filter((r:any) => r.tip === showNrModal)
+                        .map((r:any) => (
+                        <div key={r.id} className="flex items-center gap-2 py-1.5 px-2 rounded-lg hover:bg-gray-50 text-xs">
+                          <span className="font-bold text-gray-900 w-7 shrink-0">{r.numar}</span>
+                          <span className="text-gray-400 shrink-0">{new Date(r.data_notificare).toLocaleDateString('ro-RO')}</span>
+                          <span className="text-gray-500 truncate">{r.document}</span>
                         </div>
                       ))}
                     </div>
