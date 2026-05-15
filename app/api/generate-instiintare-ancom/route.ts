@@ -37,6 +37,39 @@ export async function POST(req: NextRequest) {
       .eq('tip', 'stampila_cu_semnatura')
       .single()
 
+    // Aducem info setsail pentru protocol ANCOM
+    const { data: infoRows } = await supabase
+      .from('setsail_info')
+      .select('key, value')
+      .in('key', ['protocol_ancom_valabil_pana'])
+    const infoMap: Record<string,string> = {}
+    for (const row of infoRows || []) infoMap[row.key] = row.value
+    const protocolValabilPana = infoMap['protocol_ancom_valabil_pana'] || '31.12.2026'
+
+    // Aducem numerele de solicitare alocate pentru aceasta sesiune
+    const { data: nrRows } = await supabase
+      .from('notification_numbers')
+      .select('numar, document_tip, data_notificare, tip')
+      .eq('session_id', session_id)
+      .eq('tip', 'solicitare')
+      .order('numar')
+    const nrMap: Record<string, number> = {}
+    for (const row of nrRows || []) {
+      if (row.document_tip) nrMap[row.document_tip] = row.numar
+    }
+    // Numarul si data pentru tipul curent
+    const nrTipMap: Record<string, string> = {
+      'curs-obtinere':    'curs-obtinere',
+      'curs-prelungire':  'curs-prelungire',
+      'examen-obtinere':  'examen-obtinere',
+      'examen-prelungire':'examen-prelungire',
+    }
+    const nrCurent = nrMap[nrTipMap[tip]] ? String(nrMap[nrTipMap[tip]]) : ''
+    const dataNrRow = (nrRows || []).find((r: any) => r.document_tip === tip)
+    const dataNrFormatat = dataNrRow
+      ? new Date(dataNrRow.data_notificare).toLocaleDateString('ro-RO')
+      : new Date().toLocaleDateString('ro-RO')
+
     const sessionDate = new Date(session.session_date).toLocaleDateString('ro-RO', {
       day: '2-digit', month: 'long', year: 'numeric'
     })
@@ -60,19 +93,19 @@ export async function POST(req: NextRequest) {
     if (!isExamen && !isPrelungire) {
       titluDoc = 'Înștiințare organizare curs obținere LRC'
       subiect = 'Înștiințare cu privire la data de începere a cursului de pregătire în vederea obținerii certificatelor de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit de tip GMDSS-LRC'
-      corpText = `Subscrisa SC SET SAIL ADVERTISING SRL, cu datele de identificare din antet, în baza pct. 3, lit. a) și c) din cadrul protocolului de colaborare dintre instituțiile noastre valabil până la data de 31.12.2026, vă înștiințăm că vom organiza un curs de pregătire în vederea obținerii certificatelor de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit de tip GMDSS-LRC în perioada ${perioadaCurs}.\n\nLocul de desfășurare al cursului este online.`
+      corpText = `Subscrisa SC SET SAIL ADVERTISING SRL, cu datele de identificare din antet, în baza pct. 3, lit. a) și c) din cadrul protocolului de colaborare dintre instituțiile noastre valabil până la data de ${protocolValabilPana}, vă înștiințăm că vom organiza un curs de pregătire în vederea obținerii certificatelor de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit de tip GMDSS-LRC în perioada ${perioadaCurs}.\n\nLocul de desfășurare al cursului este online.`
     } else if (!isExamen && isPrelungire) {
       titluDoc = 'Înștiințare organizare curs reconfirmare LRC'
       subiect = 'Înștiințare cu privire la data de începere a cursului de reconfirmare în vederea prelungirii valabilității certificatelor de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit de tip GMDSS-LRC'
-      corpText = `Subscrisa SC SET SAIL ADVERTISING SRL, cu datele de identificare din antet, în baza pct. 3, lit. a) și c) din cadrul protocolului de colaborare dintre instituțiile noastre valabil până la data de 31.12.2026, vă înștiințăm că vom organiza un curs de reconfirmare în vederea prelungirii valabilității certificatelor de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit de tip GMDSS-LRC în perioada ${perioadaCurs}.\n\nLocul de desfășurare al cursului este online.`
+      corpText = `Subscrisa SC SET SAIL ADVERTISING SRL, cu datele de identificare din antet, în baza pct. 3, lit. a) și c) din cadrul protocolului de colaborare dintre instituțiile noastre valabil până la data de ${protocolValabilPana}, vă înștiințăm că vom organiza un curs de reconfirmare în vederea prelungirii valabilității certificatelor de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit de tip GMDSS-LRC în perioada ${perioadaCurs}.\n\nLocul de desfășurare al cursului este online.`
     } else if (isExamen && !isPrelungire) {
       titluDoc = 'Înștiințare organizare examen obținere LRC'
       subiect = 'Înștiințare cu privire la data de desfășurare a examenului în vederea obținerii certificatelor de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit de tip GMDSS-LRC'
-      corpText = `Subscrisa SC SET SAIL ADVERTISING SRL, cu datele de identificare din antet, în baza pct. 3, lit. a) și c) din cadrul protocolului de colaborare dintre instituțiile noastre valabil până la data de 31.12.2026, vă înștiințăm că pe data de ${sessionDate}, organizam o sesiune de examinare în vederea obținerii certificatelor de operator radio, online.\n\nMembrii comisiei de examinare vor fi:\n- Drugan Ovidiu, instructor SetSail, deținător al certificatului de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit GMDSS-LRC\n- Drugan Sorin, deținător al certificatului de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit GMDSS-LRC`
+      corpText = `Subscrisa SC SET SAIL ADVERTISING SRL, cu datele de identificare din antet, în baza pct. 3, lit. a) și c) din cadrul protocolului de colaborare dintre instituțiile noastre valabil până la data de ${protocolValabilPana}, vă înștiințăm că pe data de ${sessionDate}, organizam o sesiune de examinare în vederea obținerii certificatelor de operator radio, online.\n\nMembrii comisiei de examinare vor fi:\n- Drugan Ovidiu, instructor SetSail, deținător al certificatului de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit GMDSS-LRC\n- Drugan Sorin, deținător al certificatului de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit GMDSS-LRC`
     } else {
       titluDoc = 'Înștiințare organizare examen prelungire LRC'
       subiect = 'Înștiințare cu privire la data de desfășurare a examenului în vederea prelungirii valabilității certificatelor de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit de tip GMDSS-LRC'
-      corpText = `Subscrisa SC SET SAIL ADVERTISING SRL, cu datele de identificare din antet, în baza pct. 3, lit. a) și c) din cadrul protocolului de colaborare dintre instituțiile noastre valabil până la data de 31.12.2026, vă înștiințăm că pe data de ${sessionDate}, orele 19.00, organizam o sesiune de examinare în vederea prelungirii valabilității certificatelor de operator radio, online.\n\nMembrii comisiei de examinare vor fi:\n- Drugan Ovidiu, instructor SetSail, deținător al certificatului de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit GMDSS-LRC\n- Drugan Sorin, deținător al certificatului de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit GMDSS-LRC`
+      corpText = `Subscrisa SC SET SAIL ADVERTISING SRL, cu datele de identificare din antet, în baza pct. 3, lit. a) și c) din cadrul protocolului de colaborare dintre instituțiile noastre valabil până la data de ${protocolValabilPana}, vă înștiințăm că pe data de ${sessionDate}, orele 19.00, organizam o sesiune de examinare în vederea prelungirii valabilității certificatelor de operator radio, online.\n\nMembrii comisiei de examinare vor fi:\n- Drugan Ovidiu, instructor SetSail, deținător al certificatului de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit GMDSS-LRC\n- Drugan Sorin, deținător al certificatului de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit GMDSS-LRC`
     }
 
     if (format === 'pdf') {
@@ -146,7 +179,7 @@ export async function POST(req: NextRequest) {
   <div class="antet">${antetHtml}</div>
 
   <!-- Nr si data -->
-  <div class="nr-data"><strong>...... / ${dataCurenta}</strong></div>
+  <div class="nr-data"><strong>${nrCurent || '......'} / ${dataNrFormatat}</strong></div>
 
   <!-- Catre -->
   <div class="catre">
@@ -269,7 +302,7 @@ export async function POST(req: NextRequest) {
         },
         children: [
           ...headerImg,
-          para([reg('...... / ' + dataCurenta)], AlignmentType.RIGHT as any, 200),
+          para([reg((nrCurent || '......') + ' / ' + dataNrFormatat)], AlignmentType.RIGHT as any, 200),
           new Paragraph({ spacing: { before: 200, after: 60 }, children: [bold('Către,')] }),
           new Paragraph({ spacing: { before: 0, after: 0 }, children: [reg('AUTORITATEA NAȚIONALĂ PENTRU ADMINISTRARE')] }),
           new Paragraph({ spacing: { before: 0, after: 200 }, children: [reg('ȘI REGLEMENTARE ÎN COMUNICAȚII')] }),
