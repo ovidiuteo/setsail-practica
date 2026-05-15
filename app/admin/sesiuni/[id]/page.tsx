@@ -25,6 +25,8 @@ function applyTemplate(text: string, sess: any, contacts?: any[]): string {
     'zz_data_start_practica': psd ? String(new Date(psd).getDate()) : '',
     'zz_llll_data_practica':  sd  ? new Date(sd).toLocaleDateString('ro-RO', {day:'2-digit', month:'long'}) : '',
     'ora_start':              sess?.practice_start_time || '9:30',
+    'zz_data_start_curs':     sess?.course_start_date ? String(new Date(sess.course_start_date).getDate()) : '',
+    'zz_llll_aaaa_data_practica': sd ? new Date(sd).toLocaleDateString('ro-RO', {day:'2-digit', month:'long', year:'numeric'}) : '',
   }
   // Persoane de contact: filtrate dupa id-urile bifate, sortate alfabetic
   const contactIds: string[] = sess?.contact_person_ids || []
