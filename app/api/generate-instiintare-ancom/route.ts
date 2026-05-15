@@ -170,10 +170,16 @@ export async function POST(req: NextRequest) {
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>${titluDoc}</title>
 <style>
-  @page { size: A4 portrait; margin: 4mm 20mm 20mm 20mm; }
+  @page { size: A4 portrait; margin: 5mm 18mm 15mm 18mm; }
   @media print {
-    html, body { background: white !important; padding: 0 !important; }
-    body { box-shadow: none !important; margin: 0 !important; padding: 0 !important; width: auto !important; }
+    html, body {
+      background: #fff !important;
+      margin: 0 !important;
+      padding: 0 !important;
+      width: auto !important;
+      min-height: 0 !important;
+      box-shadow: none !important;
+    }
     .no-print { display: none !important; }
   }
   html { background: #e0e0e0; padding: 20px; }
@@ -182,10 +188,10 @@ export async function POST(req: NextRequest) {
     font-size: 11pt;
     line-height: 1.55;
     background: #fff;
-    width: 170mm;
-    min-height: 257mm;
+    width: 174mm;
+    min-height: 277mm;
     margin: 0 auto;
-    padding: 4mm 20mm 20mm 20mm;
+    padding: 5mm 18mm 15mm 18mm;
     box-shadow: 0 0 20px rgba(0,0,0,0.3);
     box-sizing: border-box;
   }
@@ -267,7 +273,7 @@ export async function POST(req: NextRequest) {
     const para = (ch: any[], align = AlignmentType.LEFT as any, sp = 120, indent?: number) =>
       new Paragraph({ alignment: align, spacing: { before: sp, after: sp }, indent: indent ? { firstLine: indent } : undefined, children: ch })
 
-    // Antet
+    // Antet — latimea utila = 210 - 18 - 18 = 174mm. La 96 DPI ≈ 658 px. Inaltime proportionala ~72px.
     let headerImg: any[] = []
     if (antetDoc?.file_data) {
       try {
@@ -276,13 +282,13 @@ export async function POST(req: NextRequest) {
         const mt = antetDoc.file_data.includes('png') ? 'png' : 'jpg'
         headerImg = [new Paragraph({
           alignment: AlignmentType.CENTER as any,
-          spacing: { after: 200 },
-          children: [new ImageRun({ data: buf, type: mt as any, transformation: { width: 600, height: 65 } })]
+          spacing: { before: 0, after: 200 },
+          children: [new ImageRun({ data: buf, type: mt as any, transformation: { width: 658, height: 72 } })]
         })]
       } catch(e) { console.error(e) }
     }
 
-    // Stampila cu semnatura
+    // Stampila cu semnatura — aliniata la dreapta, sub blocul de semnatura
     let stampilaImg: any[] = []
     if (stampilaDoc?.file_data) {
       try {
@@ -292,6 +298,7 @@ export async function POST(req: NextRequest) {
         stampilaImg = [new Paragraph({
           alignment: AlignmentType.RIGHT as any,
           spacing: { before: 120, after: 0 },
+          indent: { right: 360 },
           children: [new ImageRun({ data: buf, type: mt as any, transformation: { width: 160, height: 110 } })]
         })]
       } catch(e) { console.error(e) }
@@ -306,7 +313,7 @@ export async function POST(req: NextRequest) {
         corpParas.push(new Paragraph({
           alignment: AlignmentType.JUSTIFIED as any,
           spacing: { before: 80, after: 80 },
-          indent: { left: 720 },
+          indent: { left: 360 },
           children: [reg(line)]
         }))
       } else {
@@ -319,7 +326,7 @@ export async function POST(req: NextRequest) {
         corpParas.push(new Paragraph({
           alignment: AlignmentType.JUSTIFIED as any,
           spacing: { before: 80, after: 80 },
-          indent: { firstLine: 720 },
+          indent: { firstLine: 567 },
           children
         }))
       }
@@ -330,28 +337,29 @@ export async function POST(req: NextRequest) {
         properties: {
           page: {
             margin: {
-              top: convertMillimetersToTwip(20),
-              right: convertMillimetersToTwip(20),
-              bottom: convertMillimetersToTwip(20),
-              left: convertMillimetersToTwip(20),
+              top: convertMillimetersToTwip(5),
+              right: convertMillimetersToTwip(18),
+              bottom: convertMillimetersToTwip(15),
+              left: convertMillimetersToTwip(18),
             }
           }
         },
         children: [
           ...headerImg,
-          para([reg('Nr. ' + (nrCurent || '......') + ' / ' + dataNrFormatat)], AlignmentType.RIGHT as any, 200),
-          new Paragraph({ spacing: { before: 200, after: 60 }, children: [bold('Către,')] }),
+          para([bold('Nr. ' + (nrCurent || '......') + ' / ' + dataNrFormatat)], AlignmentType.RIGHT as any, 120),
+          new Paragraph({ spacing: { before: 200, after: 40 }, children: [bold('Către,')] }),
           new Paragraph({ spacing: { before: 0, after: 0 }, children: [reg('AUTORITATEA NAȚIONALĂ PENTRU ADMINISTRARE')] }),
           new Paragraph({ spacing: { before: 0, after: 200 }, children: [reg('ȘI REGLEMENTARE ÎN COMUNICAȚII')] }),
           new Paragraph({
+            alignment: AlignmentType.JUSTIFIED as any,
             spacing: { before: 200, after: 200 },
-            children: [bold('Subiect:   '), boldItal(subiect)]
+            children: [bold('Subiect: '), boldItal(subiect)]
           }),
-          para([bold('Domnule Președinte,', 26)], AlignmentType.CENTER as any, 300),
+          para([bold('Domnule Președinte,', 26)], AlignmentType.CENTER as any, 240),
           ...corpParas,
-          new Paragraph({ spacing: { before: 600, after: 0 }, alignment: AlignmentType.RIGHT as any, children: [reg('Cu stimă,')] }),
-          new Paragraph({ spacing: { before: 60, after: 0 }, alignment: AlignmentType.RIGHT as any, children: [bold('SC SET SAIL ADVERTISING SRL')] }),
-          new Paragraph({ spacing: { before: 60, after: 0 }, alignment: AlignmentType.RIGHT as any, children: [reg('director Cobianu Drugan Corina')] }),
+          new Paragraph({ spacing: { before: 480, after: 0 }, alignment: AlignmentType.RIGHT as any, indent: { right: 720 }, children: [reg('Cu stimă,')] }),
+          new Paragraph({ spacing: { before: 60, after: 0 }, alignment: AlignmentType.RIGHT as any, indent: { right: 720 }, children: [bold('SC SET SAIL ADVERTISING SRL')] }),
+          new Paragraph({ spacing: { before: 60, after: 0 }, alignment: AlignmentType.RIGHT as any, indent: { right: 720 }, children: [reg('director Cobianu Drugan Corina')] }),
           ...stampilaImg,
           new Paragraph({ spacing: { before: 200, after: 0 }, children: [] }),
         ]
