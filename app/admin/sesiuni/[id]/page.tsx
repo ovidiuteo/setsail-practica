@@ -1166,6 +1166,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
           {([
             ['Data start curs', sess.course_start_date ? new Date(sess.course_start_date).toLocaleDateString('ro-RO', {day:'2-digit',month:'long',year:'numeric'}) : '—'],
             ['Data start practică', (sess as any).practice_start_date ? new Date((sess as any).practice_start_date).toLocaleDateString('ro-RO', {day:'2-digit',month:'long',year:'numeric'}) : '—'],
+            ['Ora start', (sess as any).practice_start_time || '9:30'],
             ['Data practică', new Date(sess.session_date).toLocaleDateString('ro-RO', {day:'2-digit',month:'long',year:'numeric'})],
             ['Instructor', sess.instructors?.full_name],
             ['Evaluator ANR', sess.evaluators?.full_name],
@@ -2693,6 +2694,7 @@ export default function SessionDetailPage() {
               {[
                 ['Data start curs', 'course_start_date', 'date'],
                 ['Data start practică', 'practice_start_date', 'date'],
+                ['Ora start', 'practice_start_time', 'text'],
                 ['Data practică', 'session_date', 'date'],
                 ['Nr. înștiințări', 'request_number', 'text'],
                 ['Nr. documente PV', 'nr_document_ancom', 'text'],
