@@ -129,7 +129,7 @@ export default async function PublicRegattaPage({ params }: { params: { slug: st
       {teamsParticipating.length > 0 && (
         <div className="mb-10">
           <h2 className="text-sm font-medium uppercase tracking-wider text-gray-500 mb-3">
-            <Users size={12} className="inline mr-1.5" /> Echipe înscrise (confirmate)
+            <Users size={12} className="inline mr-1.5" /> Echipe înscrise
           </h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {teamsParticipating.map((tp: any) => (
@@ -139,11 +139,8 @@ export default async function PublicRegattaPage({ params }: { params: { slug: st
                 className="block rounded-lg overflow-hidden hover:shadow-md transition"
                 style={{ background: '#fff', border: '1px solid #e5e7eb' }}
               >
-                <div className="h-16 flex items-center justify-center" style={{ background: tp.team.color_primary || '#4A5568' }}>
+                <div className="h-20 flex items-center justify-center" style={{ background: tp.team.color_primary || '#4A5568' }}>
                   <span className="text-white font-bold text-lg">{tp.team.short_name || tp.team.name}</span>
-                </div>
-                <div className="p-3 text-center">
-                  <div className="text-xs text-gray-500">{tp.count} membri</div>
                 </div>
               </Link>
             ))}
