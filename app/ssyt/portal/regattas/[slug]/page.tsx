@@ -1,0 +1,175 @@
+import Link from 'next/link'
+import { notFound, redirect } from 'next/navigation'
+import { ArrowLeft, MapPin, Calendar, ExternalLink, FileText, Users, AlertCircle } from 'lucide-react'
+import { getPortalSession, getPortalSupabase, canEditBoatType } from '@/lib/ssyt/portal-session'
+import RegattaDocsList from './RegattaDocsList'
+
+export const dynamic = 'force-dynamic'
+
+function getDynStatus(startDate: string, endDate: string | null) {
+  const today = new Date(); today.setHours(0,0,0,0)
+  const start = new Date(startDate); start.setHours(0,0,0,0)
+  const end = endDate ? new Date(endDate) : start; end.setHours(0,0,0,0)
+  if (today > end) return { label: 'TRECUT', color: '#9CA3AF', bg: 'rgba(156,163,175,0.2)' }
+  if (today >= start && today <= end) return { label: 'ONGOING', color: '#10B981', bg: 'rgba(16,185,129,0.2)' }
+  const days = Math.ceil((start.getTime() - today.getTime()) / 86400000)
+  if (days < 7) return { label: 'SOON', color: '#FF6B35', bg: 'rgba(255,107,53,0.2)' }
+  return { label: 'UPCOMING', color: '#3B82F6', bg: 'rgba(59,130,246,0.2)' }
+}
+
+export default async function PortalRegattaDetailPage({ params }: { params: { slug: string } }) {
+  const session = await getPortalSession()
+  if (!session) redirect(`/ssyt/portal-login?next=/ssyt/portal/regattas/${params.slug}`)
+
+  const supabase = getPortalSupabase()
+
+  const { data: regatta } = await supabase
+    .from('ssyt_regattas')
+    .select('*')
+    .eq('season_id', session.seasonId)
+    .eq('slug', params.slug)
+    .maybeSingle()
+
+  if (!regatta) notFound()
+
+  // Documente
+  const { data: docs } = await supabase
+    .from('ssyt_regatta_documents')
+    .select(`
+      id, name, description, file_url, document_type_id,
+      doc_type:ssyt_document_types(id, name, code)
+    `)
+    .eq('regatta_id', regatta.id)
+    .order('uploaded_at', { ascending: false })
+
+  const { data: docTypes } = await supabase
+    .from('ssyt_document_types')
+    .select('id, name, code')
+    .eq('is_active', true)
+    .order('display_order')
+
+  // Statusul personal
+  const { data: myPart } = await supabase
+    .from('ssyt_regatta_participation')
+    .select('confirmation_status, on_crewlist')
+    .eq('regatta_id', regatta.id)
+    .eq('participant_id', session.participantId)
+    .maybeSingle()
+
+  const canEdit = await canEditBoatType(session.participantId)
+
+  const status = getDynStatus(regatta.start_date, regatta.end_date)
+  const d1 = new Date(regatta.start_date)
+  const d2 = regatta.end_date ? new Date(regatta.end_date) : null
+
+  return (
+    <div className="max-w-5xl mx-auto px-6 py-8">
+      <Link href="/ssyt/portal/regattas" className="inline-flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-900 transition mb-4">
+        <ArrowLeft size={14} /> Toate regatele
+      </Link>
+
+      {/* Hero */}
+      <div className="rounded-2xl overflow-hidden mb-6" style={{ background: '#0a1628' }}>
+        <div className="p-6 md:p-8">
+          <div className="flex items-center gap-2 mb-3 flex-wrap">
+            <span className="text-xs uppercase tracking-wider px-2.5 py-1 rounded-full font-medium" style={{ background: status.bg, color: status.color }}>
+              {status.label}
+            </span>
+            <span className="text-xs uppercase tracking-wider px-2.5 py-1 rounded-full font-medium text-white" style={{ background: 'rgba(255,107,53,0.85)' }}>
+              {regatta.event_type}
+            </span>
+            {myPart?.confirmation_status && (
+              <span className="text-xs uppercase tracking-wider px-2.5 py-1 rounded-full font-medium" style={{
+                background: myPart.confirmation_status === 'confirmed' ? 'rgba(16,185,129,0.25)' :
+                  myPart.confirmation_status === 'tentative' ? 'rgba(245,158,11,0.25)' :
+                  'rgba(239,68,68,0.25)',
+                color: '#fff',
+              }}>
+                tu: {myPart.confirmation_status === 'confirmed' ? 'Disponibil' : myPart.confirmation_status === 'tentative' ? 'Nu știu' : 'Indisponibil'}
+              </span>
+            )}
+          </div>
+          <h1 className="text-3xl md:text-4xl font-bold tracking-tight text-white mb-3" style={{ letterSpacing: '-0.02em' }}>
+            {regatta.name}
+          </h1>
+          <div className="flex flex-wrap items-center gap-4 text-white/70 text-sm">
+            <span className="inline-flex items-center gap-1.5">
+              <Calendar size={14} />
+              {d1.toLocaleDateString('ro-RO', { day: 'numeric', month: 'long', year: 'numeric' })}
+              {d2 && d2.getDate() !== d1.getDate() && ` – ${d2.toLocaleDateString('ro-RO', { day: 'numeric', month: 'long' })}`}
+            </span>
+            {regatta.location && (
+              <span className="inline-flex items-center gap-1.5"><MapPin size={14} /> {regatta.location}</span>
+            )}
+          </div>
+          <div className="mt-4">
+            <Link href="/ssyt/portal/availability" className="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md text-white font-medium hover:opacity-90 transition" style={{ background: '#FF6B35' }}>
+              Editează disponibilitatea →
+            </Link>
+          </div>
+        </div>
+      </div>
+
+      {/* Description */}
+      {regatta.description && (
+        <div className="rounded-lg p-5 mb-6" style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
+          <p className="text-gray-700 text-sm leading-relaxed">{regatta.description}</p>
+        </div>
+      )}
+
+      {/* Info grid */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
+        {regatta.marina && <InfoCard label="Marina" value={regatta.marina} />}
+        {regatta.start_time && <InfoCard label="Ora start" value={regatta.start_time} />}
+        {regatta.briefing_location && <InfoCard label="Briefing" value={regatta.briefing_location} />}
+        {regatta.vhf_channel && <InfoCard label="VHF" value={regatta.vhf_channel} />}
+      </div>
+
+      {/* External links */}
+      {(regatta.notice_of_race_url || regatta.sailing_instructions_url || regatta.external_event_url) && (
+        <div className="mb-6">
+          <h2 className="text-sm font-medium uppercase tracking-wider text-gray-500 mb-2">Link-uri externe</h2>
+          <div className="flex flex-wrap gap-2">
+            {regatta.notice_of_race_url && <ExtLink href={regatta.notice_of_race_url} label="Notice of Race" />}
+            {regatta.sailing_instructions_url && <ExtLink href={regatta.sailing_instructions_url} label="Sailing Instructions" />}
+            {regatta.external_event_url && <ExtLink href={regatta.external_event_url} label="Site eveniment" />}
+          </div>
+        </div>
+      )}
+
+      {/* Documente */}
+      <div className="rounded-lg p-5" style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
+        <h2 className="text-sm font-medium uppercase tracking-wider text-gray-500 mb-1 flex items-center gap-1.5">
+          <FileText size={12} /> Documente regatta
+        </h2>
+        <p className="text-xs text-gray-400 mb-4">
+          NOR, proteste, schiță, sediță tehnică, anunțuri speciale, taxă etc.
+        </p>
+        <RegattaDocsList
+          docs={(docs || []) as any}
+          docTypes={(docTypes || []) as any}
+          regattaId={regatta.id}
+          canEdit={canEdit}
+        />
+      </div>
+    </div>
+  )
+}
+
+function InfoCard({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg p-3" style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
+      <div className="text-[10px] uppercase tracking-wider text-gray-500 font-medium mb-0.5">{label}</div>
+      <div className="font-medium text-sm" style={{ color: '#0a1628' }}>{value}</div>
+    </div>
+  )
+}
+
+function ExtLink({ href, label }: { href: string; label: string }) {
+  return (
+    <a href={href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium hover:bg-gray-50 transition" style={{ background: '#fff', border: '1px solid #e5e7eb', color: '#0a1628' }}>
+      {label}
+      <ExternalLink size={11} className="text-gray-400" />
+    </a>
+  )
+}
