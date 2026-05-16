@@ -3,7 +3,6 @@ import { createClient } from '@supabase/supabase-js'
 import { randomBytes } from 'crypto'
 
 const URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const ANON = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
 const SESSION_COOKIE = 'ssyt_portal_session'
@@ -50,15 +49,20 @@ export async function POST(req: NextRequest) {
     })
     if (insertErr) return NextResponse.json({ success: false, error: insertErr.message }, { status: 500 })
 
-    // Set cookie HttpOnly
-    const response = NextResponse.json({ success: true, name: row.full_name })
-    response.cookies.set(SESSION_COOKIE, token, {
+    // Set cookie cu setari maxime compatibile
+    const response = NextResponse.json({ success: true, name: row.full_name, debug_token_set: token.substring(0, 8) + '...' })
+
+    // Folosim NextResponse cookies API explicit
+    response.cookies.set({
+      name: SESSION_COOKIE,
+      value: token,
       httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
+      secure: true,  // forteaza https - Vercel e mereu https
       sameSite: 'lax',
       path: '/',
       maxAge: SESSION_DAYS * 24 * 60 * 60,
     })
+
     return response
   } catch (e: any) {
     return NextResponse.json({ success: false, error: e.message || 'Eroare server.' }, { status: 500 })

@@ -13,14 +13,27 @@ export type PortalSession = {
 
 // Citeste sesiunea curenta din cookie + valideaza in DB
 export async function getPortalSession(): Promise<PortalSession | null> {
-  const token = cookies().get(SESSION_COOKIE)?.value
+  const cookieStore = cookies()
+  const token = cookieStore.get(SESSION_COOKIE)?.value
+
+  // Debug logging in console Vercel
+  if (process.env.NODE_ENV === 'production') {
+    const allCookieNames = cookieStore.getAll().map((c) => c.name).join(', ')
+    console.log('[portal-session] Token present:', !!token, '| All cookies:', allCookieNames)
+  }
+
   if (!token) return null
 
   const supabase = createClient(URL, SERVICE, {
     auth: { persistSession: false, autoRefreshToken: false },
   })
 
-  const { data: result } = await supabase.rpc('ssyt_portal_validate_session', { p_token: token })
+  const { data: result, error } = await supabase.rpc('ssyt_portal_validate_session', { p_token: token })
+
+  if (process.env.NODE_ENV === 'production') {
+    console.log('[portal-session] Validation result:', JSON.stringify(result), 'Error:', error?.message)
+  }
+
   const row = Array.isArray(result) ? result[0] : result
   if (!row || !row.valid) return null
 
@@ -39,7 +52,6 @@ export async function getPortalSession(): Promise<PortalSession | null> {
   }
 }
 
-// Client cu service role pentru DB access in pagini portal
 export function getPortalSupabase() {
   return createClient(URL, SERVICE, {
     auth: { persistSession: false, autoRefreshToken: false },
