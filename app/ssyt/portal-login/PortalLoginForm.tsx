@@ -1,9 +1,8 @@
 'use client'
 import { useState } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 
 export default function PortalLoginForm() {
-  const router = useRouter()
   const params = useSearchParams()
   const next = params.get('next') || '/ssyt/portal'
   const [email, setEmail] = useState('')
@@ -22,15 +21,16 @@ export default function PortalLoginForm() {
       body: JSON.stringify({ email: email.trim(), keyword: keyword.trim() }),
     })
     const data = await res.json()
-    setLoading(false)
 
     if (!res.ok || !data.success) {
+      setLoading(false)
       setError(data.error || 'Email sau cod sesiune invalid.')
       return
     }
 
-    router.push(next)
-    router.refresh()
+    // HARD NAVIGATION - forteaza full page reload ca sa garanteze
+    // ca cookie-ul HttpOnly e trimis la urmatoarele requests
+    window.location.href = next
   }
 
   return (
