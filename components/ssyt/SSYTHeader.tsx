@@ -1,10 +1,22 @@
 'use client'
 import Link from 'next/link'
 import { Anchor, LogIn, User } from 'lucide-react'
-import { useCurrentUser } from '@/lib/ssyt/useCurrentUser'
+import { useEffect, useState } from 'react'
+import { createSupabaseBrowserClient } from '@/lib/ssyt/supabase-browser'
 
 export default function SSYTHeader() {
-  const { user, isAdmin, loading } = useCurrentUser()
+  const [admin, setAdmin] = useState<{ isAdmin: boolean } | null>(null)
+
+  useEffect(() => {
+    async function check() {
+      const supabase = createSupabaseBrowserClient()
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { setAdmin({ isAdmin: false }); return }
+      const { data: adminRow } = await supabase.from('ssyt_admin_users').select('level').eq('user_id', user.id).maybeSingle()
+      setAdmin({ isAdmin: !!adminRow })
+    }
+    check()
+  }, [])
 
   return (
     <header className="border-b" style={{ background: '#0a1628', borderColor: 'rgba(255,255,255,0.08)' }}>
@@ -27,24 +39,14 @@ export default function SSYTHeader() {
         </nav>
 
         <div className="flex items-center gap-3">
-          {loading ? (
-            <span className="text-xs text-white/40">...</span>
-          ) : user ? (
-            <>
-              {isAdmin && (
-                <Link href="/ssyt/admin" className="text-xs uppercase tracking-wider text-white/60 hover:text-white">
-                  Admin
-                </Link>
-              )}
-              <Link href="/ssyt/portal" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium text-white transition hover:opacity-90" style={{ background: 'rgba(255,255,255,0.1)' }}>
-                <User size={14} /> Portal
-              </Link>
-            </>
-          ) : (
-            <Link href="/ssyt/login" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium text-white transition hover:opacity-90" style={{ background: 'rgba(255,255,255,0.1)' }}>
-              <LogIn size={14} /> Login
+          {admin?.isAdmin && (
+            <Link href="/ssyt/admin" className="text-xs uppercase tracking-wider text-white/60 hover:text-white">
+              Admin
             </Link>
           )}
+          <Link href="/ssyt/portal-login" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium text-white transition hover:opacity-90" style={{ background: 'rgba(255,255,255,0.1)' }}>
+            <User size={14} /> Portal
+          </Link>
         </div>
       </div>
     </header>

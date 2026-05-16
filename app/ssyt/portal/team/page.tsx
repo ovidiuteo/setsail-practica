@@ -1,79 +1,24 @@
-'use client'
-import { useEffect, useState } from 'react'
-import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import { Crown, Sailboat } from 'lucide-react'
-import { useCurrentUser } from '@/lib/ssyt/useCurrentUser'
-import { createSupabaseBrowserClient } from '@/lib/ssyt/supabase-browser'
+import { getPortalSession, getPortalSupabase } from '@/lib/ssyt/portal-session'
 
-export default function PortalTeamPage() {
-  const { participant, loading } = useCurrentUser()
-  const [team, setTeam] = useState<any>(null)
-  const [boat, setBoat] = useState<any>(null)
-  const [skipper, setSkipper] = useState<any>(null)
-  const [teammates, setTeammates] = useState<any[]>([])
-  const [dataLoading, setDataLoading] = useState(true)
+export const dynamic = 'force-dynamic'
 
-  useEffect(() => {
-    if (loading || !participant) {
-      if (!loading) setDataLoading(false)
-      return
-    }
+export default async function PortalTeamPage() {
+  const session = await getPortalSession()
+  if (!session) redirect('/ssyt/portal-login')
 
-    async function load() {
-      const supabase = createSupabaseBrowserClient()
-      const { data: myMem } = await supabase
-        .from('ssyt_team_memberships')
-        .select('team_id')
-        .eq('participant_id', participant.id)
-        .eq('status', 'active')
-        .maybeSingle()
+  const { participant } = session
+  const supabase = getPortalSupabase()
 
-      if (!myMem) { setDataLoading(false); return }
+  const { data: myMem } = await supabase
+    .from('ssyt_team_memberships')
+    .select('team_id')
+    .eq('participant_id', participant.id)
+    .eq('status', 'active')
+    .maybeSingle()
 
-      const { data: teamData } = await supabase
-        .from('ssyt_teams')
-        .select(`
-          id, name, short_name, color_primary, slogan, skipper_id,
-          boat:ssyt_boats(id, name, model, sail_number)
-        `)
-        .eq('id', myMem.team_id)
-        .maybeSingle()
-
-      if (!teamData) { setDataLoading(false); return }
-      setTeam(teamData)
-      const b = Array.isArray(teamData.boat) ? teamData.boat[0] : teamData.boat
-      setBoat(b)
-
-      // Skipper separat
-      if (teamData.skipper_id) {
-        const { data: sk } = await supabase
-          .from('ssyt_participants')
-          .select('id, full_name, first_name, last_name, photo_url')
-          .eq('id', teamData.skipper_id)
-          .maybeSingle()
-        setSkipper(sk)
-      }
-
-      // Teammates
-      const { data: tm } = await supabase
-        .from('ssyt_team_memberships')
-        .select(`
-          id, membership_type,
-          participant:ssyt_participants(id, full_name, first_name, last_name, photo_url)
-        `)
-        .eq('team_id', teamData.id)
-        .eq('status', 'active')
-      setTeammates(tm || [])
-      setDataLoading(false)
-    }
-    load()
-  }, [participant, loading])
-
-  if (loading || dataLoading) {
-    return <div className="max-w-6xl mx-auto px-6 py-8 text-sm text-gray-400">Se încarcă...</div>
-  }
-
-  if (!team) {
+  if (!myMem) {
     return (
       <div className="max-w-6xl mx-auto px-6 py-8">
         <div className="rounded-lg p-8 text-center text-gray-500" style={{ background: '#fff', border: '1px dashed #e5e7eb' }}>
@@ -82,6 +27,43 @@ export default function PortalTeamPage() {
       </div>
     )
   }
+
+  // Detalii echipa + skipper + barca + membri
+  const { data: team } = await supabase
+    .from('ssyt_teams')
+    .select('id, name, short_name, color_primary, slogan, skipper_id, boat_id')
+    .eq('id', myMem.team_id)
+    .maybeSingle()
+
+  if (!team) return null
+
+  let boat: any = null
+  if (team.boat_id) {
+    const { data } = await supabase.from('ssyt_boats').select('id, name, model, sail_number').eq('id', team.boat_id).maybeSingle()
+    boat = data
+  }
+
+  let skipper: any = null
+  if (team.skipper_id) {
+    const { data } = await supabase.from('ssyt_participants').select('id, full_name, first_name, last_name, photo_url').eq('id', team.skipper_id).maybeSingle()
+    skipper = data
+  }
+
+  const { data: memberships } = await supabase
+    .from('ssyt_team_memberships')
+    .select('id, membership_type, participant_id')
+    .eq('team_id', team.id)
+    .eq('status', 'active')
+
+  const memberIds = (memberships || []).map((m) => m.participant_id)
+  const { data: participants } = memberIds.length > 0
+    ? await supabase.from('ssyt_participants').select('id, full_name, first_name, last_name, photo_url').in('id', memberIds)
+    : { data: [] }
+
+  const teammates = (memberships || []).map((m: any) => {
+    const p = (participants || []).find((x) => x.id === m.participant_id)
+    return p ? { ...p, membership_type: m.membership_type, membership_id: m.id } : null
+  }).filter(Boolean) as any[]
 
   return (
     <div className="max-w-6xl mx-auto px-6 py-8">
@@ -92,7 +74,7 @@ export default function PortalTeamPage() {
         </div>
         <div className="px-6 py-4 grid grid-cols-1 md:grid-cols-3 gap-4">
           {boat && (
-            <Link href={`/ssyt/admin/boats/${boat.id}`} className="flex items-center gap-3 hover:opacity-80 transition">
+            <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-md flex items-center justify-center" style={{ background: 'rgba(255,107,53,0.12)' }}>
                 <Sailboat size={18} style={{ color: '#FF6B35' }} />
               </div>
@@ -101,7 +83,7 @@ export default function PortalTeamPage() {
                 <div className="font-semibold text-sm" style={{ color: '#0a1628' }}>{boat.name}</div>
                 <div className="text-xs text-gray-500">{boat.model}</div>
               </div>
-            </Link>
+            </div>
           )}
           {skipper && (
             <div className="flex items-center gap-3">
@@ -122,13 +104,11 @@ export default function PortalTeamPage() {
           Echipaj ({teammates.length})
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          {teammates.map((m) => {
-            const p = Array.isArray(m.participant) ? m.participant[0] : m.participant
-            if (!p) return null
+          {teammates.map((p) => {
             const isMe = p.id === participant.id
             const isSkipperRow = p.id === team.skipper_id
             return (
-              <div key={m.id} className="rounded-lg p-3 flex items-center gap-3" style={{ background: '#fff', border: isMe ? '2px solid #FF6B35' : '1px solid #e5e7eb' }}>
+              <div key={p.membership_id} className="rounded-lg p-3 flex items-center gap-3" style={{ background: '#fff', border: isMe ? '2px solid #FF6B35' : '1px solid #e5e7eb' }}>
                 <div className="w-10 h-10 rounded-full flex items-center justify-center font-semibold text-sm flex-shrink-0" style={{ background: isSkipperRow ? '#FF6B35' : (team.color_primary || '#4A5568'), color: '#fff' }}>
                   {p.first_name?.[0]}{p.last_name?.[0]}
                 </div>
@@ -138,7 +118,7 @@ export default function PortalTeamPage() {
                     {isMe && <span className="ml-1 text-[10px] uppercase tracking-wider" style={{ color: '#FF6B35' }}>(tu)</span>}
                   </div>
                   <div className="text-xs text-gray-500">
-                    {isSkipperRow ? 'Skipper' : m.membership_type === 'occasional' ? 'Occasional' : 'Crew'}
+                    {isSkipperRow ? 'Skipper' : p.membership_type === 'occasional' ? 'Occasional' : 'Crew'}
                   </div>
                 </div>
               </div>
