@@ -31,7 +31,7 @@ export default function SSYTFooter() {
             <h4 className="text-xs uppercase tracking-wider text-white/40 font-medium mb-3">Participare</h4>
             <ul className="space-y-2 text-sm">
               <li><Link href="/ssyt/apply" className="text-white/70 hover:text-white">Aplică</Link></li>
-              <li><Link href="/ssyt/portal/login" className="text-white/70 hover:text-white">Login portal</Link></li>
+              <li><Link href="/ssyt/portal-login" className="text-white/70 hover:text-white">Login portal</Link></li>
               <li><Link href="/ssyt/leaderboard" className="text-white/70 hover:text-white">Leaderboard</Link></li>
               <li><Link href="/ssyt/media" className="text-white/70 hover:text-white">Media</Link></li>
             </ul>

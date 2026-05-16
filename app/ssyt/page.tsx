@@ -52,7 +52,7 @@ export default async function SSYTHomePage() {
                 Vezi echipele
               </Link>
               <Link
-                href="/ssyt/portal/login"
+                href="/ssyt/portal-login"
                 className="inline-flex items-center gap-2 px-6 py-3 rounded-md font-medium text-white/70 hover:text-white transition"
               >
                 Intră în portal
