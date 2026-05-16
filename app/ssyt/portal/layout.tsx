@@ -1,30 +1,15 @@
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import { Anchor } from 'lucide-react'
-import { getPortalSessionWithDebug } from '@/lib/ssyt/portal-session'
+import { getPortalSession } from '@/lib/ssyt/portal-session'
 import PortalNav from './PortalNav'
 import LogoutButton from './LogoutButton'
 
 export const dynamic = 'force-dynamic'
 
 export default async function PortalLayout({ children }: { children: React.ReactNode }) {
-  const { session, debug } = await getPortalSessionWithDebug()
-
-  if (!session) {
-    return (
-      <div className="p-8 max-w-3xl mx-auto font-mono text-xs">
-        <h1 className="text-lg font-bold mb-4">🔧 PORTAL DEBUG MODE</h1>
-        <div className="bg-yellow-50 p-4 rounded mb-4">
-          <p>Sesiune negăsită. Detalii detaliate:</p>
-        </div>
-        <pre className="bg-gray-100 p-4 rounded overflow-auto whitespace-pre-wrap break-all">
-{JSON.stringify(debug, null, 2)}
-        </pre>
-        <a href="/ssyt/portal-login" className="inline-block mt-4 px-4 py-2 bg-orange-500 text-white rounded">
-          Înapoi la login
-        </a>
-      </div>
-    )
-  }
+  const session = await getPortalSession()
+  if (!session) redirect('/ssyt/portal-login?next=/ssyt/portal')
 
   const { participant } = session
 
