@@ -1,9 +1,22 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, MapPin, Calendar, Anchor, ExternalLink, Users, Trophy } from 'lucide-react'
+import { ArrowLeft, MapPin, Calendar, ExternalLink, Users } from 'lucide-react'
 import { supabase, getActiveSeason } from '@/lib/ssyt/supabase'
 
-export const revalidate = 60
+export const dynamic = 'force-dynamic'
+
+function getDynamicStatus(startDate: string, endDate: string | null) {
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const start = new Date(startDate); start.setHours(0, 0, 0, 0)
+  const end = endDate ? new Date(endDate) : start; end.setHours(0, 0, 0, 0)
+
+  if (today > end) return { label: 'TRECUT', color: '#9CA3AF', bg: 'rgba(156,163,175,0.2)' }
+  if (today >= start && today <= end) return { label: 'ONGOING', color: '#10B981', bg: 'rgba(16,185,129,0.2)' }
+
+  const days = Math.ceil((start.getTime() - today.getTime()) / 86400000)
+  if (days < 7) return { label: 'SOON', color: '#FF6B35', bg: 'rgba(255,107,53,0.2)' }
+  return { label: 'UPCOMING', color: '#3B82F6', bg: 'rgba(59,130,246,0.2)' }
+}
 
 export default async function PublicRegattaPage({ params }: { params: { slug: string } }) {
   const season = await getActiveSeason()
@@ -11,7 +24,7 @@ export default async function PublicRegattaPage({ params }: { params: { slug: st
 
   const { data: regatta } = await supabase
     .from('ssyt_regattas')
-    .select('*, races:ssyt_races(*)')
+    .select('*')
     .eq('season_id', season.id)
     .eq('slug', params.slug)
     .maybeSingle()
@@ -19,7 +32,7 @@ export default async function PublicRegattaPage({ params }: { params: { slug: st
   if (!regatta) notFound()
   if (regatta.visibility === 'admin') notFound()
 
-  // Crewlist public (doar echipe + counts, fara detalii personale)
+  // Crewlist public (doar echipe + counts)
   const { data: participation } = await supabase
     .from('ssyt_regatta_participation')
     .select(`
@@ -27,26 +40,17 @@ export default async function PublicRegattaPage({ params }: { params: { slug: st
       team:ssyt_teams(id, name, short_name, color_primary, slug)
     `)
     .eq('regatta_id', regatta.id)
+    .eq('confirmation_status', 'confirmed')
 
   // Group by team
   const teamMap: Record<string, any> = {}
   for (const p of participation || []) {
     const tid = p.team_id
+    if (!tid) continue
     if (!teamMap[tid]) teamMap[tid] = { team: (p as any).team, count: 0 }
     teamMap[tid].count++
   }
   const teamsParticipating = Object.values(teamMap)
-
-  // Public results (only if status = completed)
-  let results: any[] = []
-  if (regatta.status === 'completed') {
-    const { data } = await supabase
-      .from('ssyt_results')
-      .select('*, team:ssyt_teams(id, name, short_name, color_primary, slug)')
-      .eq('regatta_id', regatta.id)
-      .order('ssyt_internal_place')
-    results = data || []
-  }
 
   const eventTypeColors: Record<string, string> = {
     regatta: '#FF6B35',
@@ -55,6 +59,7 @@ export default async function PublicRegattaPage({ params }: { params: { slug: st
     social: '#9CA3AF',
   }
   const headerColor = eventTypeColors[regatta.event_type] || '#FF6B35'
+  const dynStatus = getDynamicStatus(regatta.start_date, regatta.end_date)
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-12">
@@ -66,11 +71,13 @@ export default async function PublicRegattaPage({ params }: { params: { slug: st
       {/* Hero */}
       <div className="rounded-2xl overflow-hidden mb-8" style={{ background: '#0a1628' }}>
         <div className="p-8 md:p-12">
-          <div className="flex items-center gap-3 mb-4">
+          <div className="flex items-center gap-3 mb-4 flex-wrap">
             <span className="text-xs uppercase tracking-wider px-3 py-1 rounded-full font-medium text-white" style={{ background: headerColor }}>
               {regatta.event_type}
             </span>
-            <span className="text-xs uppercase tracking-wider text-white/60">{regatta.status}</span>
+            <span className="text-xs uppercase tracking-wider px-3 py-1 rounded-full font-medium" style={{ background: dynStatus.bg, color: dynStatus.color }}>
+              {dynStatus.label}
+            </span>
           </div>
           <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-white mb-4" style={{ letterSpacing: '-0.02em' }}>
             {regatta.name}
@@ -99,18 +106,10 @@ export default async function PublicRegattaPage({ params }: { params: { slug: st
 
       {/* Info grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-10">
-        {regatta.marina && (
-          <InfoCard label="Marina" value={regatta.marina} />
-        )}
-        {regatta.start_time && (
-          <InfoCard label="Ora start" value={regatta.start_time} />
-        )}
-        {regatta.briefing_location && (
-          <InfoCard label="Briefing" value={regatta.briefing_location} />
-        )}
-        {regatta.vhf_channel && (
-          <InfoCard label="Canal VHF" value={regatta.vhf_channel} />
-        )}
+        {regatta.marina && <InfoCard label="Marina" value={regatta.marina} />}
+        {regatta.start_time && <InfoCard label="Ora start" value={regatta.start_time} />}
+        {regatta.briefing_location && <InfoCard label="Briefing" value={regatta.briefing_location} />}
+        {regatta.vhf_channel && <InfoCard label="Canal VHF" value={regatta.vhf_channel} />}
       </div>
 
       {/* External links */}
@@ -126,34 +125,11 @@ export default async function PublicRegattaPage({ params }: { params: { slug: st
         </div>
       )}
 
-      {/* Races */}
-      {regatta.races && regatta.races.length > 0 && (
-        <div className="mb-10">
-          <h2 className="text-sm font-medium uppercase tracking-wider text-gray-500 mb-3">
-            <Anchor size={12} className="inline mr-1.5" /> Curse ({regatta.races.length})
-          </h2>
-          <div className="space-y-2">
-            {regatta.races.map((r: any) => (
-              <div key={r.id} className="rounded-lg p-4 flex items-center gap-4" style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
-                <div className="w-10 h-10 rounded flex items-center justify-center font-bold text-white text-xs flex-shrink-0" style={{ background: '#0a1628' }}>
-                  R{r.race_number}
-                </div>
-                <div className="flex-1">
-                  <div className="font-medium" style={{ color: '#0a1628' }}>{r.name || `Race ${r.race_number}`}</div>
-                  {r.race_type && <div className="text-xs text-gray-500">{r.race_type}</div>}
-                </div>
-                <span className="text-xs px-2 py-1 rounded-full" style={{ background: '#f3f4f6', color: '#6B7280' }}>{r.status}</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Echipe participante */}
+      {/* Echipe participante (confirmed only) */}
       {teamsParticipating.length > 0 && (
         <div className="mb-10">
           <h2 className="text-sm font-medium uppercase tracking-wider text-gray-500 mb-3">
-            <Users size={12} className="inline mr-1.5" /> Echipe înscrise
+            <Users size={12} className="inline mr-1.5" /> Echipe înscrise (confirmate)
           </h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
             {teamsParticipating.map((tp: any) => (
@@ -174,46 +150,6 @@ export default async function PublicRegattaPage({ params }: { params: { slug: st
           </div>
         </div>
       )}
-
-      {/* Results (only if completed) */}
-      {results.length > 0 && (
-        <div className="mb-10">
-          <h2 className="text-sm font-medium uppercase tracking-wider text-gray-500 mb-3">
-            <Trophy size={12} className="inline mr-1.5" /> Rezultate
-          </h2>
-          <div className="rounded-lg overflow-hidden" style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
-            <table className="w-full">
-              <thead style={{ background: '#f8f9fa', borderBottom: '1px solid #e5e7eb' }}>
-                <tr>
-                  <th className="text-left px-5 py-3 text-xs font-medium uppercase tracking-wider text-gray-500">Loc SSYT</th>
-                  <th className="text-left px-5 py-3 text-xs font-medium uppercase tracking-wider text-gray-500">Echipă</th>
-                  <th className="text-center px-5 py-3 text-xs font-medium uppercase tracking-wider text-gray-500">Loc oficial</th>
-                  <th className="text-center px-5 py-3 text-xs font-medium uppercase tracking-wider text-gray-500">Puncte SSYT</th>
-                </tr>
-              </thead>
-              <tbody>
-                {results.map((r: any) => (
-                  <tr key={r.id} style={{ borderTop: '1px solid #e5e7eb' }}>
-                    <td className="px-5 py-3">
-                      <span className="text-2xl font-bold" style={{ color: '#FF6B35' }}>
-                        {r.ssyt_internal_place || '—'}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3">
-                      <Link href={`/ssyt/teams/${r.team?.slug || r.team?.id}`} className="inline-flex items-center gap-2 hover:underline">
-                        <span className="w-3 h-3 rounded-full" style={{ background: r.team?.color_primary }}></span>
-                        <span className="font-medium" style={{ color: '#0a1628' }}>{r.team?.name}</span>
-                      </Link>
-                    </td>
-                    <td className="px-5 py-3 text-center text-gray-700">{r.official_place || '—'}</td>
-                    <td className="px-5 py-3 text-center font-medium" style={{ color: '#FF6B35' }}>{r.ssyt_internal_points || '—'}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
     </div>
   )
 }
@@ -229,13 +165,7 @@ function InfoCard({ label, value }: { label: string; value: string }) {
 
 function ExternalLinkButton({ href, label }: { href: string; label: string }) {
   return (
-    <a
-      href={href}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-50 transition"
-      style={{ background: '#fff', border: '1px solid #e5e7eb', color: '#0a1628' }}
-    >
+    <a href={href} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium hover:bg-gray-50 transition" style={{ background: '#fff', border: '1px solid #e5e7eb', color: '#0a1628' }}>
       {label}
       <ExternalLink size={12} className="text-gray-400" />
     </a>
