@@ -1555,7 +1555,24 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                       await supabase.from('students').update({ order_in_session: i + 1 }).eq('id', visibleStudents[i].id)
                     }
                   }
-                  await generateDoc('/api/generate-pv',`PV_${sess.session_date}.docx`)
+                  // Construim numele fisierului: PV_practica_SetSail_DD.MM.YYYY[_lista_N].docx
+                  const [yy, mm, dd] = sess.session_date.split('-')
+                  const dataFormatata = `${dd}.${mm}.${yy}`
+                  // Gasim sesiunile cu aceeasi data (principal + clone, fara absent), ordonate
+                  const sameDay = allSessions
+                    .filter((s:any) => s.session_type !== 'absent' && s.session_date === sess.session_date)
+                    .sort((a:any, b:any) => {
+                      // Principal primul, apoi clone in ordinea creerii (dupa id)
+                      if (a.session_type === 'principal' && b.session_type !== 'principal') return -1
+                      if (b.session_type === 'principal' && a.session_type !== 'principal') return 1
+                      return (a.id || '').localeCompare(b.id || '')
+                    })
+                  let filename = `PV_practica_SetSail_${dataFormatata}.docx`
+                  if (sameDay.length > 1) {
+                    const idx = sameDay.findIndex((s:any) => s.id === sess.id)
+                    filename = `PV_practica_SetSail_${dataFormatata}_lista_${idx + 1}.docx`
+                  }
+                  await generateDoc('/api/generate-pv', filename)
                 }catch(e:any){alert(e.message)}setGPV(false)}}
                   disabled={gPV||students.length===0} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#0a1628'}}>
                   <FileText size={13}/>{gPV?'Se generează...':'Proces Verbal (Anexa 12)'}
