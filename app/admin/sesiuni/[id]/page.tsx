@@ -912,6 +912,9 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
   const [authBody, setAuthBody] = useState('')
   const [authCopied, setAuthCopied] = useState(false)
   const [selectedAuthCategory, setSelectedAuthCategory] = useState<string | null>(null)
+  const [authTo, setAuthTo] = useState('')
+  const [authCc, setAuthCc] = useState('')
+  const [authBcc, setAuthBcc] = useState('')
   const [showNrModal, setShowNrModal] = useState<'solicitare'|'document'|null>(null)
   const [nrModalData, setNrModalData] = useState<any[]>([])
   const [nrModalNext, setNrModalNext] = useState(1)
@@ -1016,6 +1019,20 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
   useEffect(()=>{
     setMailTo(selectedEmails.join(', '))
   }, [selectedEmails.join(',')])
+
+  // Initializare adrese default pentru Mailing autoritati (ANCOM/ANR)
+  useEffect(()=>{
+    const isR = (sess.class_caa || '').toLowerCase().includes('radio') || (sess.class_caa || '').toLowerCase().includes('lrc')
+    if (!authTo) {
+      setAuthTo(sess.evaluators?.email_oficial || (isR ? 'secretariat@ancom.ro' : 'autorizari@rna.ro'))
+    }
+    if (!authCc && isR && sess.evaluators?.email_personal) {
+      setAuthCc(sess.evaluators.email_personal)
+    }
+    if (!authBcc) {
+      setAuthBcc('office@setsail.ro')
+    }
+  }, [sess.id, sess.class_caa, sess.evaluators?.email_oficial, sess.evaluators?.email_personal])
 
 
 
@@ -1833,28 +1850,37 @@ Set Sail NauticSchool
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-xs text-gray-400">TO</label>
-                    <button onClick={()=>navigator.clipboard.writeText(sess.evaluators?.email_oficial||(isRadio?'secretariat@ancom.ro':'autorizari@rna.ro'))}
+                    <button onClick={()=>navigator.clipboard.writeText(authTo)}
                       className="text-xs text-blue-500 hover:text-blue-700 flex items-center gap-1">
                       <Copy size={11}/>Copiază
                     </button>
                   </div>
-                  <div className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-700 bg-gray-50 select-all">
-                    {sess.evaluators?.email_oficial || (isRadio ? 'secretariat@ancom.ro' : 'autorizari@rna.ro')}
-                  </div>
+                  <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                    value={authTo} onChange={e=>setAuthTo(e.target.value)} placeholder="destinatar@..."/>
                 </div>
-                {isRadio && sess.evaluators?.email_personal && (
-                  <div>
-                    <label className="text-xs text-gray-400 block mb-1">CC</label>
-                    <div className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-700 bg-gray-50 select-all">
-                      {sess.evaluators.email_personal}
-                    </div>
-                  </div>
-                )}
+                {/* CC */}
                 <div>
-                  <label className="text-xs text-gray-400 block mb-1">BCC</label>
-                  <div className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-700 bg-gray-50 select-all">
-                    office@setsail.ro
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs text-gray-400">CC</label>
+                    <button onClick={()=>navigator.clipboard.writeText(authCc)}
+                      className="text-xs text-blue-500 hover:text-blue-700 flex items-center gap-1">
+                      <Copy size={11}/>Copiază
+                    </button>
                   </div>
+                  <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                    value={authCc} onChange={e=>setAuthCc(e.target.value)} placeholder="cc@... (opțional)"/>
+                </div>
+                {/* BCC */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs text-gray-400">BCC</label>
+                    <button onClick={()=>navigator.clipboard.writeText(authBcc)}
+                      className="text-xs text-blue-500 hover:text-blue-700 flex items-center gap-1">
+                      <Copy size={11}/>Copiază
+                    </button>
+                  </div>
+                  <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-400"
+                    value={authBcc} onChange={e=>setAuthBcc(e.target.value)} placeholder="bcc@..."/>
                 </div>
                 {/* Subiect */}
                 <div>
@@ -1896,6 +1922,10 @@ Set Sail NauticSchool
                               setAuthSubject(applyTemplate(t.subject, sess, allContacts))
                               setAuthBody(applyTemplate(rawBody, sess, allContacts))
                               setSelectedAuthCategory(catKey)
+                              // Daca template-ul are adrese, le aplicam (suprascriu cele din UI)
+                              if (t.to_emails)  setAuthTo(applyTemplate(t.to_emails, sess, allContacts))
+                              if (t.cc_emails)  setAuthCc(applyTemplate(t.cc_emails, sess, allContacts))
+                              if (t.bcc_emails) setAuthBcc(applyTemplate(t.bcc_emails, sess, allContacts))
                             }}
                             className="text-left px-3 py-2 rounded-lg text-xs border border-gray-200 hover:bg-blue-50 hover:border-blue-200 transition-colors">
                             {t.label}
@@ -1906,7 +1936,7 @@ Set Sail NauticSchool
                   )
                 })()}
                 {/* Gmail */}
-                <a href={`https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(sess.evaluators?.email_oficial||(isRadio?'secretariat@ancom.ro':'autorizari@rna.ro'))}${isRadio&&sess.evaluators?.email_personal?'&cc='+encodeURIComponent(sess.evaluators.email_personal):''}&bcc=${encodeURIComponent('office@setsail.ro')}&su=${encodeURIComponent(authSubject)}&body=${encodeURIComponent(authBody)}`}
+                <a href={`https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(authTo)}${authCc?'&cc='+encodeURIComponent(authCc):''}${authBcc?'&bcc='+encodeURIComponent(authBcc):''}&su=${encodeURIComponent(authSubject)}&body=${encodeURIComponent(authBody)}`}
                   target="_blank" rel="noopener noreferrer"
                   className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-medium text-white"
                   style={{background:'#0a1628'}}>
@@ -1927,7 +1957,7 @@ Set Sail NauticSchool
                           const html = await res.text()
                           const wPdf = window.open('', '_blank')
                           if (wPdf) { wPdf.document.write(html); wPdf.document.close(); setTimeout(() => wPdf.print(), 1200) }
-                          const gmailUrl = `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(sess.evaluators?.email_oficial||'secretariat@ancom.ro')}${sess.evaluators?.email_personal?'&cc='+encodeURIComponent(sess.evaluators.email_personal):''}&bcc=${encodeURIComponent('office@setsail.ro')}&su=${encodeURIComponent(authSubject)}&body=${encodeURIComponent(authBody)}`
+                          const gmailUrl = `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(authTo)}${authCc?'&cc='+encodeURIComponent(authCc):''}${authBcc?'&bcc='+encodeURIComponent(authBcc):''}&su=${encodeURIComponent(authSubject)}&body=${encodeURIComponent(authBody)}`
                           setTimeout(() => window.open(gmailUrl, '_blank'), 600)
                         } catch(e:any) { alert(e.message) }
                       }}
@@ -1946,7 +1976,7 @@ Set Sail NauticSchool
                           const html = await res.text()
                           const wPdf = window.open('', '_blank')
                           if (wPdf) { wPdf.document.write(html); wPdf.document.close(); setTimeout(() => wPdf.print(), 1200) }
-                          const gmailUrl = `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(sess.evaluators?.email_oficial||'secretariat@ancom.ro')}${sess.evaluators?.email_personal?'&cc='+encodeURIComponent(sess.evaluators.email_personal):''}&bcc=${encodeURIComponent('office@setsail.ro')}&su=${encodeURIComponent(authSubject)}&body=${encodeURIComponent(authBody)}`
+                          const gmailUrl = `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(authTo)}${authCc?'&cc='+encodeURIComponent(authCc):''}${authBcc?'&bcc='+encodeURIComponent(authBcc):''}&su=${encodeURIComponent(authSubject)}&body=${encodeURIComponent(authBody)}`
                           setTimeout(() => window.open(gmailUrl, '_blank'), 600)
                         } catch(e:any) { alert(e.message) }
                       }}
