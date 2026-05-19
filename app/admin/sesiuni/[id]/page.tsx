@@ -1023,19 +1023,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
     setMailTo(selectedEmails.join(', '))
   }, [selectedEmails.join(',')])
 
-  // Initializare adrese default pentru Mailing autoritati (ANCOM/ANR)
-  useEffect(()=>{
-    const isR = (sess.class_caa || '').toLowerCase().includes('radio') || (sess.class_caa || '').toLowerCase().includes('lrc')
-    if (!authTo) {
-      setAuthTo(sess.evaluators?.email_oficial || (isR ? 'secretariat@ancom.ro' : 'autorizari@rna.ro'))
-    }
-    if (!authCc && isR && sess.evaluators?.email_personal) {
-      setAuthCc(sess.evaluators.email_personal)
-    }
-    if (!authBcc) {
-      setAuthBcc('office@setsail.ro')
-    }
-  }, [sess.id, sess.class_caa, sess.evaluators?.email_oficial, sess.evaluators?.email_personal])
+  // Adresele TO/CC/BCC pentru Mailing autoritati raman goale - le populeaza utilizatorul prin template sau manual
 
 
 
@@ -1926,9 +1914,11 @@ Set Sail NauticSchool
                               setAuthBody(applyTemplate(rawBody, sess, allContacts))
                               setSelectedAuthCategory(catKey)
                               // Daca template-ul are adrese, le aplicam (suprascriu cele din UI)
-                              if (t.to_emails)  setAuthTo(applyTemplate(t.to_emails, sess, allContacts))
-                              if (t.cc_emails)  setAuthCc(applyTemplate(t.cc_emails, sess, allContacts))
-                              if (t.bcc_emails) setAuthBcc(applyTemplate(t.bcc_emails, sess, allContacts))
+                              // Curatare: scoatem {{}} orfane si separatori orfani (', ,' sau ',  ')
+                              const cleanEmail = (s:string) => s.replace(/\{\{\s*\}\}/g, '').replace(/,\s*,/g, ',').replace(/^[,\s]+|[,\s]+$/g, '').trim()
+                              if (t.to_emails)  setAuthTo(cleanEmail(applyTemplate(t.to_emails, sess, allContacts)))
+                              if (t.cc_emails)  setAuthCc(cleanEmail(applyTemplate(t.cc_emails, sess, allContacts)))
+                              if (t.bcc_emails) setAuthBcc(cleanEmail(applyTemplate(t.bcc_emails, sess, allContacts)))
                             }}
                             className="text-left px-3 py-2 rounded-lg text-xs border border-gray-200 hover:bg-blue-50 hover:border-blue-200 transition-colors">
                             {t.label}
