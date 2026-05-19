@@ -1166,7 +1166,6 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
           {([
             ['Data start curs', sess.course_start_date ? new Date(sess.course_start_date).toLocaleDateString('ro-RO', {day:'2-digit',month:'long',year:'numeric'}) : '—'],
             ['Data start practică', (sess as any).practice_start_date ? new Date((sess as any).practice_start_date).toLocaleDateString('ro-RO', {day:'2-digit',month:'long',year:'numeric'}) : '—'],
-            ['Ora start', (sess as any).practice_start_time || '9:30'],
             ['Data practică', new Date(sess.session_date).toLocaleDateString('ro-RO', {day:'2-digit',month:'long',year:'numeric'})],
             ['Instructor', sess.instructors?.full_name],
             ['Evaluator ANR', sess.evaluators?.full_name],
@@ -1875,34 +1874,49 @@ Set Sail NauticSchool
                   style={{background:'#0a1628'}}>
                   <Mail size={13}/> Deschide în Gmail
                 </a>
-                {/* Buton ATAS toate instiintarile - apare doar daca template-ul selectat e ANCOM */}
+                {/* Butoane ATAS toate instiintarile - apar doar daca template-ul selectat e ANCOM */}
                 {selectedAuthCategory === 'ancom' && (
                   <>
-                    <button onClick={async()=>{
-                      try {
-                        // 1. Deschide PDF cu TOATE Instiintarile in tab nou + auto-print (Save as PDF)
-                        const res = await fetch('/api/generate-instiintare-ancom-toate',{
-                          method:'POST',
-                          headers:{'Content-Type':'application/json'},
-                          body: JSON.stringify({session_id: sess.id})
-                        })
-                        if (!res.ok) { const e = await res.text(); throw new Error(e) }
-                        const html = await res.text()
-                        const wPdf = window.open('', '_blank')
-                        if (wPdf) {
-                          wPdf.document.write(html)
-                          wPdf.document.close()
-                          setTimeout(() => wPdf.print(), 1200)
-                        }
-                        // 2. Imediat dupa, deschide Gmail intr-un alt tab
-                        const gmailUrl = `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(sess.evaluators?.email_oficial||'secretariat@ancom.ro')}${sess.evaluators?.email_personal?'&cc='+encodeURIComponent(sess.evaluators.email_personal):''}&bcc=${encodeURIComponent('office@setsail.ro')}&su=${encodeURIComponent(authSubject)}&body=${encodeURIComponent(authBody)}`
-                        setTimeout(() => window.open(gmailUrl, '_blank'), 600)
-                      } catch(e:any) { alert(e.message) }
-                    }}
-                      className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-semibold text-white"
-                      style={{background:'#7c3aed'}}>
-                      <Download size={13}/> Salvează PDF + Deschide Gmail
-                    </button>
+                    <div className="flex gap-1.5">
+                      <button onClick={async()=>{
+                        try {
+                          const res = await fetch('/api/generate-instiintare-ancom-toate',{
+                            method:'POST',
+                            headers:{'Content-Type':'application/json'},
+                            body: JSON.stringify({session_id: sess.id, cu_stampila: true})
+                          })
+                          if (!res.ok) { const e = await res.text(); throw new Error(e) }
+                          const html = await res.text()
+                          const wPdf = window.open('', '_blank')
+                          if (wPdf) { wPdf.document.write(html); wPdf.document.close(); setTimeout(() => wPdf.print(), 1200) }
+                          const gmailUrl = `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(sess.evaluators?.email_oficial||'secretariat@ancom.ro')}${sess.evaluators?.email_personal?'&cc='+encodeURIComponent(sess.evaluators.email_personal):''}&bcc=${encodeURIComponent('office@setsail.ro')}&su=${encodeURIComponent(authSubject)}&body=${encodeURIComponent(authBody)}`
+                          setTimeout(() => window.open(gmailUrl, '_blank'), 600)
+                        } catch(e:any) { alert(e.message) }
+                      }}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-semibold text-white"
+                        style={{background:'#7c3aed'}} title="PDF cu ștampilă și semnătură + deschide Gmail">
+                        <Download size={12}/> PDF cu ștamp.+ Gmail
+                      </button>
+                      <button onClick={async()=>{
+                        try {
+                          const res = await fetch('/api/generate-instiintare-ancom-toate',{
+                            method:'POST',
+                            headers:{'Content-Type':'application/json'},
+                            body: JSON.stringify({session_id: sess.id, cu_stampila: false})
+                          })
+                          if (!res.ok) { const e = await res.text(); throw new Error(e) }
+                          const html = await res.text()
+                          const wPdf = window.open('', '_blank')
+                          if (wPdf) { wPdf.document.write(html); wPdf.document.close(); setTimeout(() => wPdf.print(), 1200) }
+                          const gmailUrl = `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(sess.evaluators?.email_oficial||'secretariat@ancom.ro')}${sess.evaluators?.email_personal?'&cc='+encodeURIComponent(sess.evaluators.email_personal):''}&bcc=${encodeURIComponent('office@setsail.ro')}&su=${encodeURIComponent(authSubject)}&body=${encodeURIComponent(authBody)}`
+                          setTimeout(() => window.open(gmailUrl, '_blank'), 600)
+                        } catch(e:any) { alert(e.message) }
+                      }}
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-semibold border-2 border-purple-300 text-purple-700 hover:bg-purple-50"
+                        title="PDF FĂRĂ ștampilă/semnătură + deschide Gmail">
+                        <Download size={12}/> PDF fără ștamp.+ Gmail
+                      </button>
+                    </div>
                     <p className="text-xs text-gray-400 text-center -mt-1">
                       După deschidere atașează PDF-ul salvat la mailul Gmail
                     </p>
@@ -2694,7 +2708,6 @@ export default function SessionDetailPage() {
               {[
                 ['Data start curs', 'course_start_date', 'date'],
                 ['Data start practică', 'practice_start_date', 'date'],
-                ['Ora start', 'practice_start_time', 'text'],
                 ['Data practică', 'session_date', 'date'],
                 ['Nr. înștiințări', 'request_number', 'text'],
                 ['Nr. documente PV', 'nr_document_ancom', 'text'],
