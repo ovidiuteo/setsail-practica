@@ -50,6 +50,9 @@ const VARIABLES_INFO: Record<string, string> = {
   tel_cont_2: 'Telefonul celei de-a doua persoane de contact',
   tel_cont_3: 'Telefonul celei de-a treia persoane de contact',
   tel_cont_4: 'Telefonul celei de-a patra persoane de contact',
+  email_oficial_reprezentant: 'Email oficial reprezentant ANR/ANCOM (din sesiune)',
+  email_personal_reprezentant: 'Email personal reprezentant ANR/ANCOM (din sesiune)',
+  email_setsail: 'Email SetSail (office@setsail.ro)',
 }
 
 const EMPTY_TEMPLATE: Partial<Template> = {
@@ -357,20 +360,72 @@ export default function MailTemplatesPage() {
                 {(form.categorie === 'anr' || form.categorie === 'ancom') && (
                   <div className="space-y-2 p-3 rounded-lg border border-blue-100 bg-blue-50/30">
                     <div className="text-xs font-medium text-blue-700 mb-1">📧 Adrese email default (suprascriu valorile din sesiune)</div>
+                    <div className="text-xs text-gray-400 mb-2">Poți insera variabile cu dropdown — se vor înlocui în Sesiunea curentă (ex: {`{{email_oficial_reprezentant}}`})</div>
+                    {/* TO */}
                     <div>
                       <label className="text-xs font-medium text-gray-500 mb-1 block">TO</label>
-                      <input className={inputCls} placeholder="secretariat@ancom.ro"
-                        value={form.to_emails || ''} onChange={e => setForm(f => ({ ...f, to_emails: e.target.value }))} />
+                      <div className="flex gap-1.5">
+                        <input className={inputCls + ' flex-1'} placeholder="secretariat@ancom.ro sau {{email_oficial_reprezentant}}"
+                          value={form.to_emails || ''} onChange={e => setForm(f => ({ ...f, to_emails: e.target.value }))} />
+                        <select className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs bg-white text-gray-600 hover:bg-gray-50 cursor-pointer"
+                          value=""
+                          onChange={e => {
+                            if (!e.target.value) return
+                            const cur = form.to_emails || ''
+                            const sep = cur && !cur.endsWith(',') && !cur.endsWith(' ') ? ', ' : ''
+                            setForm(f => ({ ...f, to_emails: cur + sep + '{{' + e.target.value + '}}' }))
+                            e.target.value = ''
+                          }}>
+                          <option value="">+ Var</option>
+                          <option value="email_oficial_reprezentant">email oficial reprezentant</option>
+                          <option value="email_personal_reprezentant">email personal reprezentant</option>
+                          <option value="email_setsail">email setsail</option>
+                        </select>
+                      </div>
                     </div>
+                    {/* CC */}
                     <div>
                       <label className="text-xs font-medium text-gray-500 mb-1 block">CC</label>
-                      <input className={inputCls} placeholder="alt.email@..."
-                        value={form.cc_emails || ''} onChange={e => setForm(f => ({ ...f, cc_emails: e.target.value }))} />
+                      <div className="flex gap-1.5">
+                        <input className={inputCls + ' flex-1'} placeholder="alt.email@... sau {{email_personal_reprezentant}}"
+                          value={form.cc_emails || ''} onChange={e => setForm(f => ({ ...f, cc_emails: e.target.value }))} />
+                        <select className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs bg-white text-gray-600 hover:bg-gray-50 cursor-pointer"
+                          value=""
+                          onChange={e => {
+                            if (!e.target.value) return
+                            const cur = form.cc_emails || ''
+                            const sep = cur && !cur.endsWith(',') && !cur.endsWith(' ') ? ', ' : ''
+                            setForm(f => ({ ...f, cc_emails: cur + sep + '{{' + e.target.value + '}}' }))
+                            e.target.value = ''
+                          }}>
+                          <option value="">+ Var</option>
+                          <option value="email_oficial_reprezentant">email oficial reprezentant</option>
+                          <option value="email_personal_reprezentant">email personal reprezentant</option>
+                          <option value="email_setsail">email setsail</option>
+                        </select>
+                      </div>
                     </div>
+                    {/* BCC */}
                     <div>
                       <label className="text-xs font-medium text-gray-500 mb-1 block">BCC</label>
-                      <input className={inputCls} placeholder="office@setsail.ro"
-                        value={form.bcc_emails || ''} onChange={e => setForm(f => ({ ...f, bcc_emails: e.target.value }))} />
+                      <div className="flex gap-1.5">
+                        <input className={inputCls + ' flex-1'} placeholder="office@setsail.ro sau {{email_setsail}}"
+                          value={form.bcc_emails || ''} onChange={e => setForm(f => ({ ...f, bcc_emails: e.target.value }))} />
+                        <select className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs bg-white text-gray-600 hover:bg-gray-50 cursor-pointer"
+                          value=""
+                          onChange={e => {
+                            if (!e.target.value) return
+                            const cur = form.bcc_emails || ''
+                            const sep = cur && !cur.endsWith(',') && !cur.endsWith(' ') ? ', ' : ''
+                            setForm(f => ({ ...f, bcc_emails: cur + sep + '{{' + e.target.value + '}}' }))
+                            e.target.value = ''
+                          }}>
+                          <option value="">+ Var</option>
+                          <option value="email_oficial_reprezentant">email oficial reprezentant</option>
+                          <option value="email_personal_reprezentant">email personal reprezentant</option>
+                          <option value="email_setsail">email setsail</option>
+                        </select>
+                      </div>
                     </div>
                   </div>
                 )}
