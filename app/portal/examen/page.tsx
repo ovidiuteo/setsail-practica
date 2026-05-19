@@ -1,6 +1,6 @@
 'use client'
 import React, { useEffect, useRef, useState, useCallback } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import {
   Circle, CircleDot, Loader2, CheckCircle, AlertCircle, Send, Save
@@ -38,8 +38,6 @@ type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
 
 export default function PortalExamenPage() {
   const router = useRouter()
-  const sp = useSearchParams()
-  const cod = (sp?.get('cod') || '').toUpperCase().trim()
 
   const [phase, setPhase] = useState<'loading' | 'no-active' | 'closed' | 'already-submitted' | 'ready' | 'error'>('loading')
   const [errorMsg, setErrorMsg] = useState('')
@@ -62,6 +60,9 @@ export default function PortalExamenPage() {
   // ---------- INIT / AUTH ----------
   useEffect(() => {
     (async () => {
+      const cod = (typeof window !== 'undefined'
+        ? new URLSearchParams(window.location.search).get('cod') || ''
+        : '').toUpperCase().trim()
       if (!cod) {
         setPhase('error'); setErrorMsg('Lipsește codul de sesiune din URL.'); return
       }
@@ -176,7 +177,7 @@ export default function PortalExamenPage() {
 
       setPhase('ready')
     })()
-  }, [cod, router])
+  }, [router])
 
   // ---------- AUTO-SAVE ----------
   const doSave = useCallback(async () => {
