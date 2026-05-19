@@ -547,7 +547,7 @@ export default function PortalExamenPage() {
         {/* Submit */}
         <button onClick={submitFinal} disabled={submitting}
           className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-base font-bold text-white shadow-lg disabled:opacity-50"
-          style={{ background: '#dc2626' }}>
+          style={{ background: '#7c3aed' }}>
           {submitting ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
           {submitting ? 'Se trimite...' : 'Trimite examen'}
         </button>
