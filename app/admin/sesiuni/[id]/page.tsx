@@ -1585,16 +1585,54 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                   disabled={gPV||students.length===0} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#0a1628'}}>
                   <FileText size={13}/>{gPV?'Se generează...':'Proces Verbal (Anexa 12)'}
                 </button>
-                <button onClick={async()=>{setGFise(true);try{await generateDoc('/api/generate-fise',`Fise_${sess.session_date}.docx`)}catch(e:any){alert(e.message)}setGFise(false)}}
+                <button onClick={async()=>{setGFise(true);try{
+                  // Construim numele: Anexa 10 - Fise de evaluare aptitudini CLASA LOCATIE DD.MM.YYYY[_lista_N].docx
+                  const [yy, mm, dd] = sess.session_date.split('-')
+                  const dataFormatata = `${dd}.${mm}.${yy}`
+                  const locName = (sess.locations?.name || '').toUpperCase()
+                  const clasa = (sess.class_caa || '').replace(',', '+')
+                  const sameDay = allSessions
+                    .filter((s:any) => s.session_type !== 'absent' && s.session_date === sess.session_date)
+                    .sort((a:any, b:any) => {
+                      if (a.session_type === 'principal' && b.session_type !== 'principal') return -1
+                      if (b.session_type === 'principal' && a.session_type !== 'principal') return 1
+                      return (a.id || '').localeCompare(b.id || '')
+                    })
+                  let suffix = ''
+                  if (sameDay.length > 1) {
+                    const idx = sameDay.findIndex((s:any) => s.id === sess.id)
+                    suffix = `_lista_${idx + 1}`
+                  }
+                  const filename = `Anexa 10 - Fise de evaluare aptitudini ${clasa} ${locName} ${dataFormatata}${suffix}.docx`
+                  await generateDoc('/api/generate-fise', filename)
+                }catch(e:any){alert(e.message)}setGFise(false)}}
                   disabled={gFise||students.length===0} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-medium border border-gray-200 hover:bg-gray-50 disabled:opacity-50">
                   <Download size={13}/>{gFise?'Se generează...':'Fișe DOCX (Anexa 10)'}
                 </button>
                 <button onClick={async()=>{setGPDF(true);try{
+                  // Construim numele: Anexa 10 - Fise de evaluare aptitudini CLASA LOCATIE DD.MM.YYYY[_lista_N].pdf
+                  const [yy, mm, dd] = sess.session_date.split('-')
+                  const dataFormatata = `${dd}.${mm}.${yy}`
+                  const locName = (sess.locations?.name || '').toUpperCase()
+                  const clasa = (sess.class_caa || '').replace(',', '+')
+                  const sameDay = allSessions
+                    .filter((s:any) => s.session_type !== 'absent' && s.session_date === sess.session_date)
+                    .sort((a:any, b:any) => {
+                      if (a.session_type === 'principal' && b.session_type !== 'principal') return -1
+                      if (b.session_type === 'principal' && a.session_type !== 'principal') return 1
+                      return (a.id || '').localeCompare(b.id || '')
+                    })
+                  let suffix = ''
+                  if (sameDay.length > 1) {
+                    const idx = sameDay.findIndex((s:any) => s.id === sess.id)
+                    suffix = `_lista_${idx + 1}`
+                  }
+                  const filename = `Anexa 10 - Fise de evaluare aptitudini ${clasa} ${locName} ${dataFormatata}${suffix}.pdf`
                   const res=await fetch('/api/generate-fise-pdf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id})})
                   const isPdfFallback=res.headers.get('X-Pdf-Fallback')==='true'
                   const blob=await res.blob();const url=URL.createObjectURL(blob)
                   if(isPdfFallback){const win=window.open(url,'_blank');if(win)win.onload=()=>win.print()}
-                  else{const a=document.createElement('a');a.href=url;a.download=`Fise_${sess.session_date}.pdf`;a.click()}
+                  else{const a=document.createElement('a');a.href=url;a.download=filename;a.click()}
                 }catch(e:any){alert(e.message)}setGPDF(false)}}
                   disabled={gPDF||students.length===0} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-medium border border-red-100 text-red-700 hover:bg-red-50 disabled:opacity-50">
                   <Download size={13}/>{gPDF?'Se generează...':'Fișe PDF cu semnături'}
