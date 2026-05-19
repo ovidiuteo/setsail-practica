@@ -11,6 +11,9 @@ type Template = {
   subject: string
   body_text: string
   body_html: string
+  to_emails: string
+  cc_emails: string
+  bcc_emails: string
   variables: string[]
   activ: boolean
   created_at: string
@@ -56,6 +59,9 @@ const EMPTY_TEMPLATE: Partial<Template> = {
   subject: '',
   body_text: '',
   body_html: '',
+  to_emails: '',
+  cc_emails: '',
+  bcc_emails: '',
   variables: [],
   activ: true,
 }
@@ -114,6 +120,9 @@ export default function MailTemplatesPage() {
       subject: form.subject,
       body_text: form.body_text || '',
       body_html: form.body_html || '',
+      to_emails: form.to_emails || '',
+      cc_emails: form.cc_emails || '',
+      bcc_emails: form.bcc_emails || '',
       variables: form.variables || [],
       activ: form.activ ?? true,
     }
@@ -343,6 +352,28 @@ export default function MailTemplatesPage() {
                   <input className={inputCls + ' font-mono text-xs'} placeholder="link_portal"
                     value={form.key || ''} onChange={e => setForm(f => ({ ...f, key: e.target.value }))} />
                 </div>
+
+                {/* Adrese email - DOAR pentru categoriile ANR si ANCOM */}
+                {(form.categorie === 'anr' || form.categorie === 'ancom') && (
+                  <div className="space-y-2 p-3 rounded-lg border border-blue-100 bg-blue-50/30">
+                    <div className="text-xs font-medium text-blue-700 mb-1">📧 Adrese email default (suprascriu valorile din sesiune)</div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-500 mb-1 block">TO</label>
+                      <input className={inputCls} placeholder="secretariat@ancom.ro"
+                        value={form.to_emails || ''} onChange={e => setForm(f => ({ ...f, to_emails: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-500 mb-1 block">CC</label>
+                      <input className={inputCls} placeholder="alt.email@..."
+                        value={form.cc_emails || ''} onChange={e => setForm(f => ({ ...f, cc_emails: e.target.value }))} />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-gray-500 mb-1 block">BCC</label>
+                      <input className={inputCls} placeholder="office@setsail.ro"
+                        value={form.bcc_emails || ''} onChange={e => setForm(f => ({ ...f, bcc_emails: e.target.value }))} />
+                    </div>
+                  </div>
+                )}
 
                 {/* Subiect */}
                 <div>
