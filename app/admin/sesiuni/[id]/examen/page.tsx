@@ -5,7 +5,8 @@ import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import {
   ArrowLeft, Save, Circle, CircleDot, FileText, Users,
-  Play, Lock, RotateCcw, ChevronDown, ChevronUp, Loader2, Check
+  Play, Lock, RotateCcw, ChevronDown, ChevronUp, Loader2, Check,
+  Sparkles, ExternalLink, AlertCircle, Shuffle
 } from 'lucide-react'
 
 type RadioExam = {
@@ -53,33 +54,42 @@ type StudentLite = {
   email: string
   class_caa: string
 }
+type PoolQuestionRow = {
+  id: string
+  code: string
+  question_text: string
+  active: boolean
+}
+type PoolOptionRow = {
+  id: string
+  question_id: string
+  code: 'X' | 'Y' | 'Z' | 'W'
+  option_text: string
+  is_correct: boolean
+}
+type PoolTranslationRow = {
+  id: string
+  code: string
+  english_text: string
+  active: boolean
+}
 
 const NUM_GRILA = 20
 const NUM_TRANS = 5
-
-function emptyQuestions(): Question[] {
-  return Array.from({ length: NUM_GRILA }, (_, i) => ({
-    order_no: i + 1,
-    question_text: '',
-    option_a: '',
-    option_b: '',
-    option_c: '',
-    option_d: '',
-    correct_option: 'A',
-  }))
-}
-function emptyTranslations(): Translation[] {
-  return Array.from({ length: NUM_TRANS }, (_, i) => ({
-    order_no: i + 1,
-    english_text: '',
-    romanian_key: '',
-  }))
-}
 
 const STATUS_META: Record<string, { label: string; bg: string; color: string }> = {
   draft:  { label: 'Ciornă',  bg: '#6b728020', color: '#6b7280' },
   active: { label: 'Activ',   bg: '#05966920', color: '#059669' },
   closed: { label: 'Închis',  bg: '#7c3aed20', color: '#7c3aed' },
+}
+
+function shuffle<T>(arr: T[]): T[] {
+  const a = [...arr]
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[a[i], a[j]] = [a[j], a[i]]
+  }
+  return a
 }
 
 export default function ExamenPage() {
@@ -88,6 +98,7 @@ export default function ExamenPage() {
 
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
+  const [generating, setGenerating] = useState<'q' | 't' | null>(null)
   const [sessAccessCode, setSessAccessCode] = useState('')
   const [sessDate, setSessDate] = useState('')
   const [sessClassCaa, setSessClassCaa] = useState('')
@@ -96,8 +107,8 @@ export default function ExamenPage() {
   const [exam, setExam] = useState<RadioExam | null>(null)
   const [codGenerare, setCodGenerare] = useState('')
   const [profesor, setProfesor] = useState('')
-  const [questions, setQuestions] = useState<Question[]>(emptyQuestions())
-  const [translations, setTranslations] = useState<Translation[]>(emptyTranslations())
+  const [questions, setQuestions] = useState<Question[]>([])
+  const [translations, setTranslations] = useState<Translation[]>([])
 
   const [tab, setTab] = useState<'config' | 'results'>('config')
   const [answers, setAnswers] = useState<Answer[]>([])
@@ -138,46 +149,30 @@ export default function ExamenPage() {
         .select('*')
         .eq('exam_id', ex.id)
         .order('order_no', { ascending: true })
-      if (qs && qs.length) {
-        const filled = emptyQuestions()
-        qs.forEach((q: any) => {
-          if (q.order_no >= 1 && q.order_no <= NUM_GRILA) {
-            filled[q.order_no - 1] = {
-              id: q.id,
-              exam_id: q.exam_id,
-              order_no: q.order_no,
-              question_text: q.question_text || '',
-              option_a: q.option_a || '',
-              option_b: q.option_b || '',
-              option_c: q.option_c || '',
-              option_d: q.option_d || '',
-              correct_option: (q.correct_option || 'A') as 'A' | 'B' | 'C' | 'D',
-            }
-          }
-        })
-        setQuestions(filled)
-      }
+      setQuestions((qs || []).map((q: any) => ({
+        id: q.id,
+        exam_id: q.exam_id,
+        order_no: q.order_no,
+        question_text: q.question_text || '',
+        option_a: q.option_a || '',
+        option_b: q.option_b || '',
+        option_c: q.option_c || '',
+        option_d: q.option_d || '',
+        correct_option: (q.correct_option || 'A') as 'A' | 'B' | 'C' | 'D',
+      })))
 
       const { data: tr } = await supabase
         .from('radio_exam_translations')
         .select('*')
         .eq('exam_id', ex.id)
         .order('order_no', { ascending: true })
-      if (tr && tr.length) {
-        const filled = emptyTranslations()
-        tr.forEach((t: any) => {
-          if (t.order_no >= 1 && t.order_no <= NUM_TRANS) {
-            filled[t.order_no - 1] = {
-              id: t.id,
-              exam_id: t.exam_id,
-              order_no: t.order_no,
-              english_text: t.english_text || '',
-              romanian_key: t.romanian_key || '',
-            }
-          }
-        })
-        setTranslations(filled)
-      }
+      setTranslations((tr || []).map((t: any) => ({
+        id: t.id,
+        exam_id: t.exam_id,
+        order_no: t.order_no,
+        english_text: t.english_text || '',
+        romanian_key: t.romanian_key || '',
+      })))
 
       // Răspunsuri
       const { data: ans } = await supabase
@@ -200,8 +195,10 @@ export default function ExamenPage() {
       setGradeDraft(draft)
     } else {
       setExam(null)
-      setQuestions(emptyQuestions())
-      setTranslations(emptyTranslations())
+      setQuestions([])
+      setTranslations([])
+      setAnswers([])
+      setStudents([])
     }
 
     setLoading(false)
@@ -209,92 +206,176 @@ export default function ExamenPage() {
 
   useEffect(() => { if (sessionId) loadAll() }, [sessionId, loadAll])
 
-  // ---------- HELPERS ----------
-  function updateQuestion(idx: number, field: keyof Question, value: string) {
-    setQuestions(prev => prev.map((q, i) => i === idx ? { ...q, [field]: value } : q))
-  }
-  function updateTranslation(idx: number, field: keyof Translation, value: string) {
-    setTranslations(prev => prev.map((t, i) => i === idx ? { ...t, [field]: value } : t))
+  // ---------- ENSURE EXAM ROW ----------
+  async function ensureExamRow(): Promise<RadioExam | null> {
+    if (exam) return exam
+    const { data: created, error } = await supabase
+      .from('radio_exams')
+      .insert({
+        session_id: sessionId,
+        cod_generare: codGenerare || null,
+        profesor_examinator: profesor || null,
+        numar_subiecte_grila: NUM_GRILA,
+        numar_subiecte_engleza: NUM_TRANS,
+      })
+      .select()
+      .single()
+    if (error) { alert('Eroare: ' + error.message); return null }
+    setExam(created as RadioExam)
+    return created as RadioExam
   }
 
-  // ---------- SAVE CONFIG ----------
-  async function saveConfig() {
+  // ---------- SAVE META ----------
+  async function saveMeta() {
     setSaving(true)
     try {
-      let examRow = exam
-      if (!examRow) {
-        const { data: created, error } = await supabase
-          .from('radio_exams')
-          .insert({
-            session_id: sessionId,
-            cod_generare: codGenerare || null,
-            profesor_examinator: profesor || null,
-            numar_subiecte_grila: NUM_GRILA,
-            numar_subiecte_engleza: NUM_TRANS,
-          })
-          .select()
-          .single()
-        if (error) throw error
-        examRow = created as RadioExam
-        setExam(examRow)
-      } else {
-        const { error } = await supabase
-          .from('radio_exams')
-          .update({
-            cod_generare: codGenerare || null,
-            profesor_examinator: profesor || null,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', examRow.id)
-        if (error) throw error
-      }
-
-      // Upsert întrebări — șterg pe cele existente și inserez la loc (mai simplu decât upsert pe (exam_id, order_no))
-      await supabase.from('radio_exam_questions').delete().eq('exam_id', examRow.id)
-      const qRows = questions.map(q => ({
-        exam_id: examRow!.id,
-        order_no: q.order_no,
-        question_text: q.question_text,
-        option_a: q.option_a,
-        option_b: q.option_b,
-        option_c: q.option_c,
-        option_d: q.option_d,
-        correct_option: q.correct_option,
-      }))
-      const { error: qErr } = await supabase.from('radio_exam_questions').insert(qRows)
-      if (qErr) throw qErr
-
-      await supabase.from('radio_exam_translations').delete().eq('exam_id', examRow.id)
-      const tRows = translations.map(t => ({
-        exam_id: examRow!.id,
-        order_no: t.order_no,
-        english_text: t.english_text,
-        romanian_key: t.romanian_key,
-      }))
-      const { error: tErr } = await supabase.from('radio_exam_translations').insert(tRows)
-      if (tErr) throw tErr
-
-      // Dacă status era NULL, setează 'draft' (default-ul DB ar trebui să-l acopere deja, dar pentru siguranță)
+      const examRow = await ensureExamRow()
+      if (!examRow) return
+      const { error } = await supabase
+        .from('radio_exams')
+        .update({
+          cod_generare: codGenerare || null,
+          profesor_examinator: profesor || null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', examRow.id)
+      if (error) throw error
       if (!radioExamStatus) {
         await supabase.from('sessions').update({ radio_exam_status: 'draft' }).eq('id', sessionId)
         setRadioExamStatus('draft')
       }
-
       await loadAll()
-      alert('Configurarea a fost salvată.')
     } catch (e: any) {
-      alert('Eroare la salvare: ' + (e.message || String(e)))
+      alert('Eroare: ' + (e.message || String(e)))
     } finally {
       setSaving(false)
+    }
+  }
+
+  // ---------- GENERATE QUESTIONS FROM POOL ----------
+  async function generateQuestionsFromPool() {
+    if (questions.length > 0) {
+      if (!confirm('Înlocuiești cele ' + questions.length + ' întrebări existente cu altă selecție din pool?')) return
+    }
+    setGenerating('q')
+    try {
+      const examRow = await ensureExamRow()
+      if (!examRow) return
+
+      // Fetch pool active
+      const { data: poolQs } = await supabase
+        .from('radio_question_pool')
+        .select('id, code, question_text, active')
+        .eq('active', true)
+      const poolList = (poolQs || []) as PoolQuestionRow[]
+
+      const { data: poolOpts } = await supabase
+        .from('radio_question_pool_options')
+        .select('*')
+      const allOpts = (poolOpts || []) as PoolOptionRow[]
+
+      // Filtrăm doar întrebările cu un răspuns corect marcat
+      const valid = poolList.filter(q => {
+        const opts = allOpts.filter(o => o.question_id === q.id)
+        return opts.length === 4 && opts.some(o => o.is_correct)
+      })
+
+      if (valid.length < NUM_GRILA) {
+        alert('Pool insuficient: ' + valid.length + '/' + NUM_GRILA +
+          ' întrebări active cu răspuns corect marcat. Mergi la „Gestionare pool" și completează.')
+        return
+      }
+
+      // Random 20
+      const selected = shuffle(valid).slice(0, NUM_GRILA)
+
+      // Generăm snapshot
+      const rows = selected.map((q, idx) => {
+        const opts = allOpts.filter(o => o.question_id === q.id)
+        const shuffled = shuffle(opts)
+        const letters: Array<'A' | 'B' | 'C' | 'D'> = ['A', 'B', 'C', 'D']
+        let correctLetter: 'A' | 'B' | 'C' | 'D' = 'A'
+        const textByLetter: Record<string, string> = { A: '', B: '', C: '', D: '' }
+        shuffled.forEach((o, i) => {
+          const letter = letters[i]
+          textByLetter[letter] = o.option_text
+          if (o.is_correct) correctLetter = letter
+        })
+        return {
+          exam_id: examRow.id,
+          order_no: idx + 1,
+          question_text: q.question_text,
+          option_a: textByLetter.A,
+          option_b: textByLetter.B,
+          option_c: textByLetter.C,
+          option_d: textByLetter.D,
+          correct_option: correctLetter,
+        }
+      })
+
+      // Delete + insert
+      await supabase.from('radio_exam_questions').delete().eq('exam_id', examRow.id)
+      const { error: insErr } = await supabase.from('radio_exam_questions').insert(rows)
+      if (insErr) throw insErr
+
+      await loadAll()
+    } catch (e: any) {
+      alert('Eroare: ' + (e.message || String(e)))
+    } finally {
+      setGenerating(null)
+    }
+  }
+
+  // ---------- GENERATE TRANSLATIONS FROM POOL ----------
+  async function generateTranslationsFromPool() {
+    if (translations.length > 0) {
+      if (!confirm('Înlocuiești cele ' + translations.length + ' traduceri existente cu altă selecție din pool?')) return
+    }
+    setGenerating('t')
+    try {
+      const examRow = await ensureExamRow()
+      if (!examRow) return
+
+      const { data: pool } = await supabase
+        .from('radio_translation_pool')
+        .select('*')
+        .eq('active', true)
+      const poolList = (pool || []) as PoolTranslationRow[]
+
+      if (poolList.length < NUM_TRANS) {
+        alert('Pool insuficient: ' + poolList.length + '/' + NUM_TRANS +
+          ' traduceri active. Mergi la „Gestionare pool" și completează.')
+        return
+      }
+
+      const selected = shuffle(poolList).slice(0, NUM_TRANS)
+      const rows = selected.map((t, idx) => ({
+        exam_id: examRow.id,
+        order_no: idx + 1,
+        english_text: t.english_text,
+        romanian_key: '',
+      }))
+
+      await supabase.from('radio_exam_translations').delete().eq('exam_id', examRow.id)
+      const { error: insErr } = await supabase.from('radio_exam_translations').insert(rows)
+      if (insErr) throw insErr
+
+      await loadAll()
+    } catch (e: any) {
+      alert('Eroare: ' + (e.message || String(e)))
+    } finally {
+      setGenerating(null)
     }
   }
 
   // ---------- STATUS ----------
   async function changeStatus(newStatus: 'draft' | 'active' | 'closed') {
     if (newStatus === radioExamStatus) return
-    if (newStatus === 'active' && !exam) {
-      alert('Salvează mai întâi configurarea examenului.')
-      return
+    if (newStatus === 'active') {
+      if (!exam || questions.length !== NUM_GRILA || translations.length !== NUM_TRANS) {
+        alert('Generează mai întâi cele ' + NUM_GRILA + ' întrebări și ' + NUM_TRANS + ' traduceri din pool.')
+        return
+      }
     }
     if (newStatus === 'draft' && radioExamStatus === 'active') {
       if (!confirm('Treci înapoi la „Ciornă"? Cursanții nu vor mai putea accesa examenul.')) return
@@ -336,6 +417,8 @@ export default function ExamenPage() {
   }
 
   const stMeta = STATUS_META[radioExamStatus] || STATUS_META.draft
+  const hasQuestions = questions.length === NUM_GRILA
+  const hasTranslations = translations.length === NUM_TRANS
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -360,6 +443,16 @@ export default function ExamenPage() {
             {stMeta.label}
           </span>
         </div>
+
+        {/* Acces pool global */}
+        <Link href="/admin/pool-radio" target="_blank"
+          className="flex items-center justify-between gap-3 px-4 py-3 rounded-xl bg-purple-50 border border-purple-200 hover:bg-purple-100 transition-colors">
+          <div className="flex items-center gap-2 text-purple-700">
+            <Sparkles size={16} />
+            <span className="text-sm font-medium">Gestionare pool global întrebări și traduceri</span>
+          </div>
+          <ExternalLink size={14} className="text-purple-500" />
+        </Link>
 
         {/* Status buttons */}
         <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
@@ -390,7 +483,7 @@ export default function ExamenPage() {
           </div>
           <p className="text-xs text-gray-400 mt-2">
             • <strong>Ciornă</strong> — editezi liber, cursanții nu văd nimic.
-            <br />• <strong>Activ</strong> — cursanții pot accesa examenul din portal.
+            <br />• <strong>Activ</strong> — cursanții pot accesa examenul din portal (necesită 20 întrebări + 5 traduceri generate).
             <br />• <strong>Închis</strong> — cursanții nu mai pot trimite. Notează rezultatele.
           </p>
         </div>
@@ -419,122 +512,120 @@ export default function ExamenPage() {
         {/* TAB CONFIG */}
         {tab === 'config' && (
           <div className="space-y-6">
+
             {/* Meta examen */}
-            <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100 grid sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Cod generare</label>
-                <input type="text" value={codGenerare} onChange={e => setCodGenerare(e.target.value)}
-                  placeholder="ex. LRC-2026-05"
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-purple-400" />
+            <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+              <h3 className="font-semibold text-sm text-gray-900 mb-3">Date examen</h3>
+              <div className="grid sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Cod generare</label>
+                  <input type="text" value={codGenerare} onChange={e => setCodGenerare(e.target.value)}
+                    placeholder="ex. LRC-2026-05"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-purple-400" />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Profesor examinator</label>
+                  <input type="text" value={profesor} onChange={e => setProfesor(e.target.value)}
+                    placeholder="Nume profesor"
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-purple-400" />
+                </div>
               </div>
-              <div>
-                <label className="block text-xs font-medium text-gray-600 mb-1">Profesor examinator</label>
-                <input type="text" value={profesor} onChange={e => setProfesor(e.target.value)}
-                  placeholder="Nume profesor"
-                  className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-purple-400" />
+              <div className="mt-3 flex justify-end">
+                <button onClick={saveMeta} disabled={saving}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                  {saving ? <Loader2 size={12} className="animate-spin" /> : <Save size={12} />}
+                  Salvează datele
+                </button>
               </div>
             </div>
 
             {/* Întrebări grilă */}
             <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-              <h3 className="font-semibold text-sm text-gray-900 mb-4">
-                Întrebări grilă <span className="text-gray-400 font-normal">({NUM_GRILA})</span>
-              </h3>
-              <div className="space-y-6">
-                {questions.map((q, i) => (
-                  <div key={i} className="border border-gray-100 rounded-lg p-4">
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="text-xs font-bold text-purple-700">Întrebarea {q.order_no}</span>
-                      <span className="text-xs text-gray-400">
-                        Corect: <strong className="text-gray-700">{q.correct_option}</strong>
-                      </span>
-                    </div>
-                    <textarea
-                      value={q.question_text}
-                      onChange={e => updateQuestion(i, 'question_text', e.target.value)}
-                      placeholder="Textul întrebării..."
-                      rows={2}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm mb-3 focus:outline-none focus:border-purple-400"
-                    />
-                    <div className="space-y-1.5">
-                      {(['A', 'B', 'C', 'D'] as const).map(letter => {
-                        const fieldKey = `option_${letter.toLowerCase()}` as keyof Question
-                        const optionVal = q[fieldKey] as string
-                        const isCorrect = q.correct_option === letter
-                        return (
-                          <div key={letter}
-                            className={`flex items-center gap-2 p-2 rounded-lg border transition-colors ${
-                              isCorrect ? 'bg-purple-50 border-purple-200' : 'border-gray-100 hover:bg-gray-50'
-                            }`}
-                          >
-                            <button type="button"
-                              onClick={() => updateQuestion(i, 'correct_option', letter)}
-                              className="shrink-0"
-                              title="Marchează ca răspuns corect"
-                            >
-                              {isCorrect
-                                ? <CircleDot size={20} className="text-purple-600" />
-                                : <Circle size={20} className="text-gray-300 hover:text-gray-500" />}
-                            </button>
-                            <span className={`text-xs w-5 shrink-0 ${isCorrect ? 'font-bold text-purple-700' : 'text-gray-500'}`}>
-                              {letter}.
-                            </span>
-                            <input type="text"
-                              value={optionVal}
-                              onChange={e => updateQuestion(i, fieldKey, e.target.value)}
-                              placeholder={`Opțiunea ${letter}`}
-                              className={`flex-1 px-2 py-1 bg-transparent text-sm focus:outline-none ${
-                                isCorrect ? 'font-bold text-gray-900' : 'text-gray-700'
-                              }`}
-                            />
-                          </div>
-                        )
-                      })}
-                    </div>
-                  </div>
-                ))}
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold text-sm text-gray-900">
+                  Întrebări grilă <span className="text-gray-400 font-normal">({hasQuestions ? NUM_GRILA + '/' + NUM_GRILA : questions.length + '/' + NUM_GRILA})</span>
+                </h3>
+                <button onClick={generateQuestionsFromPool} disabled={generating === 'q'}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-white disabled:opacity-50"
+                  style={{ background: '#7c3aed' }}>
+                  {generating === 'q' ? <Loader2 size={12} className="animate-spin" /> : <Shuffle size={12} />}
+                  {hasQuestions ? 'Regenerează din pool' : 'Generează 20 din pool'}
+                </button>
               </div>
+              {!hasQuestions && (
+                <div className="text-center py-8 text-gray-400 text-sm bg-gray-50 rounded-lg">
+                  <Sparkles size={20} className="mx-auto mb-2 text-gray-300" />
+                  Examenul nu are încă întrebări. Apasă „Generează 20 din pool" mai sus.
+                </div>
+              )}
+              {hasQuestions && (
+                <div className="space-y-3">
+                  {questions.map((q, i) => (
+                    <div key={q.id || i} className="border border-gray-100 rounded-lg p-4 bg-gray-50">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-bold text-purple-700">Întrebarea {q.order_no}</span>
+                        <span className="text-xs text-gray-400">
+                          Corect: <strong className="text-green-700">{q.correct_option}</strong>
+                        </span>
+                      </div>
+                      <div className="text-sm text-gray-900 mb-3 whitespace-pre-wrap">{q.question_text}</div>
+                      <div className="space-y-1">
+                        {(['A', 'B', 'C', 'D'] as const).map(letter => {
+                          const fieldKey = `option_${letter.toLowerCase()}` as keyof Question
+                          const optionVal = q[fieldKey] as string
+                          const isCorrect = q.correct_option === letter
+                          return (
+                            <div key={letter}
+                              className={`flex items-center gap-2 p-2 rounded ${
+                                isCorrect ? 'bg-green-50 border border-green-200' : 'bg-white border border-gray-100'
+                              }`}>
+                              {isCorrect
+                                ? <CircleDot size={16} className="text-green-600 shrink-0" />
+                                : <Circle size={16} className="text-gray-300 shrink-0" />}
+                              <span className={`text-xs ${isCorrect ? 'font-bold text-gray-900' : 'text-gray-600'}`}>
+                                <strong className="mr-1">{letter}.</strong>{optionVal}
+                              </span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Traduceri */}
             <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-              <h3 className="font-semibold text-sm text-gray-900 mb-4">
-                Traduceri EN → RO <span className="text-gray-400 font-normal">({NUM_TRANS})</span>
-              </h3>
-              <div className="space-y-4">
-                {translations.map((t, i) => (
-                  <div key={i} className="border border-gray-100 rounded-lg p-4">
-                    <div className="mb-2 text-xs font-bold text-purple-700">Traducerea {t.order_no}</div>
-                    <label className="block text-xs text-gray-500 mb-1">Text engleză (de afișat cursantului)</label>
-                    <textarea
-                      value={t.english_text}
-                      onChange={e => updateTranslation(i, 'english_text', e.target.value)}
-                      placeholder="Original english text..."
-                      rows={2}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm mb-2 focus:outline-none focus:border-purple-400"
-                    />
-                    <label className="block text-xs text-gray-500 mb-1">Traducere de referință (română)</label>
-                    <textarea
-                      value={t.romanian_key}
-                      onChange={e => updateTranslation(i, 'romanian_key', e.target.value)}
-                      placeholder="Traducerea corectă pentru notarea manuală..."
-                      rows={2}
-                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-purple-400"
-                    />
-                  </div>
-                ))}
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-semibold text-sm text-gray-900">
+                  Traduceri EN → RO <span className="text-gray-400 font-normal">({hasTranslations ? NUM_TRANS + '/' + NUM_TRANS : translations.length + '/' + NUM_TRANS})</span>
+                </h3>
+                <button onClick={generateTranslationsFromPool} disabled={generating === 't'}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-white disabled:opacity-50"
+                  style={{ background: '#7c3aed' }}>
+                  {generating === 't' ? <Loader2 size={12} className="animate-spin" /> : <Shuffle size={12} />}
+                  {hasTranslations ? 'Regenerează din pool' : 'Generează 5 din pool'}
+                </button>
               </div>
+              {!hasTranslations && (
+                <div className="text-center py-8 text-gray-400 text-sm bg-gray-50 rounded-lg">
+                  <Sparkles size={20} className="mx-auto mb-2 text-gray-300" />
+                  Examenul nu are încă traduceri. Apasă „Generează 5 din pool" mai sus.
+                </div>
+              )}
+              {hasTranslations && (
+                <div className="space-y-3">
+                  {translations.map((t, i) => (
+                    <div key={t.id || i} className="border border-gray-100 rounded-lg p-4 bg-gray-50">
+                      <div className="text-xs font-bold text-purple-700 mb-2">Traducerea {t.order_no}</div>
+                      <div className="text-sm text-gray-900 whitespace-pre-wrap">{t.english_text}</div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
-            {/* Save */}
-            <div className="sticky bottom-4">
-              <button onClick={saveConfig} disabled={saving}
-                className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold text-white shadow-lg disabled:opacity-50"
-                style={{ background: '#7c3aed' }}>
-                {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                {saving ? 'Se salvează...' : 'Salvează configurarea'}
-              </button>
-            </div>
           </div>
         )}
 
@@ -543,7 +634,7 @@ export default function ExamenPage() {
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             {!exam && (
               <div className="p-8 text-center text-gray-400 text-sm">
-                Examenul nu a fost încă salvat. Completează tab-ul „Configurare".
+                Examenul nu a fost încă creat. Completează tab-ul „Configurare".
               </div>
             )}
             {exam && answers.length === 0 && (
@@ -594,7 +685,7 @@ export default function ExamenPage() {
                           {/* Notare manuală traduceri */}
                           <div className="bg-white rounded-lg p-4 border border-purple-100">
                             <div className="text-xs font-semibold text-purple-700 mb-2">
-                              Notare traduceri (1-5)
+                              Notare traduceri (0-5)
                             </div>
                             <div className="flex items-center gap-3">
                               <input type="number" min={0} max={5} step={1}
@@ -651,9 +742,6 @@ export default function ExamenPage() {
                                   <div key={t.order_no} className="text-xs">
                                     <div className="text-gray-400 mb-1">
                                       <strong>EN {t.order_no}:</strong> {t.english_text}
-                                    </div>
-                                    <div className="text-gray-400 mb-1">
-                                      <strong>Referință:</strong> {t.romanian_key}
                                     </div>
                                     <div className="bg-purple-50 border border-purple-100 rounded p-2 text-gray-800 whitespace-pre-wrap">
                                       <strong>Cursant:</strong> {studentText || <em className="text-gray-400">(necompletat)</em>}
