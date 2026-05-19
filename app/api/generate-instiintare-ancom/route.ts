@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 
 // tip: 'curs-obtinere' | 'curs-prelungire' | 'examen-obtinere' | 'examen-prelungire'
 // format: 'docx' | 'pdf'
+// cu_stampila: true (default) | false — daca false, NU include stampila/semnatura in document
 
 export async function POST(req: NextRequest) {
   try {
@@ -10,6 +11,7 @@ export async function POST(req: NextRequest) {
     const { session_id } = body
     const tip = body.tip || 'curs-obtinere'
     const format = body.format || 'docx'
+    const cuStampila = body.cu_stampila !== false  // default true, devine false doar daca e trimis explicit false
 
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -150,9 +152,12 @@ export async function POST(req: NextRequest) {
         ? `<img src="${antetDoc.file_data}" style="max-width:100%;height:auto;max-height:117px;display:block;"/>`
         : `<div style="font-weight:bold;font-size:13pt;text-align:center;">S.C. SET SAIL ADVERTISING S.R.L.</div>`
 
-      const stampilaHtml = stampilaDoc?.file_data
-        ? `<img src="${stampilaDoc.file_data}" style="height:110px;width:auto;display:block;margin:0 auto;"/>`
-        : `<div style="font-style:italic;color:#666;">Semnătură și ștampilă</div>`
+      // Stampila apare doar daca cuStampila=true
+      const stampilaHtml = !cuStampila
+        ? ''
+        : (stampilaDoc?.file_data
+          ? `<img src="${stampilaDoc.file_data}" style="height:110px;width:auto;display:block;margin:0 auto;"/>`
+          : `<div style="font-style:italic;color:#666;">Semnătură și ștampilă</div>`)
 
       // Construim paragrafele corpului
       const paragraphs = corpText.split('\n').map(line => {
@@ -288,9 +293,9 @@ export async function POST(req: NextRequest) {
       } catch(e) { console.error(e) }
     }
 
-    // Stampila cu semnatura
+    // Stampila cu semnatura — DOAR daca cuStampila=true
     let stampilaImg: any[] = []
-    if (stampilaDoc?.file_data) {
+    if (cuStampila && stampilaDoc?.file_data) {
       try {
         const base64 = stampilaDoc.file_data.includes(',') ? stampilaDoc.file_data.split(',')[1] : stampilaDoc.file_data
         const buf = Buffer.from(base64, 'base64')
