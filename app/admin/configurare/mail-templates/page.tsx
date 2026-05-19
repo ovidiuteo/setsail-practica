@@ -370,11 +370,12 @@ export default function MailTemplatesPage() {
                         <select className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs bg-white text-gray-600 hover:bg-gray-50 cursor-pointer"
                           value=""
                           onChange={e => {
-                            if (!e.target.value) return
+                            const v = e.target.value
+                            if (!v) return
+                            e.target.value = ''
                             const cur = form.to_emails || ''
                             const sep = cur && !cur.endsWith(',') && !cur.endsWith(' ') ? ', ' : ''
-                            setForm(f => ({ ...f, to_emails: cur + sep + '{{' + e.target.value + '}}' }))
-                            e.target.value = ''
+                            setForm(f => ({ ...f, to_emails: cur + sep + '{{' + v + '}}' }))
                           }}>
                           <option value="">+ Var</option>
                           <option value="email_oficial_reprezentant">email oficial reprezentant</option>
@@ -392,11 +393,12 @@ export default function MailTemplatesPage() {
                         <select className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs bg-white text-gray-600 hover:bg-gray-50 cursor-pointer"
                           value=""
                           onChange={e => {
-                            if (!e.target.value) return
+                            const v = e.target.value
+                            if (!v) return
+                            e.target.value = ''
                             const cur = form.cc_emails || ''
                             const sep = cur && !cur.endsWith(',') && !cur.endsWith(' ') ? ', ' : ''
-                            setForm(f => ({ ...f, cc_emails: cur + sep + '{{' + e.target.value + '}}' }))
-                            e.target.value = ''
+                            setForm(f => ({ ...f, cc_emails: cur + sep + '{{' + v + '}}' }))
                           }}>
                           <option value="">+ Var</option>
                           <option value="email_oficial_reprezentant">email oficial reprezentant</option>
@@ -414,11 +416,12 @@ export default function MailTemplatesPage() {
                         <select className="border border-gray-200 rounded-lg px-2 py-1.5 text-xs bg-white text-gray-600 hover:bg-gray-50 cursor-pointer"
                           value=""
                           onChange={e => {
-                            if (!e.target.value) return
+                            const v = e.target.value
+                            if (!v) return
+                            e.target.value = ''
                             const cur = form.bcc_emails || ''
                             const sep = cur && !cur.endsWith(',') && !cur.endsWith(' ') ? ', ' : ''
-                            setForm(f => ({ ...f, bcc_emails: cur + sep + '{{' + e.target.value + '}}' }))
-                            e.target.value = ''
+                            setForm(f => ({ ...f, bcc_emails: cur + sep + '{{' + v + '}}' }))
                           }}>
                           <option value="">+ Var</option>
                           <option value="email_oficial_reprezentant">email oficial reprezentant</option>
