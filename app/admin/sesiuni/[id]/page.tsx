@@ -21,6 +21,9 @@ function applyTemplate(text: string, sess: any, contacts?: any[]): string {
     'ora_start':                  sess?.practice_start_time || '9:30',
     'zz_data_start_curs':         sess?.course_start_date ? String(new Date(sess.course_start_date).getDate()) : '',
     'zz_llll_aaaa_data_practica': sd  ? new Date(sd).toLocaleDateString('ro-RO', {day:'2-digit', month:'long', year:'numeric'}) : '',
+    'email_oficial_reprezentant': sess?.evaluators?.email_oficial || '',
+    'email_personal_reprezentant':sess?.evaluators?.email_personal || '',
+    'email_setsail':              'office@setsail.ro',
   }
   const contactIds: string[] = sess?.contact_person_ids || []
   const selected = (contacts || [])
