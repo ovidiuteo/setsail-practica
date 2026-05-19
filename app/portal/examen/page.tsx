@@ -29,6 +29,7 @@ type AnswerRow = {
   grila_answers: Record<string, string>
   translation_answers: Record<string, string>
   feedback: string
+  obtinere_prelungire: string
   status: string
   submitted_at: string | null
   grila_score: number
@@ -36,6 +37,22 @@ type AnswerRow = {
 }
 
 type SaveStatus = 'idle' | 'saving' | 'saved' | 'error'
+
+const MONTHS_SHORT_RO = ['IAN', 'FEB', 'MAR', 'APR', 'MAI', 'IUN', 'IUL', 'AUG', 'SEP', 'OCT', 'NOI', 'DEC']
+const MONTHS_LONG_RO = ['IANUARIE', 'FEBRUARIE', 'MARTIE', 'APRILIE', 'MAI', 'IUNIE', 'IULIE', 'AUGUST', 'SEPTEMBRIE', 'OCTOMBRIE', 'NOIEMBRIE', 'DECEMBRIE']
+
+function formatDateShortRO(date: string | null | undefined): string {
+  if (!date) return ''
+  const d = new Date(date)
+  if (isNaN(d.getTime())) return ''
+  return `${d.getDate()} ${MONTHS_SHORT_RO[d.getMonth()]} ${d.getFullYear()}`
+}
+function formatDateLongRO(date: string | null | undefined): string {
+  if (!date) return ''
+  const d = new Date(date)
+  if (isNaN(d.getTime())) return ''
+  return `${d.getDate()} ${MONTHS_LONG_RO[d.getMonth()]} ${d.getFullYear()}`
+}
 
 export default function PortalExamenPage() {
   const router = useRouter()
@@ -52,12 +69,15 @@ export default function PortalExamenPage() {
   const [grila, setGrila] = useState<Record<string, string>>({})
   const [trad, setTrad] = useState<Record<string, string>>({})
   const [feedback, setFeedback] = useState<string>('')
-  const [profesor, setProfesor] = useState<string>('DRUGAN OVIDIU')
+  const [profesorGrila, setProfesorGrila] = useState<string>('DRUGAN OVIDIU')
+  const [profesorEngleza, setProfesorEngleza] = useState<string>('DRUGAN OVIDIU')
+  const [codGenerare, setCodGenerare] = useState<string>('')
+  const [obtinerePrelungire, setObtinerePrelungire] = useState<string>('')
 
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [submitting, setSubmitting] = useState(false)
 
-  const lastSavedRef = useRef<{ grila: string; trad: string; feedback: string }>({ grila: '', trad: '', feedback: '' })
+  const lastSavedRef = useRef<{ grila: string; trad: string; feedback: string; obtinere: string }>({ grila: '', trad: '', feedback: '', obtinere: '' })
   const answerRowIdRef = useRef<string>('')
 
   // ---------- INIT / AUTH ----------
@@ -109,7 +129,11 @@ export default function PortalExamenPage() {
         .maybeSingle()
       if (!ex) { setPhase('error'); setErrorMsg('Examenul nu este configurat.'); return }
       setExamId(ex.id)
-      if (ex.profesor_examinator) setProfesor(ex.profesor_examinator)
+      if (ex.profesor_grila) setProfesorGrila(ex.profesor_grila)
+      else if (ex.profesor_examinator) setProfesorGrila(ex.profesor_examinator)
+      if (ex.profesor_engleza) setProfesorEngleza(ex.profesor_engleza)
+      else if (ex.profesor_examinator) setProfesorEngleza(ex.profesor_examinator)
+      if (ex.cod_generare) setCodGenerare(ex.cod_generare)
 
       // 4) Verifică studentul + nume
       const { data: st } = await supabase
@@ -175,10 +199,12 @@ export default function PortalExamenPage() {
       setGrila(row.grila_answers || {})
       setTrad(row.translation_answers || {})
       setFeedback(row.feedback || '')
+      setObtinerePrelungire(row.obtinere_prelungire || '')
       lastSavedRef.current = {
         grila: JSON.stringify(row.grila_answers || {}),
         trad: JSON.stringify(row.translation_answers || {}),
         feedback: row.feedback || '',
+        obtinere: row.obtinere_prelungire || '',
       }
 
       setPhase('ready')
@@ -193,7 +219,8 @@ export default function PortalExamenPage() {
     if (
       gJson === lastSavedRef.current.grila &&
       tJson === lastSavedRef.current.trad &&
-      feedback === lastSavedRef.current.feedback
+      feedback === lastSavedRef.current.feedback &&
+      obtinerePrelungire === lastSavedRef.current.obtinere
     ) return
     setSaveStatus('saving')
     const { error } = await supabase
@@ -202,16 +229,17 @@ export default function PortalExamenPage() {
         grila_answers: grila,
         translation_answers: trad,
         feedback: feedback,
+        obtinere_prelungire: obtinerePrelungire,
         updated_at: new Date().toISOString(),
       })
       .eq('id', answerRowIdRef.current)
     if (error) {
       setSaveStatus('error')
     } else {
-      lastSavedRef.current = { grila: gJson, trad: tJson, feedback }
+      lastSavedRef.current = { grila: gJson, trad: tJson, feedback, obtinere: obtinerePrelungire }
       setSaveStatus('saved')
     }
-  }, [grila, trad, feedback])
+  }, [grila, trad, feedback, obtinerePrelungire])
 
   useEffect(() => {
     if (phase !== 'ready') return
@@ -222,6 +250,10 @@ export default function PortalExamenPage() {
   // ---------- SUBMIT FINAL ----------
   async function submitFinal() {
     if (!answerRow || !examId) return
+    if (!obtinerePrelungire) {
+      alert('Te rugăm să alegi „Obținere carnet" sau „Prelungire valabilitate" la începutul examenului.')
+      return
+    }
     if (!confirm('Sigur trimiți examenul? Nu vei mai putea modifica nimic după acest pas.')) return
     setSubmitting(true)
     try {
@@ -236,6 +268,7 @@ export default function PortalExamenPage() {
           grila_answers: grila,
           translation_answers: trad,
           feedback: feedback,
+          obtinere_prelungire: obtinerePrelungire,
           grila_score: score,
           status: 'submitted',
           submitted_at: new Date().toISOString(),
@@ -341,6 +374,60 @@ export default function PortalExamenPage() {
 
       <div className="max-w-3xl mx-auto p-4 space-y-6">
 
+        {/* Antet examen */}
+        <div className="bg-white rounded-2xl p-6 shadow-sm">
+          <h1 className="text-2xl font-bold text-gray-900 mb-4">
+            EXAMEN RADIO GMDSS/LRC - {formatDateShortRO(session?.session_date)}
+          </h1>
+          <p className="text-sm text-gray-700 leading-relaxed mb-6">
+            Probă de regulamente interne şi internaţionale pentru examenul de obţinere/prelungire a Certificatului General
+            de Operator radio pentru ambarcaţiuni de agrement în Serviciile Mobil Maritim şi Mobil Maritim prin
+            Satelit emis în conformitate Rezoluţia 343 (WRC-97) şi Recomandarea CEPT ERC 31-05 E
+          </p>
+          <div className="space-y-2 text-base text-gray-800">
+            <div>DATA: {formatDateLongRO(session?.session_date)}</div>
+            <div>Evaluare simulator: ________</div>
+            <div>Numar subiecte engleza: {totalTrad}</div>
+            <div>Punctaj engleza: ________</div>
+            <div>Numar subiecte grila: {totalGrila}</div>
+            <div>Numar subiecte corecte: ________</div>
+          </div>
+          {codGenerare && (
+            <div className="mt-4 pt-3 border-t border-gray-100 text-xs text-gray-400">
+              Cod generare = {codGenerare}
+            </div>
+          )}
+        </div>
+
+        {/* Obținere / Prelungire */}
+        <div className="bg-white rounded-2xl p-5 shadow-sm">
+          <label className="block text-base font-semibold text-gray-900 mb-3">
+            OBȚINERE CARNET SAU PRELUNGIRE? <span className="text-red-500">*</span>
+          </label>
+          <div className="space-y-2">
+            {[
+              { val: 'obtinere', label: 'OBȚINERE CARNET (nu am mai avut brevet radio sau a expirat)' },
+              { val: 'prelungire', label: 'PRELUNGIRE VALABILITATE (carnetul mai are foarte puțin și expiră)' },
+            ].map(opt => {
+              const isSelected = obtinerePrelungire === opt.val
+              return (
+                <button key={opt.val} type="button"
+                  onClick={() => setObtinerePrelungire(opt.val)}
+                  className={`w-full flex items-start gap-3 p-3 rounded-lg border text-left transition-colors ${
+                    isSelected ? 'bg-purple-50 border-purple-300' : 'border-gray-200 hover:bg-gray-50'
+                  }`}>
+                  {isSelected
+                    ? <CircleDot size={22} className="text-purple-600 shrink-0 mt-0.5" />
+                    : <Circle size={22} className="text-gray-300 shrink-0 mt-0.5" />}
+                  <span className={`text-base ${isSelected ? 'font-bold text-gray-900' : 'text-gray-700'}`}>
+                    {opt.label}
+                  </span>
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
         {/* Avertisment */}
         <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800 flex gap-2">
           <span className="text-lg leading-none">⚠️</span>
@@ -352,7 +439,12 @@ export default function PortalExamenPage() {
 
         {/* Întrebări grilă */}
         <div className="bg-white rounded-2xl p-5 shadow-sm space-y-5">
-          <h2 className="font-bold text-gray-900 text-lg">Întrebări grilă</h2>
+          <div className="border-b border-gray-100 pb-3">
+            <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-1">
+              <h2 className="font-bold text-gray-900 text-lg">CHESTIONAR RĂSPUNSURI - TEST GRILA PROBA LRC</h2>
+              <div className="text-sm text-gray-500 font-medium">PROFESOR EXAMINATOR: {profesorGrila}</div>
+            </div>
+          </div>
           {questions.map(q => {
             const selected = grila[String(q.order_no)] || ''
             return (
@@ -392,7 +484,7 @@ export default function PortalExamenPage() {
           <div className="border-b border-gray-100 pb-3">
             <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-1">
               <h2 className="font-bold text-gray-900 text-lg">Radiocomunicatii LRC proba II: ENGLEZA</h2>
-              <div className="text-sm text-gray-500 font-medium">PROFESOR EXAMINATOR: {profesor}</div>
+              <div className="text-sm text-gray-500 font-medium">PROFESOR EXAMINATOR: {profesorEngleza}</div>
             </div>
             <div className="text-base font-semibold text-gray-700 mt-3">Translate into Romanian:</div>
           </div>

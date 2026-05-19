@@ -14,6 +14,8 @@ type RadioExam = {
   session_id: string
   cod_generare: string | null
   profesor_examinator: string | null
+  profesor_grila: string | null
+  profesor_engleza: string | null
   numar_subiecte_grila: number
   numar_subiecte_engleza: number
 }
@@ -43,6 +45,7 @@ type Answer = {
   translation_answers: Record<string, string>
   translation_grades: Record<string, any>
   feedback: string
+  obtinere_prelungire: string
   status: 'in_progress' | 'submitted' | 'graded' | string
   submitted_at: string | null
   graded_at: string | null
@@ -107,7 +110,11 @@ export default function ExamenPage() {
 
   const [exam, setExam] = useState<RadioExam | null>(null)
   const [codGenerare, setCodGenerare] = useState('')
-  const [profesor, setProfesor] = useState('')
+  const [profesorGrila, setProfesorGrila] = useState('')
+  const [profesorEngleza, setProfesorEngleza] = useState('')
+  const [useCustomGrila, setUseCustomGrila] = useState(false)
+  const [useCustomEngleza, setUseCustomEngleza] = useState(false)
+  const [availableProfesori, setAvailableProfesori] = useState<string[]>([])
   const [questions, setQuestions] = useState<Question[]>([])
   const [translations, setTranslations] = useState<Translation[]>([])
 
@@ -124,7 +131,7 @@ export default function ExamenPage() {
 
     const { data: s } = await supabase
       .from('sessions')
-      .select('id, access_code, session_date, class_caa, radio_exam_status')
+      .select('id, access_code, session_date, class_caa, radio_exam_status, instructor_id, contact_person_ids')
       .eq('id', sessionId)
       .single()
     if (s) {
@@ -133,6 +140,32 @@ export default function ExamenPage() {
       setSessClassCaa(s.class_caa || '')
       setRadioExamStatus(s.radio_exam_status || 'draft')
     }
+
+    // Fetch contact persons + instructor pentru lista profesori
+    const profesoriList: string[] = []
+    if (s?.instructor_id) {
+      const { data: ins } = await supabase
+        .from('instructors')
+        .select('full_name')
+        .eq('id', s.instructor_id)
+        .maybeSingle()
+      if (ins?.full_name) profesoriList.push(ins.full_name)
+    }
+    if (s?.contact_person_ids && Array.isArray(s.contact_person_ids) && s.contact_person_ids.length > 0) {
+      const { data: cps } = await supabase
+        .from('contact_persons')
+        .select('full_name')
+        .in('id', s.contact_person_ids)
+      if (cps) cps.forEach((c: any) => {
+        if (c.full_name && !profesoriList.includes(c.full_name)) profesoriList.push(c.full_name)
+      })
+    }
+    setAvailableProfesori(profesoriList)
+
+    // Detect Ovidiu Drugan din listă pentru default
+    const ovidiuMatch = profesoriList.find(n =>
+      n.toLowerCase().includes('ovidiu') && n.toLowerCase().includes('drugan')
+    )
 
     const { data: ex } = await supabase
       .from('radio_exams')
@@ -143,7 +176,14 @@ export default function ExamenPage() {
     if (ex) {
       setExam(ex as RadioExam)
       setCodGenerare(ex.cod_generare || '')
-      setProfesor(ex.profesor_examinator || '')
+
+      // Migrare valoare legacy din profesor_examinator dacă coloanele noi sunt goale
+      const grilaVal = ex.profesor_grila || ex.profesor_examinator || ovidiuMatch || ''
+      const englezaVal = ex.profesor_engleza || ex.profesor_examinator || ovidiuMatch || ''
+      setProfesorGrila(grilaVal)
+      setProfesorEngleza(englezaVal)
+      setUseCustomGrila(!!grilaVal && !profesoriList.includes(grilaVal))
+      setUseCustomEngleza(!!englezaVal && !profesoriList.includes(englezaVal))
 
       const { data: qs } = await supabase
         .from('radio_exam_questions')
@@ -200,6 +240,11 @@ export default function ExamenPage() {
       setTranslations([])
       setAnswers([])
       setStudents([])
+      // Default Ovidiu Drugan dacă există în listă
+      if (ovidiuMatch) {
+        setProfesorGrila(ovidiuMatch)
+        setProfesorEngleza(ovidiuMatch)
+      }
     }
 
     setLoading(false)
@@ -215,7 +260,9 @@ export default function ExamenPage() {
       .insert({
         session_id: sessionId,
         cod_generare: codGenerare || null,
-        profesor_examinator: profesor || null,
+        profesor_grila: profesorGrila || null,
+        profesor_engleza: profesorEngleza || null,
+        profesor_examinator: profesorGrila || null,
         numar_subiecte_grila: NUM_GRILA,
         numar_subiecte_engleza: NUM_TRANS,
       })
@@ -236,7 +283,9 @@ export default function ExamenPage() {
         .from('radio_exams')
         .update({
           cod_generare: codGenerare || null,
-          profesor_examinator: profesor || null,
+          profesor_grila: profesorGrila || null,
+          profesor_engleza: profesorEngleza || null,
+          profesor_examinator: profesorGrila || null,
           updated_at: new Date().toISOString(),
         })
         .eq('id', examRow.id)
@@ -535,13 +584,71 @@ export default function ExamenPage() {
                     placeholder="ex. LRC-2026-05"
                     className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-purple-400" />
                 </div>
+                <div></div>
+
+                {/* Profesor examinator grilă */}
                 <div>
-                  <label className="block text-xs font-medium text-gray-600 mb-1">Profesor examinator</label>
-                  <input type="text" value={profesor} onChange={e => setProfesor(e.target.value)}
-                    placeholder="Nume profesor"
-                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-purple-400" />
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Profesor examinator (grilă)</label>
+                  <select
+                    value={useCustomGrila ? '__custom__' : profesorGrila}
+                    onChange={e => {
+                      if (e.target.value === '__custom__') {
+                        setUseCustomGrila(true)
+                        setProfesorGrila('')
+                      } else {
+                        setUseCustomGrila(false)
+                        setProfesorGrila(e.target.value)
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-purple-400 bg-white">
+                    <option value="">— alege —</option>
+                    {availableProfesori.map(p => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                    <option value="__custom__">✏️ Alt nume...</option>
+                  </select>
+                  {useCustomGrila && (
+                    <input type="text" value={profesorGrila}
+                      onChange={e => setProfesorGrila(e.target.value)}
+                      placeholder="Tastează numele"
+                      className="mt-2 w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-purple-400" />
+                  )}
+                </div>
+
+                {/* Profesor examinator engleză */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">Profesor examinator (engleză)</label>
+                  <select
+                    value={useCustomEngleza ? '__custom__' : profesorEngleza}
+                    onChange={e => {
+                      if (e.target.value === '__custom__') {
+                        setUseCustomEngleza(true)
+                        setProfesorEngleza('')
+                      } else {
+                        setUseCustomEngleza(false)
+                        setProfesorEngleza(e.target.value)
+                      }
+                    }}
+                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-purple-400 bg-white">
+                    <option value="">— alege —</option>
+                    {availableProfesori.map(p => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                    <option value="__custom__">✏️ Alt nume...</option>
+                  </select>
+                  {useCustomEngleza && (
+                    <input type="text" value={profesorEngleza}
+                      onChange={e => setProfesorEngleza(e.target.value)}
+                      placeholder="Tastează numele"
+                      className="mt-2 w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-purple-400" />
+                  )}
                 </div>
               </div>
+              {availableProfesori.length === 0 && (
+                <p className="mt-2 text-xs text-amber-600">
+                  ⚠ Sesiunea nu are persoane de contact sau instructor setați. Folosește „✏️ Alt nume..." pentru a introduce manual.
+                </p>
+              )}
               <div className="mt-3 flex justify-end">
                 <button onClick={saveMeta} disabled={saving}
                   className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-50">
@@ -694,6 +801,18 @@ export default function ExamenPage() {
 
                       {isOpen && (
                         <div className="px-5 pb-5 bg-gray-50 space-y-4">
+                          {/* Obținere / Prelungire */}
+                          <div className="bg-white rounded-lg p-4 border border-gray-100">
+                            <div className="text-xs font-semibold text-gray-700 mb-1">Tip examen ales de cursant</div>
+                            <div className="text-sm text-gray-900">
+                              {a.obtinere_prelungire === 'obtinere'
+                                ? 'OBȚINERE CARNET'
+                                : a.obtinere_prelungire === 'prelungire'
+                                  ? 'PRELUNGIRE VALABILITATE'
+                                  : <em className="text-gray-400">(necompletat)</em>}
+                            </div>
+                          </div>
+
                           {/* Notare manuală traduceri */}
                           <div className="bg-white rounded-lg p-4 border border-purple-100">
                             <div className="text-xs font-semibold text-purple-700 mb-2">
