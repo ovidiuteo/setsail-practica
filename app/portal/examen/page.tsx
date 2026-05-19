@@ -357,8 +357,7 @@ export default function PortalExamenPage() {
             const selected = grila[String(q.order_no)] || ''
             return (
               <div key={q.id} className="border-t border-gray-100 pt-4 first:border-t-0 first:pt-0">
-                <div className="text-sm font-bold text-purple-700 mb-1">{q.order_no}</div>
-                <div className="text-lg font-bold text-gray-900 mb-3 whitespace-pre-wrap">{q.question_text}</div>
+                <div className="text-lg font-bold text-gray-900 mb-3 whitespace-pre-wrap">{q.order_no}. {q.question_text}</div>
                 <div className="space-y-1.5">
                   {(['A', 'B', 'C', 'D'] as const).map(letter => {
                     const optKey = `option_${letter.toLowerCase()}` as keyof Question
@@ -399,9 +398,8 @@ export default function PortalExamenPage() {
           </div>
           {translations.map(t => (
             <div key={t.id} className="border-t border-gray-100 pt-4 first:border-t-0 first:pt-0">
-              <div className="text-sm font-bold text-purple-700 mb-1">{t.order_no}</div>
               <div className="text-lg font-bold text-gray-900 mb-3 whitespace-pre-wrap bg-gray-50 rounded-lg p-3">
-                {t.english_text}
+                {t.order_no}. {t.english_text}
               </div>
               <label className="block text-sm text-gray-500 mb-1">Traducerea ta în română:</label>
               <textarea
