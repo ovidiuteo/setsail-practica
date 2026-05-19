@@ -348,7 +348,18 @@ export default function ExamenPage() {
         return
       }
 
-      const selected = shuffle(poolList).slice(0, NUM_TRANS)
+      // Când pool-ul are EXACT NUM_TRANS traduceri, le păstrăm în ordinea codului (T1, T2, ...)
+      // ca să nu randomizăm fără rost. Doar când există mai multe disponibile facem shuffle.
+      let selected: PoolTranslationRow[]
+      if (poolList.length === NUM_TRANS) {
+        selected = [...poolList].sort((a, b) => {
+          const na = parseInt(a.code.replace(/[^0-9]/g, ''), 10) || 0
+          const nb = parseInt(b.code.replace(/[^0-9]/g, ''), 10) || 0
+          return na - nb
+        })
+      } else {
+        selected = shuffle(poolList).slice(0, NUM_TRANS)
+      }
       const rows = selected.map((t, idx) => ({
         exam_id: examRow.id,
         order_no: idx + 1,
