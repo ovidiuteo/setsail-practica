@@ -28,6 +28,7 @@ type AnswerRow = {
   student_id: string
   grila_answers: Record<string, string>
   translation_answers: Record<string, string>
+  feedback: string
   status: string
   submitted_at: string | null
   grila_score: number
@@ -50,11 +51,12 @@ export default function PortalExamenPage() {
 
   const [grila, setGrila] = useState<Record<string, string>>({})
   const [trad, setTrad] = useState<Record<string, string>>({})
+  const [feedback, setFeedback] = useState<string>('')
 
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [submitting, setSubmitting] = useState(false)
 
-  const lastSavedRef = useRef<{ grila: string; trad: string }>({ grila: '', trad: '' })
+  const lastSavedRef = useRef<{ grila: string; trad: string; feedback: string }>({ grila: '', trad: '', feedback: '' })
   const answerRowIdRef = useRef<string>('')
 
   // ---------- INIT / AUTH ----------
@@ -170,9 +172,11 @@ export default function PortalExamenPage() {
 
       setGrila(row.grila_answers || {})
       setTrad(row.translation_answers || {})
+      setFeedback(row.feedback || '')
       lastSavedRef.current = {
         grila: JSON.stringify(row.grila_answers || {}),
         trad: JSON.stringify(row.translation_answers || {}),
+        feedback: row.feedback || '',
       }
 
       setPhase('ready')
@@ -184,23 +188,28 @@ export default function PortalExamenPage() {
     if (!answerRowIdRef.current) return
     const gJson = JSON.stringify(grila)
     const tJson = JSON.stringify(trad)
-    if (gJson === lastSavedRef.current.grila && tJson === lastSavedRef.current.trad) return
+    if (
+      gJson === lastSavedRef.current.grila &&
+      tJson === lastSavedRef.current.trad &&
+      feedback === lastSavedRef.current.feedback
+    ) return
     setSaveStatus('saving')
     const { error } = await supabase
       .from('radio_exam_answers')
       .update({
         grila_answers: grila,
         translation_answers: trad,
+        feedback: feedback,
         updated_at: new Date().toISOString(),
       })
       .eq('id', answerRowIdRef.current)
     if (error) {
       setSaveStatus('error')
     } else {
-      lastSavedRef.current = { grila: gJson, trad: tJson }
+      lastSavedRef.current = { grila: gJson, trad: tJson, feedback }
       setSaveStatus('saved')
     }
-  }, [grila, trad])
+  }, [grila, trad, feedback])
 
   useEffect(() => {
     if (phase !== 'ready') return
@@ -224,6 +233,7 @@ export default function PortalExamenPage() {
         .update({
           grila_answers: grila,
           translation_answers: trad,
+          feedback: feedback,
           grila_score: score,
           status: 'submitted',
           submitted_at: new Date().toISOString(),
@@ -395,6 +405,45 @@ export default function PortalExamenPage() {
               />
             </div>
           ))}
+        </div>
+
+        {/* Feedback Google Reviews */}
+        <div className="bg-white rounded-2xl p-5 shadow-sm">
+          <h2 className="font-bold text-gray-900 mb-2">Feedback curs Radio Online</h2>
+          <p className="text-sm text-gray-600 mb-4">
+            Vă rugăm să ne acordați câteva minute și să ne redactați un feedback al experienței
+            dumneavoastră SetSail.
+          </p>
+          <p className="text-sm text-gray-600 mb-4">
+            Este cu atât mai de ajutor cu cât doriți să-l postați și la Google Reviews, prin link
+            sau prin scanare QR Code:
+          </p>
+          <div className="flex flex-col sm:flex-row items-center gap-4 mb-4 p-4 bg-gray-50 rounded-xl">
+            <img src="/qr-feedback-google.jpg" alt="QR Google Reviews SetSail"
+              className="w-32 h-32 shrink-0 rounded-lg shadow-sm" />
+            <div className="flex-1 text-center sm:text-left">
+              <a href="https://g.page/r/CSF2mkhzKOBDEAI/review"
+                target="_blank" rel="noopener noreferrer"
+                className="inline-block px-4 py-2 rounded-lg text-xs font-medium text-white"
+                style={{ background: '#7c3aed' }}>
+                Deschide formular Google Reviews
+              </a>
+              <p className="text-xs text-gray-400 mt-2 break-all">
+                https://g.page/r/CSF2mkhzKOBDEAI/review
+              </p>
+            </div>
+          </div>
+          <label className="block text-xs text-gray-500 mb-1">Feedback-ul tău (opțional):</label>
+          <textarea
+            value={feedback}
+            onChange={e => setFeedback(e.target.value)}
+            rows={4}
+            placeholder="Scrie aici impresiile tale despre curs..."
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-purple-400"
+          />
+          <p className="text-xs text-gray-400 mt-2 text-center">
+            Echipa SetSail vă mulțumește pentru bunăvoință!
+          </p>
         </div>
 
         {/* Submit */}

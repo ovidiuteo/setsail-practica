@@ -42,6 +42,7 @@ type Answer = {
   grila_answers: Record<string, string>
   translation_answers: Record<string, string>
   translation_grades: Record<string, any>
+  feedback: string
   status: 'in_progress' | 'submitted' | 'graded' | string
   submitted_at: string | null
   graded_at: string | null
@@ -760,6 +761,16 @@ export default function ExamenPage() {
                                   </div>
                                 )
                               })}
+                            </div>
+                          </div>
+
+                          {/* Feedback Google Reviews */}
+                          <div className="bg-white rounded-lg p-4 border border-gray-100">
+                            <div className="text-xs font-semibold text-gray-700 mb-2">Feedback curs</div>
+                            <div className="text-xs text-gray-800 whitespace-pre-wrap bg-gray-50 rounded p-3">
+                              {a.feedback?.trim()
+                                ? a.feedback
+                                : <em className="text-gray-400">(cursantul nu a lăsat feedback)</em>}
                             </div>
                           </div>
                         </div>
