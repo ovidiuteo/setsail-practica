@@ -2,10 +2,14 @@ import { NextRequest, NextResponse } from 'next/server'
 
 // Genereaza un singur HTML care contine toate 4 instiintarile,
 // fiecare pe pagina ei (page-break intre ele).
+// Parametri:
+//   session_id: required
+//   cu_stampila: true (default) | false - forwardeaza catre fiecare subapel
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json()
     const { session_id } = body
+    const cuStampila = body.cu_stampila !== false  // default true
 
     if (!session_id) {
       return NextResponse.json({ error: 'session_id required' }, { status: 400 })
@@ -21,7 +25,7 @@ export async function POST(req: NextRequest) {
       const res = await fetch(`${origin}/api/generate-instiintare-ancom`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id, tip, format: 'pdf' })
+        body: JSON.stringify({ session_id, tip, format: 'pdf', cu_stampila: cuStampila })
       })
 
       if (!res.ok) {
@@ -34,11 +38,16 @@ export async function POST(req: NextRequest) {
       htmlParts.push(extractBody(html))
     }
 
+    // Titlu doc dinamic in functie de cu/fara stampila (apare in numele PDF la Save as)
+    const titluDoc = cuStampila
+      ? 'Toate Înștiințările ANCOM'
+      : 'Toate Înștiințările ANCOM (fără ștampilă)'
+
     const combined = `<!DOCTYPE html>
 <html lang="ro">
 <head>
 <meta charset="UTF-8">
-<title>Toate Înștiințările ANCOM</title>
+<title>${titluDoc}</title>
 <style>
   @page { size: A4 portrait; margin: 5mm 18mm 15mm 18mm; }
   @media print {
