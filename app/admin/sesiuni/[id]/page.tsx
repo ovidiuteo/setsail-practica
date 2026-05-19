@@ -1547,7 +1547,16 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
             ) : (
               <div className="space-y-2">
                 {/* Documente standard */}
-                <button onClick={async()=>{setGPV(true);try{await generateDoc('/api/generate-pv',`PV_${sess.session_date}.docx`)}catch(e:any){alert(e.message)}setGPV(false)}}
+                <button onClick={async()=>{setGPV(true);try{
+                  // Renumerotam in DB conform ordinii curente din state (fara only_sailing)
+                  const visibleStudents = students.filter(s=>!s.only_sailing)
+                  for (let i = 0; i < visibleStudents.length; i++) {
+                    if (visibleStudents[i].order_in_session !== i + 1) {
+                      await supabase.from('students').update({ order_in_session: i + 1 }).eq('id', visibleStudents[i].id)
+                    }
+                  }
+                  await generateDoc('/api/generate-pv',`PV_${sess.session_date}.docx`)
+                }catch(e:any){alert(e.message)}setGPV(false)}}
                   disabled={gPV||students.length===0} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#0a1628'}}>
                   <FileText size={13}/>{gPV?'Se generează...':'Proces Verbal (Anexa 12)'}
                 </button>
