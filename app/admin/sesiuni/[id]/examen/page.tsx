@@ -6,7 +6,7 @@ import Link from 'next/link'
 import {
   ArrowLeft, Save, Circle, CircleDot, FileText, Users,
   Play, Lock, RotateCcw, ChevronDown, ChevronUp, Loader2, Check,
-  Sparkles, ExternalLink, AlertCircle, Shuffle, Trash2
+  Sparkles, ExternalLink, AlertCircle, Shuffle, Trash2, Copy
 } from 'lucide-react'
 
 type RadioExam = {
@@ -96,6 +96,20 @@ function shuffle<T>(arr: T[]): T[] {
   return a
 }
 
+// Generează un cod numeric de N digiți: primul digit 1-9, restul 0-9,
+// fără mai mult de 3 zerouri consecutive.
+function generateRandomCode(length = 13): string {
+  for (let attempt = 0; attempt < 50; attempt++) {
+    let code = String(Math.floor(Math.random() * 9) + 1)
+    for (let i = 1; i < length; i++) {
+      code += String(Math.floor(Math.random() * 10))
+    }
+    if (!/0{4,}/.test(code)) return code
+  }
+  // fallback foarte improbabil
+  return '1' + String(Date.now()).slice(-(length - 1))
+}
+
 export default function ExamenPage() {
   const params = useParams<{ id: string }>()
   const sessionId = params?.id as string
@@ -124,6 +138,7 @@ export default function ExamenPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [gradeDraft, setGradeDraft] = useState<Record<string, number>>({})
   const [savingGrade, setSavingGrade] = useState<string | null>(null)
+  const [solutionCopied, setSolutionCopied] = useState(false)
 
   // ---------- LOAD ----------
   const loadAll = useCallback(async () => {
@@ -367,6 +382,14 @@ export default function ExamenPage() {
       await supabase.from('radio_exam_questions').delete().eq('exam_id', examRow.id)
       const { error: insErr } = await supabase.from('radio_exam_questions').insert(rows)
       if (insErr) throw insErr
+
+      // Auto-generare cod unic pentru această sesiune de generare
+      const newCode = generateRandomCode(13)
+      await supabase
+        .from('radio_exams')
+        .update({ cod_generare: newCode, updated_at: new Date().toISOString() })
+        .eq('id', examRow.id)
+      setCodGenerare(newCode)
 
       await loadAll()
     } catch (e: any) {
@@ -694,6 +717,35 @@ export default function ExamenPage() {
                   Examenul nu are încă întrebări. Apasă „Generează 20 din pool" mai sus.
                 </div>
               )}
+              {hasQuestions && (() => {
+                const solutionString = questions
+                  .map(q => `${q.order_no}. ${q.correct_option}`)
+                  .join(', ')
+                return (
+                  <div className="mb-4 flex items-center gap-2 p-3 bg-purple-50 border border-purple-100 rounded-lg">
+                    <span className="text-xs text-purple-700 font-semibold shrink-0">Soluție:</span>
+                    <code className="flex-1 text-xs font-mono text-gray-800 select-all overflow-x-auto whitespace-nowrap">
+                      {solutionString}
+                    </code>
+                    <button
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard.writeText(solutionString)
+                          setSolutionCopied(true)
+                          setTimeout(() => setSolutionCopied(false), 1500)
+                        } catch {
+                          alert('Nu am putut copia în clipboard. Selectează manual.')
+                        }
+                      }}
+                      title="Copiază soluția"
+                      className="shrink-0 flex items-center gap-1 px-2 py-1 rounded text-xs font-medium text-white"
+                      style={{ background: '#7c3aed' }}>
+                      {solutionCopied ? <Check size={12} /> : <Copy size={12} />}
+                      {solutionCopied ? 'Copiat' : 'Copiază'}
+                    </button>
+                  </div>
+                )
+              })()}
               {hasQuestions && (
                 <div className="space-y-3">
                   {questions.map((q, i) => (
