@@ -1408,16 +1408,28 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                     <Download size={11}/>PDF Examen Prelungire
                   </button>
                 </div>
-                {/* Buton mare: TOATE Instiintarile intr-un singur PDF */}
-                <div className="border-t border-gray-200 pt-2 mt-2">
-                  <button onClick={async()=>{try{
-                    const res=await fetch('/api/generate-instiintare-ancom-toate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id})})
-                    if(!res.ok){const e=await res.text();throw new Error(e)}
-                    const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>w.print(),1200)}
-                  }catch(e:any){alert(e.message)}}}
-                    className="w-full flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold text-white" style={{background:'#7c3aed'}}>
-                    <Download size={14}/>TOATE Înștiințările PDF
-                  </button>
+                {/* Butoane mari: TOATE Instiintarile intr-un singur PDF - cu/fara stampila */}
+                <div className="border-t border-gray-200 pt-2 mt-2 space-y-1.5">
+                  <div className="flex gap-1.5">
+                    <button onClick={async()=>{try{
+                      const res=await fetch('/api/generate-instiintare-ancom-toate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id, cu_stampila: true})})
+                      if(!res.ok){const e=await res.text();throw new Error(e)}
+                      const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>w.print(),1200)}
+                    }catch(e:any){alert(e.message)}}}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-3 rounded-lg text-xs font-semibold text-white"
+                      style={{background:'#7c3aed'}} title="TOATE înștiințările cu ștampilă și semnătură">
+                      <Download size={13}/>TOATE cu ștamp.
+                    </button>
+                    <button onClick={async()=>{try{
+                      const res=await fetch('/api/generate-instiintare-ancom-toate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id, cu_stampila: false})})
+                      if(!res.ok){const e=await res.text();throw new Error(e)}
+                      const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>w.print(),1200)}
+                    }catch(e:any){alert(e.message)}}}
+                      className="flex-1 flex items-center justify-center gap-1.5 py-3 rounded-lg text-xs font-semibold border-2 border-purple-300 text-purple-700 hover:bg-purple-50"
+                      title="TOATE înștiințările FĂRĂ ștampilă și semnătură">
+                      <Download size={13}/>TOATE fără ștamp.
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
