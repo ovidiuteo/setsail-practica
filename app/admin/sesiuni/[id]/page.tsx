@@ -1628,11 +1628,25 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                     suffix = `_lista_${idx + 1}`
                   }
                   const filename = `Anexa 10 - Fise de evaluare aptitudini ${clasa} ${locName} ${dataFormatata}${suffix}.pdf`
+                  const titluFaraExt = filename.replace(/\.pdf$/, '')
                   const res=await fetch('/api/generate-fise-pdf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id})})
                   const isPdfFallback=res.headers.get('X-Pdf-Fallback')==='true'
-                  const blob=await res.blob();const url=URL.createObjectURL(blob)
-                  if(isPdfFallback){const win=window.open(url,'_blank');if(win)win.onload=()=>win.print()}
-                  else{const a=document.createElement('a');a.href=url;a.download=filename;a.click()}
+                  if(isPdfFallback){
+                    // HTML pentru print - injectam <title> ca sa apara ca filename la Save as PDF
+                    let html = await res.text()
+                    if (/<title>[^<]*<\/title>/i.test(html)) {
+                      html = html.replace(/<title>[^<]*<\/title>/i, `<title>${titluFaraExt}</title>`)
+                    } else if (/<head[^>]*>/i.test(html)) {
+                      html = html.replace(/<head[^>]*>/i, m => `${m}<title>${titluFaraExt}</title>`)
+                    } else {
+                      html = `<title>${titluFaraExt}</title>` + html
+                    }
+                    const win = window.open('', '_blank')
+                    if (win) { win.document.write(html); win.document.close(); setTimeout(()=>win.print(), 1000) }
+                  } else {
+                    const blob=await res.blob();const url=URL.createObjectURL(blob)
+                    const a=document.createElement('a');a.href=url;a.download=filename;a.click()
+                  }
                 }catch(e:any){alert(e.message)}setGPDF(false)}}
                   disabled={gPDF||students.length===0} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-medium border border-red-100 text-red-700 hover:bg-red-50 disabled:opacity-50">
                   <Download size={13}/>{gPDF?'Se generează...':'Fișe PDF cu semnături'}
