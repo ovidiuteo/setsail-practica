@@ -52,6 +52,7 @@ export default function PortalExamenPage() {
   const [grila, setGrila] = useState<Record<string, string>>({})
   const [trad, setTrad] = useState<Record<string, string>>({})
   const [feedback, setFeedback] = useState<string>('')
+  const [profesor, setProfesor] = useState<string>('DRUGAN OVIDIU')
 
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle')
   const [submitting, setSubmitting] = useState(false)
@@ -108,6 +109,7 @@ export default function PortalExamenPage() {
         .maybeSingle()
       if (!ex) { setPhase('error'); setErrorMsg('Examenul nu este configurat.'); return }
       setExamId(ex.id)
+      if (ex.profesor_examinator) setProfesor(ex.profesor_examinator)
 
       // 4) Verifică studentul + nume
       const { data: st } = await supabase
@@ -321,17 +323,17 @@ export default function PortalExamenPage() {
       <div className="sticky top-0 z-10 bg-white border-b border-gray-200 shadow-sm">
         <div className="max-w-3xl mx-auto px-4 py-3 flex items-center justify-between gap-4">
           <div className="min-w-0">
-            <h1 className="text-sm font-bold text-gray-900 truncate">Examinare Radio LRC</h1>
-            <p className="text-xs text-gray-400 truncate">{studentName}</p>
+            <h1 className="text-base font-bold text-gray-900 truncate">Examinare Radio LRC</h1>
+            <p className="text-sm text-gray-400 truncate">{studentName}</p>
           </div>
-          <div className="text-xs flex items-center gap-2 shrink-0">
-            {saveStatus === 'saving' && <><Loader2 size={12} className="animate-spin text-gray-400" /> <span className="text-gray-400">Salvez...</span></>}
-            {saveStatus === 'saved' && <><CheckCircle size={12} className="text-green-500" /> <span className="text-green-600">Salvat</span></>}
-            {saveStatus === 'error' && <><AlertCircle size={12} className="text-red-500" /> <span className="text-red-600">Eroare salvare</span></>}
-            {saveStatus === 'idle' && <Save size={12} className="text-gray-300" />}
+          <div className="text-sm flex items-center gap-2 shrink-0">
+            {saveStatus === 'saving' && <><Loader2 size={14} className="animate-spin text-gray-400" /> <span className="text-gray-400">Salvez...</span></>}
+            {saveStatus === 'saved' && <><CheckCircle size={14} className="text-green-500" /> <span className="text-green-600">Salvat</span></>}
+            {saveStatus === 'error' && <><AlertCircle size={14} className="text-red-500" /> <span className="text-red-600">Eroare salvare</span></>}
+            {saveStatus === 'idle' && <Save size={14} className="text-gray-300" />}
           </div>
         </div>
-        <div className="max-w-3xl mx-auto px-4 pb-2 flex gap-3 text-xs text-gray-500">
+        <div className="max-w-3xl mx-auto px-4 pb-2 flex gap-3 text-sm text-gray-500">
           <span>Grilă: <strong className="text-gray-800">{answeredGrila}/{totalGrila}</strong></span>
           <span>Traduceri: <strong className="text-gray-800">{answeredTrad}/{totalTrad}</strong></span>
         </div>
@@ -340,8 +342,8 @@ export default function PortalExamenPage() {
       <div className="max-w-3xl mx-auto p-4 space-y-6">
 
         {/* Avertisment */}
-        <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex gap-2">
-          <span className="text-base leading-none">⚠️</span>
+        <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-sm text-amber-800 flex gap-2">
+          <span className="text-lg leading-none">⚠️</span>
           <span>
             Răspunsurile se salvează automat. Apasă <strong>„Trimite examen"</strong> la final.
             După trimitere, nu mai poți modifica nimic.
@@ -350,13 +352,13 @@ export default function PortalExamenPage() {
 
         {/* Întrebări grilă */}
         <div className="bg-white rounded-2xl p-5 shadow-sm space-y-5">
-          <h2 className="font-bold text-gray-900">Întrebări grilă</h2>
+          <h2 className="font-bold text-gray-900 text-lg">Întrebări grilă</h2>
           {questions.map(q => {
             const selected = grila[String(q.order_no)] || ''
             return (
               <div key={q.id} className="border-t border-gray-100 pt-4 first:border-t-0 first:pt-0">
-                <div className="text-xs font-bold text-purple-700 mb-1">Întrebarea {q.order_no}</div>
-                <div className="text-sm text-gray-900 mb-3 whitespace-pre-wrap">{q.question_text}</div>
+                <div className="text-sm font-bold text-purple-700 mb-1">{q.order_no}</div>
+                <div className="text-lg font-bold text-gray-900 mb-3 whitespace-pre-wrap">{q.question_text}</div>
                 <div className="space-y-1.5">
                   {(['A', 'B', 'C', 'D'] as const).map(letter => {
                     const optKey = `option_${letter.toLowerCase()}` as keyof Question
@@ -372,9 +374,9 @@ export default function PortalExamenPage() {
                         }`}
                       >
                         {isSelected
-                          ? <CircleDot size={20} className="text-purple-600 shrink-0 mt-0.5" />
-                          : <Circle size={20} className="text-gray-300 shrink-0 mt-0.5" />}
-                        <span className={`text-sm ${isSelected ? 'font-bold text-gray-900' : 'text-gray-700'}`}>
+                          ? <CircleDot size={22} className="text-purple-600 shrink-0 mt-0.5" />
+                          : <Circle size={22} className="text-gray-300 shrink-0 mt-0.5" />}
+                        <span className={`text-base ${isSelected ? 'font-bold text-gray-900' : 'text-gray-700'}`}>
                           <span className="mr-2">{letter}.</span>{optionText}
                         </span>
                       </button>
@@ -388,20 +390,26 @@ export default function PortalExamenPage() {
 
         {/* Traduceri */}
         <div className="bg-white rounded-2xl p-5 shadow-sm space-y-5">
-          <h2 className="font-bold text-gray-900">Traduceri EN → RO</h2>
+          <div className="border-b border-gray-100 pb-3">
+            <div className="flex flex-col sm:flex-row sm:items-baseline sm:justify-between gap-1">
+              <h2 className="font-bold text-gray-900 text-lg">Radiocomunicatii LRC proba II: ENGLEZA</h2>
+              <div className="text-sm text-gray-500 font-medium">PROFESOR EXAMINATOR: {profesor}</div>
+            </div>
+            <div className="text-base font-semibold text-gray-700 mt-3">Translate into Romanian:</div>
+          </div>
           {translations.map(t => (
             <div key={t.id} className="border-t border-gray-100 pt-4 first:border-t-0 first:pt-0">
-              <div className="text-xs font-bold text-purple-700 mb-1">Traducerea {t.order_no}</div>
-              <div className="bg-gray-50 rounded-lg p-3 text-sm text-gray-700 mb-2 whitespace-pre-wrap">
+              <div className="text-sm font-bold text-purple-700 mb-1">{t.order_no}</div>
+              <div className="text-lg font-bold text-gray-900 mb-3 whitespace-pre-wrap bg-gray-50 rounded-lg p-3">
                 {t.english_text}
               </div>
-              <label className="block text-xs text-gray-500 mb-1">Traducerea ta în română:</label>
+              <label className="block text-sm text-gray-500 mb-1">Traducerea ta în română:</label>
               <textarea
                 value={trad[String(t.order_no)] || ''}
                 onChange={e => setTrad(prev => ({ ...prev, [String(t.order_no)]: e.target.value }))}
                 rows={3}
                 placeholder="Scrie traducerea aici..."
-                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-purple-400"
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-base focus:outline-none focus:border-purple-400"
               />
             </div>
           ))}
@@ -409,12 +417,12 @@ export default function PortalExamenPage() {
 
         {/* Feedback Google Reviews */}
         <div className="bg-white rounded-2xl p-5 shadow-sm">
-          <h2 className="font-bold text-gray-900 mb-2">Feedback curs Radio Online</h2>
-          <p className="text-sm text-gray-600 mb-4">
+          <h2 className="font-bold text-gray-900 text-lg mb-2">Feedback curs Radio Online</h2>
+          <p className="text-base text-gray-600 mb-4">
             Vă rugăm să ne acordați câteva minute și să ne redactați un feedback al experienței
             dumneavoastră SetSail.
           </p>
-          <p className="text-sm text-gray-600 mb-4">
+          <p className="text-base text-gray-600 mb-4">
             Este cu atât mai de ajutor cu cât doriți să-l postați și la Google Reviews, prin link
             sau prin scanare QR Code:
           </p>
@@ -424,36 +432,36 @@ export default function PortalExamenPage() {
             <div className="flex-1 text-center sm:text-left">
               <a href="https://g.page/r/CSF2mkhzKOBDEAI/review"
                 target="_blank" rel="noopener noreferrer"
-                className="inline-block px-4 py-2 rounded-lg text-xs font-medium text-white"
+                className="inline-block px-4 py-2 rounded-lg text-sm font-medium text-white"
                 style={{ background: '#7c3aed' }}>
                 Deschide formular Google Reviews
               </a>
-              <p className="text-xs text-gray-400 mt-2 break-all">
+              <p className="text-sm text-gray-400 mt-2 break-all">
                 https://g.page/r/CSF2mkhzKOBDEAI/review
               </p>
             </div>
           </div>
-          <label className="block text-xs text-gray-500 mb-1">Feedback-ul tău (opțional):</label>
+          <label className="block text-sm text-gray-500 mb-1">Feedback-ul tău (opțional):</label>
           <textarea
             value={feedback}
             onChange={e => setFeedback(e.target.value)}
             rows={4}
             placeholder="Scrie aici impresiile tale despre curs..."
-            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:border-purple-400"
+            className="w-full px-3 py-2 border border-gray-200 rounded-lg text-base focus:outline-none focus:border-purple-400"
           />
-          <p className="text-xs text-gray-400 mt-2 text-center">
+          <p className="text-sm text-gray-400 mt-2 text-center">
             Echipa SetSail vă mulțumește pentru bunăvoință!
           </p>
         </div>
 
         {/* Submit */}
         <button onClick={submitFinal} disabled={submitting}
-          className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-sm font-bold text-white shadow-lg disabled:opacity-50"
+          className="w-full flex items-center justify-center gap-2 py-3.5 rounded-2xl text-base font-bold text-white shadow-lg disabled:opacity-50"
           style={{ background: '#dc2626' }}>
-          {submitting ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
+          {submitting ? <Loader2 size={18} className="animate-spin" /> : <Send size={18} />}
           {submitting ? 'Se trimite...' : 'Trimite examen'}
         </button>
-        <p className="text-xs text-gray-400 text-center">
+        <p className="text-sm text-gray-400 text-center">
           După trimitere nu mai poți modifica răspunsurile.
         </p>
 
