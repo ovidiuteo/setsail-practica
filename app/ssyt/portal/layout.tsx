@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { Anchor } from 'lucide-react'
 import { getPortalSession } from '@/lib/ssyt/portal-session'
+import { getSportClubsAccess } from '@/lib/ssyt/club-access'
 import PortalNav from './PortalNav'
 import LogoutButton from './LogoutButton'
 
@@ -12,6 +13,7 @@ export default async function PortalLayout({ children }: { children: React.React
   if (!session) redirect('/ssyt/portal-login?next=/ssyt/portal')
 
   const { participant } = session
+  const access = await getSportClubsAccess(session.participantId, session.seasonId)
 
   return (
     <div className="min-h-screen flex flex-col" style={{ background: '#f8f9fa' }}>
@@ -27,7 +29,7 @@ export default async function PortalLayout({ children }: { children: React.React
         </div>
       </header>
 
-      <PortalNav />
+      <PortalNav showClubsTab={access.hasAccess} />
 
       <main className="flex-1">
         {children}

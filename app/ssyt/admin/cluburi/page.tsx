@@ -2,11 +2,34 @@ import Link from 'next/link'
 import { Shield, Plus } from 'lucide-react'
 import { supabase, getActiveSeason } from '@/lib/ssyt/supabase'
 import ClubsManager from './ClubsManager'
+import BetaAccessCard from './BetaAccessCard'
 
 export const revalidate = 0
 
 export default async function AdminClubsPage() {
   const season = await getActiveSeason()
+
+  const { data: seasonAccessRow } = await supabase
+    .from('ssyt_seasons')
+    .select('id, sport_clubs_enabled, sport_clubs_beta_participant_ids')
+    .eq('id', season?.id ?? '00000000-0000-0000-0000-000000000000')
+    .maybeSingle()
+
+  const betaIds = (seasonAccessRow?.sport_clubs_beta_participant_ids ?? []) as string[]
+
+  const [participantsRes, betaParticipantsRes] = await Promise.all([
+    supabase
+      .from('ssyt_participants')
+      .select('id, full_name')
+      .in('status', ['active', 'accepted'])
+      .order('full_name'),
+    betaIds.length > 0
+      ? supabase
+          .from('ssyt_participants')
+          .select('id, full_name')
+          .in('id', betaIds)
+      : Promise.resolve({ data: [] as { id: string; full_name: string | null }[] }),
+  ])
 
   const { data: clubs } = await supabase
     .from('ssyt_sport_clubs')
@@ -65,6 +88,15 @@ export default async function AdminClubsPage() {
           Adaugă club
         </Link>
       </div>
+
+      {seasonAccessRow && (
+        <BetaAccessCard
+          seasonId={seasonAccessRow.id}
+          enabledForAll={!!seasonAccessRow.sport_clubs_enabled}
+          betaParticipants={(betaParticipantsRes.data ?? []) as { id: string; full_name: string | null }[]}
+          allParticipants={(participantsRes.data ?? []) as { id: string; full_name: string | null }[]}
+        />
+      )}
 
       <ClubsManager clubs={clubs ?? []} appsCounts={appsCounts} />
     </div>

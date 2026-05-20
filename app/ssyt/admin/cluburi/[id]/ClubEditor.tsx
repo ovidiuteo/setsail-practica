@@ -5,6 +5,7 @@ import { Info, Mail, ListOrdered, FileText, ClipboardList } from 'lucide-react'
 import InfoTab from './InfoTab'
 import ContactsTab from './ContactsTab'
 import ProceduresTab from './ProceduresTab'
+import ApplicationsTab from './ApplicationsTab'
 
 export type ClubRow = {
   id: string
@@ -56,6 +57,7 @@ export type ApplicationRow = {
   submitted_at: string | null
   decided_at: string | null
   admin_notes: string | null
+  participant: { id: string; full_name: string | null; email: string | null } | null
 }
 
 const TABS = [
@@ -123,13 +125,7 @@ export default function ClubEditor({
           subtitle={`${templates.length} template-uri configurate momentan.`}
         />
       )}
-      {tab === 'applications' && (
-        <Placeholder
-          title="Aplicații participanți"
-          message="Lista de aplicații + aprobare/respingere vine în Batch 3."
-          subtitle={`${applications.length} aplicații în total.`}
-        />
-      )}
+      {tab === 'applications' && <ApplicationsTab initial={applications} />}
     </div>
   )
 }

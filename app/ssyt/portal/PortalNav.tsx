@@ -1,20 +1,24 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, Users, CheckSquare, User, Anchor, Sailboat, Briefcase } from 'lucide-react'
+import { Home, Users, CheckSquare, User, Anchor, Sailboat, Briefcase, Shield } from 'lucide-react'
 
-const TABS = [
+const BASE_TABS = [
   { href: '/ssyt/portal', label: 'Acasă', icon: Home, exact: true },
   { href: '/ssyt/portal/team', label: 'Echipa', icon: Users },
   { href: '/ssyt/portal/regattas', label: 'Regate', icon: Anchor },
   { href: '/ssyt/portal/availability', label: 'Disponibilități', icon: CheckSquare },
   { href: '/ssyt/portal/team-space', label: 'Spațiu echipă', icon: Briefcase },
   { href: '/ssyt/portal/boat-info', label: 'First 34.7', icon: Sailboat },
-  { href: '/ssyt/portal/profile', label: 'Profil', icon: User },
 ]
+const CLUB_TAB = { href: '/ssyt/portal/club', label: 'Club sportiv', icon: Shield }
+const PROFILE_TAB = { href: '/ssyt/portal/profile', label: 'Profil', icon: User }
 
-export default function PortalNav() {
+export default function PortalNav({ showClubsTab = false }: { showClubsTab?: boolean }) {
   const pathname = usePathname()
+  const TABS = showClubsTab
+    ? [...BASE_TABS, CLUB_TAB, PROFILE_TAB]
+    : [...BASE_TABS, PROFILE_TAB]
 
   return (
     <nav className="border-b overflow-x-auto" style={{ background: '#fff', borderColor: '#e5e7eb' }}>

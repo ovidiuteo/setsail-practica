@@ -39,7 +39,9 @@ export default async function AdminClubDetailPage({
       .order('display_order'),
     supabase
       .from('ssyt_club_applications')
-      .select('id, status, started_at, submitted_at, decided_at, admin_notes')
+      .select(
+        'id, status, started_at, submitted_at, decided_at, admin_notes, participant:ssyt_participants(id, full_name, email)'
+      )
       .eq('club_id', params.id)
       .order('started_at', { ascending: false }),
   ])
@@ -80,7 +82,15 @@ export default async function AdminClubDetailPage({
         contacts={contactsRes.data ?? []}
         procedures={proceduresRes.data ?? []}
         templates={templatesRes.data ?? []}
-        applications={appsRes.data ?? []}
+        applications={(appsRes.data ?? []).map((a: any) => ({
+          id: a.id,
+          status: a.status,
+          started_at: a.started_at,
+          submitted_at: a.submitted_at,
+          decided_at: a.decided_at,
+          admin_notes: a.admin_notes,
+          participant: Array.isArray(a.participant) ? a.participant[0] ?? null : a.participant,
+        }))}
       />
     </div>
   )
