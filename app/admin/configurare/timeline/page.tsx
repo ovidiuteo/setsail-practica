@@ -175,18 +175,17 @@ export default function TimelineConfigPage() {
           const sortedMs = ([...msDates] as any[]).sort((a, b) => a.date.getTime() - b.date.getTime())
           const exactMs = sortedMs.find(m => m.date.getTime() === t)
           const prevMs = !exactMs ? [...sortedMs].reverse().find(m => m.date.getTime() <= t) : null
-          let bg: string | undefined = '#e5e7eb'
+          let bg = '#e5e7eb'
           let label = ''
           if (exactMs) {
-            bg = exactMs.color === 'none' ? undefined : exactMs.color
+            bg = exactMs.color === 'none' ? (isWeekend ? '#86efac' : '#bbf7d0') : exactMs.color
             label = exactMs.label
           } else if (prevMs) {
-            const resolved = resolveColor(
+            bg = resolveColor(
               isWeekend ? prevMs.color_weekend : prevMs.color_day,
               prevMs.color,
               isWeekend ? 'weekend' : 'day',
             )
-            bg = resolved || undefined
             label = prevMs.label
           }
           return (

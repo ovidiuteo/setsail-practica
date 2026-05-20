@@ -87,18 +87,18 @@ function SessionTimeline({ session, config }: { session: any; config: Record<str
           ? [...sorted].reverse().find(m => m.date.getTime() <= t)
           : null
 
-        let bg: string | undefined = '#e5e7eb'
+        let bg = '#e5e7eb'
         let label = ''
         if (exactMs) {
-          bg = exactMs.color === 'none' ? undefined : exactMs.color
+          // Dacă „event" e 'none' folosim verdele default global
+          bg = exactMs.color === 'none' ? (isWeekend ? '#86efac' : '#bbf7d0') : exactMs.color
           label = exactMs.label
         } else if (previousMs) {
-          const resolved = resolveColor(
+          bg = resolveColor(
             isWeekend ? previousMs.color_weekend : previousMs.color_day,
             previousMs.color,
             isWeekend ? 'weekend' : 'day',
           )
-          bg = resolved || undefined
           label = previousMs.label
         }
 

@@ -59,9 +59,19 @@ export function defaultWeekendColor(eventColor: string): string {
   return lighten(eventColor, 22)
 }
 
-// Returnează culoarea efectivă, ținând cont de fallback la derivat
-export function resolveColor(stored: string | null | undefined, eventColor: string, kind: 'day' | 'weekend'): string | null {
-  if (stored === 'none') return null // transparent
+// Culori default „globale" (verde) folosite când utilizatorul alege explicit „none"
+// pentru a se distinge de derivatele din event color.
+export const DEFAULT_GLOBAL_DAY = '#bbf7d0'      // green-200
+export const DEFAULT_GLOBAL_WEEKEND = '#86efac'  // green-300
+
+// Returnează culoarea efectivă pentru o zi/weekend
+// - `null`/`undefined` → derivă automată din eventColor
+// - `'none'` → culoare verde default globală (nu transparent — utilizator preferă verde standard)
+// - hex → folosește direct
+export function resolveColor(stored: string | null | undefined, eventColor: string, kind: 'day' | 'weekend'): string {
+  if (stored === 'none') {
+    return kind === 'day' ? DEFAULT_GLOBAL_DAY : DEFAULT_GLOBAL_WEEKEND
+  }
   if (stored && stored.startsWith('#')) return stored
   return kind === 'day' ? defaultDayColor(eventColor) : defaultWeekendColor(eventColor)
 }
