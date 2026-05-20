@@ -2,7 +2,8 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
-import { ArrowLeft, Plus, Trash2, Save, Loader2 } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, Loader2, RotateCcw } from 'lucide-react'
+import { resolveColor, defaultDayColor, defaultWeekendColor } from '@/lib/timeline-colors'
 
 type Milestone = {
   id: string
@@ -12,16 +13,8 @@ type Milestone = {
   anchor: string
   offset_days: number
   color: string
-  order_index: number
-}
-type Period = {
-  id: string
-  scope: string
-  label: string
-  from_milestone_code: string
-  to_milestone_code: string
-  color_day: string
-  color_weekend: string
+  color_day: string | null
+  color_weekend: string | null
   order_index: number
 }
 
@@ -64,7 +57,6 @@ function scopeForSession(s: SessionLite): 'radio_lrc' | 'practica' {
 export default function TimelineConfigPage() {
   const [scope, setScope] = useState<'practica' | 'radio_lrc'>('radio_lrc')
   const [milestones, setMilestones] = useState<Milestone[]>([])
-  const [periods, setPeriods] = useState<Period[]>([])
   const [sessions, setSessions] = useState<SessionLite[]>([])
   const [previewSessionId, setPreviewSessionId] = useState<string>('')
   const [loading, setLoading] = useState(true)
@@ -72,16 +64,14 @@ export default function TimelineConfigPage() {
 
   const loadAll = useCallback(async () => {
     setLoading(true)
-    const [{ data: ms }, { data: ps }, { data: sess }] = await Promise.all([
+    const [{ data: ms }, { data: sess }] = await Promise.all([
       supabase.from('timeline_milestones').select('*').order('order_index'),
-      supabase.from('timeline_periods').select('*').order('order_index'),
       supabase.from('sessions')
         .select('id, session_date, created_at, course_start_date, practice_start_date, class_caa, access_code, session_type, locations(name)')
         .eq('session_type', 'principal')
         .order('session_date', { ascending: false }),
     ])
     setMilestones((ms || []) as Milestone[])
-    setPeriods((ps || []) as Period[])
     setSessions((sess || []) as unknown as SessionLite[])
     setLoading(false)
   }, [])
@@ -101,14 +91,13 @@ export default function TimelineConfigPage() {
   }, [scope, sessions.length])
 
   const scopedMilestones = milestones.filter(m => m.scope === scope).sort((a,b) => a.order_index - b.order_index)
-  const scopedPeriods = periods.filter(p => p.scope === scope).sort((a,b) => a.order_index - b.order_index)
 
   async function addMilestone() {
     const nextOrder = Math.max(0, ...scopedMilestones.map(m => m.order_index)) + 1
     const code = `m${Date.now().toString().slice(-6)}`
     const { data, error } = await supabase.from('timeline_milestones').insert({
       scope, code, label: 'Milestone nou', anchor: 'session_date', offset_days: 0,
-      color: '#3b82f6', order_index: nextOrder,
+      color: '#3b82f6', color_day: null, color_weekend: null, order_index: nextOrder,
     }).select().single()
     if (error) { alert('Eroare: ' + error.message); return }
     setMilestones([...milestones, data as Milestone])
@@ -131,34 +120,18 @@ export default function TimelineConfigPage() {
     setMilestones(milestones.filter(x => x.id !== m.id))
   }
 
-  async function addPeriod() {
-    const nextOrder = Math.max(0, ...scopedPeriods.map(p => p.order_index)) + 1
-    const firstMs = scopedMilestones[0]?.code || 'creation'
-    const secondMs = scopedMilestones[1]?.code || 'exam'
-    const { data, error } = await supabase.from('timeline_periods').insert({
-      scope, label: 'Perioadă nouă',
-      from_milestone_code: firstMs, to_milestone_code: secondMs,
-      color_day: '#bbf7d0', color_weekend: '#86efac', order_index: nextOrder,
-    }).select().single()
-    if (error) { alert('Eroare: ' + error.message); return }
-    setPeriods([...periods, data as Period])
-  }
-
-  async function updatePeriod(id: string, patch: Partial<Period>) {
-    setSavingId(id)
-    const { error } = await supabase.from('timeline_periods').update({
-      ...patch, updated_at: new Date().toISOString(),
-    }).eq('id', id)
-    setSavingId(null)
-    if (error) { alert('Eroare: ' + error.message); return }
-    setPeriods(periods.map(p => p.id === id ? { ...p, ...patch } as Period : p))
-  }
-
-  async function deletePeriod(p: Period) {
-    if (!confirm(`Ștergi perioada „${p.label}"?`)) return
-    const { error } = await supabase.from('timeline_periods').delete().eq('id', p.id)
-    if (error) { alert('Eroare: ' + error.message); return }
-    setPeriods(periods.filter(x => x.id !== p.id))
+  // Când utilizatorul schimbă manual culoarea „zi", auto-completează „weekend" cu derivata
+  // (doar dacă weekend e null sau e tot derivat din event)
+  async function setMilestoneDayColor(m: Milestone, newDay: string) {
+    const patch: Partial<Milestone> = { color_day: newDay }
+    // Auto-derivate weekend doar dacă cel actual e null sau e exact derivata din event
+    const eventDerivedWeekend = defaultWeekendColor(m.color)
+    if (m.color_weekend === null || m.color_weekend === eventDerivedWeekend) {
+      // Calculăm o nuanță saturată din noul day
+      const newWeekend = newDay === 'none' ? 'none' : defaultWeekendColor(newDay)
+      patch.color_weekend = newWeekend
+    }
+    await updateMilestone(m.id, patch)
   }
 
   // Preview: folosește sesiunea selectată (sau fictivă dacă nu există nimic)
@@ -198,20 +171,23 @@ export default function TimelineConfigPage() {
         {days.map((d, i) => {
           const isWeekend = d.getDay() === 0 || d.getDay() === 6
           const isToday = d.getTime() === today.getTime()
-          const exactMs = (msDates as any[]).find(m => m.date.getTime() === d.getTime())
-          const period = scopedPeriods.find(p => {
-            const from = (msDates as any[]).find(m => m.code === p.from_milestone_code)?.date
-            const to = (msDates as any[]).find(m => m.code === p.to_milestone_code)?.date
-            if (!from || !to) return false
-            return d.getTime() >= from.getTime() && d.getTime() < to.getTime()
-          })
+          const t = d.getTime()
+          const sortedMs = ([...msDates] as any[]).sort((a, b) => a.date.getTime() - b.date.getTime())
+          const exactMs = sortedMs.find(m => m.date.getTime() === t)
+          const prevMs = !exactMs ? [...sortedMs].reverse().find(m => m.date.getTime() <= t) : null
           let bg: string | undefined = '#e5e7eb'
           let label = ''
-          if (exactMs) { bg = exactMs.color === 'none' ? undefined : exactMs.color; label = exactMs.label }
-          else if (period) {
-            const pc = isWeekend ? period.color_weekend : period.color_day
-            bg = pc === 'none' ? undefined : pc
-            label = period.label
+          if (exactMs) {
+            bg = exactMs.color === 'none' ? undefined : exactMs.color
+            label = exactMs.label
+          } else if (prevMs) {
+            const resolved = resolveColor(
+              isWeekend ? prevMs.color_weekend : prevMs.color_day,
+              prevMs.color,
+              isWeekend ? 'weekend' : 'day',
+            )
+            bg = resolved || undefined
+            label = prevMs.label
           }
           return (
             <div key={i} className="flex-1 relative group h-full"
@@ -311,141 +287,108 @@ export default function TimelineConfigPage() {
             {scopedMilestones.length === 0 && (
               <p className="text-xs text-gray-400 italic py-3 text-center">Nicio milestone definită.</p>
             )}
-            {scopedMilestones.map(m => (
-              <div key={m.id} className="grid grid-cols-12 gap-2 items-center p-2 border border-gray-100 rounded-lg">
-                <div className="col-span-2">
-                  <label className="block text-[10px] uppercase text-gray-400 mb-0.5">Cod</label>
-                  <input type="text" value={m.code}
-                    onChange={e => setMilestones(milestones.map(x => x.id === m.id ? {...x, code: e.target.value} : x))}
-                    onBlur={e => updateMilestone(m.id, { code: e.target.value })}
-                    className="w-full px-2 py-1 border border-gray-200 rounded text-xs font-mono focus:outline-none focus:border-purple-400"/>
-                </div>
-                <div className="col-span-3">
-                  <label className="block text-[10px] uppercase text-gray-400 mb-0.5">Label</label>
-                  <input type="text" value={m.label}
-                    onChange={e => setMilestones(milestones.map(x => x.id === m.id ? {...x, label: e.target.value} : x))}
-                    onBlur={e => updateMilestone(m.id, { label: e.target.value })}
-                    className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:border-purple-400"/>
-                </div>
-                <div className="col-span-3">
-                  <label className="block text-[10px] uppercase text-gray-400 mb-0.5">Ancoră</label>
-                  <select value={m.anchor}
-                    onChange={e => updateMilestone(m.id, { anchor: e.target.value })}
-                    className="w-full px-2 py-1 border border-gray-200 rounded text-xs bg-white focus:outline-none focus:border-purple-400">
-                    {ANCHORS.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
-                  </select>
-                </div>
-                <div className="col-span-1">
-                  <label className="block text-[10px] uppercase text-gray-400 mb-0.5">Offset</label>
-                  <input type="number" value={m.offset_days}
-                    onChange={e => setMilestones(milestones.map(x => x.id === m.id ? {...x, offset_days: parseInt(e.target.value)||0} : x))}
-                    onBlur={e => updateMilestone(m.id, { offset_days: parseInt(e.target.value)||0 })}
-                    className="w-full px-2 py-1 border border-gray-200 rounded text-xs text-center focus:outline-none focus:border-purple-400"/>
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-[10px] uppercase text-gray-400 mb-0.5">Culoare</label>
-                  <div className="flex gap-1 items-center">
-                    <input type="color" value={m.color}
-                      onChange={e => updateMilestone(m.id, { color: e.target.value })}
-                      className="w-7 h-7 border border-gray-200 rounded cursor-pointer"/>
-                    <span className="text-xs font-mono text-gray-500">{m.color}</span>
+            {scopedMilestones.map(m => {
+              const derivedDay = defaultDayColor(m.color)
+              const derivedWeekend = defaultWeekendColor(m.color)
+              const dayIsNone = m.color_day === 'none'
+              const wkIsNone = m.color_weekend === 'none'
+              const effectiveDay = dayIsNone ? '#ffffff' : (m.color_day || derivedDay)
+              const effectiveWeekend = wkIsNone ? '#ffffff' : (m.color_weekend || derivedWeekend)
+              const dayIsDefault = m.color_day === null || m.color_day === derivedDay
+              const wkIsDefault = m.color_weekend === null || m.color_weekend === derivedWeekend
+              return (
+                <div key={m.id} className="border border-gray-100 rounded-lg p-3 space-y-2 bg-white">
+                  {/* Rândul 1: meta */}
+                  <div className="grid grid-cols-12 gap-2 items-end">
+                    <div className="col-span-2">
+                      <label className="block text-[10px] uppercase text-gray-400 mb-0.5">Cod</label>
+                      <input type="text" value={m.code}
+                        onChange={e => setMilestones(milestones.map(x => x.id === m.id ? {...x, code: e.target.value} : x))}
+                        onBlur={e => updateMilestone(m.id, { code: e.target.value })}
+                        className="w-full px-2 py-1 border border-gray-200 rounded text-xs font-mono focus:outline-none focus:border-purple-400"/>
+                    </div>
+                    <div className="col-span-4">
+                      <label className="block text-[10px] uppercase text-gray-400 mb-0.5">Label</label>
+                      <input type="text" value={m.label}
+                        onChange={e => setMilestones(milestones.map(x => x.id === m.id ? {...x, label: e.target.value} : x))}
+                        onBlur={e => updateMilestone(m.id, { label: e.target.value })}
+                        className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:border-purple-400"/>
+                    </div>
+                    <div className="col-span-3">
+                      <label className="block text-[10px] uppercase text-gray-400 mb-0.5">Ancoră</label>
+                      <select value={m.anchor}
+                        onChange={e => updateMilestone(m.id, { anchor: e.target.value })}
+                        className="w-full px-2 py-1 border border-gray-200 rounded text-xs bg-white focus:outline-none focus:border-purple-400">
+                        {ANCHORS.map(a => <option key={a.value} value={a.value}>{a.label}</option>)}
+                      </select>
+                    </div>
+                    <div className="col-span-2">
+                      <label className="block text-[10px] uppercase text-gray-400 mb-0.5">Offset (zile)</label>
+                      <input type="number" value={m.offset_days}
+                        onChange={e => setMilestones(milestones.map(x => x.id === m.id ? {...x, offset_days: parseInt(e.target.value)||0} : x))}
+                        onBlur={e => updateMilestone(m.id, { offset_days: parseInt(e.target.value)||0 })}
+                        className="w-full px-2 py-1 border border-gray-200 rounded text-xs text-center focus:outline-none focus:border-purple-400"/>
+                    </div>
+                    <div className="col-span-1 flex justify-end items-center gap-1 pb-0.5">
+                      {savingId === m.id && <Loader2 size={12} className="animate-spin text-gray-400"/>}
+                      <button onClick={() => deleteMilestone(m)}
+                        className="p-1.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-600">
+                        <Trash2 size={12}/>
+                      </button>
+                    </div>
+                  </div>
+                  {/* Rândul 2: culori */}
+                  <div className="flex flex-wrap items-end gap-4 pt-2 border-t border-gray-100">
+                    {/* Event */}
+                    <div>
+                      <label className="block text-[10px] uppercase text-gray-400 mb-0.5">Culoare event (ziua)</label>
+                      <div className="flex items-center gap-1">
+                        <input type="color" value={m.color}
+                          onChange={e => updateMilestone(m.id, { color: e.target.value })}
+                          className="w-7 h-7 border border-gray-200 rounded cursor-pointer"/>
+                        <span className="text-[11px] font-mono text-gray-500">{m.color}</span>
+                      </div>
+                    </div>
+                    {/* Day */}
+                    <div>
+                      <label className="block text-[10px] uppercase text-gray-400 mb-0.5">Zi (până la următorul)</label>
+                      <div className="flex items-center gap-1.5">
+                        <input type="color" value={effectiveDay}
+                          onChange={e => setMilestoneDayColor(m, e.target.value)}
+                          disabled={dayIsNone}
+                          className="w-7 h-7 border border-gray-200 rounded cursor-pointer disabled:opacity-30"/>
+                        <label className="flex items-center gap-0.5 text-[10px] text-gray-500 cursor-pointer">
+                          <input type="checkbox" checked={dayIsNone}
+                            onChange={e => updateMilestone(m.id, { color_day: e.target.checked ? 'none' : derivedDay })}
+                            className="w-3 h-3"/>none
+                        </label>
+                        <button onClick={() => updateMilestone(m.id, { color_day: null, color_weekend: null })}
+                          disabled={dayIsDefault && wkIsDefault}
+                          title="Revino la culorile default derivate din event"
+                          className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-30">
+                          <RotateCcw size={10}/>default
+                        </button>
+                      </div>
+                    </div>
+                    {/* Weekend */}
+                    <div>
+                      <label className="block text-[10px] uppercase text-gray-400 mb-0.5">Weekend</label>
+                      <div className="flex items-center gap-1.5">
+                        <input type="color" value={effectiveWeekend}
+                          onChange={e => updateMilestone(m.id, { color_weekend: e.target.value })}
+                          disabled={wkIsNone}
+                          className="w-7 h-7 border border-gray-200 rounded cursor-pointer disabled:opacity-30"/>
+                        <label className="flex items-center gap-0.5 text-[10px] text-gray-500 cursor-pointer">
+                          <input type="checkbox" checked={wkIsNone}
+                            onChange={e => updateMilestone(m.id, { color_weekend: e.target.checked ? 'none' : derivedWeekend })}
+                            className="w-3 h-3"/>none
+                        </label>
+                      </div>
+                    </div>
                   </div>
                 </div>
-                <div className="col-span-1 flex justify-end">
-                  {savingId === m.id && <Loader2 size={12} className="animate-spin text-gray-400 mr-1"/>}
-                  <button onClick={() => deleteMilestone(m)}
-                    className="p-1.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-600">
-                    <Trash2 size={12}/>
-                  </button>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Periods */}
-        <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-          <div className="flex items-center justify-between mb-4">
-            <div>
-              <h3 className="font-semibold text-sm text-gray-900">Perioade</h3>
-              <p className="text-xs text-gray-400 mt-0.5">
-                Intervale între 2 milestones. Au culoare zi + culoare weekend (mai saturată).
-              </p>
-            </div>
-            <button onClick={addPeriod}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white"
-              style={{ background: '#7c3aed' }}>
-              <Plus size={12}/>Adaugă perioadă
-            </button>
-          </div>
-          <div className="space-y-2">
-            {scopedPeriods.length === 0 && (
-              <p className="text-xs text-gray-400 italic py-3 text-center">Nicio perioadă definită.</p>
-            )}
-            {scopedPeriods.map(p => (
-              <div key={p.id} className="grid grid-cols-12 gap-2 items-center p-2 border border-gray-100 rounded-lg">
-                <div className="col-span-3">
-                  <label className="block text-[10px] uppercase text-gray-400 mb-0.5">Label</label>
-                  <input type="text" value={p.label}
-                    onChange={e => setPeriods(periods.map(x => x.id === p.id ? {...x, label: e.target.value} : x))}
-                    onBlur={e => updatePeriod(p.id, { label: e.target.value })}
-                    className="w-full px-2 py-1 border border-gray-200 rounded text-xs focus:outline-none focus:border-purple-400"/>
-                </div>
-                <div className="col-span-3">
-                  <label className="block text-[10px] uppercase text-gray-400 mb-0.5">De la milestone</label>
-                  <select value={p.from_milestone_code}
-                    onChange={e => updatePeriod(p.id, { from_milestone_code: e.target.value })}
-                    className="w-full px-2 py-1 border border-gray-200 rounded text-xs bg-white focus:outline-none focus:border-purple-400">
-                    {scopedMilestones.map(m => <option key={m.id} value={m.code}>{m.label}</option>)}
-                  </select>
-                </div>
-                <div className="col-span-3">
-                  <label className="block text-[10px] uppercase text-gray-400 mb-0.5">Până la milestone</label>
-                  <select value={p.to_milestone_code}
-                    onChange={e => updatePeriod(p.id, { to_milestone_code: e.target.value })}
-                    className="w-full px-2 py-1 border border-gray-200 rounded text-xs bg-white focus:outline-none focus:border-purple-400">
-                    {scopedMilestones.map(m => <option key={m.id} value={m.code}>{m.label}</option>)}
-                  </select>
-                </div>
-                <div className="col-span-1">
-                  <label className="block text-[10px] uppercase text-gray-400 mb-0.5">Zi</label>
-                  <div className="flex items-center gap-1">
-                    <input type="color" value={p.color_day === 'none' ? '#ffffff' : p.color_day}
-                      onChange={e => updatePeriod(p.id, { color_day: e.target.value })}
-                      disabled={p.color_day === 'none'}
-                      className="w-6 h-6 border border-gray-200 rounded cursor-pointer disabled:opacity-30"/>
-                    <label className="flex items-center gap-0.5 text-[10px] text-gray-500 cursor-pointer">
-                      <input type="checkbox" checked={p.color_day === 'none'}
-                        onChange={e => updatePeriod(p.id, { color_day: e.target.checked ? 'none' : '#bbf7d0' })}
-                        className="w-3 h-3"/>
-                      none
-                    </label>
-                  </div>
-                </div>
-                <div className="col-span-1">
-                  <label className="block text-[10px] uppercase text-gray-400 mb-0.5">Weekend</label>
-                  <div className="flex items-center gap-1">
-                    <input type="color" value={p.color_weekend === 'none' ? '#ffffff' : p.color_weekend}
-                      onChange={e => updatePeriod(p.id, { color_weekend: e.target.value })}
-                      disabled={p.color_weekend === 'none'}
-                      className="w-6 h-6 border border-gray-200 rounded cursor-pointer disabled:opacity-30"/>
-                    <label className="flex items-center gap-0.5 text-[10px] text-gray-500 cursor-pointer">
-                      <input type="checkbox" checked={p.color_weekend === 'none'}
-                        onChange={e => updatePeriod(p.id, { color_weekend: e.target.checked ? 'none' : '#86efac' })}
-                        className="w-3 h-3"/>
-                      none
-                    </label>
-                  </div>
-                </div>
-                <div className="col-span-1 flex justify-end">
-                  {savingId === p.id && <Loader2 size={12} className="animate-spin text-gray-400 mr-1"/>}
-                  <button onClick={() => deletePeriod(p)}
-                    className="p-1.5 rounded hover:bg-red-50 text-gray-400 hover:text-red-600">
-                    <Trash2 size={12}/>
-                  </button>
-                </div>
-              </div>
-            ))}
+              )
+            })}
           </div>
         </div>
 

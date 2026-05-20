@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
 import { Plus, Copy, ExternalLink, Trash2, Pencil, Check, X } from 'lucide-react'
+import { resolveColor } from '@/lib/timeline-colors'
 
 const statusMap: Record<string, { label: string; color: string }> = {
   draft:     { label: 'Ciornă',     color: '#6b7280' },
@@ -23,14 +24,13 @@ function fmtDateRO(d: Date): string {
 
 export type TimelineMilestone = {
   id: string; scope: string; code: string; label: string
-  anchor: string; offset_days: number; color: string; order_index: number
+  anchor: string; offset_days: number
+  color: string
+  color_day: string | null
+  color_weekend: string | null
+  order_index: number
 }
-export type TimelinePeriod = {
-  id: string; scope: string; label: string
-  from_milestone_code: string; to_milestone_code: string
-  color_day: string; color_weekend: string; order_index: number
-}
-export type TimelineConfig = { milestones: TimelineMilestone[]; periods: TimelinePeriod[] }
+export type TimelineConfig = { milestones: TimelineMilestone[] }
 
 function scopeForSession(session: any): 'radio_lrc' | 'practica' {
   const c = (session?.class_caa || '').toLowerCase()
@@ -47,7 +47,7 @@ function getAnchorDate(session: any, anchor: string): Date | null {
 
 function SessionTimeline({ session, config }: { session: any; config: Record<string, TimelineConfig> }) {
   const scope = scopeForSession(session)
-  const scopeCfg = config[scope] || config['practica'] || { milestones: [], periods: [] }
+  const scopeCfg = config[scope] || config['practica'] || { milestones: [] }
 
   // Calculez datele tuturor milestone-urilor pentru această sesiune
   const milestoneDates = scopeCfg.milestones.map(m => {
@@ -60,10 +60,10 @@ function SessionTimeline({ session, config }: { session: any; config: Record<str
 
   if (milestoneDates.length < 2) return null
 
-  // Determină intervalul total — min și max ale milestones
-  const sortedDates = milestoneDates.map(m => m.date.getTime()).sort((a, b) => a - b)
-  const startTs = sortedDates[0]
-  const endTs = sortedDates[sortedDates.length - 1]
+  // Sortăm milestones după dată ca să găsim ușor „precedentul" pentru fiecare zi
+  const sorted = [...milestoneDates].sort((a, b) => a.date.getTime() - b.date.getTime())
+  const startTs = sorted[0].date.getTime()
+  const endTs = sorted[sorted.length - 1].date.getTime()
   const today = startOfDay(new Date())
 
   const nDays = Math.max(1, Math.round((endTs - startTs) / DAY_MS) + 1)
@@ -78,27 +78,28 @@ function SessionTimeline({ session, config }: { session: any; config: Record<str
         const dDay = d.getDay()
         const isWeekend = dDay === 0 || dDay === 6
         const isToday = d.getTime() === today.getTime()
+        const t = d.getTime()
 
-        // 1) Verific milestone exact pe ziua respectivă
-        const exactMs = milestoneDates.find(m => m.date.getTime() === d.getTime())
+        // 1) Verific milestone EXACT pe ziua respectivă
+        const exactMs = sorted.find(m => m.date.getTime() === t)
+        // 2) Milestone precedent (cel mai recent ≤ d, dar nu egal cu exact dacă există)
+        const previousMs = !exactMs
+          ? [...sorted].reverse().find(m => m.date.getTime() <= t)
+          : null
 
-        // 2) Caut period care conține această zi
-        const period = scopeCfg.periods.find(p => {
-          const from = milestoneDates.find(m => m.code === p.from_milestone_code)?.date
-          const to = milestoneDates.find(m => m.code === p.to_milestone_code)?.date
-          if (!from || !to) return false
-          return d.getTime() >= from.getTime() && d.getTime() < to.getTime()
-        })
-
-        let bg: string | undefined = '#e5e7eb' // gri default
+        let bg: string | undefined = '#e5e7eb'
         let label = ''
         if (exactMs) {
           bg = exactMs.color === 'none' ? undefined : exactMs.color
           label = exactMs.label
-        } else if (period) {
-          const pc = isWeekend ? period.color_weekend : period.color_day
-          bg = pc === 'none' ? undefined : pc
-          label = period.label
+        } else if (previousMs) {
+          const resolved = resolveColor(
+            isWeekend ? previousMs.color_weekend : previousMs.color_day,
+            previousMs.color,
+            isWeekend ? 'weekend' : 'day',
+          )
+          bg = resolved || undefined
+          label = previousMs.label
         }
 
         const ctx: string[] = []
@@ -146,14 +147,13 @@ export default function SesiuniPage() {
   const [timelineCfg, setTimelineCfg] = useState<Record<string, TimelineConfig>>({})
 
   async function load() {
-    const [{ data: s }, loc, boat, ev, instr, tlMs, tlPs] = await Promise.all([
+    const [{ data: s }, loc, boat, ev, instr, tlMs] = await Promise.all([
       supabase.from('sessions').select('*, locations(name, county), evaluators(full_name), instructors(full_name), boats(name)').order('session_date', { ascending: true }).order('created_at', { ascending: true }),
       supabase.from('locations').select('*').order('name'),
       supabase.from('boats').select('*').order('name'),
       supabase.from('evaluators').select('*').order('full_name'),
       supabase.from('instructors').select('*').order('full_name'),
       supabase.from('timeline_milestones').select('*').order('order_index'),
-      supabase.from('timeline_periods').select('*').order('order_index'),
     ])
     const allSess = s || []
     setSessions(allSess)
@@ -170,12 +170,8 @@ export default function SesiuniPage() {
     // Group timeline config by scope
     const cfg: Record<string, TimelineConfig> = {}
     for (const m of (tlMs.data || []) as TimelineMilestone[]) {
-      if (!cfg[m.scope]) cfg[m.scope] = { milestones: [], periods: [] }
+      if (!cfg[m.scope]) cfg[m.scope] = { milestones: [] }
       cfg[m.scope].milestones.push(m)
-    }
-    for (const p of (tlPs.data || []) as TimelinePeriod[]) {
-      if (!cfg[p.scope]) cfg[p.scope] = { milestones: [], periods: [] }
-      cfg[p.scope].periods.push(p)
     }
     setTimelineCfg(cfg)
     setLoading(false)
