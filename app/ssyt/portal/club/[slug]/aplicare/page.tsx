@@ -46,7 +46,7 @@ export default async function PortalClubApplicationPage({
   const [templatesRes, contactsRes, proceduresRes] = await Promise.all([
     supabase
       .from('ssyt_club_document_templates')
-      .select('id, title, description, is_required, display_order')
+      .select('id, title, description, is_required, is_full_package, display_order')
       .eq('club_id', club.id)
       .order('display_order'),
     supabase

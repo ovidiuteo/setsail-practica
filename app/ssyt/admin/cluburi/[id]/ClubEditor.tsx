@@ -47,6 +47,7 @@ export type TemplateRow = {
   title: string
   description: string | null
   is_required: boolean
+  is_full_package?: boolean | null
   display_order: number
   updated_at: string | null
   html_content: string | null

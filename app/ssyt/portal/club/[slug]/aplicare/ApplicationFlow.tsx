@@ -9,6 +9,7 @@ type Template = {
   title: string
   description: string | null
   is_required: boolean
+  is_full_package?: boolean | null
   display_order: number
 }
 
@@ -38,13 +39,18 @@ const CONTACT_TYPE_LABEL: Record<string, string> = {
   altul: 'Altul',
 }
 
-const TABS = [
-  { key: 'documents', label: 'Documente', icon: FileText },
-  { key: 'communication', label: 'Comunicare', icon: Mail },
-  { key: 'procedures', label: 'Proceduri', icon: ListOrdered },
-] as const
+type TabKey = 'documents' | 'procedures' | 'communication'
 
-type TabKey = (typeof TABS)[number]['key']
+const TAB_META: Record<TabKey, { label: string; icon: typeof FileText }> = {
+  documents: { label: 'Documente', icon: FileText },
+  procedures: { label: 'Proceduri', icon: ListOrdered },
+  communication: { label: 'Comunicare', icon: Mail },
+}
+
+// Inainte de submit: Documente | Proceduri | Comunicare
+const TABS_BEFORE_SUBMIT: TabKey[] = ['documents', 'procedures', 'communication']
+// Dupa submit: Proceduri pe primul loc (deja a trimis docs, urmeaza pasii)
+const TABS_AFTER_SUBMIT: TabKey[] = ['procedures', 'documents', 'communication']
 
 export default function ApplicationFlow({
   applicationId,
@@ -66,7 +72,15 @@ export default function ApplicationFlow({
   procedures: Procedure[]
 }) {
   const router = useRouter()
-  const [tab, setTab] = useState<TabKey>('documents')
+
+  const isStarted = applicationStatus === 'started'
+  const isFinal = applicationStatus === 'approved' || applicationStatus === 'rejected'
+
+  // Tab ordering + default depinde de status: cand cursantul lucreaza vede documentele,
+  // dupa trimiterea aplicatiei vede mai intai procedurile (ce mai are de facut).
+  const tabsOrder = isStarted ? TABS_BEFORE_SUBMIT : TABS_AFTER_SUBMIT
+  const [tab, setTab] = useState<TabKey>(tabsOrder[0])
+
   const [checked, setChecked] = useState<Record<string, boolean>>({})
   const [submitting, setSubmitting] = useState(false)
   const [cancelling, setCancelling] = useState(false)
@@ -137,15 +151,14 @@ export default function ApplicationFlow({
     router.refresh()
   }
 
-  const isStarted = applicationStatus === 'started'
-  const isFinal = applicationStatus === 'approved' || applicationStatus === 'rejected'
   const totalSteps = procedures.length
   const completedSteps = procedures.filter((p) => checked[p.id]).length
 
   return (
     <div>
       <div className="flex items-center border-b mb-4" style={{ borderColor: '#e2e8f0' }}>
-        {TABS.map(({ key, label, icon: Icon }) => {
+        {tabsOrder.map((key) => {
+          const { label, icon: Icon } = TAB_META[key]
           const active = tab === key
           return (
             <button
@@ -165,7 +178,11 @@ export default function ApplicationFlow({
       </div>
 
       {tab === 'documents' && (
-        <DocumentsList templates={templates} applicationId={applicationId} />
+        <DocumentsList
+          templates={templates}
+          applicationId={applicationId}
+          onGoToProcedures={() => setTab('procedures')}
+        />
       )}
 
       {tab === 'communication' && (
@@ -183,6 +200,7 @@ export default function ApplicationFlow({
           onToggle={toggleStep}
           completedSteps={completedSteps}
           totalSteps={totalSteps}
+          onGoToDocuments={() => setTab('documents')}
         />
       )}
 
@@ -257,16 +275,6 @@ function SubmitBlock({
       className="rounded-lg border p-4"
       style={{ borderColor: '#e2e8f0', background: '#fff' }}
     >
-      <div className="text-xs font-medium uppercase tracking-wider mb-2" style={{ color: '#475569' }}>
-        Trimite documentele clubului
-      </div>
-      <p className="text-xs text-gray-500 mb-3">
-        Email-ul oficial al clubului apare mai jos. Editează adresa dacă vrei să trimiți la altcineva.
-        Apasă „Trimite emailul" — se deschide clientul tău de email cu subject și text gata. Atașează
-        PDF-urile generate înainte de a trimite. După ce ai trimis efectiv, apasă{' '}
-        <strong>„Am trimis aplicația"</strong>.
-      </p>
-
       <input
         type="email"
         value={email}
@@ -283,7 +291,7 @@ function SubmitBlock({
           style={{ background: '#FF6B35', color: '#fff' }}
         >
           <Mail size={14} />
-          Trimite emailul
+          Trimite aplicația
         </a>
         <button
           onClick={onMarkAsSent}
@@ -302,9 +310,11 @@ function SubmitBlock({
 function DocumentsList({
   templates,
   applicationId,
+  onGoToProcedures,
 }: {
   templates: Template[]
   applicationId: string
+  onGoToProcedures: () => void
 }) {
   if (templates.length === 0) {
     return (
@@ -336,7 +346,10 @@ function DocumentsList({
           <li
             key={t.id}
             className="flex items-center justify-between gap-3 rounded-lg border px-4 py-3"
-            style={{ borderColor: '#e2e8f0', background: '#fff' }}
+            style={{
+              borderColor: t.is_full_package ? '#bbf7d0' : '#e2e8f0',
+              background: t.is_full_package ? '#f0fdf4' : '#fff',
+            }}
           >
             <div className="min-w-0 flex-1">
               <div className="text-sm font-medium" style={{ color: '#0a1628' }}>
@@ -349,20 +362,40 @@ function DocumentsList({
                     Obligatoriu
                   </span>
                 )}
+                {t.is_full_package && (
+                  <span
+                    className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded uppercase font-semibold"
+                    style={{ background: '#dcfce7', color: '#166534' }}
+                  >
+                    Pachet complet
+                  </span>
+                )}
               </div>
               {t.description && <div className="text-xs text-gray-500 mt-0.5">{t.description}</div>}
             </div>
 
-            <a
-              href={`/api/ssyt/club/application/${applicationId}/document/${t.id}/render`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition"
-              style={{ background: '#FF6B35', color: '#fff' }}
-            >
-              <Download size={12} />
-              Generează PDF
-            </a>
+            <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+              <a
+                href={`/api/ssyt/club/application/${applicationId}/document/${t.id}/render`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition"
+                style={{ background: '#FF6B35', color: '#fff' }}
+              >
+                <Download size={12} />
+                Generează PDF
+              </a>
+              {t.is_full_package && (
+                <button
+                  onClick={onGoToProcedures}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition"
+                  style={{ background: '#16a34a', color: '#fff' }}
+                >
+                  <ListOrdered size={12} />
+                  Vezi procedurile
+                </button>
+              )}
+            </div>
           </li>
         ))}
       </ul>
@@ -501,12 +534,14 @@ function ProceduresChecklist({
   onToggle,
   completedSteps,
   totalSteps,
+  onGoToDocuments,
 }: {
   procedures: Procedure[]
   checked: Record<string, boolean>
   onToggle: (id: string) => void
   completedSteps: number
   totalSteps: number
+  onGoToDocuments: () => void
 }) {
   if (procedures.length === 0) {
     return (
@@ -521,12 +556,24 @@ function ProceduresChecklist({
 
   return (
     <div>
-      {totalSteps > 0 && (
-        <div className="mb-3 text-xs text-gray-500">
-          Progres: <strong>{completedSteps}</strong> / {totalSteps} pași bifați (doar local —
-          ajută-te să urmărești ce ai făcut)
-        </div>
-      )}
+      <div className="mb-3 flex items-center justify-between gap-3 flex-wrap">
+        {totalSteps > 0 ? (
+          <div className="text-xs text-gray-500">
+            Progres: <strong>{completedSteps}</strong> / {totalSteps} pași bifați (doar local —
+            ajută-te să urmărești ce ai făcut)
+          </div>
+        ) : (
+          <div />
+        )}
+        <button
+          onClick={onGoToDocuments}
+          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition"
+          style={{ background: '#16a34a', color: '#fff' }}
+        >
+          <FileText size={12} />
+          Vezi documente
+        </button>
+      </div>
       <ol className="space-y-2">
         {procedures.map((step) => {
           const isChecked = !!checked[step.id]
