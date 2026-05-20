@@ -45,14 +45,14 @@ function SessionTimeline({ session }: { session: any }) {
     days.push(new Date(createdAt.getTime() + i * DAY_MS))
   }
 
-  // Culori de bază pentru cele 4 perioade
+  // Culori de bază pentru cele 4 perioade — și nuanțele lor de weekend
+  // Folosim variante mai saturate (nu doar mai întunecate) ca să rămână vii vizual
   const COLORS = {
-    preStartPractice: '#bbf7d0', // verde deschis — creare → start practică
-    practiceToExam:   '#e9d5ff', // mov deschis  — start practică → examen
-    examDay:          '#a855f7', // mov închis   — ziua examenului
-    postExam:         '#dcfce7', // verde palid  — după examen
+    preStartPractice: { day: '#bbf7d0', weekend: '#86efac' }, // green-200 → green-300
+    practiceToExam:   { day: '#e9d5ff', weekend: '#d8b4fe' }, // purple-200 → purple-300
+    examDay:          { day: '#a855f7', weekend: '#a855f7' }, // mov închis (NA — o singură zi)
+    postExam:         { day: '#dcfce7', weekend: '#bbf7d0' }, // green-100 → green-200
   }
-  const WEEKEND_FACTOR = 0.8 // 20% mai întunecat
 
   return (
     <div className="relative w-full h-4 flex bg-gray-50 rounded-t-xl overflow-visible">
@@ -64,13 +64,12 @@ function SessionTimeline({ session }: { session: any }) {
         const isToday = d.getTime() === today.getTime()
         const isInPracticePhase = practiceStart && d.getTime() >= practiceStart.getTime() && d.getTime() < examDate.getTime()
 
-        let bg: string
-        if (isExam) bg = COLORS.examDay
-        else if (isAfterExam) bg = COLORS.postExam
-        else if (isInPracticePhase) bg = COLORS.practiceToExam
-        else bg = COLORS.preStartPractice
-        // Weekend → atenuat cu 20% (NU se aplică pentru ziua examenului care e mereu mov închis)
-        if (isWeekend && !isExam) bg = darken(bg, WEEKEND_FACTOR)
+        let palette: { day: string; weekend: string }
+        if (isExam) palette = COLORS.examDay
+        else if (isAfterExam) palette = COLORS.postExam
+        else if (isInPracticePhase) palette = COLORS.practiceToExam
+        else palette = COLORS.preStartPractice
+        const bg = (isWeekend && !isExam) ? palette.weekend : palette.day
 
         const ctx: string[] = []
         if (isToday) ctx.push('astăzi')
