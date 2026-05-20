@@ -934,14 +934,8 @@ export default function ExamenPage() {
                 </div>
               )}
               {hasQuestions && (() => {
-                const parts = questions.map(q => `${q.order_no}.${q.correct_option}`)
-                let solutionString = ''
-                for (let i = 0; i < parts.length; i++) {
-                  solutionString += parts[i]
-                  if (i < parts.length - 1) {
-                    solutionString += (i === 9) ? ',\n' : ',  '
-                  }
-                }
+                const parts = questions.map(q => `${String(q.order_no).padStart(2, ' ')}.${q.correct_option}`)
+                const solutionString = parts.slice(0, 10).join('  ') + '\n' + parts.slice(10).join('  ')
                 return (
                   <div className="mb-4 flex items-start gap-2 p-3 bg-purple-50 border border-purple-100 rounded-lg">
                     <span className="text-xs text-purple-700 font-semibold shrink-0 mt-0.5">Soluție:</span>
