@@ -152,6 +152,7 @@ function parseExamText(text: string): { codGenerare: string | null; questions: P
   const questions: ParsedQuestion[] = []
   let current: ParsedQuestion | null = null
   let currentField: 'question_text' | 'A' | 'B' | 'C' | 'D' | null = null
+  let nextExpected = 1
 
   function commit() {
     if (current) {
@@ -169,15 +170,15 @@ function parseExamText(text: string): { codGenerare: string | null; questions: P
     // Nouă întrebare: "N TextÎntrebare..." sau "N. Text..."
     // Doar dacă N este următorul așteptat (1..20) — evităm confuzia cu "1. MSI; ..." din răspunsuri
     const qMatch = line.match(/^(\d{1,2})[\s.)]+(.+)$/)
-    const expectedNext = questions.length + 1
-    if (qMatch && parseInt(qMatch[1], 10) === expectedNext && expectedNext <= 20 && !/^[A-D]\.\s/.test(qMatch[2])) {
+    if (qMatch && parseInt(qMatch[1], 10) === nextExpected && nextExpected <= 20 && !/^[A-D]\.\s/.test(qMatch[2])) {
       commit()
       current = {
-        number: expectedNext,
+        number: nextExpected,
         question_text: qMatch[2],
         options: { A: '', B: '', C: '', D: '' },
       }
       currentField = 'question_text'
+      nextExpected++
       continue
     }
 
