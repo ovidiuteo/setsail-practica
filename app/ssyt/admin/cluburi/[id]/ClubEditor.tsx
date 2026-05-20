@@ -56,7 +56,6 @@ export type ApplicationRow = {
   submitted_at: string | null
   decided_at: string | null
   admin_notes: string | null
-  participant: { id: string; full_name: string | null; email: string | null } | null
 }
 
 const TABS = [

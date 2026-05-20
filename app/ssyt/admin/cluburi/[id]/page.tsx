@@ -39,9 +39,7 @@ export default async function AdminClubDetailPage({
       .order('display_order'),
     supabase
       .from('ssyt_club_applications')
-      .select(
-        'id, status, started_at, submitted_at, decided_at, admin_notes, participant:ssyt_participants(id, full_name, email)'
-      )
+      .select('id, status, started_at, submitted_at, decided_at, admin_notes')
       .eq('club_id', params.id)
       .order('started_at', { ascending: false }),
   ])
