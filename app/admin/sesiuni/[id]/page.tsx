@@ -1353,34 +1353,6 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
             <div className="mt-3 text-xs text-gray-400 text-center">{students.filter(s=>s.portal_status==='signed').length}/{students.filter(s=>!s.only_sailing).length} cursanți au semnat</div>
           </div>
 
-          {/* Examen Radio LRC - doar pentru sesiuni Radio */}
-          {isRadio && (() => {
-            const examStatus = sess.radio_exam_status || 'draft'
-            const examMeta: Record<string, { label: string; bg: string; color: string }> = {
-              draft:  { label: 'Ciornă',  bg: '#6b728020', color: '#6b7280' },
-              active: { label: 'Activ',   bg: '#05966920', color: '#059669' },
-              closed: { label: 'Închis',  bg: '#7c3aed20', color: '#7c3aed' },
-            }
-            const meta = examMeta[examStatus] || examMeta.draft
-            return (
-              <div className="bg-white rounded-xl p-5 shadow-sm border border-purple-100">
-                <h3 className="font-semibold text-sm text-gray-900 mb-3">Examen Radio LRC</h3>
-                <div className="mb-3 flex items-center justify-between">
-                  <span className="text-xs text-gray-500">Status:</span>
-                  <span className="px-2 py-1 rounded-md text-xs font-semibold"
-                    style={{ background: meta.bg, color: meta.color }}>
-                    {meta.label}
-                  </span>
-                </div>
-                <Link href={`/admin/sesiuni/${sess.id}/examen`}
-                  className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-medium text-white"
-                  style={{ background: '#7c3aed' }}>
-                  <FileText size={12} />Deschide examen
-                </Link>
-              </div>
-            )
-          })()}
-
           {/* Instiintari ANCOM - doar pentru sesiuni Radio */}
           {isRadio && (
             <div className="bg-white rounded-xl p-5 shadow-sm border border-purple-100">
@@ -1505,6 +1477,34 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
               </div>
             </div>
           )}
+
+          {/* Examen Radio LRC - doar pentru sesiuni Radio (sub Cereri ANCOM, deasupra Documente) */}
+          {isRadio && (() => {
+            const examStatus = sess.radio_exam_status || 'draft'
+            const examMeta: Record<string, { label: string; bg: string; color: string }> = {
+              draft:  { label: 'Ciornă',  bg: '#6b728020', color: '#6b7280' },
+              active: { label: 'Activ',   bg: '#05966920', color: '#059669' },
+              closed: { label: 'Închis',  bg: '#7c3aed20', color: '#7c3aed' },
+            }
+            const meta = examMeta[examStatus] || examMeta.draft
+            return (
+              <div className="bg-white rounded-xl p-5 shadow-sm border border-purple-100">
+                <h3 className="font-semibold text-sm text-gray-900 mb-3">Examen Radio LRC</h3>
+                <div className="mb-3 flex items-center justify-between">
+                  <span className="text-xs text-gray-500">Status:</span>
+                  <span className="px-2 py-1 rounded-md text-xs font-semibold"
+                    style={{ background: meta.bg, color: meta.color }}>
+                    {meta.label}
+                  </span>
+                </div>
+                <Link href={`/admin/sesiuni/${sess.id}/examen`}
+                  className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-medium text-white"
+                  style={{ background: '#7c3aed' }}>
+                  <FileText size={12} />Deschide examen
+                </Link>
+              </div>
+            )
+          })()}
 
           <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
             <h3 className="font-semibold text-sm text-gray-900 mb-3">Documente</h3>
