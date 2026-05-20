@@ -51,6 +51,8 @@ REGULI COMUNE:
 - county = dacă city=București → "Sector X"; altfel județul fără prefix
 - Dacă documentul e rotit, citește-l mental corect
 - Data expirării: ÎNTOTDEAUNA prezentă — caută cu atenție
+- issued_by: emitentul CI/pașaportului (ex: "SPCEP Sector 1", "SPCJEP Constanța", "MAI"). NU confunda cu "valabilitate"
+- issued_date: data emiterii (NU expirării) — la CI românească e pe față jos, lângă "Eliberată la"; la pașaport câmpul "Data emiterii"
 
 Returnează DOAR JSON (fără markdown):
 {
@@ -61,7 +63,9 @@ Returnează DOAR JSON (fără markdown):
   "last_name": "numele de familie cu diacritice",
   "first_name": "prenumele cu diacritice și cratime",
   "birth_date": "dd.mm.yyyy",
+  "issued_date": "dd.mm.yyyy (data emiterii — NU expirării)",
   "expiry_date": "dd.mm.yyyy",
+  "issued_by": "instituția emitentă (ex: SPCEP Sector 1)",
   "nationality": "ROU sau altele",
   "address": "strada+nr+bloc+ap sau gol pentru pașaport",
   "city": "localitatea de domiciliu sau naștere",
