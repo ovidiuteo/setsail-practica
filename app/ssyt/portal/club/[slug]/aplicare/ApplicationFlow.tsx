@@ -161,7 +161,7 @@ export default function ApplicationFlow({
       </div>
 
       {tab === 'documents' && (
-        <DocumentsList templates={templates} />
+        <DocumentsList templates={templates} applicationId={applicationId} />
       )}
 
       {tab === 'communication' && <CommunicationList contacts={contacts} />}
@@ -214,7 +214,13 @@ export default function ApplicationFlow({
   )
 }
 
-function DocumentsList({ templates }: { templates: Template[] }) {
+function DocumentsList({
+  templates,
+  applicationId,
+}: {
+  templates: Template[]
+  applicationId: string
+}) {
   if (templates.length === 0) {
     return (
       <div
@@ -230,40 +236,52 @@ function DocumentsList({ templates }: { templates: Template[] }) {
   }
 
   return (
-    <ul className="space-y-2">
-      {templates.map((t) => (
-        <li
-          key={t.id}
-          className="flex items-center justify-between gap-3 rounded-lg border px-4 py-3"
-          style={{ borderColor: '#e2e8f0', background: '#fff' }}
-        >
-          <div className="min-w-0 flex-1">
-            <div className="text-sm font-medium" style={{ color: '#0a1628' }}>
-              {t.title}
-              {t.is_required && (
-                <span
-                  className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded uppercase font-semibold"
-                  style={{ background: '#fef3c7', color: '#92400e' }}
-                >
-                  Obligatoriu
-                </span>
-              )}
-            </div>
-            {t.description && <div className="text-xs text-gray-500 mt-0.5">{t.description}</div>}
-          </div>
-
-          <button
-            disabled
-            title="Generare PDF disponibilă în următorul deploy"
-            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium opacity-50 cursor-not-allowed"
-            style={{ background: '#f1f5f9', color: '#475569' }}
+    <div>
+      <p className="text-xs text-gray-500 mb-3">
+        Click pe „Generează PDF" deschide documentul precompletat într-un tab nou. Folosește{' '}
+        <strong>Ctrl+P</strong> (sau <strong>⌘P</strong> pe Mac) și alege „Save as PDF". Asigură-te că
+        ai uploadat poza CI și semnătura în{' '}
+        <a href="/ssyt/portal/profile/identitate" className="underline" style={{ color: '#FF6B35' }}>
+          Profil → Identitate
+        </a>
+        .
+      </p>
+      <ul className="space-y-2">
+        {templates.map((t) => (
+          <li
+            key={t.id}
+            className="flex items-center justify-between gap-3 rounded-lg border px-4 py-3"
+            style={{ borderColor: '#e2e8f0', background: '#fff' }}
           >
-            <Download size={12} />
-            PDF (în curând)
-          </button>
-        </li>
-      ))}
-    </ul>
+            <div className="min-w-0 flex-1">
+              <div className="text-sm font-medium" style={{ color: '#0a1628' }}>
+                {t.title}
+                {t.is_required && (
+                  <span
+                    className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded uppercase font-semibold"
+                    style={{ background: '#fef3c7', color: '#92400e' }}
+                  >
+                    Obligatoriu
+                  </span>
+                )}
+              </div>
+              {t.description && <div className="text-xs text-gray-500 mt-0.5">{t.description}</div>}
+            </div>
+
+            <a
+              href={`/api/ssyt/club/application/${applicationId}/document/${t.id}/render`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition"
+              style={{ background: '#FF6B35', color: '#fff' }}
+            >
+              <Download size={12} />
+              Generează PDF
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
   )
 }
 

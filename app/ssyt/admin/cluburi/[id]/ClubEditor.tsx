@@ -6,6 +6,7 @@ import InfoTab from './InfoTab'
 import ContactsTab from './ContactsTab'
 import ProceduresTab from './ProceduresTab'
 import ApplicationsTab from './ApplicationsTab'
+import DocumentsTab from './DocumentsTab'
 
 export type ClubRow = {
   id: string
@@ -48,6 +49,7 @@ export type TemplateRow = {
   is_required: boolean
   display_order: number
   updated_at: string | null
+  html_content: string | null
 }
 
 export type ApplicationRow = {
@@ -118,13 +120,7 @@ export default function ClubEditor({
       {tab === 'info' && <InfoTab club={club} />}
       {tab === 'contacts' && <ContactsTab clubId={club.id} initial={contacts} />}
       {tab === 'procedures' && <ProceduresTab clubId={club.id} initial={procedures} />}
-      {tab === 'documents' && (
-        <Placeholder
-          title="Template-uri documente"
-          message="Editorul HTML cu placeholderi vine în următorul deploy (Batch 2)."
-          subtitle={`${templates.length} template-uri configurate momentan.`}
-        />
-      )}
+      {tab === 'documents' && <DocumentsTab clubId={club.id} initial={templates} />}
       {tab === 'applications' && <ApplicationsTab initial={applications} />}
     </div>
   )

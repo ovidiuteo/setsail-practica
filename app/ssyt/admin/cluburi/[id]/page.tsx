@@ -34,7 +34,7 @@ export default async function AdminClubDetailPage({
       .order('step_no'),
     supabase
       .from('ssyt_club_document_templates')
-      .select('id, title, description, is_required, display_order, updated_at')
+      .select('id, title, description, is_required, display_order, updated_at, html_content')
       .eq('club_id', params.id)
       .order('display_order'),
     supabase
