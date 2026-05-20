@@ -42,7 +42,7 @@ export default async function PortalClubsListPage() {
         <p className="text-sm text-gray-500 mt-1 max-w-2xl">
           Pentru a participa la regatele oficiale din calendarul SSYT 2026, trebuie să fii legitimat la
           un club sportiv afiliat la Federația Română de Yachting. Vezi opțiunile de mai jos și alege
-          una care ți se potrivește. Poți schimba clubul oricând până la prima regată.
+          una dintre ele.
         </p>
       </div>
 
