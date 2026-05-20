@@ -41,6 +41,35 @@ export async function POST(req: NextRequest) {
       : s.obtinere_prelungire !== 'prelungire')
     .sort((a: any, b: any) => (a.full_name || '').localeCompare(b.full_name || '', 'ro'))
 
+  // Aducem scorurile examenului radio (dacă există)
+  const { data: examRow } = await supabase
+    .from('radio_exams')
+    .select('id')
+    .eq('session_id', session_id)
+    .maybeSingle()
+
+  const answerByStudent: Record<string, any> = {}
+  if (examRow?.id) {
+    const { data: ans } = await supabase
+      .from('radio_exam_answers')
+      .select('student_id, grila_score, translation_score, simulator_score, status')
+      .eq('exam_id', examRow.id)
+    for (const a of (ans || [])) {
+      answerByStudent[a.student_id] = a
+    }
+  }
+
+  function getScores(s: any) {
+    const a = answerByStudent[s?.id]
+    if (!a) return { grila: '', trad: '', sim: '', result: '' }
+    const grila = typeof a.grila_score === 'number' ? `${a.grila_score} / 20` : ''
+    const trad = (typeof a.translation_score === 'number' && a.translation_score > 0) ? `${a.translation_score}/5` : ''
+    const sim = (typeof a.simulator_score === 'number' && a.simulator_score !== null) ? String(a.simulator_score) : ''
+    // Admis dacă cursantul a submis examenul (status nu mai e 'in_progress')
+    const result = a.status && a.status !== 'in_progress' ? 'Admis' : ''
+    return { grila, trad, sim, result }
+  }
+
   // Antetul Radio
   const { data: antetDoc } = await supabase
     .from('setsail_documents')
@@ -99,21 +128,22 @@ export async function POST(req: NextRequest) {
     const minRows = Math.max(students.length, 8)
     const dataRows = Array.from({length: minRows}, (_, i) => {
       const s = students[i]
+      const sc = s ? getScores(s) : { grila: '', trad: '', sim: '', result: '' }
       if (isPrelungire) {
         return `<tr>
           <td style="border:1px solid #000;padding:6px;text-align:center">${s ? i+1 : ''}</td>
           <td style="border:1px solid #000;padding:6px">${s?.full_name || ''}</td>
-          <td style="border:1px solid #000;padding:6px"></td>
-          <td style="border:1px solid #000;padding:6px"></td>
+          <td style="border:1px solid #000;padding:6px;text-align:center">${sc.grila}</td>
+          <td style="border:1px solid #000;padding:6px;text-align:center">${sc.result}</td>
         </tr>`
       } else {
         return `<tr>
           <td style="border:1px solid #000;padding:6px;text-align:center">${s ? i+1 : ''}</td>
           <td style="border:1px solid #000;padding:6px">${s?.full_name || ''}</td>
-          <td style="border:1px solid #000;padding:6px"></td>
-          <td style="border:1px solid #000;padding:6px"></td>
-          <td style="border:1px solid #000;padding:6px"></td>
-          <td style="border:1px solid #000;padding:6px"></td>
+          <td style="border:1px solid #000;padding:6px;text-align:center">${sc.grila}</td>
+          <td style="border:1px solid #000;padding:6px;text-align:center">${sc.trad}</td>
+          <td style="border:1px solid #000;padding:6px;text-align:center">${sc.sim}</td>
+          <td style="border:1px solid #000;padding:6px;text-align:center">${sc.result}</td>
         </tr>`
       }
     }).join('')
@@ -244,21 +274,27 @@ ${antetHtml}
 
   const dataRows = Array.from({ length: minRows }, (_, i) => {
     const s = students[i]
+    const sc = s ? getScores(s) : { grila: '', trad: '', sim: '', result: '' }
+    const centered = (txt: string) => new Paragraph({
+      alignment: AlignmentType.CENTER,
+      spacing: { before: 60, after: 60 },
+      children: [reg(txt, 16)],
+    })
     if (isPrelungire) {
       return new TableRow({ children: [
-        cell([para([reg(s ? String(i+1) : '', 16)])], { w: colWidths[0] }),
+        cell([para([reg(s ? String(i+1) : '', 16)], AlignmentType.CENTER)], { w: colWidths[0] }),
         cell([para([reg(s?.full_name || '', 16)])], { w: colWidths[1] }),
-        cell([para([reg('')])], { w: colWidths[2] }),
-        cell([para([reg('')])], { w: colWidths[3] }),
+        cell([centered(sc.grila)], { w: colWidths[2] }),
+        cell([centered(sc.result)], { w: colWidths[3] }),
       ]})
     } else {
       return new TableRow({ children: [
-        cell([para([reg(s ? String(i+1) : '', 16)])], { w: colWidths[0] }),
+        cell([para([reg(s ? String(i+1) : '', 16)], AlignmentType.CENTER)], { w: colWidths[0] }),
         cell([para([reg(s?.full_name || '', 16)])], { w: colWidths[1] }),
-        cell([para([reg('')])], { w: colWidths[2] }),
-        cell([para([reg('')])], { w: colWidths[3] }),
-        cell([para([reg('')])], { w: colWidths[4] }),
-        cell([para([reg('')])], { w: colWidths[5] }),
+        cell([centered(sc.grila)], { w: colWidths[2] }),
+        cell([centered(sc.trad)], { w: colWidths[3] }),
+        cell([centered(sc.sim)], { w: colWidths[4] }),
+        cell([centered(sc.result)], { w: colWidths[5] }),
       ]})
     }
   })

@@ -64,13 +64,13 @@ export async function POST(req: NextRequest) {
     const dataRows = Array.from({ length: minRows }, (_, i) => {
       const s = students[i]
       const bd = s?.birth_date ? new Date(s.birth_date).toLocaleDateString('ro-RO') : ''
-      // Separam prenume de nume (ultimul cuvant = prenume in modelul lor)
-      const parts = (s?.full_name || '').split(' ')
-      const prenume = parts.length > 1 ? parts.slice(1).join(' ') : ''
+      // În modelul SetSail: primul cuvânt din full_name = NUME, restul = PRENUME
+      const parts = (s?.full_name || '').split(/\s+/).filter(Boolean)
       const nume = parts[0] || ''
+      const prenume = parts.length > 1 ? parts.slice(1).join(' ') : ''
       return `<tr>
         <td style="border:1px solid #000;padding:5px;text-align:center">${s ? i+1 : ''}</td>
-        <td style="border:1px solid #000;padding:5px">${s ? (s.full_name || '') : ''}</td>
+        <td style="border:1px solid #000;padding:5px">${nume}</td>
         <td style="border:1px solid #000;padding:5px">${prenume}</td>
         <td style="border:1px solid #000;padding:5px">${bd}</td>
         <td style="border:1px solid #000;padding:5px">${s?.cnp || ''}</td>
@@ -163,12 +163,12 @@ ${antetHtml}
   const dataRows = Array.from({ length: minRows }, (_, i) => {
     const s = students[i]
     const bd = s?.birth_date ? new Date(s.birth_date).toLocaleDateString('ro-RO') : ''
-    const parts = (s?.full_name || '').split(' ')
-    const prenume = parts.length > 1 ? parts.slice(1).join(' ') : ''
+    const parts = (s?.full_name || '').split(/\s+/).filter(Boolean)
     const nume = parts[0] || ''
+    const prenume = parts.length > 1 ? parts.slice(1).join(' ') : ''
     return new TableRow({ children: [
       cell([para([reg(s ? String(i+1) : '')])], { w: colWidths[0] }),
-      cell([para([reg(s?.full_name || '')])], { w: colWidths[1] }),
+      cell([para([reg(nume)])], { w: colWidths[1] }),
       cell([para([reg(prenume)])], { w: colWidths[2] }),
       cell([para([reg(bd)])], { w: colWidths[3] }),
       cell([para([reg(s?.cnp || '')])], { w: colWidths[4] }),
