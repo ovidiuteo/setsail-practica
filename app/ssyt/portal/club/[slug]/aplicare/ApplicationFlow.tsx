@@ -50,6 +50,8 @@ export default function ApplicationFlow({
   applicationId,
   applicationStatus,
   clubSlug,
+  clubName,
+  participantName,
   templates,
   contacts,
   procedures,
@@ -57,6 +59,8 @@ export default function ApplicationFlow({
   applicationId: string
   applicationStatus: string
   clubSlug: string
+  clubName: string
+  participantName: string
   templates: Template[]
   contacts: Contact[]
   procedures: Procedure[]
@@ -164,7 +168,13 @@ export default function ApplicationFlow({
         <DocumentsList templates={templates} applicationId={applicationId} />
       )}
 
-      {tab === 'communication' && <CommunicationList contacts={contacts} />}
+      {tab === 'communication' && (
+        <CommunicationList
+          contacts={contacts}
+          clubName={clubName}
+          participantName={participantName}
+        />
+      )}
 
       {tab === 'procedures' && (
         <ProceduresChecklist
@@ -285,7 +295,40 @@ function DocumentsList({
   )
 }
 
-function CommunicationList({ contacts }: { contacts: Contact[] }) {
+const SUBJECT_PER_TYPE: Record<string, string> = {
+  inscriere: 'Adeziune și înscriere ca membru',
+  contabilitate: 'Cotizație de membru',
+  gdpr: 'Solicitare GDPR',
+  antrenor: 'Înscriere antrenor',
+  general: 'Cerere informații',
+  altul: 'Solicitare',
+}
+
+function buildSubject(contactType: string, participantName: string, clubName: string) {
+  const base = SUBJECT_PER_TYPE[contactType] ?? 'Solicitare'
+  return `${base} — ${participantName} — ${clubName}`
+}
+
+function buildBody(participantName: string, clubName: string) {
+  return [
+    'Bună ziua,',
+    '',
+    `Vă transmit atașat documentele de înscriere ca membru al ${clubName}.`,
+    '',
+    'Vă mulțumesc!',
+    participantName,
+  ].join('\n')
+}
+
+function CommunicationList({
+  contacts,
+  clubName,
+  participantName,
+}: {
+  contacts: Contact[]
+  clubName: string
+  participantName: string
+}) {
   if (contacts.length === 0) {
     return (
       <div
@@ -302,33 +345,78 @@ function CommunicationList({ contacts }: { contacts: Contact[] }) {
   return (
     <div>
       <p className="text-xs text-gray-500 mb-3">
-        Copiază adresele de mai jos și trimite documentele din clientul tău obișnuit de email
-        (Outlook, Gmail etc.). Nu trimitem mesajul prin platformă.
+        Adresele de mai jos sunt pre-completate. Editează-le dacă vrei să trimiți la altcineva. Apasă
+        „Trimite emailul" → se deschide clientul tău de email (Outlook, Gmail etc.) cu subject și text
+        gata. <strong>Nu trimitem nimic automat din platformă.</strong> Atașează PDF-urile generate
+        înainte de a trimite.
       </p>
-      <ul className="space-y-2">
+      <ul className="space-y-3">
         {contacts.map((c) => (
-          <li
+          <ContactRow
             key={c.id}
-            className="rounded-lg border px-4 py-3"
-            style={{ borderColor: '#e2e8f0', background: '#fff' }}
-          >
-            <div className="flex items-center gap-2 mb-1">
-              <span
-                className="inline-block text-xs px-2 py-0.5 rounded-full"
-                style={{ background: '#fff7ed', color: '#FF6B35' }}
-              >
-                {CONTACT_TYPE_LABEL[c.contact_type] ?? c.contact_type}
-              </span>
-              {c.name && <span className="text-xs text-gray-500">{c.name}</span>}
-            </div>
-            <div className="text-sm font-mono select-all" style={{ color: '#0a1628' }}>
-              {c.email}
-            </div>
-            {c.label && <div className="text-xs text-gray-400 mt-0.5">{c.label}</div>}
-          </li>
+            contact={c}
+            clubName={clubName}
+            participantName={participantName}
+          />
         ))}
       </ul>
     </div>
+  )
+}
+
+function ContactRow({
+  contact,
+  clubName,
+  participantName,
+}: {
+  contact: Contact
+  clubName: string
+  participantName: string
+}) {
+  const [email, setEmail] = useState(contact.email)
+
+  const subject = buildSubject(contact.contact_type, participantName, clubName)
+  const body = buildBody(participantName, clubName)
+  const mailto = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(
+    subject
+  )}&body=${encodeURIComponent(body)}`
+
+  return (
+    <li
+      className="rounded-lg border px-4 py-3"
+      style={{ borderColor: '#e2e8f0', background: '#fff' }}
+    >
+      <div className="flex items-center gap-2 mb-2 flex-wrap">
+        <span
+          className="inline-block text-xs px-2 py-0.5 rounded-full"
+          style={{ background: '#fff7ed', color: '#FF6B35' }}
+        >
+          {CONTACT_TYPE_LABEL[contact.contact_type] ?? contact.contact_type}
+        </span>
+        {contact.name && <span className="text-xs text-gray-500">{contact.name}</span>}
+        {contact.label && (
+          <span className="text-xs text-gray-400">· {contact.label}</span>
+        )}
+      </div>
+
+      <div className="flex items-stretch gap-2 flex-wrap">
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          className="flex-1 min-w-[200px] px-3 py-2 rounded-md border text-sm font-mono"
+          style={{ borderColor: '#cbd5e1' }}
+        />
+        <a
+          href={mailto}
+          className="inline-flex items-center gap-1 px-3 py-2 rounded-md text-sm font-medium whitespace-nowrap"
+          style={{ background: '#FF6B35', color: '#fff' }}
+        >
+          <Mail size={14} />
+          Trimite emailul
+        </a>
+      </div>
+    </li>
   )
 }
 

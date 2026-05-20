@@ -125,6 +125,8 @@ export default async function PortalClubApplicationPage({
         applicationId={application.id}
         applicationStatus={application.status}
         clubSlug={club.slug}
+        clubName={club.name}
+        participantName={session.participant.full_name ?? ''}
         templates={templatesRes.data ?? []}
         contacts={contactsRes.data ?? []}
         procedures={proceduresRes.data ?? []}
