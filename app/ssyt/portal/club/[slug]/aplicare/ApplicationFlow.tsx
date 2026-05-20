@@ -97,7 +97,7 @@ export default function ApplicationFlow({
   async function submit() {
     if (
       !confirm(
-        'Confirmi trimiterea aplicației către club? După trimitere, clubul va analiza cererea ta și îți va răspunde prin email.'
+        'Marchezi aplicația ca trimisă? Asta confirmă că ai trimis efectiv documentele clubului prin email. Câmpul de email și butoanele vor dispărea.'
       )
     )
       return
@@ -196,17 +196,15 @@ export default function ApplicationFlow({
       )}
 
       {!isFinal && (
-        <div className="mt-6 flex flex-wrap gap-3 items-center">
+        <div className="mt-6 space-y-3">
           {isStarted && (
-            <button
-              onClick={submit}
-              disabled={submitting}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-md text-sm font-semibold disabled:opacity-50"
-              style={{ background: '#FF6B35', color: '#fff' }}
-            >
-              <Send size={14} />
-              {submitting ? 'Se trimite...' : 'Trimite aplicația'}
-            </button>
+            <SubmitBlock
+              contacts={contacts}
+              clubName={clubName}
+              participantName={participantName}
+              onMarkAsSent={submit}
+              submitting={submitting}
+            />
           )}
 
           <button
@@ -220,6 +218,83 @@ export default function ApplicationFlow({
           </button>
         </div>
       )}
+    </div>
+  )
+}
+
+// ============================================================================
+// Submit block: email field + mailto button + "Am trimis aplicatia" button
+// ============================================================================
+function SubmitBlock({
+  contacts,
+  clubName,
+  participantName,
+  onMarkAsSent,
+  submitting,
+}: {
+  contacts: Contact[]
+  clubName: string
+  participantName: string
+  onMarkAsSent: () => void | Promise<void>
+  submitting: boolean
+}) {
+  const defaultEmail =
+    contacts.find((c) => c.contact_type === 'inscriere')?.email ??
+    contacts.find((c) => c.contact_type === 'general')?.email ??
+    contacts[0]?.email ??
+    ''
+
+  const [email, setEmail] = useState(defaultEmail)
+
+  const subject = buildSubject('inscriere', participantName, clubName)
+  const body = buildBody(participantName, clubName)
+  const mailto = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(
+    subject
+  )}&body=${encodeURIComponent(body)}`
+
+  return (
+    <div
+      className="rounded-lg border p-4"
+      style={{ borderColor: '#e2e8f0', background: '#fff' }}
+    >
+      <div className="text-xs font-medium uppercase tracking-wider mb-2" style={{ color: '#475569' }}>
+        Trimite documentele clubului
+      </div>
+      <p className="text-xs text-gray-500 mb-3">
+        Email-ul oficial al clubului apare mai jos. Editează adresa dacă vrei să trimiți la altcineva.
+        Apasă „Trimite emailul" — se deschide clientul tău de email cu subject și text gata. Atașează
+        PDF-urile generate înainte de a trimite. După ce ai trimis efectiv, apasă{' '}
+        <strong>„Am trimis aplicația"</strong>.
+      </p>
+
+      <input
+        type="email"
+        value={email}
+        onChange={(e) => setEmail(e.target.value)}
+        placeholder="email club"
+        className="w-full mb-3 px-3 py-2 rounded-md border text-sm font-mono"
+        style={{ borderColor: '#cbd5e1' }}
+      />
+
+      <div className="flex items-center gap-2 flex-wrap">
+        <a
+          href={mailto}
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md text-sm font-semibold transition"
+          style={{ background: '#FF6B35', color: '#fff' }}
+        >
+          <Mail size={14} />
+          Trimite emailul
+        </a>
+        <button
+          onClick={onMarkAsSent}
+          disabled={submitting}
+          className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md text-sm font-semibold disabled:opacity-50"
+          style={{ background: '#2563eb', color: '#fff' }}
+        >
+          <Send size={14} />
+          {submitting ? 'Se marchează...' : 'Am trimis aplicația'}
+        </button>
+      </div>
     </div>
   )
 }
