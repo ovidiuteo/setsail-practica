@@ -243,6 +243,7 @@ export default function ExamenPage() {
   const [gradeDraft, setGradeDraft] = useState<Record<string, number>>({})
   const [savingGrade, setSavingGrade] = useState<string | null>(null)
   const [solutionCopied, setSolutionCopied] = useState(false)
+  const [generatingPdf, setGeneratingPdf] = useState(false)
   const [showImport, setShowImport] = useState(false)
   const [importText, setImportText] = useState('')
   const [importBusy, setImportBusy] = useState(false)
@@ -477,6 +478,7 @@ export default function ExamenPage() {
         return {
           exam_id: examRow.id,
           order_no: idx + 1,
+          pool_question_code: q.code,
           question_text: q.question_text,
           option_a: textByLetter.A,
           option_b: textByLetter.B,
@@ -666,6 +668,7 @@ export default function ExamenPage() {
         rows.push({
           exam_id: examRow.id,
           order_no: pq.number,
+          pool_question_code: poolQ.code,
           question_text: poolQ.question_text,
           option_a: optionMap.A!.option_text,
           option_b: optionMap.B!.option_text,
@@ -966,6 +969,42 @@ export default function ExamenPage() {
                       style={{ background: '#7c3aed' }}>
                       {solutionCopied ? <Check size={12} /> : <Copy size={12} />}
                       {solutionCopied ? 'Copiat' : 'Copiază'}
+                    </button>
+                    <button
+                      onClick={async () => {
+                        if (!exam) { alert('Examenul nu este salvat încă.'); return }
+                        setGeneratingPdf(true)
+                        try {
+                          const res = await fetch('/api/generate-rezultate-pdf', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ exam_id: exam.id }),
+                          })
+                          if (!res.ok) {
+                            const err = await res.text()
+                            throw new Error(err)
+                          }
+                          const html = await res.text()
+                          const w = window.open('', '_blank')
+                          if (w) {
+                            w.document.write(html)
+                            w.document.close()
+                            setTimeout(() => w.print(), 800)
+                          } else {
+                            alert('Blocker pop-up. Activează pop-up-urile pentru a genera PDF-ul.')
+                          }
+                        } catch (e: any) {
+                          alert('Eroare: ' + (e.message || String(e)))
+                        } finally {
+                          setGeneratingPdf(false)
+                        }
+                      }}
+                      title="Generează PDF cu rezultate în stil oficial"
+                      disabled={generatingPdf}
+                      className="shrink-0 flex items-center gap-1 px-2 py-1 rounded text-xs font-medium text-white disabled:opacity-50"
+                      style={{ background: '#ea580c' }}>
+                      {generatingPdf ? <Loader2 size={12} className="animate-spin" /> : <FileText size={12} />}
+                      Generează PDF
                     </button>
                   </div>
                 )
