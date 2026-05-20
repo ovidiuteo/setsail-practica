@@ -116,18 +116,17 @@ function normalizeForMatch(s: string): string {
   return s
     .toLowerCase()
     // Descompune diacriticele (ă → a + ̆) apoi elimină marcajele combining
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
-    // Înlocuim variante ț/ș cu caracter de bază
-    .replace(/[șş]/g, 's')
-    .replace(/[țţ]/g, 't')
-    // Ghilimele tipografice + apostrofuri tipografice
-    .replace(/[„“”‘’«»`]/g, '')
-    // Non-breaking space + zero-width space
-    .replace(/[ ​ ]/g, ' ')
-    .replace(/[„""'']/g, '')
-    .replace(/[\s ​]+/g, ' ')
-    .replace(/[.,;:!?]+$/g, '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    // Variante ş/ţ cu cedillă (vechi) → s/t
+    .replace(/[\u0219\u015F]/g, 's')
+    .replace(/[\u021B\u0163]/g, 't')
+    // TOATE ghilimelele (ASCII + tipografice) și apostrofurile — codepoints explicit
+    .replace(/[\u0022\u0027\u0060\u00AB\u00BB\u2018\u2019\u201A\u201B\u201C\u201D\u201E\u201F]/g, '')
+    // Whitespace exotic (NBSP, ZWSP, narrow NBSP, em space, en space)
+    .replace(/[\u00A0\u200B\u202F\u2003\u2002]/g, ' ')
+    .replace(/\s+/g, ' ')
+    // Punctuație finală
+    .replace(/[.,;:!?)\]]+$/g, '')
     .trim()
 }
 
