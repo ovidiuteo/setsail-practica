@@ -2,8 +2,37 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { Calendar, Users, CheckCircle, Clock, Plus, ExternalLink, GitBranch, UserX, ArrowRight } from 'lucide-react'
+import { Calendar, Users, CheckCircle, Clock, Plus, ExternalLink, GitBranch, UserX, ArrowRight, Bell } from 'lucide-react'
 import Link from 'next/link'
+
+// ---------- Helper timeline TO DO ----------
+const DAY_MS = 24 * 60 * 60 * 1000
+const MONTHS_RO_SHORT = ['ian','feb','mar','apr','mai','iun','iul','aug','sep','oct','noi','dec']
+
+function startOfDay(d: Date): Date { const x = new Date(d); x.setHours(0,0,0,0); return x }
+function shortDate(d: Date | null): string {
+  if (!d) return ''
+  return `${d.getDate()} ${MONTHS_RO_SHORT[d.getMonth()]}`
+}
+function scopeForSession(s: any): string {
+  const c = (s?.class_caa || '').toLowerCase()
+  return (c.includes('radio') || c.includes('lrc')) ? 'radio_lrc' : 'practica'
+}
+function getAnchorDate(s: any, anchor: string): Date | null {
+  const raw = s?.[anchor]
+  if (raw) return startOfDay(new Date(raw))
+  if (s?.session_date) return startOfDay(new Date(s.session_date))
+  return null
+}
+
+type TodoItem = {
+  type: 'today' | 'in1' | 'in2' | 'inZone'
+  milestoneLabel: string
+  sessionId: string
+  sessionLabel: string
+  daysUntil: number  // 0 = azi, 1 = mâine, 2 = poimâine
+  date: Date
+}
 
 const statusMap: Record<string, { label: string; color: string }> = {
   draft:     { label: 'Ciornă',     color: '#6b7280' },
@@ -22,14 +51,18 @@ export default function AdminDashboard() {
   const [moving, setMoving]         = useState<string|null>(null)
   const [moveMenuId, setMoveMenuId] = useState<string|null>(null)
 
+  const [milestones, setMilestones] = useState<any[]>([])
+
   async function load() {
-    const [{ data: sessions }, { data: allSts }] = await Promise.all([
+    const [{ data: sessions }, { data: allSts }, { data: tlMs }] = await Promise.all([
       supabase.from('sessions')
         .select('*, locations(name, county), instructors(full_name), boats(name), evaluators(full_name)')
         .order('session_date', { ascending: true })
         .order('created_at', { ascending: true }),
-      supabase.from('students').select('*, sessions!session_id(session_date, session_type, status, locations(name))')
+      supabase.from('students').select('*, sessions!session_id(session_date, session_type, status, locations(name))'),
+      supabase.from('timeline_milestones').select('*').order('order_index'),
     ])
+    setMilestones(tlMs || [])
 
     const all = sessions || []
     const sts = allSts || []
@@ -135,6 +168,48 @@ export default function AdminDashboard() {
   const absentGroups = Object.values(absentBySession)
     .sort((a,b) => a.sess.session_date.localeCompare(b.sess.session_date))
 
+  // Calculez TO DO items pe baza milestones + sesiuni
+  const today = startOfDay(new Date())
+  const todos: TodoItem[] = []
+  const activeSessions = allSessions.filter((s: any) =>
+    s.session_type === 'principal' && s.status !== 'completed'
+  )
+  for (const sess of activeSessions) {
+    const scope = scopeForSession(sess)
+    const scopeMs = (milestones || []).filter((m: any) => m.scope === scope)
+    // Calculez data fiecărui milestone
+    const dated = scopeMs.map((m: any) => {
+      const anchor = getAnchorDate(sess, m.anchor)
+      return { m, date: anchor ? new Date(anchor.getTime() + m.offset_days * DAY_MS) : null }
+    }).filter(x => x.date !== null) as { m: any; date: Date }[]
+    if (dated.length === 0) continue
+    dated.sort((a, b) => a.date.getTime() - b.date.getTime())
+
+    const sessLabel = `${shortDate(sess.session_date ? startOfDay(new Date(sess.session_date)) : null)} · ${sess.locations?.name || sess.class_caa || ''}`
+
+    // Milestone-uri în ±2 zile
+    for (const { m, date } of dated) {
+      const diff = Math.round((date.getTime() - today.getTime()) / DAY_MS)
+      if (diff === 0) todos.push({ type: 'today', milestoneLabel: m.label, sessionId: sess.id, sessionLabel: sessLabel, daysUntil: 0, date })
+      else if (diff === 1) todos.push({ type: 'in1', milestoneLabel: m.label, sessionId: sess.id, sessionLabel: sessLabel, daysUntil: 1, date })
+      else if (diff === 2) todos.push({ type: 'in2', milestoneLabel: m.label, sessionId: sess.id, sessionLabel: sessLabel, daysUntil: 2, date })
+    }
+
+    // Zona activă (perioada în care suntem AZI, dacă nu e fix milestone)
+    const exactToday = dated.find(d => d.date.getTime() === today.getTime())
+    if (!exactToday) {
+      const prevMs = [...dated].reverse().find(d => d.date.getTime() < today.getTime())
+      const nextMs = dated.find(d => d.date.getTime() > today.getTime())
+      // Suntem într-o zonă doar dacă există un milestone precedent ȘI unul următor (suntem ÎN interval)
+      if (prevMs && nextMs) {
+        todos.push({ type: 'inZone', milestoneLabel: prevMs.m.label, sessionId: sess.id, sessionLabel: sessLabel, daysUntil: 0, date: today })
+      }
+    }
+  }
+  // Sortăm: azi → mâine → +2 zile → zone
+  const todoOrder: Record<TodoItem['type'], number> = { today: 0, in1: 1, in2: 2, inZone: 3 }
+  todos.sort((a, b) => todoOrder[a.type] - todoOrder[b.type] || a.sessionLabel.localeCompare(b.sessionLabel))
+
   return (
     <div className="p-8" onClick={() => setMoveMenuId(null)}>
       <div className="flex items-center justify-between mb-8">
@@ -164,6 +239,50 @@ export default function AdminDashboard() {
             </div>
           </div>
         ))}
+      </div>
+
+      {/* TO DO (alerte milestones) */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 mb-6">
+        <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+          <h2 className="font-semibold text-gray-900 flex items-center gap-2">
+            <Bell size={16} className="text-amber-500" />
+            TO DO
+          </h2>
+          <span className="text-xs text-gray-400">Alerte milestones ±2 zile + zone active</span>
+        </div>
+        {loading ? (
+          <div className="p-6 text-center text-gray-400 text-sm">Se încarcă...</div>
+        ) : todos.length === 0 ? (
+          <div className="p-6 text-center text-gray-400 text-sm">Nicio alertă în următoarele 2 zile.</div>
+        ) : (
+          <div className="divide-y divide-gray-50">
+            {todos.map((t, i) => {
+              const meta = t.type === 'today'
+                ? { bg: '#fef2f2', dot: '#dc2626', label: 'AZI' }
+                : t.type === 'in1'
+                  ? { bg: '#fff7ed', dot: '#ea580c', label: 'MÂINE' }
+                  : t.type === 'in2'
+                    ? { bg: '#fefce8', dot: '#ca8a04', label: '+2 zile' }
+                    : { bg: '#eff6ff', dot: '#2563eb', label: 'ACUM' }
+              return (
+                <Link key={i} href={`/admin/sesiuni/${t.sessionId}`}
+                  className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50 transition-colors"
+                  style={{ background: meta.bg }}>
+                  <span className="inline-block w-2 h-2 rounded-full shrink-0" style={{ background: meta.dot }} />
+                  <span className="text-xs font-bold uppercase tracking-wide shrink-0" style={{ color: meta.dot, minWidth: 64 }}>
+                    {meta.label}
+                  </span>
+                  <span className="text-sm text-gray-900 flex-1 truncate">
+                    <strong>{t.milestoneLabel}</strong>
+                    <span className="text-gray-500"> @ </span>
+                    <span className="text-gray-700">{t.sessionLabel}</span>
+                  </span>
+                  <ExternalLink size={12} className="text-gray-300 shrink-0" />
+                </Link>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {/* Sesiuni recente cu filtre */}
