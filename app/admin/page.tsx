@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { Calendar, Users, CheckCircle, Clock, Plus, ExternalLink, GitBranch, UserX, ArrowRight, Bell } from 'lucide-react'
 import Link from 'next/link'
+import { resolveColor, DEFAULT_GLOBAL_DAY, DEFAULT_GLOBAL_WEEKEND } from '@/lib/timeline-colors'
 
 // ---------- Helper timeline TO DO ----------
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -200,10 +201,20 @@ export default function AdminDashboard() {
     if (!exactToday) {
       const prevMs = [...dated].reverse().find(d => d.date.getTime() < today.getTime())
       const nextMs = dated.find(d => d.date.getTime() > today.getTime())
-      // Suntem într-o zonă semantică doar dacă există milestone precedent + următor
-      // ȘI culoarea zilei NU e verdele default global ('none' = utilizator a zis explicit „neutru")
-      if (prevMs && nextMs && prevMs.m.color_day !== 'none') {
-        todos.push({ type: 'inZone', milestoneLabel: prevMs.m.label, sessionId: sess.id, sessionLabel: sessLabel, daysUntil: 0, date: today })
+      // Suntem într-o zonă semantică doar dacă:
+      // 1) Există milestone precedent + următor
+      // 2) Culoarea efectivă a zilei NU e verdele default global (neutru, fără semnificație)
+      if (prevMs && nextMs) {
+        const isWeekend = today.getDay() === 0 || today.getDay() === 6
+        const effective = resolveColor(
+          isWeekend ? prevMs.m.color_weekend : prevMs.m.color_day,
+          prevMs.m.color,
+          isWeekend ? 'weekend' : 'day',
+        )
+        const isNeutral = effective === DEFAULT_GLOBAL_DAY || effective === DEFAULT_GLOBAL_WEEKEND
+        if (!isNeutral) {
+          todos.push({ type: 'inZone', milestoneLabel: prevMs.m.label, sessionId: sess.id, sessionLabel: sessLabel, daysUntil: 0, date: today })
+        }
       }
     }
   }
