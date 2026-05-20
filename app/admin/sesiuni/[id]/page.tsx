@@ -150,6 +150,8 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
     selectedIds: Set<string>, setSelectedIds: (s: Set<string>) => void,
     onCiPreview?: (name:string, img:string) => void }) {
 
+  const isRadio = (sess.class_caa || '').toLowerCase().includes('radio')
+               || (sess.class_caa || '').toLowerCase().includes('lrc')
   const [editingId, setEditingId] = useState<string|null>(null)
   const [editValues, setEditValues] = useState<any>({})
   const [saving, setSaving] = useState(false)
