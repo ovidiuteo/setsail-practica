@@ -52,6 +52,7 @@ type Answer = {
   graded_at: string | null
   grila_score: number
   translation_score: number
+  simulator_score: number | null
 }
 type StudentLite = {
   id: string
@@ -241,6 +242,7 @@ export default function ExamenPage() {
   const [students, setStudents] = useState<StudentLite[]>([])
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [gradeDraft, setGradeDraft] = useState<Record<string, number>>({})
+  const [simulatorDraft, setSimulatorDraft] = useState<Record<string, number | null>>({})
   const [savingGrade, setSavingGrade] = useState<string | null>(null)
   const [solutionCopied, setSolutionCopied] = useState(false)
   const [generatingPdf, setGeneratingPdf] = useState(false)
@@ -354,10 +356,15 @@ export default function ExamenPage() {
         .eq('session_id', sessionId)
       setStudents((sts || []) as StudentLite[])
 
-      // Init grade draft
+      // Init grade draft + simulator draft
       const draft: Record<string, number> = {}
-      ansList.forEach(a => { draft[a.id] = a.translation_score || 0 })
+      const simDraft: Record<string, number | null> = {}
+      ansList.forEach(a => {
+        draft[a.id] = a.translation_score || 0
+        simDraft[a.id] = a.simulator_score ?? null
+      })
       setGradeDraft(draft)
+      setSimulatorDraft(simDraft)
     } else {
       setExam(null)
       setQuestions([])
@@ -585,12 +592,17 @@ export default function ExamenPage() {
   // ---------- GRADE ----------
   async function saveGrade(answer: Answer) {
     const score = gradeDraft[answer.id] ?? 0
-    if (score < 0 || score > 5) { alert('Nota trebuie să fie între 0 și 5.'); return }
+    if (score < 0 || score > 5) { alert('Nota traduceri trebuie să fie între 0 și 5.'); return }
+    const sim = simulatorDraft[answer.id]
+    if (sim !== null && sim !== undefined && (sim < 1 || sim > 10)) {
+      alert('Nota simulator trebuie să fie între 1 și 10 (sau gol).'); return
+    }
     setSavingGrade(answer.id)
     const { error } = await supabase
       .from('radio_exam_answers')
       .update({
         translation_score: score,
+        simulator_score: sim ?? null,
         graded_at: new Date().toISOString(),
         status: 'graded',
         updated_at: new Date().toISOString(),
@@ -1127,6 +1139,9 @@ export default function ExamenPage() {
                           <div className="text-xs text-gray-600">
                             <strong>{a.translation_score}</strong>/5 trad.
                           </div>
+                          <div className="text-xs text-gray-600">
+                            <strong>{a.simulator_score ?? '—'}</strong>/10 sim.
+                          </div>
                           {isOpen ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
                         </div>
                       </button>
@@ -1145,30 +1160,57 @@ export default function ExamenPage() {
                             </div>
                           </div>
 
-                          {/* Notare manuală traduceri */}
+                          {/* Notare manuală traduceri + simulator */}
                           <div className="bg-white rounded-lg p-4 border border-purple-100">
-                            <div className="text-xs font-semibold text-purple-700 mb-2">
-                              Notare traduceri (0-5)
+                            <div className="text-xs font-semibold text-purple-700 mb-3">
+                              Notare manuală
+                            </div>
+                            <div className="flex flex-wrap items-end gap-4 mb-3">
+                              <div>
+                                <label className="block text-xs text-gray-500 mb-1">Traduceri (0-5)</label>
+                                <input type="number" min={0} max={5} step={1}
+                                  value={draftScore}
+                                  onChange={e => setGradeDraft(prev => ({
+                                    ...prev,
+                                    [a.id]: Math.max(0, Math.min(5, parseInt(e.target.value) || 0))
+                                  }))}
+                                  className="w-20 px-3 py-2 border border-gray-200 rounded-lg text-sm text-center focus:outline-none focus:border-purple-400"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-xs text-gray-500 mb-1">Simulator (1-10)</label>
+                                <input type="number" min={1} max={10} step={1}
+                                  value={simulatorDraft[a.id] ?? ''}
+                                  onChange={e => {
+                                    const raw = e.target.value
+                                    if (raw === '') {
+                                      setSimulatorDraft(prev => ({ ...prev, [a.id]: null }))
+                                    } else {
+                                      const n = parseInt(raw, 10)
+                                      if (!isNaN(n)) {
+                                        setSimulatorDraft(prev => ({
+                                          ...prev,
+                                          [a.id]: Math.max(1, Math.min(10, n))
+                                        }))
+                                      }
+                                    }
+                                  }}
+                                  placeholder="—"
+                                  className="w-20 px-3 py-2 border border-gray-200 rounded-lg text-sm text-center focus:outline-none focus:border-purple-400"
+                                />
+                              </div>
                             </div>
                             <div className="flex items-center gap-3">
-                              <input type="number" min={0} max={5} step={1}
-                                value={draftScore}
-                                onChange={e => setGradeDraft(prev => ({
-                                  ...prev,
-                                  [a.id]: Math.max(0, Math.min(5, parseInt(e.target.value) || 0))
-                                }))}
-                                className="w-20 px-3 py-2 border border-gray-200 rounded-lg text-sm text-center focus:outline-none focus:border-purple-400"
-                              />
                               <button onClick={() => saveGrade(a)}
                                 disabled={savingGrade === a.id || a.status === 'in_progress'}
                                 className="px-4 py-2 rounded-lg text-xs font-medium text-white disabled:opacity-50"
                                 style={{ background: '#7c3aed' }}>
                                 {savingGrade === a.id ? <Loader2 size={14} className="animate-spin inline" /> : <Check size={14} className="inline mr-1" />}
-                                Salvează nota
+                                Salvează notele
                               </button>
                               {a.graded_at && (
                                 <span className="text-xs text-gray-400">
-                                  Notat {new Date(a.graded_at).toLocaleString('ro-RO')}
+                                  Ultima salvare: {new Date(a.graded_at).toLocaleString('ro-RO')}
                                 </span>
                               )}
                             </div>
