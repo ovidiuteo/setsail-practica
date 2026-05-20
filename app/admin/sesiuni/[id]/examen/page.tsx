@@ -111,10 +111,20 @@ function generateRandomCode(length = 13): string {
   return '1' + String(Date.now()).slice(-(length - 1))
 }
 
-// Normalizare text pentru comparație
+// Normalizare text pentru comparație — tolerantă la diacritice, ghilimele și whitespace
 function normalizeForMatch(s: string): string {
   return s
     .toLowerCase()
+    // Descompune diacriticele (ă → a + ̆) apoi elimină marcajele combining
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    // Înlocuim variante ț/ș cu caracter de bază
+    .replace(/[șş]/g, 's')
+    .replace(/[țţ]/g, 't')
+    // Ghilimele tipografice + apostrofuri tipografice
+    .replace(/[„“”‘’«»`]/g, '')
+    // Non-breaking space + zero-width space
+    .replace(/[ ​ ]/g, ' ')
     .replace(/[„""'']/g, '')
     .replace(/[\s ​]+/g, ' ')
     .replace(/[.,;:!?]+$/g, '')
