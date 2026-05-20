@@ -7,7 +7,13 @@ const SESSION_COOKIE = 'ssyt_portal_session'
 
 // WHITELIST de campuri editabile din portal
 // Toate celelalte (email, full_name, cnp, date_of_birth) sunt IGNORATE
-const ALLOWED_FIELDS = ['phone', 'photo_url', 'dietary_restrictions', 'emergency_contact', 't_shirt_size']
+// ci_image_url si signature_image_url se seteaza separat prin /api/ssyt/portal/upload-*
+const ALLOWED_FIELDS = [
+  'phone', 'photo_url', 'dietary_restrictions', 'emergency_contact', 't_shirt_size',
+  // Date pentru generarea documentelor catre cluburi sportive
+  'ci_seria', 'ci_numar', 'ci_emis_de', 'ci_emisa_la',
+  'loc_nasterii', 'judet_nasterii', 'cetatenia', 'adresa_completa',
+]
 
 export async function POST(req: NextRequest) {
   const token = req.cookies.get(SESSION_COOKIE)?.value

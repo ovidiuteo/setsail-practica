@@ -26,7 +26,10 @@ export async function getPortalSession(): Promise<PortalSession | null> {
 
   const { data: participant } = await supabase
     .from('ssyt_participants')
-    .select('id, full_name, first_name, last_name, email, phone, photo_url, t_shirt_size, emergency_contact, dietary_restrictions, notes, date_of_birth, cnp')
+    .select(
+      'id, full_name, first_name, last_name, email, phone, photo_url, t_shirt_size, emergency_contact, dietary_restrictions, notes, date_of_birth, cnp, ' +
+      'ci_seria, ci_numar, ci_emis_de, ci_emisa_la, ci_image_url, loc_nasterii, judet_nasterii, cetatenia, adresa_completa, signature_image_url'
+    )
     .eq('id', row.participant_id)
     .maybeSingle()
   if (!participant) return null
