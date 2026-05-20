@@ -282,14 +282,14 @@ ${antetHtml}
     })
     if (isPrelungire) {
       return new TableRow({ children: [
-        cell([para([reg(s ? String(i+1) : '', 16)], AlignmentType.CENTER)], { w: colWidths[0] }),
+        cell([centered(s ? String(i+1) : '')], { w: colWidths[0] }),
         cell([para([reg(s?.full_name || '', 16)])], { w: colWidths[1] }),
         cell([centered(sc.grila)], { w: colWidths[2] }),
         cell([centered(sc.result)], { w: colWidths[3] }),
       ]})
     } else {
       return new TableRow({ children: [
-        cell([para([reg(s ? String(i+1) : '', 16)], AlignmentType.CENTER)], { w: colWidths[0] }),
+        cell([centered(s ? String(i+1) : '')], { w: colWidths[0] }),
         cell([para([reg(s?.full_name || '', 16)])], { w: colWidths[1] }),
         cell([centered(sc.grila)], { w: colWidths[2] }),
         cell([centered(sc.trad)], { w: colWidths[3] }),
