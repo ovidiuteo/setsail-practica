@@ -90,13 +90,14 @@ function SessionTimeline({ session, config }: { session: any; config: Record<str
           return d.getTime() >= from.getTime() && d.getTime() < to.getTime()
         })
 
-        let bg = '#e5e7eb' // gri default
+        let bg: string | undefined = '#e5e7eb' // gri default
         let label = ''
         if (exactMs) {
-          bg = exactMs.color
+          bg = exactMs.color === 'none' ? undefined : exactMs.color
           label = exactMs.label
         } else if (period) {
-          bg = isWeekend ? period.color_weekend : period.color_day
+          const pc = isWeekend ? period.color_weekend : period.color_day
+          bg = pc === 'none' ? undefined : pc
           label = period.label
         }
 

@@ -205,10 +205,14 @@ export default function TimelineConfigPage() {
             if (!from || !to) return false
             return d.getTime() >= from.getTime() && d.getTime() < to.getTime()
           })
-          let bg = '#e5e7eb'
+          let bg: string | undefined = '#e5e7eb'
           let label = ''
-          if (exactMs) { bg = exactMs.color; label = exactMs.label }
-          else if (period) { bg = isWeekend ? period.color_weekend : period.color_day; label = period.label }
+          if (exactMs) { bg = exactMs.color === 'none' ? undefined : exactMs.color; label = exactMs.label }
+          else if (period) {
+            const pc = isWeekend ? period.color_weekend : period.color_day
+            bg = pc === 'none' ? undefined : pc
+            label = period.label
+          }
           return (
             <div key={i} className="flex-1 relative group h-full"
               style={{ background: bg, minWidth: 4, borderRight: i < days.length - 1 ? '1px solid #d1d5db' : undefined }}>
@@ -405,15 +409,33 @@ export default function TimelineConfigPage() {
                 </div>
                 <div className="col-span-1">
                   <label className="block text-[10px] uppercase text-gray-400 mb-0.5">Zi</label>
-                  <input type="color" value={p.color_day}
-                    onChange={e => updatePeriod(p.id, { color_day: e.target.value })}
-                    className="w-7 h-7 border border-gray-200 rounded cursor-pointer"/>
+                  <div className="flex items-center gap-1">
+                    <input type="color" value={p.color_day === 'none' ? '#ffffff' : p.color_day}
+                      onChange={e => updatePeriod(p.id, { color_day: e.target.value })}
+                      disabled={p.color_day === 'none'}
+                      className="w-6 h-6 border border-gray-200 rounded cursor-pointer disabled:opacity-30"/>
+                    <label className="flex items-center gap-0.5 text-[10px] text-gray-500 cursor-pointer">
+                      <input type="checkbox" checked={p.color_day === 'none'}
+                        onChange={e => updatePeriod(p.id, { color_day: e.target.checked ? 'none' : '#bbf7d0' })}
+                        className="w-3 h-3"/>
+                      none
+                    </label>
+                  </div>
                 </div>
                 <div className="col-span-1">
                   <label className="block text-[10px] uppercase text-gray-400 mb-0.5">Weekend</label>
-                  <input type="color" value={p.color_weekend}
-                    onChange={e => updatePeriod(p.id, { color_weekend: e.target.value })}
-                    className="w-7 h-7 border border-gray-200 rounded cursor-pointer"/>
+                  <div className="flex items-center gap-1">
+                    <input type="color" value={p.color_weekend === 'none' ? '#ffffff' : p.color_weekend}
+                      onChange={e => updatePeriod(p.id, { color_weekend: e.target.value })}
+                      disabled={p.color_weekend === 'none'}
+                      className="w-6 h-6 border border-gray-200 rounded cursor-pointer disabled:opacity-30"/>
+                    <label className="flex items-center gap-0.5 text-[10px] text-gray-500 cursor-pointer">
+                      <input type="checkbox" checked={p.color_weekend === 'none'}
+                        onChange={e => updatePeriod(p.id, { color_weekend: e.target.checked ? 'none' : '#86efac' })}
+                        className="w-3 h-3"/>
+                      none
+                    </label>
+                  </div>
                 </div>
                 <div className="col-span-1 flex justify-end">
                   {savingId === p.id && <Loader2 size={12} className="animate-spin text-gray-400 mr-1"/>}
