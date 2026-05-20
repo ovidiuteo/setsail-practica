@@ -276,6 +276,11 @@ export default function PortalExamenPage() {
         })
         .eq('id', answerRow.id)
       if (error) throw error
+      // Sincronizăm și `students.obtinere_prelungire` ca să apară corect în tabelul admin
+      await supabase
+        .from('students')
+        .update({ obtinere_prelungire: obtinerePrelungire })
+        .eq('id', answerRow.student_id)
       setPhase('already-submitted')
     } catch (e: any) {
       alert('Eroare la trimitere: ' + (e.message || String(e)))

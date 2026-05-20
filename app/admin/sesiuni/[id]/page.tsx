@@ -71,6 +71,7 @@ type Student = {
   notes?: string
   signature_pool?: boolean
   signature_random?: string
+  obtinere_prelungire?: string
 }
 type Session = { id: string; session_date: string; course_start_date?: string; status: string; session_type: string; access_code: string; class_caa: string; request_number?: string; location_detail?: string; parent_session_id?: string; is_clone?: boolean; locations?: any; boats?: any; evaluators?: any; instructors?: any; contact_person_ids?: string[]; practice_start_date?: string; practice_start_time?: string; radio_exam_status?: string }
 
@@ -293,6 +294,12 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
   }
 
 
+  async function toggleObtinerePrelungire(s: Student) {
+    const next = s.obtinere_prelungire === 'prelungire' ? 'obtinere' : 'prelungire'
+    await supabase.from('students').update({ obtinere_prelungire: next }).eq('id', s.id)
+    setStudents(students.map(st => st.id === s.id ? { ...st, obtinere_prelungire: next } : st))
+  }
+
   async function markSailing(s: Student) {
     // Gasim sesiunea principala (parent) pentru a muta cursantul acolo
     const mainSess = allSessions.find(sess => sess.session_type === 'principal' && !sess.parent_session_id)
@@ -442,13 +449,45 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
                     </span>
                   </th>
                 ))}
+                {isRadio && (
+                  <th className="px-2 py-2.5 font-medium text-gray-500 text-center whitespace-nowrap">Tip</th>
+                )}
                 <th className="px-2 py-2.5 text-gray-400 text-xs font-medium text-center">CI</th>
                 <th className="px-2 py-2.5 text-gray-400 text-xs font-medium text-center">Sem.</th>
                 <th className="w-24 px-2 py-2.5"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {getSorted(students.filter((s:Student)=>!s.only_sailing)).map((s,i) => {
+              {(() => {
+                const baseList = students.filter((s:Student)=>!s.only_sailing)
+                let renderable: Array<{type:'sep'|'student'; s?:Student; label?:string; count?:number}> = []
+                if (isRadio) {
+                  const sortAlpha = (a:Student,b:Student) => (a.full_name||'').localeCompare(b.full_name||'', 'ro')
+                  const obt = baseList.filter(x => x.obtinere_prelungire !== 'prelungire').sort(sortAlpha)
+                  const prel = baseList.filter(x => x.obtinere_prelungire === 'prelungire').sort(sortAlpha)
+                  renderable.push({type:'sep', label:'OBȚINERE', count: obt.length})
+                  obt.forEach(x => renderable.push({type:'student', s:x}))
+                  renderable.push({type:'sep', label:'RECONFIRMARE', count: prel.length})
+                  prel.forEach(x => renderable.push({type:'student', s:x}))
+                } else {
+                  getSorted(baseList).forEach(x => renderable.push({type:'student', s:x}))
+                }
+                let studentIdx = -1
+                return renderable.map((item) => {
+                  if (item.type === 'sep') {
+                    const isObt = item.label === 'OBȚINERE'
+                    return (
+                      <tr key={`sep-${item.label}`} style={{background: isObt ? '#dcfce7' : '#dbeafe'}}>
+                        <td colSpan={15} className="px-3 py-2 text-xs font-bold tracking-wider"
+                          style={{color: isObt ? '#15803d' : '#1d4ed8'}}>
+                          {item.label} ({item.count})
+                        </td>
+                      </tr>
+                    )
+                  }
+                  studentIdx++
+                  const s = item.s!
+                  const i = studentIdx
                 const ps = portalMap[s.portal_status] || portalMap.pending
                 const isEditing = editingId === s.id
                 return (
@@ -467,6 +506,7 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
                       <td className="px-1 py-1.5"><select className={inCls} value={editValues.class_caa} onChange={e=>setEditValues((v:any)=>({...v,class_caa:e.target.value}))}>
                         <option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option><option value="C,D">C,D</option><option value="Radio">Radio</option><option value="Obtinere LRC">Obținere LRC</option><option value="Prelungire LRC">Prelungire LRC</option></select></td>
                       <td className="px-1 py-1.5"><span className="text-xs" style={{color:ps.color}}>{ps.label}</span></td>
+                      {isRadio && <td className="px-1 py-1.5"></td>}
                       <td className="px-2 py-1.5"><div className="flex gap-1">
                         <button onClick={()=>saveEdit(s.id)} disabled={saving} className="p-1 rounded bg-green-100 text-green-700"><Check size={12}/></button>
                         <button onClick={()=>setEditingId(null)} className="p-1 rounded bg-gray-100 text-gray-500"><X size={12}/></button>
@@ -522,6 +562,21 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
                         <span className="text-xs font-medium" style={{color:ps.color}}>{ps.label}</span>
                         {s.signed_at && <div className="text-gray-300 text-xs">{new Date(s.signed_at).toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'})}</div>}
                       </td>
+                      {/* O/R toggle - doar pentru Radio */}
+                      {isRadio && (
+                        <td className="px-2 py-2 text-center">
+                          <button onClick={(e)=>{e.stopPropagation();toggleObtinerePrelungire(s)}}
+                            title={s.obtinere_prelungire === 'prelungire'
+                              ? 'Reconfirmare — click pentru a comuta la Obținere'
+                              : 'Obținere — click pentru a comuta la Reconfirmare'}
+                            className="w-7 h-7 rounded-md text-xs font-bold transition-colors hover:opacity-80"
+                            style={s.obtinere_prelungire === 'prelungire'
+                              ? { background: '#dbeafe', color: '#1d4ed8' }
+                              : { background: '#dcfce7', color: '#15803d' }}>
+                            {s.obtinere_prelungire === 'prelungire' ? 'R' : 'O'}
+                          </button>
+                        </td>
+                      )}
                       {/* CI imagine - pictograma */}
                       <td className="px-2 py-2 text-center">
                         {s.ci_image_data ? (
@@ -675,7 +730,8 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
                     </>)}
                   </tr>
                 )
-              })}
+              })
+              })()}
             </tbody>
           </table>
         </div>
