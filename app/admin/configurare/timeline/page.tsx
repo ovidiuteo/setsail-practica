@@ -36,6 +36,26 @@ const DAY_MS = 24 * 60 * 60 * 1000
 
 function startOfDay(d: Date) { const x = new Date(d); x.setHours(0,0,0,0); return x }
 function fmtDateRO(d: Date) { return `${DAYS_RO[d.getDay()]}, ${d.getDate()} ${MONTHS_RO[d.getMonth()]} ${d.getFullYear()}` }
+function isValidHex(v: string): boolean { return /^#[0-9a-fA-F]{6}$/.test(v) }
+
+// Input text pentru HEX, sincronizat cu valoarea externă (cu commit on blur sau Enter)
+function HexInput({ value, onCommit, disabled = false }: { value: string; onCommit: (v: string) => void; disabled?: boolean }) {
+  const [local, setLocal] = useState(value)
+  useEffect(() => { setLocal(value) }, [value])
+  const commit = () => {
+    if (isValidHex(local)) onCommit(local.toLowerCase())
+    else setLocal(value) // revert la valoarea validă curentă
+  }
+  return (
+    <input type="text" value={local} disabled={disabled}
+      onChange={e => setLocal(e.target.value)}
+      onBlur={commit}
+      onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+      placeholder="#rrggbb"
+      className={`w-20 px-1.5 py-0.5 border border-gray-200 rounded text-[11px] font-mono uppercase focus:outline-none focus:border-purple-400 disabled:opacity-30 disabled:bg-gray-50`}
+    />
+  )
+}
 
 type SessionLite = {
   id: string
@@ -341,11 +361,11 @@ export default function TimelineConfigPage() {
                     {/* Event */}
                     <div>
                       <label className="block text-[10px] uppercase text-gray-400 mb-0.5">Culoare event (ziua)</label>
-                      <div className="flex items-center gap-1">
+                      <div className="flex items-center gap-1.5">
                         <input type="color" value={m.color}
                           onChange={e => updateMilestone(m.id, { color: e.target.value })}
                           className="w-7 h-7 border border-gray-200 rounded cursor-pointer"/>
-                        <span className="text-[11px] font-mono text-gray-500">{m.color}</span>
+                        <HexInput value={m.color} onCommit={v => updateMilestone(m.id, { color: v })} />
                       </div>
                     </div>
                     {/* Day */}
@@ -356,6 +376,8 @@ export default function TimelineConfigPage() {
                           onChange={e => setMilestoneDayColor(m, e.target.value)}
                           disabled={dayIsNone}
                           className="w-7 h-7 border border-gray-200 rounded cursor-pointer disabled:opacity-30"/>
+                        <HexInput value={effectiveDay} disabled={dayIsNone}
+                          onCommit={v => setMilestoneDayColor(m, v)} />
                         <label className="flex items-center gap-0.5 text-[10px] text-gray-500 cursor-pointer">
                           <input type="checkbox" checked={dayIsNone}
                             onChange={e => updateMilestone(m.id, { color_day: e.target.checked ? 'none' : derivedDay })}
@@ -377,6 +399,8 @@ export default function TimelineConfigPage() {
                           onChange={e => updateMilestone(m.id, { color_weekend: e.target.value })}
                           disabled={wkIsNone}
                           className="w-7 h-7 border border-gray-200 rounded cursor-pointer disabled:opacity-30"/>
+                        <HexInput value={effectiveWeekend} disabled={wkIsNone}
+                          onCommit={v => updateMilestone(m.id, { color_weekend: v })} />
                         <label className="flex items-center gap-0.5 text-[10px] text-gray-500 cursor-pointer">
                           <input type="checkbox" checked={wkIsNone}
                             onChange={e => updateMilestone(m.id, { color_weekend: e.target.checked ? 'none' : derivedWeekend })}
