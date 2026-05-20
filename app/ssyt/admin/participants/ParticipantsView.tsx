@@ -1,7 +1,28 @@
 'use client'
 import { useState, useMemo } from 'react'
 import Link from 'next/link'
-import { Mail, Phone, ChevronRight, Users, Search, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react'
+import { Mail, Phone, ChevronRight, Users, Search, ArrowUp, ArrowDown, ArrowUpDown, Copy, Check, ExternalLink } from 'lucide-react'
+
+function CopyButton({ value, title }: { value: string; title: string }) {
+  const [copied, setCopied] = useState(false)
+  if (!value) return null
+  return (
+    <button
+      onClick={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        navigator.clipboard.writeText(value).then(() => {
+          setCopied(true)
+          setTimeout(() => setCopied(false), 1500)
+        })
+      }}
+      title={title}
+      className="p-1 rounded hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition"
+    >
+      {copied ? <Check size={11} className="text-green-600" /> : <Copy size={11} />}
+    </button>
+  )
+}
 
 type Participant = {
   id: string
@@ -307,14 +328,18 @@ function ParticipantsTable({
                   <span className={`inline-flex items-center gap-1 ${isPlaceholder ? 'text-amber-600' : 'text-gray-700'}`}>
                     <Mail size={11} className="text-gray-400" />
                     <span className="font-mono">{p.email}</span>
+                    {p.email && !isPlaceholder && <CopyButton value={p.email} title="Copiază email" />}
                   </span>
                 </td>
                 <td className="px-5 py-2.5 text-xs text-gray-700">
                   {p.phone ? (
-                    <a href={`tel:${p.phone}`} className="inline-flex items-center gap-1 hover:underline">
-                      <Phone size={11} className="text-gray-400" />
-                      <span className="font-mono">{p.phone}</span>
-                    </a>
+                    <span className="inline-flex items-center gap-1">
+                      <a href={`tel:${p.phone}`} className="inline-flex items-center gap-1 hover:underline">
+                        <Phone size={11} className="text-gray-400" />
+                        <span className="font-mono">{p.phone}</span>
+                      </a>
+                      <CopyButton value={p.phone} title="Copiază telefon" />
+                    </span>
                   ) : (
                     <span className="text-gray-300 italic">—</span>
                   )}
@@ -347,9 +372,24 @@ function ParticipantsTable({
                   <StatusBadge status={p.status} />
                 </td>
                 <td className="pr-5">
-                  <Link href={`/ssyt/admin/participants/${p.id}`} className="text-gray-400 hover:text-gray-700">
-                    <ChevronRight size={16} />
-                  </Link>
+                  <div className="flex items-center gap-1 justify-end">
+                    {p.email && !isPlaceholder && (
+                      <a
+                        href={`/ssyt/portal-login?email=${encodeURIComponent(p.email)}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        title={`Deschide portalul ca ${p.full_name}`}
+                        className="inline-flex items-center gap-1 px-2 py-1 rounded text-[10px] font-medium hover:bg-orange-50 transition"
+                        style={{ color: '#FF6B35', border: '1px solid #FF6B35' }}
+                      >
+                        <ExternalLink size={10} />
+                        Portal
+                      </a>
+                    )}
+                    <Link href={`/ssyt/admin/participants/${p.id}`} className="text-gray-400 hover:text-gray-700">
+                      <ChevronRight size={16} />
+                    </Link>
+                  </div>
                 </td>
               </tr>
             )

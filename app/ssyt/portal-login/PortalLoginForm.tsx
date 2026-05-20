@@ -5,7 +5,8 @@ import { useSearchParams } from 'next/navigation'
 export default function PortalLoginForm() {
   const params = useSearchParams()
   const next = params.get('next') || '/ssyt/portal'
-  const [email, setEmail] = useState('')
+  const prefilledEmail = params.get('email') || ''
+  const [email, setEmail] = useState(prefilledEmail)
   const [keyword, setKeyword] = useState('ssyt2026')  // precompletat
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
