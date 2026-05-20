@@ -21,62 +21,89 @@ function fmtDateRO(d: Date): string {
   return `${DAYS_RO[d.getDay()]}, ${d.getDate()} ${MONTHS_RO_FULL[d.getMonth()]} ${d.getFullYear()}`
 }
 
-// Aplică o atenuare cu factor (0..1) pe un HEX color → returnează HEX mai întunecat
-function darken(hex: string, factor: number): string {
-  const h = hex.replace('#', '')
-  const r = Math.round(parseInt(h.slice(0, 2), 16) * factor)
-  const g = Math.round(parseInt(h.slice(2, 4), 16) * factor)
-  const b = Math.round(parseInt(h.slice(4, 6), 16) * factor)
-  const toHex = (n: number) => Math.max(0, Math.min(255, n)).toString(16).padStart(2, '0')
-  return `#${toHex(r)}${toHex(g)}${toHex(b)}`
+export type TimelineMilestone = {
+  id: string; scope: string; code: string; label: string
+  anchor: string; offset_days: number; color: string; order_index: number
+}
+export type TimelinePeriod = {
+  id: string; scope: string; label: string
+  from_milestone_code: string; to_milestone_code: string
+  color_day: string; color_weekend: string; order_index: number
+}
+export type TimelineConfig = { milestones: TimelineMilestone[]; periods: TimelinePeriod[] }
+
+function scopeForSession(session: any): 'radio_lrc' | 'practica' {
+  const c = (session?.class_caa || '').toLowerCase()
+  return (c.includes('radio') || c.includes('lrc')) ? 'radio_lrc' : 'practica'
 }
 
-function SessionTimeline({ session }: { session: any }) {
-  const examDate = session.session_date ? startOfDay(new Date(session.session_date)) : null
-  const createdAt = session.created_at ? startOfDay(new Date(session.created_at)) : null
-  if (!examDate || !createdAt) return null
-  const practiceStart = session.practice_start_date ? startOfDay(new Date(session.practice_start_date)) : null
-  const endDate = new Date(examDate.getTime() + 14 * DAY_MS)
+function getAnchorDate(session: any, anchor: string): Date | null {
+  const raw = session?.[anchor]
+  if (raw) return startOfDay(new Date(raw))
+  // Fallback: dacă ancora e goală, folosim session_date
+  if (session?.session_date) return startOfDay(new Date(session.session_date))
+  return null
+}
+
+function SessionTimeline({ session, config }: { session: any; config: Record<string, TimelineConfig> }) {
+  const scope = scopeForSession(session)
+  const scopeCfg = config[scope] || config['practica'] || { milestones: [], periods: [] }
+
+  // Calculez datele tuturor milestone-urilor pentru această sesiune
+  const milestoneDates = scopeCfg.milestones.map(m => {
+    const anchor = getAnchorDate(session, m.anchor)
+    return {
+      ...m,
+      date: anchor ? new Date(anchor.getTime() + m.offset_days * DAY_MS) : null,
+    }
+  }).filter(m => m.date !== null) as (TimelineMilestone & { date: Date })[]
+
+  if (milestoneDates.length < 2) return null
+
+  // Determină intervalul total — min și max ale milestones
+  const sortedDates = milestoneDates.map(m => m.date.getTime()).sort((a, b) => a - b)
+  const startTs = sortedDates[0]
+  const endTs = sortedDates[sortedDates.length - 1]
   const today = startOfDay(new Date())
 
-  const nDays = Math.max(1, Math.round((endDate.getTime() - createdAt.getTime()) / DAY_MS) + 1)
+  const nDays = Math.max(1, Math.round((endTs - startTs) / DAY_MS) + 1)
   const days: Date[] = []
   for (let i = 0; i < nDays; i++) {
-    days.push(new Date(createdAt.getTime() + i * DAY_MS))
-  }
-
-  // Culori de bază pentru cele 4 perioade — și nuanțele lor de weekend
-  // Folosim variante mai saturate (nu doar mai întunecate) ca să rămână vii vizual
-  const COLORS = {
-    preStartPractice: { day: '#bbf7d0', weekend: '#86efac' }, // green-200 → green-300
-    practiceToExam:   { day: '#e9d5ff', weekend: '#d8b4fe' }, // purple-200 → purple-300
-    examDay:          { day: '#a855f7', weekend: '#a855f7' }, // mov închis (NA — o singură zi)
-    postExam:         { day: '#dcfce7', weekend: '#bbf7d0' }, // green-100 → green-200
+    days.push(new Date(startTs + i * DAY_MS))
   }
 
   return (
     <div className="relative w-full h-4 flex bg-gray-50 rounded-t-xl overflow-visible">
       {days.map((d, i) => {
-        const dDay = d.getDay() // 0 = duminică, 6 = sâmbătă
+        const dDay = d.getDay()
         const isWeekend = dDay === 0 || dDay === 6
-        const isExam = d.getTime() === examDate.getTime()
-        const isAfterExam = d.getTime() > examDate.getTime()
         const isToday = d.getTime() === today.getTime()
-        const isInPracticePhase = practiceStart && d.getTime() >= practiceStart.getTime() && d.getTime() < examDate.getTime()
 
-        let palette: { day: string; weekend: string }
-        if (isExam) palette = COLORS.examDay
-        else if (isAfterExam) palette = COLORS.postExam
-        else if (isInPracticePhase) palette = COLORS.practiceToExam
-        else palette = COLORS.preStartPractice
-        const bg = (isWeekend && !isExam) ? palette.weekend : palette.day
+        // 1) Verific milestone exact pe ziua respectivă
+        const exactMs = milestoneDates.find(m => m.date.getTime() === d.getTime())
+
+        // 2) Caut period care conține această zi
+        const period = scopeCfg.periods.find(p => {
+          const from = milestoneDates.find(m => m.code === p.from_milestone_code)?.date
+          const to = milestoneDates.find(m => m.code === p.to_milestone_code)?.date
+          if (!from || !to) return false
+          return d.getTime() >= from.getTime() && d.getTime() < to.getTime()
+        })
+
+        let bg = '#e5e7eb' // gri default
+        let label = ''
+        if (exactMs) {
+          bg = exactMs.color
+          label = exactMs.label
+        } else if (period) {
+          bg = isWeekend ? period.color_weekend : period.color_day
+          label = period.label
+        }
 
         const ctx: string[] = []
         if (isToday) ctx.push('astăzi')
-        if (isExam) ctx.push('ZIUA EXAMENULUI')
-        else if (isInPracticePhase) ctx.push('perioada practică')
-        else if (isAfterExam) ctx.push('post-examen')
-        if (isWeekend && !isExam) ctx.push('weekend')
+        if (label) ctx.push(label)
+        if (isWeekend && !exactMs) ctx.push('weekend')
         const tooltipText = `${fmtDateRO(d)}${ctx.length ? ' · ' + ctx.join(' · ') : ''}`
 
         return (
@@ -115,14 +142,17 @@ export default function SesiuniPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editValues, setEditValues] = useState<any>({})
   const [saving, setSaving] = useState(false)
+  const [timelineCfg, setTimelineCfg] = useState<Record<string, TimelineConfig>>({})
 
   async function load() {
-    const [{ data: s }, loc, boat, ev, instr] = await Promise.all([
+    const [{ data: s }, loc, boat, ev, instr, tlMs, tlPs] = await Promise.all([
       supabase.from('sessions').select('*, locations(name, county), evaluators(full_name), instructors(full_name), boats(name)').order('session_date', { ascending: true }).order('created_at', { ascending: true }),
       supabase.from('locations').select('*').order('name'),
       supabase.from('boats').select('*').order('name'),
       supabase.from('evaluators').select('*').order('full_name'),
       supabase.from('instructors').select('*').order('full_name'),
+      supabase.from('timeline_milestones').select('*').order('order_index'),
+      supabase.from('timeline_periods').select('*').order('order_index'),
     ])
     const allSess = s || []
     setSessions(allSess)
@@ -136,6 +166,17 @@ export default function SesiuniPage() {
     }
     setStudentCounts(counts)
     setRefs({ locations: loc.data || [], boats: boat.data || [], evaluators: ev.data || [], instructors: instr.data || [] })
+    // Group timeline config by scope
+    const cfg: Record<string, TimelineConfig> = {}
+    for (const m of (tlMs.data || []) as TimelineMilestone[]) {
+      if (!cfg[m.scope]) cfg[m.scope] = { milestones: [], periods: [] }
+      cfg[m.scope].milestones.push(m)
+    }
+    for (const p of (tlPs.data || []) as TimelinePeriod[]) {
+      if (!cfg[p.scope]) cfg[p.scope] = { milestones: [], periods: [] }
+      cfg[p.scope].periods.push(p)
+    }
+    setTimelineCfg(cfg)
     setLoading(false)
   }
 
@@ -252,7 +293,7 @@ export default function SesiuniPage() {
                 {/* SESIUNEA PRINCIPALA */}
                 <div className={`bg-white rounded-xl shadow-sm border transition-colors overflow-visible ${isEditing ? 'border-blue-200' : 'border-gray-100'}`}>
                 {/* Timeline progress bar */}
-                <SessionTimeline session={s} />
+                <SessionTimeline session={s} config={timelineCfg} />
                 {isEditing ? (
                   /* Edit mode */
                   <div className="p-5">

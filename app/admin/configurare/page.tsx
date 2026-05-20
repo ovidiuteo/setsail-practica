@@ -166,6 +166,14 @@ export default function ConfigurarePage() {
           <h1 className="text-2xl font-bold text-gray-900" style={{ fontFamily: 'Georgia, serif' }}>Configurare</h1>
           <p className="text-gray-500 text-sm mt-1">Gestionare locații, ambarcațiuni, evaluatori, instructori și persoane de contact</p>
         </div>
+        <div className="flex items-center gap-2">
+        <a href="/admin/configurare/timeline"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border border-purple-200 text-purple-700 hover:bg-purple-50 transition-colors">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="3" y1="12" x2="21" y2="12"/><circle cx="6" cy="12" r="2"/><circle cx="14" cy="12" r="2.5"/><circle cx="20" cy="12" r="1.5"/>
+          </svg>
+          Timeline sesiuni
+        </a>
         <a href="/admin/configurare/mail-templates"
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -173,6 +181,7 @@ export default function ConfigurarePage() {
           </svg>
           Template-uri Email
         </a>
+        </div>
       </div>
       <div className="grid grid-cols-2 gap-6">
         <Section title="📍 Locații de practică" table="locations"
