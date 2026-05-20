@@ -200,8 +200,9 @@ export default function AdminDashboard() {
     if (!exactToday) {
       const prevMs = [...dated].reverse().find(d => d.date.getTime() < today.getTime())
       const nextMs = dated.find(d => d.date.getTime() > today.getTime())
-      // Suntem într-o zonă doar dacă există un milestone precedent ȘI unul următor (suntem ÎN interval)
-      if (prevMs && nextMs) {
+      // Suntem într-o zonă semantică doar dacă există milestone precedent + următor
+      // ȘI culoarea zilei NU e verdele default global ('none' = utilizator a zis explicit „neutru")
+      if (prevMs && nextMs && prevMs.m.color_day !== 'none') {
         todos.push({ type: 'inZone', milestoneLabel: prevMs.m.label, sessionId: sess.id, sessionLabel: sessLabel, daysUntil: 0, date: today })
       }
     }
