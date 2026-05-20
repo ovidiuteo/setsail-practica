@@ -244,6 +244,13 @@ export default function ExamenPage() {
   const [gradeDraft, setGradeDraft] = useState<Record<string, number>>({})
   const [simulatorDraft, setSimulatorDraft] = useState<Record<string, number | null>>({})
   const [savingGrade, setSavingGrade] = useState<string | null>(null)
+
+  // Randomizatoare note
+  const [showRandomTrad, setShowRandomTrad] = useState(false)
+  const [randomTradCounts, setRandomTradCounts] = useState<{ five: number; four: number }>({ five: 0, four: 0 })
+  const [showRandomSim, setShowRandomSim] = useState(false)
+  const [randomSimCounts, setRandomSimCounts] = useState<{ ten: number; nine: number; eight: number }>({ ten: 0, nine: 0, eight: 0 })
+  const [randomizing, setRandomizing] = useState(false)
   const [solutionCopied, setSolutionCopied] = useState(false)
   const [generatingPdf, setGeneratingPdf] = useState(false)
   const [showImport, setShowImport] = useState(false)
@@ -611,6 +618,105 @@ export default function ExamenPage() {
     setSavingGrade(null)
     if (error) { alert('Eroare: ' + error.message); return }
     await loadAll()
+  }
+
+  // ---------- RANDOMIZARE NOTE ----------
+  function openRandomTrad() {
+    const eligible = answers.filter(a =>
+      a.status !== 'in_progress' &&
+      (!a.translation_score || a.translation_score === 0)
+    )
+    setRandomTradCounts({ five: eligible.length, four: 0 })
+    setShowRandomTrad(true)
+  }
+
+  function openRandomSim() {
+    const eligible = answers.filter(a =>
+      a.status !== 'in_progress' &&
+      (a.simulator_score === null || a.simulator_score === undefined)
+    )
+    setRandomSimCounts({ ten: eligible.length, nine: 0, eight: 0 })
+    setShowRandomSim(true)
+  }
+
+  async function doRandomTrad() {
+    const eligible = answers.filter(a =>
+      a.status !== 'in_progress' &&
+      (!a.translation_score || a.translation_score === 0)
+    )
+    const total = randomTradCounts.five + randomTradCounts.four
+    if (total !== eligible.length) {
+      alert('Total alocat (' + total + ') trebuie să fie egal cu numărul de cursanți eligibili (' + eligible.length + ').')
+      return
+    }
+    setRandomizing(true)
+    try {
+      // Array note
+      const grades: number[] = []
+      for (let i = 0; i < randomTradCounts.five; i++) grades.push(5)
+      for (let i = 0; i < randomTradCounts.four; i++) grades.push(4)
+      // Shuffle
+      const shuffled = shuffle(grades)
+      // Aplică
+      for (let i = 0; i < eligible.length; i++) {
+        const a = eligible[i]
+        const score = shuffled[i]
+        await supabase
+          .from('radio_exam_answers')
+          .update({
+            translation_score: score,
+            graded_at: new Date().toISOString(),
+            status: 'graded',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', a.id)
+      }
+      await loadAll()
+      setShowRandomTrad(false)
+    } catch (e: any) {
+      alert('Eroare: ' + (e.message || String(e)))
+    } finally {
+      setRandomizing(false)
+    }
+  }
+
+  async function doRandomSim() {
+    const eligible = answers.filter(a =>
+      a.status !== 'in_progress' &&
+      (a.simulator_score === null || a.simulator_score === undefined)
+    )
+    const total = randomSimCounts.ten + randomSimCounts.nine + randomSimCounts.eight
+    if (total !== eligible.length) {
+      alert('Total alocat (' + total + ') trebuie să fie egal cu numărul de cursanți eligibili (' + eligible.length + ').')
+      return
+    }
+    setRandomizing(true)
+    try {
+      const grades: number[] = []
+      for (let i = 0; i < randomSimCounts.ten; i++) grades.push(10)
+      for (let i = 0; i < randomSimCounts.nine; i++) grades.push(9)
+      for (let i = 0; i < randomSimCounts.eight; i++) grades.push(8)
+      const shuffled = shuffle(grades)
+      for (let i = 0; i < eligible.length; i++) {
+        const a = eligible[i]
+        const score = shuffled[i]
+        await supabase
+          .from('radio_exam_answers')
+          .update({
+            simulator_score: score,
+            graded_at: new Date().toISOString(),
+            status: 'graded',
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', a.id)
+      }
+      await loadAll()
+      setShowRandomSim(false)
+    } catch (e: any) {
+      alert('Eroare: ' + (e.message || String(e)))
+    } finally {
+      setRandomizing(false)
+    }
   }
 
   // ---------- IMPORT EXAM FROM TEXT ----------
@@ -1094,6 +1200,25 @@ export default function ExamenPage() {
 
         {/* TAB RESULTS */}
         {tab === 'results' && (
+          <>
+          {exam && answers.length > 0 && (
+            <div className="bg-purple-50 border border-purple-100 rounded-xl p-3 mb-3 flex flex-wrap items-center gap-2">
+              <span className="text-xs text-purple-700 font-semibold mr-2">Randomizare note:</span>
+              <button onClick={openRandomTrad}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white"
+                style={{ background: '#7c3aed' }}>
+                🎲 Random trad
+              </button>
+              <button onClick={openRandomSim}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white"
+                style={{ background: '#7c3aed' }}>
+                🎲 Random sim
+              </button>
+              <span className="text-xs text-gray-500 ml-auto">
+                Afectează doar cursanții fără notă; cele setate manual rămân neschimbate.
+              </span>
+            </div>
+          )}
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
             {!exam && (
               <div className="p-8 text-center text-gray-400 text-sm">
@@ -1289,6 +1414,7 @@ export default function ExamenPage() {
               </div>
             )}
           </div>
+          </>
         )}
 
       </div>
@@ -1348,6 +1474,140 @@ export default function ExamenPage() {
           </div>
         </div>
       )}
+
+      {/* Modal Random TRAD */}
+      {showRandomTrad && (() => {
+        const eligible = answers.filter(a =>
+          a.status !== 'in_progress' &&
+          (!a.translation_score || a.translation_score === 0)
+        )
+        const total = randomTradCounts.five + randomTradCounts.four
+        const isValid = total === eligible.length && randomTradCounts.five >= 0 && randomTradCounts.four >= 0
+        return (
+          <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+              <h3 className="font-semibold text-gray-900 mb-1">🎲 Random note traduceri</h3>
+              <p className="text-xs text-gray-400 mb-4">
+                Cursanți eligibili (fără notă): <strong>{eligible.length}</strong> ·
+                Alocați: <strong className={total === eligible.length ? 'text-green-600' : 'text-red-500'}>{total}</strong>
+              </p>
+              {eligible.length === 0 ? (
+                <p className="text-sm text-gray-500 mb-5">
+                  Toți cursanții au deja notă la traduceri. Modifică manual din lista de mai jos dacă vrei să le schimbi.
+                </p>
+              ) : (
+                <div className="space-y-3 mb-5">
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 text-sm text-gray-700">Câți primesc nota <strong>5</strong>?</div>
+                    <input type="number" min="0" max={eligible.length}
+                      className="w-20 border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-purple-400"
+                      value={randomTradCounts.five}
+                      onChange={e => setRandomTradCounts(prev => ({ ...prev, five: Math.max(0, parseInt(e.target.value) || 0) }))} />
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 text-sm text-gray-700">Câți primesc nota <strong>4</strong>?</div>
+                    <input type="number" min="0" max={eligible.length}
+                      className="w-20 border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-purple-400"
+                      value={randomTradCounts.four}
+                      onChange={e => setRandomTradCounts(prev => ({ ...prev, four: Math.max(0, parseInt(e.target.value) || 0) }))} />
+                  </div>
+                </div>
+              )}
+              {eligible.length > 0 && !isValid && (
+                <p className="text-xs text-red-500 mb-3 text-center">
+                  {total > eligible.length
+                    ? 'Ai alocat ' + (total - eligible.length) + ' cursanți în plus'
+                    : 'Mai ai ' + (eligible.length - total) + ' cursanți nealocați'}
+                </p>
+              )}
+              <div className="flex justify-end gap-2">
+                <button onClick={() => setShowRandomTrad(false)} disabled={randomizing}
+                  className="px-4 py-2 rounded-lg text-xs border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-50">
+                  {eligible.length === 0 ? 'Închide' : 'Anulează'}
+                </button>
+                {eligible.length > 0 && (
+                  <button onClick={doRandomTrad} disabled={!isValid || randomizing}
+                    className="px-5 py-2 rounded-lg text-xs font-medium text-white disabled:opacity-50"
+                    style={{ background: '#7c3aed' }}>
+                    {randomizing ? 'Se randomizează...' : '🎲 Aplică'}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* Modal Random SIM */}
+      {showRandomSim && (() => {
+        const eligible = answers.filter(a =>
+          a.status !== 'in_progress' &&
+          (a.simulator_score === null || a.simulator_score === undefined)
+        )
+        const total = randomSimCounts.ten + randomSimCounts.nine + randomSimCounts.eight
+        const isValid = total === eligible.length &&
+          randomSimCounts.ten >= 0 && randomSimCounts.nine >= 0 && randomSimCounts.eight >= 0
+        return (
+          <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+              <h3 className="font-semibold text-gray-900 mb-1">🎲 Random note simulator</h3>
+              <p className="text-xs text-gray-400 mb-4">
+                Cursanți eligibili (fără notă): <strong>{eligible.length}</strong> ·
+                Alocați: <strong className={total === eligible.length ? 'text-green-600' : 'text-red-500'}>{total}</strong>
+              </p>
+              {eligible.length === 0 ? (
+                <p className="text-sm text-gray-500 mb-5">
+                  Toți cursanții au deja notă la simulator. Modifică manual din lista de mai jos dacă vrei să le schimbi.
+                </p>
+              ) : (
+                <div className="space-y-3 mb-5">
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 text-sm text-gray-700">Câți primesc nota <strong>10</strong>?</div>
+                    <input type="number" min="0" max={eligible.length}
+                      className="w-20 border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-purple-400"
+                      value={randomSimCounts.ten}
+                      onChange={e => setRandomSimCounts(prev => ({ ...prev, ten: Math.max(0, parseInt(e.target.value) || 0) }))} />
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 text-sm text-gray-700">Câți primesc nota <strong>9</strong>?</div>
+                    <input type="number" min="0" max={eligible.length}
+                      className="w-20 border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-purple-400"
+                      value={randomSimCounts.nine}
+                      onChange={e => setRandomSimCounts(prev => ({ ...prev, nine: Math.max(0, parseInt(e.target.value) || 0) }))} />
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <div className="flex-1 text-sm text-gray-700">Câți primesc nota <strong>8</strong>?</div>
+                    <input type="number" min="0" max={eligible.length}
+                      className="w-20 border border-gray-200 rounded-lg px-2.5 py-1.5 text-sm text-center focus:outline-none focus:ring-2 focus:ring-purple-400"
+                      value={randomSimCounts.eight}
+                      onChange={e => setRandomSimCounts(prev => ({ ...prev, eight: Math.max(0, parseInt(e.target.value) || 0) }))} />
+                  </div>
+                </div>
+              )}
+              {eligible.length > 0 && !isValid && (
+                <p className="text-xs text-red-500 mb-3 text-center">
+                  {total > eligible.length
+                    ? 'Ai alocat ' + (total - eligible.length) + ' cursanți în plus'
+                    : 'Mai ai ' + (eligible.length - total) + ' cursanți nealocați'}
+                </p>
+              )}
+              <div className="flex justify-end gap-2">
+                <button onClick={() => setShowRandomSim(false)} disabled={randomizing}
+                  className="px-4 py-2 rounded-lg text-xs border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-50">
+                  {eligible.length === 0 ? 'Închide' : 'Anulează'}
+                </button>
+                {eligible.length > 0 && (
+                  <button onClick={doRandomSim} disabled={!isValid || randomizing}
+                    className="px-5 py-2 rounded-lg text-xs font-medium text-white disabled:opacity-50"
+                    style={{ background: '#7c3aed' }}>
+                    {randomizing ? 'Se randomizează...' : '🎲 Aplică'}
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
