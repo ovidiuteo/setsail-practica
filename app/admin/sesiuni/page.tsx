@@ -21,10 +21,21 @@ function fmtDateRO(d: Date): string {
   return `${DAYS_RO[d.getDay()]}, ${d.getDate()} ${MONTHS_RO_FULL[d.getMonth()]} ${d.getFullYear()}`
 }
 
+// Aplică o atenuare cu factor (0..1) pe un HEX color → returnează HEX mai întunecat
+function darken(hex: string, factor: number): string {
+  const h = hex.replace('#', '')
+  const r = Math.round(parseInt(h.slice(0, 2), 16) * factor)
+  const g = Math.round(parseInt(h.slice(2, 4), 16) * factor)
+  const b = Math.round(parseInt(h.slice(4, 6), 16) * factor)
+  const toHex = (n: number) => Math.max(0, Math.min(255, n)).toString(16).padStart(2, '0')
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`
+}
+
 function SessionTimeline({ session }: { session: any }) {
   const examDate = session.session_date ? startOfDay(new Date(session.session_date)) : null
   const createdAt = session.created_at ? startOfDay(new Date(session.created_at)) : null
   if (!examDate || !createdAt) return null
+  const practiceStart = session.practice_start_date ? startOfDay(new Date(session.practice_start_date)) : null
   const endDate = new Date(examDate.getTime() + 14 * DAY_MS)
   const today = startOfDay(new Date())
 
@@ -34,32 +45,54 @@ function SessionTimeline({ session }: { session: any }) {
     days.push(new Date(createdAt.getTime() + i * DAY_MS))
   }
 
+  // Culori de bază pentru cele 4 perioade
+  const COLORS = {
+    preStartPractice: '#bbf7d0', // verde deschis — creare → start practică
+    practiceToExam:   '#e9d5ff', // mov deschis  — start practică → examen
+    examDay:          '#a855f7', // mov închis   — ziua examenului
+    postExam:         '#dcfce7', // verde palid  — după examen
+  }
+  const WEEKEND_FACTOR = 0.8 // 20% mai întunecat
+
   return (
-    <div className="relative w-full h-2.5 flex bg-gray-50 rounded-t-xl overflow-hidden">
+    <div className="relative w-full h-4 flex bg-gray-50 rounded-t-xl overflow-visible">
       {days.map((d, i) => {
         const dDay = d.getDay() // 0 = duminică, 6 = sâmbătă
         const isWeekend = dDay === 0 || dDay === 6
         const isExam = d.getTime() === examDate.getTime()
         const isAfterExam = d.getTime() > examDate.getTime()
         const isToday = d.getTime() === today.getTime()
-        let bg = '#bbf7d0' // green-200
-        if (isExam) bg = '#a855f7' // purple-500
-        else if (isAfterExam) bg = isWeekend ? '#bbf7d0' : '#dcfce7' // green-200 / green-100
-        else if (isWeekend) bg = '#86efac' // green-300
+        const isInPracticePhase = practiceStart && d.getTime() >= practiceStart.getTime() && d.getTime() < examDate.getTime()
+
+        let bg: string
+        if (isExam) bg = COLORS.examDay
+        else if (isAfterExam) bg = COLORS.postExam
+        else if (isInPracticePhase) bg = COLORS.practiceToExam
+        else bg = COLORS.preStartPractice
+        // Weekend → atenuat cu 20% (NU se aplică pentru ziua examenului care e mereu mov închis)
+        if (isWeekend && !isExam) bg = darken(bg, WEEKEND_FACTOR)
 
         const ctx: string[] = []
         if (isToday) ctx.push('astăzi')
         if (isExam) ctx.push('ZIUA EXAMENULUI')
-        else if (isWeekend) ctx.push('weekend')
-        if (isAfterExam && !isExam) ctx.push('post-examen')
+        else if (isInPracticePhase) ctx.push('perioada practică')
+        else if (isAfterExam) ctx.push('post-examen')
+        if (isWeekend && !isExam) ctx.push('weekend')
         const tooltipText = `${fmtDateRO(d)}${ctx.length ? ' · ' + ctx.join(' · ') : ''}`
 
         return (
-          <div key={i} className="flex-1 relative group" style={{ background: bg, minWidth: 2 }}>
+          <div key={i} className="flex-1 relative group h-full"
+            style={{
+              background: bg,
+              minWidth: 2,
+              borderRight: i < days.length - 1 ? '1px solid #d1d5db' : undefined,
+            }}>
             {isToday && (
-              <div className="absolute -top-1 -bottom-1 left-0 right-0 pointer-events-none">
-                <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-0.5 bg-red-600" />
-                <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-red-600" />
+              // Cursor today = un sfert de zi, centrat orizontal, semi-transparent roșu
+              <div className="absolute inset-y-0 pointer-events-none"
+                style={{ left: '37.5%', width: '25%', background: 'rgba(220, 38, 38, 0.55)',
+                         borderLeft: '1.5px solid #b91c1c', borderRight: '1.5px solid #b91c1c' }}>
+                <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-red-600 shadow" />
               </div>
             )}
             <span className="invisible group-hover:visible absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-50
