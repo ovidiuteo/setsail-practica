@@ -6,7 +6,8 @@ import Link from 'next/link'
 import {
   ArrowLeft, Save, Circle, CircleDot, FileText, Users,
   Play, Lock, RotateCcw, ChevronDown, ChevronUp, Loader2, Check,
-  Sparkles, ExternalLink, AlertCircle, Shuffle, Trash2, Copy
+  Sparkles, ExternalLink, AlertCircle, Shuffle, Trash2, Copy,
+  Upload, X
 } from 'lucide-react'
 
 type RadioExam = {
@@ -110,6 +111,99 @@ function generateRandomCode(length = 13): string {
   return '1' + String(Date.now()).slice(-(length - 1))
 }
 
+// Normalizare text pentru comparație
+function normalizeForMatch(s: string): string {
+  return s
+    .toLowerCase()
+    .replace(/[„""'']/g, '')
+    .replace(/[\s ​]+/g, ' ')
+    .replace(/[.,;:!?]+$/g, '')
+    .trim()
+}
+
+interface ParsedQuestion {
+  number: number
+  question_text: string
+  options: { A: string; B: string; C: string; D: string }
+}
+
+// Parsează un text de examen Radio LRC și extrage codul de generare + cele 20 întrebări
+function parseExamText(text: string): { codGenerare: string | null; questions: ParsedQuestion[] } {
+  const lines = text.split(/\r?\n/)
+  let codGenerare: string | null = null
+  for (const line of lines) {
+    const m = line.match(/Cod\s*generare\s*=\s*(\d+)/i)
+    if (m) { codGenerare = m[1]; break }
+  }
+
+  // Filtrare linii header/footer repetitive
+  const cleaned: string[] = []
+  for (const raw of lines) {
+    const t = raw.trim()
+    if (!t) continue
+    if (t.startsWith('Probă de regulamente interne')) continue
+    if (t.startsWith('de Operator radio')) continue
+    if (t.startsWith('Satelit emis')) continue
+    if (/^(luni|marți|marţi|miercuri|joi|vineri|sâmbătă|sambata|duminică|duminica),/i.test(t)) continue
+    if (/Page\s+\d+\s+of\s+\d+/i.test(t)) continue
+    cleaned.push(t)
+  }
+
+  const questions: ParsedQuestion[] = []
+  let current: ParsedQuestion | null = null
+  let currentField: 'question_text' | 'A' | 'B' | 'C' | 'D' | null = null
+
+  function commit() {
+    if (current) {
+      // normalize whitespace
+      current.question_text = current.question_text.replace(/\s+/g, ' ').trim()
+      current.options.A = current.options.A.replace(/\s+/g, ' ').trim()
+      current.options.B = current.options.B.replace(/\s+/g, ' ').trim()
+      current.options.C = current.options.C.replace(/\s+/g, ' ').trim()
+      current.options.D = current.options.D.replace(/\s+/g, ' ').trim()
+      questions.push(current)
+    }
+  }
+
+  for (const line of cleaned) {
+    // Nouă întrebare: "N TextÎntrebare..." sau "N. Text..."
+    // Doar dacă N este următorul așteptat (1..20) — evităm confuzia cu "1. MSI; ..." din răspunsuri
+    const qMatch = line.match(/^(\d{1,2})[\s.)]+(.+)$/)
+    const expectedNext = questions.length + 1
+    if (qMatch && parseInt(qMatch[1], 10) === expectedNext && expectedNext <= 20 && !/^[A-D]\.\s/.test(qMatch[2])) {
+      commit()
+      current = {
+        number: expectedNext,
+        question_text: qMatch[2],
+        options: { A: '', B: '', C: '', D: '' },
+      }
+      currentField = 'question_text'
+      continue
+    }
+
+    // Răspuns A/B/C/D
+    const oMatch = line.match(/^([A-D])\.\s*(.*)$/)
+    if (oMatch && current) {
+      const letter = oMatch[1] as 'A' | 'B' | 'C' | 'D'
+      current.options[letter] = oMatch[2]
+      currentField = letter
+      continue
+    }
+
+    // Continuare pe linie nouă
+    if (current && currentField) {
+      if (currentField === 'question_text') {
+        current.question_text += ' ' + line
+      } else {
+        current.options[currentField] += ' ' + line
+      }
+    }
+  }
+  commit()
+
+  return { codGenerare, questions }
+}
+
 export default function ExamenPage() {
   const params = useParams<{ id: string }>()
   const sessionId = params?.id as string
@@ -139,6 +233,10 @@ export default function ExamenPage() {
   const [gradeDraft, setGradeDraft] = useState<Record<string, number>>({})
   const [savingGrade, setSavingGrade] = useState<string | null>(null)
   const [solutionCopied, setSolutionCopied] = useState(false)
+  const [showImport, setShowImport] = useState(false)
+  const [importText, setImportText] = useState('')
+  const [importBusy, setImportBusy] = useState(false)
+  const [importError, setImportError] = useState('')
 
   // ---------- LOAD ----------
   const loadAll = useCallback(async () => {
@@ -491,6 +589,116 @@ export default function ExamenPage() {
     await loadAll()
   }
 
+  // ---------- IMPORT EXAM FROM TEXT ----------
+  async function importExam() {
+    setImportBusy(true)
+    setImportError('')
+    try {
+      if (!importText.trim()) { setImportError('Lipsește textul.'); return }
+
+      const examRow = await ensureExamRow()
+      if (!examRow) { setImportError('Nu am putut crea/găsi examenul.'); return }
+
+      const { codGenerare: parsedCode, questions: parsedQs } = parseExamText(importText)
+      if (parsedQs.length < NUM_GRILA) {
+        throw new Error('Am identificat doar ' + parsedQs.length + '/' + NUM_GRILA + ' întrebări în text. Verifică formatul.')
+      }
+
+      // Fetch pool întrebări + opțiuni
+      const { data: poolQs } = await supabase
+        .from('radio_question_pool')
+        .select('id, code, question_text, active')
+        .eq('active', true)
+      const poolList = (poolQs || []) as PoolQuestionRow[]
+      const { data: poolOpts } = await supabase
+        .from('radio_question_pool_options')
+        .select('*')
+      const allOpts = (poolOpts || []) as PoolOptionRow[]
+
+      const rows: any[] = []
+      const unmatched: number[] = []
+      const unmatchedOpts: number[] = []
+
+      for (const pq of parsedQs.slice(0, NUM_GRILA)) {
+        const normParsedQ = normalizeForMatch(pq.question_text)
+
+        // Match întrebare în pool — exact, apoi prefix lung
+        let poolQ = poolList.find(p => normalizeForMatch(p.question_text) === normParsedQ)
+        if (!poolQ) {
+          poolQ = poolList.find(p => {
+            const pn = normalizeForMatch(p.question_text)
+            return pn.startsWith(normParsedQ.slice(0, 40)) || normParsedQ.startsWith(pn.slice(0, 40))
+          })
+        }
+        if (!poolQ) { unmatched.push(pq.number); continue }
+
+        // Match opțiuni
+        const poolOptsForQ = allOpts.filter(o => o.question_id === poolQ!.id)
+        const optionMap: Record<'A' | 'B' | 'C' | 'D', PoolOptionRow | undefined> = {
+          A: undefined, B: undefined, C: undefined, D: undefined,
+        }
+        for (const letter of ['A', 'B', 'C', 'D'] as const) {
+          const normP = normalizeForMatch(pq.options[letter])
+          let f = poolOptsForQ.find(o => normalizeForMatch(o.option_text) === normP)
+          if (!f) {
+            f = poolOptsForQ.find(o => {
+              const on = normalizeForMatch(o.option_text)
+              return on.startsWith(normP.slice(0, 25)) || normP.startsWith(on.slice(0, 25))
+            })
+          }
+          if (f) optionMap[letter] = f
+        }
+        const mappedIds = new Set([optionMap.A?.id, optionMap.B?.id, optionMap.C?.id, optionMap.D?.id].filter(Boolean))
+        if (mappedIds.size !== 4) { unmatchedOpts.push(pq.number); continue }
+
+        const correctLetter = (['A', 'B', 'C', 'D'] as const).find(l => optionMap[l]?.is_correct) || 'A'
+
+        rows.push({
+          exam_id: examRow.id,
+          order_no: pq.number,
+          question_text: poolQ.question_text,
+          option_a: optionMap.A!.option_text,
+          option_b: optionMap.B!.option_text,
+          option_c: optionMap.C!.option_text,
+          option_d: optionMap.D!.option_text,
+          correct_option: correctLetter,
+        })
+      }
+
+      if (unmatched.length || unmatchedOpts.length) {
+        const parts: string[] = []
+        if (unmatched.length) parts.push('Întrebări nepotrivite în pool: ' + unmatched.join(', '))
+        if (unmatchedOpts.length) parts.push('Întrebări cu opțiuni nepotrivite: ' + unmatchedOpts.join(', '))
+        throw new Error(parts.join('. ') + '. Verifică textele sau adaugă-le în pool.')
+      }
+      if (rows.length !== NUM_GRILA) {
+        throw new Error('Am procesat doar ' + rows.length + '/' + NUM_GRILA + ' întrebări. Anulez.')
+      }
+
+      // Delete + insert atomic-like
+      await supabase.from('radio_exam_questions').delete().eq('exam_id', examRow.id)
+      const { error: insErr } = await supabase.from('radio_exam_questions').insert(rows)
+      if (insErr) throw insErr
+
+      // Cod generare: îl iau din text dacă există, altfel generez random
+      const codeToSave = parsedCode || generateRandomCode(13)
+      await supabase
+        .from('radio_exams')
+        .update({ cod_generare: codeToSave, updated_at: new Date().toISOString() })
+        .eq('id', examRow.id)
+      setCodGenerare(codeToSave)
+
+      await loadAll()
+      setShowImport(false)
+      setImportText('')
+      setImportError('')
+    } catch (e: any) {
+      setImportError(e.message || String(e))
+    } finally {
+      setImportBusy(false)
+    }
+  }
+
   // ---------- DELETE / RESET ANSWER ----------
   async function deleteAnswerRow(answer: Answer) {
     const st = students.find(x => x.id === answer.student_id)
@@ -704,12 +912,19 @@ export default function ExamenPage() {
                 <h3 className="font-semibold text-sm text-gray-900">
                   Întrebări grilă <span className="text-gray-400 font-normal">({hasQuestions ? NUM_GRILA + '/' + NUM_GRILA : questions.length + '/' + NUM_GRILA})</span>
                 </h3>
-                <button onClick={generateQuestionsFromPool} disabled={generating === 'q'}
-                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-white disabled:opacity-50"
-                  style={{ background: '#7c3aed' }}>
-                  {generating === 'q' ? <Loader2 size={12} className="animate-spin" /> : <Shuffle size={12} />}
-                  {hasQuestions ? 'Regenerează din pool' : 'Generează 20 din pool'}
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button onClick={generateQuestionsFromPool} disabled={generating === 'q'}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-white disabled:opacity-50"
+                    style={{ background: '#7c3aed' }}>
+                    {generating === 'q' ? <Loader2 size={12} className="animate-spin" /> : <Shuffle size={12} />}
+                    {hasQuestions ? 'Regenerează din pool' : 'Generează 20 din pool'}
+                  </button>
+                  <button onClick={() => { setShowImport(true); setImportError('') }}
+                    className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-purple-300 text-purple-700 hover:bg-purple-50">
+                    <Upload size={12} />
+                    Importă din text
+                  </button>
+                </div>
               </div>
               {!hasQuestions && (
                 <div className="text-center py-8 text-gray-400 text-sm bg-gray-50 rounded-lg">
@@ -987,6 +1202,62 @@ export default function ExamenPage() {
         )}
 
       </div>
+
+      {/* Modal Import */}
+      {showImport && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4"
+          onClick={() => !importBusy && setShowImport(false)}>
+          <div className="bg-white rounded-2xl max-w-3xl w-full max-h-[90vh] flex flex-col shadow-2xl"
+            onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-5 border-b border-gray-100">
+              <div>
+                <h3 className="font-bold text-gray-900">Importă examen din text</h3>
+                <p className="text-xs text-gray-500 mt-1">
+                  Lipește textul examenului (cu 20 întrebări A/B/C/D). Codul de generare este detectat automat.
+                </p>
+              </div>
+              <button onClick={() => !importBusy && setShowImport(false)}
+                className="p-2 rounded-lg hover:bg-gray-100 text-gray-400">
+                <X size={18} />
+              </button>
+            </div>
+            <div className="p-5 flex-1 overflow-y-auto">
+              <textarea value={importText}
+                onChange={e => setImportText(e.target.value)}
+                placeholder="Lipește aici textul examenului..."
+                rows={18}
+                className="w-full px-3 py-2 border border-gray-200 rounded-lg text-xs font-mono focus:outline-none focus:border-purple-400" />
+              {importError && (
+                <div className="mt-3 p-3 bg-red-50 border border-red-200 rounded-lg text-xs text-red-700 flex gap-2">
+                  <AlertCircle size={14} className="shrink-0 mt-0.5" />
+                  <span>{importError}</span>
+                </div>
+              )}
+              <div className="mt-3 text-xs text-gray-400">
+                <strong>Ce face importul:</strong>
+                <ul className="list-disc list-inside mt-1 space-y-0.5">
+                  <li>Identifică „Cod generare = …" din text și-l salvează</li>
+                  <li>Extrage cele 20 întrebări numerotate 1–20 cu opțiunile A/B/C/D</li>
+                  <li>Face match cu pool-ul global (pe baza textului) pentru a păstra răspunsul corect</li>
+                  <li>Salvează ordinea exactă din text (NU re-shuffle)</li>
+                </ul>
+              </div>
+            </div>
+            <div className="flex items-center justify-end gap-2 p-5 border-t border-gray-100">
+              <button onClick={() => setShowImport(false)} disabled={importBusy}
+                className="px-4 py-2 rounded-lg text-xs font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                Anulează
+              </button>
+              <button onClick={importExam} disabled={importBusy || !importText.trim()}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium text-white disabled:opacity-50"
+                style={{ background: '#7c3aed' }}>
+                {importBusy ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                Importă și salvează
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
