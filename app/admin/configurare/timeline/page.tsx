@@ -44,25 +44,61 @@ const DAY_MS = 24 * 60 * 60 * 1000
 function startOfDay(d: Date) { const x = new Date(d); x.setHours(0,0,0,0); return x }
 function fmtDateRO(d: Date) { return `${DAYS_RO[d.getDay()]}, ${d.getDate()} ${MONTHS_RO[d.getMonth()]} ${d.getFullYear()}` }
 
+type SessionLite = {
+  id: string
+  session_date: string | null
+  created_at: string | null
+  course_start_date: string | null
+  practice_start_date: string | null
+  class_caa: string | null
+  access_code: string | null
+  session_type: string | null
+  locations: { name: string } | null
+}
+
+function scopeForSession(s: SessionLite): 'radio_lrc' | 'practica' {
+  const c = (s.class_caa || '').toLowerCase()
+  return (c.includes('radio') || c.includes('lrc')) ? 'radio_lrc' : 'practica'
+}
+
 export default function TimelineConfigPage() {
   const [scope, setScope] = useState<'practica' | 'radio_lrc'>('radio_lrc')
   const [milestones, setMilestones] = useState<Milestone[]>([])
   const [periods, setPeriods] = useState<Period[]>([])
+  const [sessions, setSessions] = useState<SessionLite[]>([])
+  const [previewSessionId, setPreviewSessionId] = useState<string>('')
   const [loading, setLoading] = useState(true)
   const [savingId, setSavingId] = useState<string | null>(null)
 
   const loadAll = useCallback(async () => {
     setLoading(true)
-    const [{ data: ms }, { data: ps }] = await Promise.all([
+    const [{ data: ms }, { data: ps }, { data: sess }] = await Promise.all([
       supabase.from('timeline_milestones').select('*').order('order_index'),
       supabase.from('timeline_periods').select('*').order('order_index'),
+      supabase.from('sessions')
+        .select('id, session_date, created_at, course_start_date, practice_start_date, class_caa, access_code, session_type, locations(name)')
+        .eq('session_type', 'principal')
+        .order('session_date', { ascending: false }),
     ])
     setMilestones((ms || []) as Milestone[])
     setPeriods((ps || []) as Period[])
+    setSessions((sess || []) as unknown as SessionLite[])
     setLoading(false)
   }, [])
 
   useEffect(() => { loadAll() }, [loadAll])
+
+  // Sesiuni din scope-ul curent; auto-selectare la schimbarea scope-ului
+  const sessionsInScope = sessions.filter(s => scopeForSession(s) === scope)
+  useEffect(() => {
+    const stillValid = previewSessionId && sessionsInScope.some(s => s.id === previewSessionId)
+    if (!stillValid && sessionsInScope.length > 0) {
+      setPreviewSessionId(sessionsInScope[0].id)
+    } else if (sessionsInScope.length === 0) {
+      setPreviewSessionId('')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [scope, sessions.length])
 
   const scopedMilestones = milestones.filter(m => m.scope === scope).sort((a,b) => a.order_index - b.order_index)
   const scopedPeriods = periods.filter(p => p.scope === scope).sort((a,b) => a.order_index - b.order_index)
@@ -125,20 +161,22 @@ export default function TimelineConfigPage() {
     setPeriods(periods.filter(x => x.id !== p.id))
   }
 
-  // Preview: construim un timeline mock cu o sesiune fake (creare azi-10, examen azi+7)
+  // Preview: folosește sesiunea selectată (sau fictivă dacă nu există nimic)
   function buildPreviewDays() {
     const today = startOfDay(new Date())
-    const fakeSession: any = {
+    const selected = sessionsInScope.find(s => s.id === previewSessionId)
+    const baseSession: any = selected ? selected : {
       created_at: new Date(today.getTime() - 10 * DAY_MS).toISOString(),
       course_start_date: new Date(today.getTime() - 8 * DAY_MS).toISOString(),
       practice_start_date: new Date(today.getTime() - 3 * DAY_MS).toISOString(),
       session_date: new Date(today.getTime() + 7 * DAY_MS).toISOString(),
     }
     const msDates = scopedMilestones.map(m => {
-      const anchorRaw = fakeSession[m.anchor] || fakeSession.session_date
+      const anchorRaw = baseSession[m.anchor] || baseSession.session_date
+      if (!anchorRaw) return null
       const anchor = startOfDay(new Date(anchorRaw))
       return { ...m, date: new Date(anchor.getTime() + m.offset_days * DAY_MS) }
-    })
+    }).filter(Boolean) as (Milestone & { date: Date })[]
     if (msDates.length < 2) return { days: [], msDates: [] }
     const times = msDates.map(m => m.date.getTime()).sort((a,b) => a-b)
     const start = times[0]
@@ -225,8 +263,29 @@ export default function TimelineConfigPage() {
 
         {/* Preview */}
         <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-          <div className="text-xs font-semibold text-gray-700 mb-2">Preview (sesiune fictivă: examen peste 7 zile)</div>
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <div className="text-xs font-semibold text-gray-700">Preview pe sesiune</div>
+            {sessionsInScope.length > 0 ? (
+              <select value={previewSessionId}
+                onChange={e => setPreviewSessionId(e.target.value)}
+                className="px-3 py-1.5 border border-gray-200 rounded-lg text-xs bg-white focus:outline-none focus:ring-1 focus:ring-purple-400 min-w-[260px]">
+                {sessionsInScope.map(s => {
+                  const d = s.session_date
+                    ? new Date(s.session_date).toLocaleDateString('ro-RO', { day:'2-digit', month:'short', year:'numeric' })
+                    : '(fără dată)'
+                  const loc = s.locations?.name || ''
+                  return <option key={s.id} value={s.id}>{d} · {loc || '—'} · {s.class_caa || ''}</option>
+                })}
+              </select>
+            ) : (
+              <span className="text-xs text-gray-400 italic">Nicio sesiune {scope === 'radio_lrc' ? 'Radio LRC' : 'Practică'} disponibilă. Preview cu sesiune fictivă.</span>
+            )}
+          </div>
           {renderPreview()}
+          <p className="text-xs text-gray-400 mt-2">
+            Modificările la milestones / perioade se aplică <strong>tuturor sesiunilor {scope === 'radio_lrc' ? 'Radio LRC' : 'Practică'}</strong>.
+            Sesiunea selectată e doar pentru previzualizare.
+          </p>
         </div>
 
         {/* Milestones */}
