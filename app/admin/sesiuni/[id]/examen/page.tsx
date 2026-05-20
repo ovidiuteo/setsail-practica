@@ -251,6 +251,15 @@ export default function ExamenPage() {
   const [showRandomSim, setShowRandomSim] = useState(false)
   const [randomSimCounts, setRandomSimCounts] = useState<{ ten: number; nine: number; eight: number }>({ ten: 0, nine: 0, eight: 0 })
   const [randomizing, setRandomizing] = useState(false)
+
+  // Rezolvare manuală cursant
+  const [showResolve, setShowResolve] = useState(false)
+  const [resolveStudentId, setResolveStudentId] = useState<string>('')
+  const [resolveGrilaScore, setResolveGrilaScore] = useState<number>(20)
+  const [resolveTradScore, setResolveTradScore] = useState<string>('')
+  const [resolveSimScore, setResolveSimScore] = useState<string>('')
+  const [resolveExistingAnswerId, setResolveExistingAnswerId] = useState<string | null>(null)
+  const [resolveBusy, setResolveBusy] = useState(false)
   const [solutionCopied, setSolutionCopied] = useState(false)
   const [generatingPdf, setGeneratingPdf] = useState(false)
   const [showImport, setShowImport] = useState(false)
@@ -716,6 +725,110 @@ export default function ExamenPage() {
       alert('Eroare: ' + (e.message || String(e)))
     } finally {
       setRandomizing(false)
+    }
+  }
+
+  // ---------- REZOLVARE MANUALĂ CURSANT ----------
+  function openResolveNew() {
+    setResolveStudentId('')
+    setResolveGrilaScore(NUM_GRILA)
+    setResolveTradScore('')
+    setResolveSimScore('')
+    setResolveExistingAnswerId(null)
+    setShowResolve(true)
+  }
+
+  function openResolveFromExisting(answer: Answer) {
+    setResolveStudentId(answer.student_id)
+    setResolveGrilaScore(NUM_GRILA)
+    setResolveTradScore('')
+    setResolveSimScore('')
+    setResolveExistingAnswerId(answer.id)
+    setShowResolve(true)
+  }
+
+  async function doResolve() {
+    if (!exam) { alert('Examenul nu există.'); return }
+    if (!resolveStudentId) { alert('Alege un cursant.'); return }
+    if (resolveGrilaScore < 0 || resolveGrilaScore > NUM_GRILA) {
+      alert('Punctaj grilă invalid (0-' + NUM_GRILA + ').'); return
+    }
+    const tradN = resolveTradScore === '' ? null : parseInt(resolveTradScore, 10)
+    if (tradN !== null && (isNaN(tradN) || tradN < 0 || tradN > 5)) {
+      alert('Notă traduceri trebuie 0-5 sau gol.'); return
+    }
+    const simN = resolveSimScore === '' ? null : parseInt(resolveSimScore, 10)
+    if (simN !== null && (isNaN(simN) || simN < 1 || simN > 10)) {
+      alert('Notă simulator trebuie 1-10 sau gol.'); return
+    }
+    if (questions.length !== NUM_GRILA) {
+      alert('Examenul nu are cele ' + NUM_GRILA + ' întrebări generate.'); return
+    }
+
+    setResolveBusy(true)
+    try {
+      // Construiește grila_answers: aleg random N întrebări care primesc răspunsul corect,
+      // restul primesc un răspuns greșit ales aleator dintre celelalte 3 litere
+      const indices = shuffle(questions.map((_, i) => i))
+      const correctIdx = new Set(indices.slice(0, resolveGrilaScore))
+      const grilaAns: Record<string, string> = {}
+      questions.forEach((q, i) => {
+        if (correctIdx.has(i)) {
+          grilaAns[String(q.order_no)] = q.correct_option
+        } else {
+          const wrong = (['A', 'B', 'C', 'D'] as const).filter(l => l !== q.correct_option)
+          grilaAns[String(q.order_no)] = wrong[Math.floor(Math.random() * wrong.length)]
+        }
+      })
+
+      // Dacă vine din „Șterge și rezolvă", ștergem rândul vechi
+      if (resolveExistingAnswerId) {
+        const { error: delErr } = await supabase
+          .from('radio_exam_answers')
+          .delete()
+          .eq('id', resolveExistingAnswerId)
+        if (delErr) throw delErr
+      } else {
+        // Verifică să nu existe deja un rând pentru acest student
+        const { data: existing } = await supabase
+          .from('radio_exam_answers')
+          .select('id')
+          .eq('exam_id', exam.id)
+          .eq('student_id', resolveStudentId)
+          .maybeSingle()
+        if (existing) {
+          throw new Error('Acest cursant are deja un rând în rezultate. Folosește „Șterge și rezolvă" pe el.')
+        }
+      }
+
+      // Status: 'graded' dacă AMBELE note sunt completate; altfel 'submitted' (ca să fie eligibil la random)
+      const bothManual = tradN !== null && simN !== null
+      const status = bothManual ? 'graded' : 'submitted'
+
+      const { error: insErr } = await supabase
+        .from('radio_exam_answers')
+        .insert({
+          exam_id: exam.id,
+          student_id: resolveStudentId,
+          grila_answers: grilaAns,
+          translation_answers: {},
+          feedback: '',
+          obtinere_prelungire: '',
+          grila_score: resolveGrilaScore,
+          translation_score: tradN ?? 0,
+          simulator_score: simN,
+          status,
+          submitted_at: new Date().toISOString(),
+          graded_at: bothManual ? new Date().toISOString() : null,
+        })
+      if (insErr) throw insErr
+
+      await loadAll()
+      setShowResolve(false)
+    } catch (e: any) {
+      alert('Eroare: ' + (e.message || String(e)))
+    } finally {
+      setResolveBusy(false)
     }
   }
 
@@ -1201,21 +1314,28 @@ export default function ExamenPage() {
         {/* TAB RESULTS */}
         {tab === 'results' && (
           <>
-          {exam && answers.length > 0 && (
+          {exam && (
             <div className="bg-purple-50 border border-purple-100 rounded-xl p-3 mb-3 flex flex-wrap items-center gap-2">
-              <span className="text-xs text-purple-700 font-semibold mr-2">Randomizare note:</span>
+              <span className="text-xs text-purple-700 font-semibold mr-2">Acțiuni rezultate:</span>
               <button onClick={openRandomTrad}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white"
+                disabled={answers.length === 0}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white disabled:opacity-50"
                 style={{ background: '#7c3aed' }}>
                 🎲 Random trad
               </button>
               <button onClick={openRandomSim}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white"
+                disabled={answers.length === 0}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white disabled:opacity-50"
                 style={{ background: '#7c3aed' }}>
                 🎲 Random sim
               </button>
+              <button onClick={openResolveNew}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white"
+                style={{ background: '#ea580c' }}>
+                ➕ Rezolvă cursant
+              </button>
               <span className="text-xs text-gray-500 ml-auto">
-                Afectează doar cursanții fără notă; cele setate manual rămân neschimbate.
+                Random afectează doar cursanții fără notă. „Rezolvă cursant" adaugă manual un cursant care nu a răspuns.
               </span>
             </div>
           )}
@@ -1392,19 +1512,28 @@ export default function ExamenPage() {
                             </div>
                           </div>
 
-                          {/* Resetare cursant */}
+                          {/* Resetare / rezolvare cursant */}
                           <div className="bg-white rounded-lg p-4 border border-red-100">
-                            <div className="text-xs font-semibold text-red-700 mb-1">Resetare cursant</div>
+                            <div className="text-xs font-semibold text-red-700 mb-1">Acțiuni cursant</div>
                             <p className="text-xs text-gray-500 mb-3">
-                              Șterge toate răspunsurile, scorurile, feedback-ul și tipul de examen ales.
-                              Cursantul va putea relua examenul de la zero din portal.
+                              Șterge răspunsurile pentru ca cursantul să reia examenul de la zero,
+                              sau înlocuiește răspunsurile cu un set generat pentru un punctaj dorit.
                             </p>
-                            <button onClick={() => deleteAnswerRow(a)}
-                              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-white hover:opacity-90"
-                              style={{ background: '#dc2626' }}>
-                              <Trash2 size={12} />
-                              Șterge răspunsurile și permite reluarea
-                            </button>
+                            <div className="flex flex-wrap gap-2">
+                              <button onClick={() => deleteAnswerRow(a)}
+                                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-white hover:opacity-90"
+                                style={{ background: '#dc2626' }}>
+                                <Trash2 size={12} />
+                                Șterge răspunsurile
+                              </button>
+                              {a.status === 'in_progress' && (
+                                <button onClick={() => openResolveFromExisting(a)}
+                                  className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-white hover:opacity-90"
+                                  style={{ background: '#7c3aed' }}>
+                                  ✨ Șterge și rezolvă
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </div>
                       )}
@@ -1532,6 +1661,111 @@ export default function ExamenPage() {
                     {randomizing ? 'Se randomizează...' : '🎲 Aplică'}
                   </button>
                 )}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* Modal Rezolvă cursant */}
+      {showResolve && (() => {
+        const studentsWithoutAnswer = students.filter(s =>
+          !answers.find(a => a.student_id === s.id)
+        )
+        const isReResolve = !!resolveExistingAnswerId
+        const fixedStudent = isReResolve
+          ? students.find(s => s.id === resolveStudentId)
+          : null
+        return (
+          <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6">
+              <h3 className="font-semibold text-gray-900 mb-1">
+                {isReResolve ? '✨ Șterge și rezolvă cursant' : '➕ Rezolvă cursant'}
+              </h3>
+              <p className="text-xs text-gray-400 mb-4">
+                {isReResolve
+                  ? 'Răspunsurile existente vor fi șterse și înlocuite cu un set generat.'
+                  : 'Adaugă un rezultat pentru un cursant care nu a completat formularul.'}
+              </p>
+
+              <div className="space-y-3 mb-5">
+                {/* Cursant */}
+                {isReResolve ? (
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Cursant</label>
+                    <div className="px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm text-gray-800">
+                      {fixedStudent?.full_name || '—'}
+                    </div>
+                  </div>
+                ) : (
+                  <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">Cursant *</label>
+                    <select value={resolveStudentId}
+                      onChange={e => setResolveStudentId(e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-purple-400">
+                      <option value="">— alege —</option>
+                      {studentsWithoutAnswer.map(s => (
+                        <option key={s.id} value={s.id}>{s.full_name} · {s.class_caa}</option>
+                      ))}
+                    </select>
+                    {studentsWithoutAnswer.length === 0 && (
+                      <p className="text-xs text-amber-600 mt-1">
+                        Toți cursanții din sesiune au deja rezultate.
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Punctaj grilă */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    Punctaj grilă (0–{NUM_GRILA}) *
+                  </label>
+                  <input type="number" min={0} max={NUM_GRILA} step={1}
+                    value={resolveGrilaScore}
+                    onChange={e => setResolveGrilaScore(Math.max(0, Math.min(NUM_GRILA, parseInt(e.target.value) || 0)))}
+                    className="w-24 px-3 py-2 border border-gray-200 rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-purple-400" />
+                  <p className="text-xs text-gray-400 mt-1">
+                    Răspunsurile la grilă vor fi generate automat: {resolveGrilaScore} corecte, restul greșite random.
+                  </p>
+                </div>
+
+                {/* Notă traduceri */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    Notă traduceri (0–5) <span className="text-gray-400 font-normal">— gol = se va decide la randomizare</span>
+                  </label>
+                  <input type="number" min={0} max={5} step={1}
+                    value={resolveTradScore}
+                    onChange={e => setResolveTradScore(e.target.value)}
+                    placeholder="—"
+                    className="w-24 px-3 py-2 border border-gray-200 rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-purple-400" />
+                </div>
+
+                {/* Notă simulator */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    Notă simulator (1–10) <span className="text-gray-400 font-normal">— gol = se va decide la randomizare</span>
+                  </label>
+                  <input type="number" min={1} max={10} step={1}
+                    value={resolveSimScore}
+                    onChange={e => setResolveSimScore(e.target.value)}
+                    placeholder="—"
+                    className="w-24 px-3 py-2 border border-gray-200 rounded-lg text-sm text-center focus:outline-none focus:ring-2 focus:ring-purple-400" />
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <button onClick={() => setShowResolve(false)} disabled={resolveBusy}
+                  className="px-4 py-2 rounded-lg text-xs border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-50">
+                  Anulează
+                </button>
+                <button onClick={doResolve}
+                  disabled={resolveBusy || !resolveStudentId || (!isReResolve && studentsWithoutAnswer.length === 0)}
+                  className="px-5 py-2 rounded-lg text-xs font-medium text-white disabled:opacity-50"
+                  style={{ background: '#7c3aed' }}>
+                  {resolveBusy ? 'Se rezolvă...' : (isReResolve ? '✨ Șterge și rezolvă' : '➕ Rezolvă')}
+                </button>
               </div>
             </div>
           </div>
