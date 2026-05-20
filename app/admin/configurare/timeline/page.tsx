@@ -2,7 +2,7 @@
 import { useEffect, useState, useCallback } from 'react'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
-import { ArrowLeft, Plus, Trash2, Loader2, RotateCcw } from 'lucide-react'
+import { ArrowLeft, Plus, Trash2, Loader2, RotateCcw, ArrowDownUp } from 'lucide-react'
 import { resolveColor, defaultDayColor, defaultWeekendColor } from '@/lib/timeline-colors'
 
 type Milestone = {
@@ -138,6 +138,41 @@ export default function TimelineConfigPage() {
     const { error } = await supabase.from('timeline_milestones').delete().eq('id', m.id)
     if (error) { alert('Eroare: ' + error.message); return }
     setMilestones(milestones.filter(x => x.id !== m.id))
+  }
+
+  // Reordonare cronologică: setează order_index conform datelor calculate (anchor + offset)
+  async function reorderChronologically() {
+    const today = startOfDay(new Date())
+    const selected = sessionsInScope.find(s => s.id === previewSessionId)
+    const baseSession: any = selected ? selected : {
+      created_at: new Date(today.getTime() - 10 * DAY_MS).toISOString(),
+      course_start_date: new Date(today.getTime() - 8 * DAY_MS).toISOString(),
+      practice_start_date: new Date(today.getTime() - 3 * DAY_MS).toISOString(),
+      session_date: new Date(today.getTime() + 7 * DAY_MS).toISOString(),
+    }
+    // Calculez data efectivă pentru fiecare milestone din scope
+    const dated = scopedMilestones.map(m => {
+      const raw = baseSession[m.anchor] || baseSession.session_date
+      const anchor = raw ? startOfDay(new Date(raw)) : today
+      return { m, date: new Date(anchor.getTime() + m.offset_days * DAY_MS) }
+    }).sort((a, b) => a.date.getTime() - b.date.getTime())
+
+    setSavingId('reorder')
+    // Update toate într-o singură repriză
+    for (let i = 0; i < dated.length; i++) {
+      if (dated[i].m.order_index !== i) {
+        await supabase.from('timeline_milestones').update({
+          order_index: i,
+          updated_at: new Date().toISOString(),
+        }).eq('id', dated[i].m.id)
+      }
+    }
+    setSavingId(null)
+    // Actualizăm state local
+    setMilestones(milestones.map(orig => {
+      const idx = dated.findIndex(d => d.m.id === orig.id)
+      return idx >= 0 ? { ...orig, order_index: idx } : orig
+    }))
   }
 
   // Când utilizatorul schimbă manual culoarea „zi", auto-completează „weekend" cu derivata
@@ -296,11 +331,20 @@ export default function TimelineConfigPage() {
                 Puncte cheie pe timeline. Fiecare are o ancoră (câmp din sesiune) + offset (zile înainte/după) + culoare proprie.
               </p>
             </div>
-            <button onClick={addMilestone}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white"
-              style={{ background: '#7c3aed' }}>
-              <Plus size={12}/>Adaugă milestone
-            </button>
+            <div className="flex items-center gap-2">
+              <button onClick={reorderChronologically}
+                disabled={savingId === 'reorder' || scopedMilestones.length < 2}
+                title="Reordonează milestones-urile în ordine cronologică pe baza datelor calculate"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                {savingId === 'reorder' ? <Loader2 size={12} className="animate-spin"/> : <ArrowDownUp size={12}/>}
+                Sortează cronologic
+              </button>
+              <button onClick={addMilestone}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white"
+                style={{ background: '#7c3aed' }}>
+                <Plus size={12}/>Adaugă milestone
+              </button>
+            </div>
           </div>
           <div className="space-y-2">
             {scopedMilestones.length === 0 && (
