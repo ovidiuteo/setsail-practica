@@ -1,13 +1,14 @@
 'use client'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Ship, Calendar, Users, Settings, Anchor, Building2, Mail } from 'lucide-react'
+import { Ship, Calendar, Users, Settings, Anchor, Building2, Mail, PenTool } from 'lucide-react'
 
 const nav = [
   { href: '/admin',             label: 'Dashboard',        icon: Anchor },
   { href: '/admin/sesiuni',     label: 'Sesiuni Practică', icon: Calendar },
   { href: '/admin/cursanti',    label: 'Cursanți',         icon: Users },
   { href: '/admin/emailuri',    label: 'Emailuri',         icon: Mail },
+  { href: '/admin/semnaturi',   label: 'Semnături',        icon: PenTool },
   { href: '/admin/setsail',     label: 'SetSail Firmă',    icon: Building2 },
   { href: '/admin/configurare', label: 'Configurare',      icon: Settings },
 ]
