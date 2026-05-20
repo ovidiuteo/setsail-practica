@@ -18,7 +18,7 @@ export default function ApplyButton({
 
   async function apply() {
     if (disabled) return
-    if (!confirm(`Confirmi că vrei să aplici la „${clubName}"? Poți reveni asupra alegerii ulterior.`)) return
+    if (!confirm(`Aplică pentru ${clubName}?`)) return
 
     setLoading(true)
     setError('')
