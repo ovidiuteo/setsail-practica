@@ -20,16 +20,26 @@ export async function POST(req: NextRequest) {
     .eq('id', session_id)
     .single()
 
-  const { data: students } = await supabase
+  const { data: allStudents } = await supabase
     .from('students')
     .select('*')
     .eq('session_id', session_id)
     .eq('only_sailing', false)
     .order('order_in_session')
 
-  if (!session || !students) {
+  if (!session || !allStudents) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
+
+  // Filtrăm cursanții după tipul examenului (Obținere / Prelungire)
+  // - Prelungire: doar cei cu obtinere_prelungire === 'prelungire'
+  // - Obținere: toți ceilalți (gol, null sau 'obtinere')
+  // Sortăm alfabetic ca în tabelul admin
+  const students = allStudents
+    .filter((s: any) => isPrelungire
+      ? s.obtinere_prelungire === 'prelungire'
+      : s.obtinere_prelungire !== 'prelungire')
+    .sort((a: any, b: any) => (a.full_name || '').localeCompare(b.full_name || '', 'ro'))
 
   // Antetul Radio
   const { data: antetDoc } = await supabase
