@@ -11,6 +11,68 @@ const statusMap: Record<string, { label: string; color: string }> = {
   completed: { label: 'Finalizată', color: '#059669' },
 }
 
+// ---------- Timeline progress bar ----------
+const DAY_MS = 24 * 60 * 60 * 1000
+const MONTHS_RO_FULL = ['ianuarie','februarie','martie','aprilie','mai','iunie','iulie','august','septembrie','octombrie','noiembrie','decembrie']
+const DAYS_RO = ['duminică','luni','marți','miercuri','joi','vineri','sâmbătă']
+
+function startOfDay(d: Date): Date { const x = new Date(d); x.setHours(0,0,0,0); return x }
+function fmtDateRO(d: Date): string {
+  return `${DAYS_RO[d.getDay()]}, ${d.getDate()} ${MONTHS_RO_FULL[d.getMonth()]} ${d.getFullYear()}`
+}
+
+function SessionTimeline({ session }: { session: any }) {
+  const examDate = session.session_date ? startOfDay(new Date(session.session_date)) : null
+  const createdAt = session.created_at ? startOfDay(new Date(session.created_at)) : null
+  if (!examDate || !createdAt) return null
+  const endDate = new Date(examDate.getTime() + 14 * DAY_MS)
+  const today = startOfDay(new Date())
+
+  const nDays = Math.max(1, Math.round((endDate.getTime() - createdAt.getTime()) / DAY_MS) + 1)
+  const days: Date[] = []
+  for (let i = 0; i < nDays; i++) {
+    days.push(new Date(createdAt.getTime() + i * DAY_MS))
+  }
+
+  return (
+    <div className="relative w-full h-2.5 flex bg-gray-50 rounded-t-xl overflow-hidden">
+      {days.map((d, i) => {
+        const dDay = d.getDay() // 0 = duminică, 6 = sâmbătă
+        const isWeekend = dDay === 0 || dDay === 6
+        const isExam = d.getTime() === examDate.getTime()
+        const isAfterExam = d.getTime() > examDate.getTime()
+        const isToday = d.getTime() === today.getTime()
+        let bg = '#bbf7d0' // green-200
+        if (isExam) bg = '#a855f7' // purple-500
+        else if (isAfterExam) bg = isWeekend ? '#bbf7d0' : '#dcfce7' // green-200 / green-100
+        else if (isWeekend) bg = '#86efac' // green-300
+
+        const ctx: string[] = []
+        if (isToday) ctx.push('astăzi')
+        if (isExam) ctx.push('ZIUA EXAMENULUI')
+        else if (isWeekend) ctx.push('weekend')
+        if (isAfterExam && !isExam) ctx.push('post-examen')
+        const tooltipText = `${fmtDateRO(d)}${ctx.length ? ' · ' + ctx.join(' · ') : ''}`
+
+        return (
+          <div key={i} className="flex-1 relative group" style={{ background: bg, minWidth: 2 }}>
+            {isToday && (
+              <div className="absolute -top-1 -bottom-1 left-0 right-0 pointer-events-none">
+                <div className="absolute inset-y-0 left-1/2 -translate-x-1/2 w-0.5 bg-red-600" />
+                <div className="absolute -top-1 left-1/2 -translate-x-1/2 w-2 h-2 rounded-full bg-red-600" />
+              </div>
+            )}
+            <span className="invisible group-hover:visible absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 z-50
+                             px-2 py-1 bg-gray-900 text-white text-xs rounded whitespace-nowrap pointer-events-none shadow-lg">
+              {tooltipText}
+            </span>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 export default function SesiuniPage() {
   const [sessions, setSessions] = useState<any[]>([])
   const [studentCounts, setStudentCounts] = useState<Record<string,{total:number,absenti:number}>>({})
@@ -156,7 +218,9 @@ export default function SesiuniPage() {
             return (
               <div key={s.id} className="space-y-0">
                 {/* SESIUNEA PRINCIPALA */}
-                <div className={`bg-white rounded-xl shadow-sm border transition-colors ${isEditing ? 'border-blue-200' : 'border-gray-100'}`}>
+                <div className={`bg-white rounded-xl shadow-sm border transition-colors overflow-visible ${isEditing ? 'border-blue-200' : 'border-gray-100'}`}>
+                {/* Timeline progress bar */}
+                <SessionTimeline session={s} />
                 {isEditing ? (
                   /* Edit mode */
                   <div className="p-5">
