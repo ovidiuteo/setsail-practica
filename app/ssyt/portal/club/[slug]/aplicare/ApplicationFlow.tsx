@@ -178,11 +178,7 @@ export default function ApplicationFlow({
       </div>
 
       {tab === 'documents' && (
-        <DocumentsList
-          templates={templates}
-          applicationId={applicationId}
-          onGoToProcedures={() => setTab('procedures')}
-        />
+        <DocumentsList templates={templates} applicationId={applicationId} />
       )}
 
       {tab === 'communication' && (
@@ -200,7 +196,6 @@ export default function ApplicationFlow({
           onToggle={toggleStep}
           completedSteps={completedSteps}
           totalSteps={totalSteps}
-          onGoToDocuments={() => setTab('documents')}
         />
       )}
 
@@ -222,6 +217,8 @@ export default function ApplicationFlow({
               participantName={participantName}
               onMarkAsSent={submit}
               submitting={submitting}
+              currentTab={tab}
+              onSwitchTab={setTab}
             />
           )}
 
@@ -249,12 +246,16 @@ function SubmitBlock({
   participantName,
   onMarkAsSent,
   submitting,
+  currentTab,
+  onSwitchTab,
 }: {
   contacts: Contact[]
   clubName: string
   participantName: string
   onMarkAsSent: () => void | Promise<void>
   submitting: boolean
+  currentTab: TabKey
+  onSwitchTab: (k: TabKey) => void
 }) {
   const defaultEmail =
     contacts.find((c) => c.contact_type === 'inscriere')?.email ??
@@ -269,6 +270,13 @@ function SubmitBlock({
   const mailto = `mailto:${encodeURIComponent(email)}?subject=${encodeURIComponent(
     subject
   )}&body=${encodeURIComponent(body)}`
+
+  let greenJump: { label: string; icon: typeof FileText; target: TabKey } | null = null
+  if (currentTab === 'documents') {
+    greenJump = { label: 'Vezi procedurile', icon: ListOrdered, target: 'procedures' }
+  } else if (currentTab === 'procedures') {
+    greenJump = { label: 'Vezi documente', icon: FileText, target: 'documents' }
+  }
 
   return (
     <div
@@ -302,6 +310,20 @@ function SubmitBlock({
           <Send size={14} />
           {submitting ? 'Se marchează...' : 'Am trimis aplicația'}
         </button>
+        {greenJump &&
+          (() => {
+            const GreenIcon = greenJump.icon
+            return (
+              <button
+                onClick={() => onSwitchTab(greenJump!.target)}
+                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-md text-sm font-semibold transition"
+                style={{ background: '#16a34a', color: '#fff' }}
+              >
+                <GreenIcon size={14} />
+                {greenJump!.label}
+              </button>
+            )
+          })()}
       </div>
     </div>
   )
@@ -310,11 +332,9 @@ function SubmitBlock({
 function DocumentsList({
   templates,
   applicationId,
-  onGoToProcedures,
 }: {
   templates: Template[]
   applicationId: string
-  onGoToProcedures: () => void
 }) {
   if (templates.length === 0) {
     return (
@@ -374,28 +394,16 @@ function DocumentsList({
               {t.description && <div className="text-xs text-gray-500 mt-0.5">{t.description}</div>}
             </div>
 
-            <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
-              <a
-                href={`/api/ssyt/club/application/${applicationId}/document/${t.id}/render`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition"
-                style={{ background: '#FF6B35', color: '#fff' }}
-              >
-                <Download size={12} />
-                Generează PDF
-              </a>
-              {t.is_full_package && (
-                <button
-                  onClick={onGoToProcedures}
-                  className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition"
-                  style={{ background: '#16a34a', color: '#fff' }}
-                >
-                  <ListOrdered size={12} />
-                  Vezi procedurile
-                </button>
-              )}
-            </div>
+            <a
+              href={`/api/ssyt/club/application/${applicationId}/document/${t.id}/render`}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition shrink-0"
+              style={{ background: '#FF6B35', color: '#fff' }}
+            >
+              <Download size={12} />
+              Generează PDF
+            </a>
           </li>
         ))}
       </ul>
@@ -534,14 +542,12 @@ function ProceduresChecklist({
   onToggle,
   completedSteps,
   totalSteps,
-  onGoToDocuments,
 }: {
   procedures: Procedure[]
   checked: Record<string, boolean>
   onToggle: (id: string) => void
   completedSteps: number
   totalSteps: number
-  onGoToDocuments: () => void
 }) {
   if (procedures.length === 0) {
     return (
@@ -556,24 +562,12 @@ function ProceduresChecklist({
 
   return (
     <div>
-      <div className="mb-3 flex items-center justify-between gap-3 flex-wrap">
-        {totalSteps > 0 ? (
-          <div className="text-xs text-gray-500">
-            Progres: <strong>{completedSteps}</strong> / {totalSteps} pași bifați (doar local —
-            ajută-te să urmărești ce ai făcut)
-          </div>
-        ) : (
-          <div />
-        )}
-        <button
-          onClick={onGoToDocuments}
-          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition"
-          style={{ background: '#16a34a', color: '#fff' }}
-        >
-          <FileText size={12} />
-          Vezi documente
-        </button>
-      </div>
+      {totalSteps > 0 && (
+        <div className="mb-3 text-xs text-gray-500">
+          Progres: <strong>{completedSteps}</strong> / {totalSteps} pași bifați (doar local —
+          ajută-te să urmărești ce ai făcut)
+        </div>
+      )}
       <ol className="space-y-2">
         {procedures.map((step) => {
           const isChecked = !!checked[step.id]
