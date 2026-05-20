@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
 export async function POST(req: NextRequest) {
-  const { session_id } = await req.json()
-  const tip = req.nextUrl.searchParams.get('tip') || 'obtinere'
-  const format = req.nextUrl.searchParams.get('format') || 'docx'
+  const body = await req.json()
+  const session_id = body.session_id
+  const tip = req.nextUrl.searchParams.get('tip') || body.tip || 'obtinere'
+  const format = req.nextUrl.searchParams.get('format') || body.format || 'docx'
   const isPrelungire = tip === 'prelungire'
 
   const supabase = createClient(
