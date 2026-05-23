@@ -18,6 +18,7 @@ import {
   Wallet,
   UserCog,
   Shield,
+  BarChart3,
   ChevronLeft,
 } from 'lucide-react'
 
@@ -31,6 +32,7 @@ const NAV = [
   { href: '/ssyt/admin/boats', label: 'Ambarcațiuni', icon: Sailboat },
   { href: '/ssyt/admin/regattas', label: 'Regatte', icon: Anchor },
   { href: '/ssyt/admin/availability', label: 'Disponibilități', icon: CheckSquare },
+  { href: '/ssyt/admin/stats', label: 'Statistici portal', icon: BarChart3 },
   { href: '/ssyt/admin/financial', label: 'Situație financiară', icon: Wallet },
   { href: '/ssyt/admin/results', label: 'Rezultate', icon: Trophy },
   { href: '/ssyt/admin/leaderboard', label: 'Leaderboard', icon: Trophy },
