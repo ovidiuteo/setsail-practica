@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Users, CheckCircle2, HelpCircle, XCircle, MinusCircle, UserCheck, UserX, Lock } from 'lucide-react'
+import { Users, CheckCircle2, HelpCircle, XCircle, MinusCircle, UserCheck, UserX, Lock, ChevronDown, ChevronRight } from 'lucide-react'
 
 export type CrewMember = {
   participantId: string
@@ -69,6 +69,7 @@ export default function TeamCrewSection({
   const [list, setList] = useState<CrewMember[]>(crew)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [error, setError] = useState('')
+  const [open, setOpen] = useState(false)
 
   async function toggleCrewlist(memberId: string) {
     setError('')
@@ -112,11 +113,15 @@ export default function TeamCrewSection({
       className="rounded-lg overflow-hidden mb-6"
       style={{ background: '#fff', border: '1px solid #e5e7eb' }}
     >
-      <div
-        className="px-5 py-3 flex items-center justify-between gap-3 flex-wrap"
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="w-full px-5 py-3 flex items-center justify-between gap-3 flex-wrap text-left transition hover:brightness-110"
         style={{ background: teamColor, color: '#fff' }}
+        aria-expanded={open}
       >
         <div className="flex items-center gap-2 min-w-0">
+          {open ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
           <Users size={16} />
           <h2 className="font-semibold tracking-tight">
             Echipa {team.short_name || team.name} — Crewlist participanți
@@ -137,35 +142,43 @@ export default function TeamCrewSection({
             </span>
           )}
         </div>
-      </div>
+      </button>
 
-      <div className="px-5 py-3 text-xs text-gray-500 border-b" style={{ borderColor: '#f1f5f9' }}>
-        {canEditCrewlist ? (
-          <>
-            Ca <strong>skipper / editor</strong> al echipei poți decide cine intră pe crewlist —
-            click pe <UserCheck size={11} className="inline align-middle" /> lângă fiecare membru
-            disponibil.
-          </>
-        ) : (
-          <>
-            Lista de mai jos arată cine din echipa ta este disponibil, indecis sau indisponibil
-            pentru această regată. Doar skipper-ul sau editorii pot modifica crewlist-ul.
-          </>
-        )}
-        {regattaIsFrozen && (
-          <span className="block mt-1 italic text-amber-700">
-            Regata este finalizată — statusurile sunt înghețate.
-          </span>
-        )}
-      </div>
-
-      {error && (
-        <div className="mx-5 mt-3 px-3 py-2 text-sm rounded-md" style={{ background: '#fef2f2', color: '#dc2626' }}>
-          {error}
+      {!open && (
+        <div className="px-5 py-2 text-xs text-gray-400 italic">
+          Click pe bara colorată pentru a vedea lista membrilor.
         </div>
       )}
 
-      <div className="p-5 space-y-4">
+      {open && (
+        <>
+          <div className="px-5 py-3 text-xs text-gray-500 border-b" style={{ borderColor: '#f1f5f9' }}>
+            {canEditCrewlist ? (
+              <>
+                Ca <strong>skipper / editor</strong> al echipei poți decide cine intră pe crewlist —
+                click pe <UserCheck size={11} className="inline align-middle" /> lângă fiecare membru
+                disponibil.
+              </>
+            ) : (
+              <>
+                Lista de mai jos arată cine din echipa ta este disponibil, indecis sau indisponibil
+                pentru această regată. Doar skipper-ul sau editorii pot modifica crewlist-ul.
+              </>
+            )}
+            {regattaIsFrozen && (
+              <span className="block mt-1 italic text-amber-700">
+                Regata este finalizată — statusurile sunt înghețate.
+              </span>
+            )}
+          </div>
+
+          {error && (
+            <div className="mx-5 mt-3 px-3 py-2 text-sm rounded-md" style={{ background: '#fef2f2', color: '#dc2626' }}>
+              {error}
+            </div>
+          )}
+
+          <div className="p-5 space-y-4">
         {(['confirmed', 'tentative', 'declined', 'unknown'] as StatusKey[]).map((key) => {
           const members = grouped[key]
           if (members.length === 0) return null
@@ -250,7 +263,9 @@ export default function TeamCrewSection({
             </div>
           )
         })}
-      </div>
+          </div>
+        </>
+      )}
     </section>
   )
 }
