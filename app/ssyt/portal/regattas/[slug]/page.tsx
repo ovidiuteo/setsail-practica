@@ -1,8 +1,20 @@
 import Link from 'next/link'
 import { notFound, redirect } from 'next/navigation'
 import { ArrowLeft, MapPin, Calendar, ExternalLink, FileText, Users, AlertCircle } from 'lucide-react'
-import { getPortalSession, getPortalSupabase, canEditBoatType } from '@/lib/ssyt/portal-session'
+import { getPortalSession, getPortalSupabase, canEditBoatType, getMyTeamAndPerms } from '@/lib/ssyt/portal-session'
 import RegattaDocsList from './RegattaDocsList'
+import TeamCrewSection, { type CrewMember } from './TeamCrewSection'
+
+function isRegattaFrozen(end_date: string | null, status: string | null): boolean {
+  if (status === 'completed' || status === 'cancelled') return true
+  if (end_date) {
+    const end = new Date(end_date)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    if (end < today) return true
+  }
+  return false
+}
 
 export const dynamic = 'force-dynamic'
 
@@ -58,6 +70,71 @@ export default async function PortalRegattaDetailPage({ params }: { params: { sl
 
   const canEdit = await canEditBoatType(session.participantId)
 
+  // Echipa cursantului + crew pentru regata curentă
+  const { teamId, isSkipper, isEditor } = await getMyTeamAndPerms(session.participantId)
+  let teamData: { id: string; name: string; short_name: string | null; color_primary: string | null } | null = null
+  let crew: CrewMember[] = []
+  if (teamId) {
+    const { data: team } = await supabase
+      .from('ssyt_teams')
+      .select('id, name, short_name, color_primary, skipper_id')
+      .eq('id', teamId)
+      .maybeSingle()
+    if (team) {
+      teamData = {
+        id: team.id,
+        name: team.name,
+        short_name: team.short_name,
+        color_primary: team.color_primary,
+      }
+
+      const { data: members } = await supabase
+        .from('ssyt_team_memberships')
+        .select('id, participant_id, membership_type, participant:ssyt_participants(id, full_name)')
+        .eq('team_id', teamId)
+        .eq('status', 'active')
+
+      const memberIds = (members ?? []).map((m: any) => m.participant_id).filter(Boolean)
+
+      let partsByParticipant: Record<string, { confirmation_status: string | null; on_crewlist: boolean }> = {}
+      if (memberIds.length > 0) {
+        const { data: parts } = await supabase
+          .from('ssyt_regatta_participation')
+          .select('participant_id, confirmation_status, on_crewlist')
+          .eq('regatta_id', regatta.id)
+          .in('participant_id', memberIds)
+        for (const p of parts ?? []) {
+          partsByParticipant[p.participant_id as string] = {
+            confirmation_status: p.confirmation_status as string | null,
+            on_crewlist: !!p.on_crewlist,
+          }
+        }
+      }
+
+      crew = (members ?? []).map((m: any) => {
+        const part = partsByParticipant[m.participant_id]
+        const participantObj = Array.isArray(m.participant) ? m.participant[0] : m.participant
+        return {
+          participantId: m.participant_id,
+          fullName: participantObj?.full_name || '—',
+          membershipType: m.membership_type,
+          isSkipper: team.skipper_id === m.participant_id,
+          status: part?.confirmation_status ?? null,
+          onCrewlist: part?.on_crewlist ?? false,
+        }
+      })
+      // Sortare: skipper primul, apoi alfabetic
+      crew.sort((a, b) => {
+        if (a.isSkipper && !b.isSkipper) return -1
+        if (!a.isSkipper && b.isSkipper) return 1
+        return a.fullName.localeCompare(b.fullName, 'ro')
+      })
+    }
+  }
+
+  const regattaIsFrozen = isRegattaFrozen(regatta.end_date, regatta.status)
+  const canEditCrewlist = (isSkipper || isEditor) && !regattaIsFrozen
+
   const status = getDynStatus(regatta.start_date, regatta.end_date)
   const d1 = new Date(regatta.start_date)
   const d2 = regatta.end_date ? new Date(regatta.end_date) : null
@@ -109,6 +186,18 @@ export default async function PortalRegattaDetailPage({ params }: { params: { sl
           </div>
         </div>
       </div>
+
+      {/* Echipa + Crewlist */}
+      {teamData && (
+        <TeamCrewSection
+          team={teamData}
+          crew={crew}
+          regattaId={regatta.id}
+          canEditCrewlist={canEditCrewlist}
+          regattaIsFrozen={regattaIsFrozen}
+          meParticipantId={session.participantId}
+        />
+      )}
 
       {/* Description */}
       {regatta.description && (
