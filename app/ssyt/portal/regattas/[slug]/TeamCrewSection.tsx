@@ -2,11 +2,14 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Users, CheckCircle2, HelpCircle, XCircle, MinusCircle, UserCheck, UserX, Lock, ChevronDown, ChevronRight } from 'lucide-react'
+import { Users, CheckCircle2, HelpCircle, XCircle, MinusCircle, UserCheck, UserX, Lock, ChevronDown, ChevronRight, Mail, Phone, MapPin } from 'lucide-react'
 
 export type CrewMember = {
   participantId: string
   fullName: string
+  email: string | null
+  phone: string | null
+  city: string | null
   membershipType: string | null
   isSkipper: boolean
   status: string | null // 'confirmed' | 'tentative' | 'declined' | 'pending' | null
@@ -201,35 +204,67 @@ export default function TeamCrewSection({
                   return (
                     <li
                       key={m.participantId}
-                      className="flex items-center gap-3 px-3 py-2 rounded-md"
+                      className="flex items-start gap-3 px-3 py-2 rounded-md"
                       style={{ background: meta.bg }}
                     >
-                      <div className="flex-1 min-w-0 flex items-center gap-2 flex-wrap">
-                        <span className="text-sm font-medium" style={{ color: '#0a1628' }}>
-                          {m.fullName}
-                        </span>
-                        {isMe && (
-                          <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold" style={{ background: 'rgba(0,0,0,0.06)', color: '#475569' }}>
-                            tu
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-sm font-medium" style={{ color: '#0a1628' }}>
+                            {m.fullName}
                           </span>
-                        )}
-                        {m.isSkipper && (
-                          <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold" style={{ background: 'rgba(255,107,53,0.15)', color: '#FF6B35' }}>
-                            skipper
-                          </span>
-                        )}
-                        {memLabel && (
-                          <span
-                            className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold"
-                            style={{ background: memColor + '20', color: memColor }}
-                          >
-                            {memLabel}
-                          </span>
-                        )}
-                        {m.onCrewlist && (
-                          <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold" style={{ background: '#10B98120', color: '#10B981' }}>
-                            <UserCheck size={9} /> pe crewlist
-                          </span>
+                          {isMe && (
+                            <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold" style={{ background: 'rgba(0,0,0,0.06)', color: '#475569' }}>
+                              tu
+                            </span>
+                          )}
+                          {m.isSkipper && (
+                            <span className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold" style={{ background: 'rgba(255,107,53,0.15)', color: '#FF6B35' }}>
+                              skipper
+                            </span>
+                          )}
+                          {memLabel && (
+                            <span
+                              className="text-[9px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold"
+                              style={{ background: memColor + '20', color: memColor }}
+                            >
+                              {memLabel}
+                            </span>
+                          )}
+                          {m.onCrewlist && (
+                            <span className="inline-flex items-center gap-1 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold" style={{ background: '#10B98120', color: '#10B981' }}>
+                              <UserCheck size={9} /> pe crewlist
+                            </span>
+                          )}
+                        </div>
+                        {(m.email || m.phone || m.city) && (
+                          <div className="flex items-center gap-3 mt-1 text-[11px] text-gray-500 flex-wrap">
+                            {m.email && (
+                              <a
+                                href={`mailto:${encodeURIComponent(m.email)}`}
+                                className="inline-flex items-center gap-1 hover:underline"
+                                title="Trimite email"
+                              >
+                                <Mail size={10} className="text-gray-400" />
+                                <span className="font-mono">{m.email}</span>
+                              </a>
+                            )}
+                            {m.phone && (
+                              <a
+                                href={`tel:${m.phone.replace(/\s+/g, '')}`}
+                                className="inline-flex items-center gap-1 hover:underline"
+                                title="Sună"
+                              >
+                                <Phone size={10} className="text-gray-400" />
+                                <span className="font-mono">{m.phone}</span>
+                              </a>
+                            )}
+                            {m.city && (
+                              <span className="inline-flex items-center gap-1">
+                                <MapPin size={10} className="text-gray-400" />
+                                {m.city}
+                              </span>
+                            )}
+                          </div>
                         )}
                       </div>
 

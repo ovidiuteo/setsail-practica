@@ -16,6 +16,21 @@ function isRegattaFrozen(end_date: string | null, status: string | null): boolea
   return false
 }
 
+// Heuristic: din "Str. Exemplu nr. 12, bl. A, Sector 1, București" → "București"
+// Ia ultima parte din split pe virgulă, ignoră prefixe gen "Sector X" dacă ultima parte e o capitală română
+function cityFromAddress(addr: string | null): string | null {
+  if (!addr) return null
+  const parts = addr.split(',').map((s) => s.trim()).filter(Boolean)
+  if (parts.length === 0) return null
+  // Ultima parte e cel mai des orașul
+  const last = parts[parts.length - 1]
+  // Ignor coduri poștale pure (doar cifre)
+  if (/^\d+$/.test(last) && parts.length >= 2) {
+    return parts[parts.length - 2]
+  }
+  return last
+}
+
 export const dynamic = 'force-dynamic'
 
 function getDynStatus(startDate: string, endDate: string | null) {
@@ -90,7 +105,10 @@ export default async function PortalRegattaDetailPage({ params }: { params: { sl
 
       const { data: members } = await supabase
         .from('ssyt_team_memberships')
-        .select('id, participant_id, membership_type, participant:ssyt_participants(id, full_name)')
+        .select(
+          'id, participant_id, membership_type, ' +
+          'participant:ssyt_participants(id, full_name, email, phone, adresa_completa)'
+        )
         .eq('team_id', teamId)
         .eq('status', 'active')
 
@@ -117,6 +135,9 @@ export default async function PortalRegattaDetailPage({ params }: { params: { sl
         return {
           participantId: m.participant_id,
           fullName: participantObj?.full_name || '—',
+          email: participantObj?.email ?? null,
+          phone: participantObj?.phone ?? null,
+          city: cityFromAddress(participantObj?.adresa_completa ?? null),
           membershipType: m.membership_type,
           isSkipper: team.skipper_id === m.participant_id,
           status: part?.confirmation_status ?? null,
