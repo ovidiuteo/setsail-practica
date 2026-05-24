@@ -39,7 +39,7 @@ export default async function AdminAvailabilityPage() {
     supabase
       .from('ssyt_team_memberships')
       .select(`
-        id, team_id, participant_id, membership_type,
+        id, team_id, participant_id, membership_type, punctual_anchor_regatta_id,
         participant:ssyt_participants(id, full_name, first_name, last_name)
       `)
       .eq('status', 'active')

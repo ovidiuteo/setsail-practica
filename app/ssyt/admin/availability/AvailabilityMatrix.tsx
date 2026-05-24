@@ -78,8 +78,36 @@ export default function AvailabilityMatrix({
 
   const frozenIds = new Set(regattas.filter(isRegattaFrozen).map((r) => r.id))
 
+  // Map: regattaId → end timestamp (pt anchor lookup)
+  const regattaEndTs: Record<string, number> = {}
+  for (const r of regattas) {
+    const d = r.end_date || r.start_date
+    if (d) regattaEndTs[r.id] = new Date(d).getTime()
+  }
+
+  // Pentru fiecare member punctual: setul regatelor locked (post-anchor)
+  const punctualLockMap: Record<string, Set<string>> = {} // participantId → Set<regattaId>
+  for (const m of memberships) {
+    if (m.membership_type !== 'punctual') continue
+    const anchorId = m.punctual_anchor_regatta_id
+    if (!anchorId) continue
+    const anchorEnd = regattaEndTs[anchorId]
+    if (!anchorEnd) continue
+    const locked = new Set<string>()
+    for (const r of regattas) {
+      const startTs = new Date(r.start_date).getTime()
+      if (startTs > anchorEnd) locked.add(r.id)
+    }
+    punctualLockMap[m.participant_id] = locked
+  }
+
+  function isLockedFor(participantId: string, regattaId: string): boolean {
+    return punctualLockMap[participantId]?.has(regattaId) ?? false
+  }
+
   async function cycleStatus(regattaId: string, participantId: string, teamId: string | null) {
     if (frozenIds.has(regattaId)) return // regată finalizată — read-only
+    if (isLockedFor(participantId, regattaId)) return // one-time post-anchor
     const key = `${regattaId}_${participantId}`
     setBusy(key)
     const existing = partMap[key]
@@ -123,6 +151,7 @@ export default function AvailabilityMatrix({
 
   async function toggleCrewlist(regattaId: string, participantId: string, teamId: string | null) {
     if (frozenIds.has(regattaId)) return
+    if (isLockedFor(participantId, regattaId)) return
     const key = `${regattaId}_${participantId}`
     const existing = partMap[key]
 
@@ -204,6 +233,8 @@ export default function AvailabilityMatrix({
                       participantName={p.full_name}
                       teamId={team.id}
                       isOccasional={m.membership_type === 'occasional'}
+                      isPunctual={m.membership_type === 'punctual'}
+                      lockedRegattaIds={punctualLockMap[p.id]}
                       regattas={regattas}
                       partMap={partMap}
                       busy={busy}
@@ -264,13 +295,15 @@ export default function AvailabilityMatrix({
 }
 
 function ParticipantRow({
-  participantId, participantName, teamId, isOccasional, isUnallocated, regattas, partMap, busy, onCycleStatus, onToggleCrewlist,
+  participantId, participantName, teamId, isOccasional, isPunctual, isUnallocated, lockedRegattaIds, regattas, partMap, busy, onCycleStatus, onToggleCrewlist,
 }: {
   participantId: string
   participantName: string
   teamId: string | null
   isOccasional: boolean
+  isPunctual?: boolean
   isUnallocated?: boolean
+  lockedRegattaIds?: Set<string>
   regattas: Regatta[]
   partMap: Record<string, Participation>
   busy: string | null
@@ -288,6 +321,11 @@ function ParticipantRow({
             occ
           </span>
         )}
+        {isPunctual && (
+          <span className="ml-1.5 text-[9px] uppercase tracking-wider px-1 py-0.5 rounded" style={{ background: 'rgba(168,85,247,0.12)', color: '#a855f7' }}>
+            1×
+          </span>
+        )}
         {isUnallocated && (
           <span className="ml-1.5 text-[9px] uppercase tracking-wider px-1 py-0.5 rounded" style={{ background: 'rgba(107,114,128,0.15)', color: '#6B7280' }}>
             fără echipă
@@ -302,26 +340,34 @@ function ParticipantRow({
         const isBusy = busy === key
         const isConfirmed = status === 'confirmed'
         const frozen = isRegattaFrozen(r)
+        const lockedPunctual = lockedRegattaIds?.has(r.id) ?? false
+        const cellDisabled = frozen || lockedPunctual
+
+        const cellTitle = frozen
+          ? 'Regată finalizată — read-only'
+          : lockedPunctual
+            ? 'One-time — regată ulterioară regatei membrului'
+            : undefined
 
         return (
           <td
             key={r.id}
             className="p-1"
-            style={{ opacity: frozen ? 0.5 : 1 }}
-            title={frozen ? 'Regată finalizată — read-only' : undefined}
+            style={{ opacity: cellDisabled ? 0.5 : 1 }}
+            title={cellTitle}
           >
             <div className="flex items-center justify-center gap-1">
               <StatusCell
                 status={status}
                 onClick={() => onCycleStatus(r.id, participantId, teamId)}
-                disabled={isBusy || frozen}
+                disabled={isBusy || cellDisabled}
               />
               <CrewlistIcon
                 onCrewlist={onCrewlist}
                 isConfirmed={isConfirmed}
                 hasTeam={!!part?.team_id}
                 onClick={() => onToggleCrewlist(r.id, participantId, teamId)}
-                disabled={isBusy || frozen || !isConfirmed || !part?.team_id}
+                disabled={isBusy || cellDisabled || !isConfirmed || !part?.team_id}
               />
             </div>
           </td>
