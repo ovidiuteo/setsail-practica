@@ -219,7 +219,12 @@ export default function RosterBoard({
   async function toggleMembershipType(participantId: string) {
     const m = membershipMap[participantId]
     if (!m) return
-    const next = m.membership_type === 'core' ? 'occasional' : 'core'
+    // Ciclu: core -> occasional -> punctual -> core
+    const next = m.membership_type === 'core'
+      ? 'occasional'
+      : m.membership_type === 'occasional'
+        ? 'punctual'
+        : 'core'
     setBusy(true)
     const { error } = await supabase
       .from('ssyt_team_memberships')
@@ -227,7 +232,8 @@ export default function RosterBoard({
       .eq('id', m.id)
     if (!error) {
       setMemberships((prev) => prev.map((x) => x.id === m.id ? { ...x, membership_type: next } : x))
-      showToast(`Schimbat la ${next}`)
+      const label = next === 'punctual' ? 'one-time' : next
+      showToast(`Schimbat la ${label}`)
       router.refresh()
     } else {
       showToast('Eroare: ' + error.message, 'err')
@@ -444,20 +450,27 @@ function ParticipantCard({
               <Crown size={8} /> skipper
             </span>
           )}
-          {membership && !isSkipper && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onToggleType() }}
-              title="Click pentru toggle core/occasional"
-              className="inline-flex items-center gap-0.5 text-[9px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded hover:opacity-80 transition"
-              style={{
-                background: membership.membership_type === 'core' ? 'rgba(255,107,53,0.12)' : 'rgba(0,168,181,0.12)',
-                color: membership.membership_type === 'core' ? '#FF6B35' : '#00A8B5',
-              }}
-            >
-              <ArrowRightLeft size={8} />
-              {membership.membership_type}
-            </button>
-          )}
+          {membership && !isSkipper && (() => {
+            const t = membership.membership_type
+            const bg = t === 'core' ? 'rgba(255,107,53,0.12)'
+              : t === 'occasional' ? 'rgba(0,168,181,0.12)'
+              : 'rgba(168,85,247,0.12)'
+            const fg = t === 'core' ? '#FF6B35'
+              : t === 'occasional' ? '#00A8B5'
+              : '#a855f7'
+            const label = t === 'punctual' ? 'one-time' : t
+            return (
+              <button
+                onClick={(e) => { e.stopPropagation(); onToggleType() }}
+                title="Click pentru toggle: core → ocazional → one-time → core"
+                className="inline-flex items-center gap-0.5 text-[9px] uppercase tracking-wider font-semibold px-1.5 py-0.5 rounded hover:opacity-80 transition"
+                style={{ background: bg, color: fg }}
+              >
+                <ArrowRightLeft size={8} />
+                {label}
+              </button>
+            )
+          })()}
         </div>
       </div>
     </div>

@@ -77,10 +77,14 @@ export default function TeamTab({ teams }: { teams: any[] }) {
                           <div className="text-xs text-gray-500 truncate">{m.participant?.email}</div>
                         </div>
                         <span className="text-xs px-2 py-0.5 rounded-full" style={{
-                          background: m.membership_type === 'core' ? 'rgba(255,107,53,0.12)' : 'rgba(0,168,181,0.12)',
-                          color: m.membership_type === 'core' ? '#FF6B35' : '#00A8B5',
+                          background: m.membership_type === 'core' ? 'rgba(255,107,53,0.12)'
+                            : m.membership_type === 'occasional' ? 'rgba(0,168,181,0.12)'
+                            : 'rgba(168,85,247,0.12)',
+                          color: m.membership_type === 'core' ? '#FF6B35'
+                            : m.membership_type === 'occasional' ? '#00A8B5'
+                            : '#a855f7',
                         }}>
-                          {m.membership_type}
+                          {m.membership_type === 'punctual' ? 'one-time' : m.membership_type}
                         </span>
                       </Link>
                     )
