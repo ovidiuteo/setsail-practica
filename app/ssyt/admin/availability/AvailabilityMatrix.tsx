@@ -2,10 +2,21 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { UserCheck } from 'lucide-react'
+import { UserCheck, Lock } from 'lucide-react'
 import { supabase } from '@/lib/ssyt/supabase'
 
 type Regatta = { id: string; name: string; short_name: string | null; start_date: string; end_date: string | null; event_type: string; status: string }
+
+function isRegattaFrozen(r: Regatta): boolean {
+  if (r.status === 'completed' || r.status === 'cancelled') return true
+  if (r.end_date) {
+    const end = new Date(r.end_date)
+    const today = new Date()
+    today.setHours(0, 0, 0, 0)
+    if (end < today) return true
+  }
+  return false
+}
 type Team = { id: string; name: string; short_name: string | null; color_primary: string | null }
 type Membership = {
   id: string
@@ -65,7 +76,10 @@ export default function AvailabilityMatrix({
     partMap[`${p.regatta_id}_${p.participant_id}`] = p
   }
 
+  const frozenIds = new Set(regattas.filter(isRegattaFrozen).map((r) => r.id))
+
   async function cycleStatus(regattaId: string, participantId: string, teamId: string | null) {
+    if (frozenIds.has(regattaId)) return // regată finalizată — read-only
     const key = `${regattaId}_${participantId}`
     setBusy(key)
     const existing = partMap[key]
@@ -108,6 +122,7 @@ export default function AvailabilityMatrix({
   }
 
   async function toggleCrewlist(regattaId: string, participantId: string, teamId: string | null) {
+    if (frozenIds.has(regattaId)) return
     const key = `${regattaId}_${participantId}`
     const existing = partMap[key]
 
@@ -140,10 +155,19 @@ export default function AvailabilityMatrix({
             </th>
             {regattas.map((r) => {
               const d = new Date(r.start_date)
+              const frozen = frozenIds.has(r.id)
               return (
-                <th key={r.id} className="px-2 py-2 text-center" style={{ minWidth: 100 }}>
+                <th
+                  key={r.id}
+                  className="px-2 py-2 text-center"
+                  style={{ minWidth: 100, opacity: frozen ? 0.5 : 1 }}
+                  title={frozen ? 'Regată finalizată — read-only' : undefined}
+                >
                   <Link href={`/ssyt/admin/regattas/${r.id}`} className="block hover:underline">
-                    <div className="text-[10px] uppercase text-gray-400">{d.toLocaleString('ro-RO', { month: 'short' })}</div>
+                    <div className="text-[10px] uppercase text-gray-400 flex items-center justify-center gap-1">
+                      {d.toLocaleString('ro-RO', { month: 'short' })}
+                      {frozen && <Lock size={9} />}
+                    </div>
                     <div className="font-semibold text-sm" style={{ color: '#0a1628' }}>
                       {d.getDate()}{r.end_date && new Date(r.end_date).getDate() !== d.getDate() ? `-${new Date(r.end_date).getDate()}` : ''}
                     </div>
@@ -277,21 +301,27 @@ function ParticipantRow({
         const onCrewlist = part?.on_crewlist || false
         const isBusy = busy === key
         const isConfirmed = status === 'confirmed'
+        const frozen = isRegattaFrozen(r)
 
         return (
-          <td key={r.id} className="p-1">
+          <td
+            key={r.id}
+            className="p-1"
+            style={{ opacity: frozen ? 0.5 : 1 }}
+            title={frozen ? 'Regată finalizată — read-only' : undefined}
+          >
             <div className="flex items-center justify-center gap-1">
               <StatusCell
                 status={status}
                 onClick={() => onCycleStatus(r.id, participantId, teamId)}
-                disabled={isBusy}
+                disabled={isBusy || frozen}
               />
               <CrewlistIcon
                 onCrewlist={onCrewlist}
                 isConfirmed={isConfirmed}
                 hasTeam={!!part?.team_id}
                 onClick={() => onToggleCrewlist(r.id, participantId, teamId)}
-                disabled={isBusy || !isConfirmed || !part?.team_id}
+                disabled={isBusy || frozen || !isConfirmed || !part?.team_id}
               />
             </div>
           </td>

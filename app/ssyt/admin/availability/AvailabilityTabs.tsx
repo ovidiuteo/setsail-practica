@@ -1,10 +1,11 @@
 'use client'
 import { useState } from 'react'
-import { Users, Sailboat } from 'lucide-react'
+import { Users, Sailboat, Archive } from 'lucide-react'
 import AvailabilityMatrix from './AvailabilityMatrix'
 import BoatCapacityView from './BoatCapacityView'
+import ArchiveView from './ArchiveView'
 
-type TabKey = 'members' | 'boats'
+type TabKey = 'members' | 'boats' | 'archive'
 
 export default function AvailabilityTabs(props: {
   regattas: any[]
@@ -12,6 +13,7 @@ export default function AvailabilityTabs(props: {
   memberships: any[]
   participation: any[]
   unallocatedParticipants: any[]
+  archivedRows: any[]
 }) {
   const [tab, setTab] = useState<TabKey>('members')
 
@@ -20,6 +22,7 @@ export default function AvailabilityTabs(props: {
       <div className="border-b mb-6 flex" style={{ borderColor: '#e5e7eb' }}>
         <TabButton active={tab === 'members'} onClick={() => setTab('members')} icon={<Users size={14} />} label="Membri" />
         <TabButton active={tab === 'boats'} onClick={() => setTab('boats')} icon={<Sailboat size={14} />} label="Bărci" />
+        <TabButton active={tab === 'archive'} onClick={() => setTab('archive')} icon={<Archive size={14} />} label="Arhivă participări" />
       </div>
 
       {tab === 'members' && (
@@ -40,6 +43,10 @@ export default function AvailabilityTabs(props: {
           participation={props.participation}
           unallocatedParticipants={props.unallocatedParticipants}
         />
+      )}
+
+      {tab === 'archive' && (
+        <ArchiveView regattas={props.regattas} archivedRows={props.archivedRows} />
       )}
     </div>
   )

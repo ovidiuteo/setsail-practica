@@ -19,7 +19,14 @@ export default async function AdminAvailabilityPage() {
 
   const regattaIds = (regattas || []).map((r) => r.id)
 
-  const [teamsRes, membershipsRes, participationRes, unallocatedParticipantsRes] = await Promise.all([
+  // Lazy sync: arhivez toate regatele cu end_date trecut (idempotent, fail-safe)
+  try {
+    await supabase.rpc('ssyt_archive_all_past_regattas')
+  } catch {
+    // ignor — UI rămâne funcțional chiar dacă sync eșuează
+  }
+
+  const [teamsRes, membershipsRes, participationRes, unallocatedParticipantsRes, archivedRowsRes] = await Promise.all([
     supabase
       .from('ssyt_teams')
       .select(`
@@ -48,6 +55,17 @@ export default async function AdminAvailabilityPage() {
       .select('id, full_name, first_name, last_name')
       .in('status', ['active', 'accepted'])
       .limit(500),
+    // Arhivă participări pentru regate cu archived_at != NULL
+    supabase
+      .from('ssyt_regatta_participation')
+      .select(
+        'id, regatta_id, participant_id, team_id, confirmation_status, attendance_type, ' +
+        'archived_participant_full_name, archived_participant_email, ' +
+        'archived_team_name, archived_team_short_name, archived_team_color, archived_at'
+      )
+      .in('regatta_id', regattaIds.length > 0 ? regattaIds : ['00000000-0000-0000-0000-000000000000'])
+      .not('archived_at', 'is', null)
+      .limit(2000),
   ])
 
   // Iau separat datele participantilor referite in participation
@@ -94,6 +112,7 @@ export default async function AdminAvailabilityPage() {
         memberships={membershipsRes.data || []}
         participation={enrichedParticipation}
         unallocatedParticipants={unallocatedParticipants}
+        archivedRows={archivedRowsRes.data || []}
       />
     </div>
   )
