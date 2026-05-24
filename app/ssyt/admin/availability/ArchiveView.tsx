@@ -1,5 +1,5 @@
 'use client'
-import { Lock, Archive } from 'lucide-react'
+import { Lock, Archive, Crown } from 'lucide-react'
 import Link from 'next/link'
 
 type Regatta = {
@@ -9,6 +9,14 @@ type Regatta = {
   start_date: string
   end_date: string | null
   status: string
+}
+
+type LiveTeam = {
+  id: string
+  name?: string | null
+  short_name?: string | null
+  color_primary?: string | null
+  skipper_id?: string | null
 }
 
 type ArchivedRow = {
@@ -26,25 +34,17 @@ type ArchivedRow = {
   archived_at: string | null
 }
 
-const STATUS_COLORS: Record<string, string> = {
-  confirmed: '#10B981',
-  declined: '#EF4444',
-  tentative: '#9CA3AF',
-  pending: '#F59E0B',
+const STATUS_COLORS: Record<string, { bg: string; fg: string; label: string }> = {
+  confirmed: { bg: '#10B981', fg: '#fff', label: 'Prezent' },
+  declined:  { bg: '#EF4444', fg: '#fff', label: 'Absent' },
+  tentative: { bg: '#9CA3AF', fg: '#fff', label: 'Indecis' },
+  pending:   { bg: '#F59E0B', fg: '#fff', label: 'În așteptare' },
 }
 
-const STATUS_LETTER: Record<string, string> = {
-  confirmed: 'P',
-  declined: 'A',
-  tentative: '?',
-  pending: '·',
-}
-
-const STATUS_LABEL: Record<string, string> = {
-  confirmed: 'Prezent',
-  declined: 'Absent',
-  tentative: 'Indecis',
-  pending: 'În așteptare',
+const TYPE_RANK: Record<string, number> = {
+  core: 0,
+  occasional: 1,
+  punctual: 2,
 }
 
 function isFrozen(r: Regatta): boolean {
@@ -80,22 +80,25 @@ type TeamSnapshot = {
   name: string
   short_name: string | null
   color: string
+  skipper_id: string | null
 }
 
-type Participant = {
+type PersonAggregate = {
   key: string
   participant_id: string | null
   full_name: string
   email: string | null
-  attendance_type: string | null // tip preponderent (din ultimul rând)
+  attendance_type: string | null // tipul predominant
 }
 
 export default function ArchiveView({
   regattas,
   archivedRows,
+  teams,
 }: {
   regattas: Regatta[]
   archivedRows: ArchivedRow[]
+  teams: LiveTeam[]
 }) {
   const frozenRegattas = regattas
     .filter(isFrozen)
@@ -119,49 +122,71 @@ export default function ArchiveView({
   const frozenRegattaIds = new Set(frozenRegattas.map((r) => r.id))
   const rows = archivedRows.filter((r) => frozenRegattaIds.has(r.regatta_id))
 
-  // Grupare pe team (team_id || archived_team_name)
+  // Map team live (din ssyt_teams) pentru skipper_id
+  const teamLiveById: Record<string, LiveTeam> = {}
+  for (const t of teams) if (t.id) teamLiveById[t.id] = t
+
+  // Agregare pe (team, persoană)
   const teamMap = new Map<TeamKey, TeamSnapshot>()
-  const participantsByTeam = new Map<TeamKey, Map<string, Participant>>()
+  const peopleByTeam = new Map<TeamKey, Map<string, PersonAggregate>>()
+  const typeCountByPerson = new Map<string, Record<string, number>>() // teamKey|personKey → count per type
   const cellByTeamPersonRegatta = new Map<string, ArchivedRow>()
 
   for (const row of rows) {
     const teamKey: TeamKey = row.team_id ?? `name:${row.archived_team_name ?? 'unknown'}`
     if (!teamMap.has(teamKey)) {
+      const live = row.team_id ? teamLiveById[row.team_id] : null
       teamMap.set(teamKey, {
         key: teamKey,
         team_id: row.team_id,
-        name: row.archived_team_name || '—',
-        short_name: row.archived_team_short_name,
-        color: row.archived_team_color || '#94a3b8',
+        name: row.archived_team_name || live?.name || '—',
+        short_name: row.archived_team_short_name || live?.short_name || null,
+        color: row.archived_team_color || live?.color_primary || '#94a3b8',
+        skipper_id: live?.skipper_id ?? null,
       })
     }
     const personKey =
       row.participant_id ??
       `email:${row.archived_participant_email ?? row.archived_participant_full_name ?? row.id}`
 
-    if (!participantsByTeam.has(teamKey)) participantsByTeam.set(teamKey, new Map())
-    const peopleMap = participantsByTeam.get(teamKey)!
+    if (!peopleByTeam.has(teamKey)) peopleByTeam.set(teamKey, new Map())
+    const peopleMap = peopleByTeam.get(teamKey)!
     if (!peopleMap.has(personKey)) {
       peopleMap.set(personKey, {
         key: personKey,
         participant_id: row.participant_id,
         full_name: row.archived_participant_full_name || '(participant șters)',
         email: row.archived_participant_email,
-        attendance_type: row.attendance_type,
+        attendance_type: null,
       })
-    } else {
-      // pastrez ultimul tip non-null
-      const existing = peopleMap.get(personKey)!
-      if (row.attendance_type && !existing.attendance_type) {
-        existing.attendance_type = row.attendance_type
-      }
+    }
+
+    // Count attendance types per persoana
+    const ttKey = `${teamKey}|${personKey}`
+    if (!typeCountByPerson.has(ttKey)) typeCountByPerson.set(ttKey, {})
+    const counts = typeCountByPerson.get(ttKey)!
+    if (row.attendance_type) {
+      counts[row.attendance_type] = (counts[row.attendance_type] || 0) + 1
     }
 
     cellByTeamPersonRegatta.set(`${teamKey}|${personKey}|${row.regatta_id}`, row)
   }
 
-  // Lista finală de echipe sortată: cele cu team_id real primele, alfabetic
-  const teams: TeamSnapshot[] = Array.from(teamMap.values()).sort((a, b) => {
+  // Calc attendance_type predominant pentru fiecare persoana
+  for (const [teamKey, peopleMap] of peopleByTeam) {
+    for (const [personKey, person] of peopleMap) {
+      const counts = typeCountByPerson.get(`${teamKey}|${personKey}`) || {}
+      let best: string | null = null
+      let bestCount = 0
+      for (const [t, n] of Object.entries(counts)) {
+        if (n > bestCount) { best = t; bestCount = n }
+      }
+      person.attendance_type = best
+    }
+  }
+
+  // Sortare echipe (cu team_id live primele)
+  const teamList: TeamSnapshot[] = Array.from(teamMap.values()).sort((a, b) => {
     if (a.team_id && !b.team_id) return -1
     if (!a.team_id && b.team_id) return 1
     return a.name.localeCompare(b.name, 'ro')
@@ -175,8 +200,9 @@ export default function ArchiveView({
       >
         <Archive size={14} />
         <span>
-          <strong>Arhivă:</strong> datele de mai jos sunt înghețate. Numele participanților și
-          echipelor se păstrează chiar dacă sunt scoși ulterior din sezon.
+          <strong>Arhivă:</strong> rândurile sunt poziții fixe (Skipper, Crew 1, Crew 2 …) în
+          fiecare echipă; sortare: core → ocazional → one-time, alfabetic. În fiecare celulă apare
+          numele persoanei pe poziția și regata respectivă, colorat după status.
         </span>
       </div>
 
@@ -184,13 +210,13 @@ export default function ArchiveView({
         <table className="text-xs" style={{ borderCollapse: 'collapse', minWidth: '100%' }}>
           <thead>
             <tr style={{ background: '#f8f9fa', borderBottom: '1px solid #e5e7eb' }}>
-              <th className="text-left px-3 py-2 sticky left-0 z-10" style={{ background: '#f8f9fa', minWidth: 240 }}>
-                <span className="uppercase tracking-wider text-gray-500 font-medium">Membru</span>
+              <th className="text-left px-3 py-2 sticky left-0 z-10" style={{ background: '#f8f9fa', minWidth: 100 }}>
+                <span className="uppercase tracking-wider text-gray-500 font-medium">Poziție</span>
               </th>
               {frozenRegattas.map((r) => {
                 const d = new Date(r.start_date)
                 return (
-                  <th key={r.id} className="px-2 py-2 text-center" style={{ minWidth: 100 }}>
+                  <th key={r.id} className="px-2 py-2 text-center" style={{ minWidth: 140 }}>
                     <Link href={`/ssyt/admin/regattas/${r.id}`} className="block hover:underline">
                       <div className="text-[10px] uppercase text-gray-400 flex items-center justify-center gap-1">
                         {d.toLocaleString('ro-RO', { month: 'short' })}
@@ -199,7 +225,7 @@ export default function ArchiveView({
                       <div className="font-semibold text-sm" style={{ color: '#0a1628' }}>
                         {d.getDate()}{r.end_date && new Date(r.end_date).getDate() !== d.getDate() ? `-${new Date(r.end_date).getDate()}` : ''}
                       </div>
-                      <div className="text-[10px] text-gray-500 mt-0.5 truncate max-w-[100px]" title={r.name}>
+                      <div className="text-[10px] text-gray-500 mt-0.5 truncate max-w-[140px]" title={r.name}>
                         {r.short_name || r.name.split(' ').slice(0, 2).join(' ')}
                       </div>
                     </Link>
@@ -209,12 +235,32 @@ export default function ArchiveView({
             </tr>
           </thead>
           <tbody>
-            {teams.map((team) => {
-              const peopleMap = participantsByTeam.get(team.key)
+            {teamList.map((team) => {
+              const peopleMap = peopleByTeam.get(team.key)
               if (!peopleMap || peopleMap.size === 0) return null
-              const people: Participant[] = Array.from(peopleMap.values()).sort((a, b) =>
-                a.full_name.localeCompare(b.full_name, 'ro')
-              )
+              const allPeople: PersonAggregate[] = Array.from(peopleMap.values())
+
+              // 1. Skipper-ul (dacă există în echipa live)
+              const skipperPerson = team.skipper_id
+                ? allPeople.find((p) => p.participant_id === team.skipper_id) ?? null
+                : null
+
+              // 2. Restul: sortate core → occasional → punctual → alfabetic
+              const rest = allPeople
+                .filter((p) => p !== skipperPerson)
+                .sort((a, b) => {
+                  const ra = TYPE_RANK[a.attendance_type ?? ''] ?? 99
+                  const rb = TYPE_RANK[b.attendance_type ?? ''] ?? 99
+                  if (ra !== rb) return ra - rb
+                  return a.full_name.localeCompare(b.full_name, 'ro')
+                })
+
+              const positions: { label: string; person: PersonAggregate | null }[] = []
+              positions.push({ label: 'Skipper', person: skipperPerson })
+              for (let i = 0; i < rest.length; i++) {
+                positions.push({ label: `Crew ${i + 1}`, person: rest[i] })
+              }
+
               return (
                 <>
                   <tr key={`hdr-${team.key}`} style={{ background: team.color }}>
@@ -231,7 +277,8 @@ export default function ArchiveView({
                         <span>{team.name}</span>
                       )}
                       <span className="text-white/70 text-xs font-normal ml-2">
-                        ({people.length} {people.length === 1 ? 'persoană' : 'persoane'})
+                        ({positions.filter((p) => p.person).length}{' '}
+                        {positions.filter((p) => p.person).length === 1 ? 'persoană' : 'persoane'})
                       </span>
                       {!team.team_id && (
                         <span className="ml-2 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold" style={{ background: 'rgba(255,255,255,0.18)' }}>
@@ -240,60 +287,60 @@ export default function ArchiveView({
                       )}
                     </td>
                   </tr>
-                  {people.map((p) => (
-                    <tr key={`${team.key}-${p.key}`} style={{ borderTop: '1px solid #f3f4f6' }}>
-                      <td className="px-3 py-2 sticky left-0 z-10" style={{ background: '#fff' }}>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          {p.participant_id ? (
-                            <Link
-                              href={`/ssyt/admin/participants/${p.participant_id}`}
-                              className="hover:underline font-medium"
-                              style={{ color: '#0a1628' }}
-                            >
-                              {p.full_name}
-                            </Link>
-                          ) : (
-                            <span className="font-medium italic text-gray-400">{p.full_name}</span>
-                          )}
-                          {p.attendance_type && (
-                            <span
-                              className="text-[9px] uppercase tracking-wider px-1 py-0.5 rounded"
-                              style={{
-                                background: attendanceTypeColor(p.attendance_type) + '20',
-                                color: attendanceTypeColor(p.attendance_type),
-                              }}
-                              title={p.attendance_type}
-                            >
-                              {attendanceTypeLabel(p.attendance_type)}
-                            </span>
-                          )}
+                  {positions.map((pos, idx) => (
+                    <tr key={`${team.key}-pos-${idx}`} style={{ borderTop: '1px solid #f3f4f6' }}>
+                      <td className="px-3 py-1.5 sticky left-0 z-10 font-medium" style={{ background: '#fff' }}>
+                        <div className="flex items-center gap-1.5 text-[11px]" style={{ color: '#475569' }}>
+                          {pos.label === 'Skipper' && <Crown size={11} style={{ color: '#FF6B35' }} />}
+                          {pos.label}
                         </div>
-                        {p.email && (
-                          <div className="text-[10px] text-gray-400 font-mono mt-0.5 truncate max-w-[220px]">
-                            {p.email}
-                          </div>
-                        )}
                       </td>
                       {frozenRegattas.map((r) => {
-                        const cell = cellByTeamPersonRegatta.get(`${team.key}|${p.key}|${r.id}`)
+                        const cell = pos.person
+                          ? cellByTeamPersonRegatta.get(`${team.key}|${pos.person.key}|${r.id}`)
+                          : null
                         const status = cell?.confirmation_status
-                        const color = status ? STATUS_COLORS[status] : null
-                        const letter = status ? STATUS_LETTER[status] : ''
+                        const meta = status ? STATUS_COLORS[status] : null
+                        const nameToShow = pos.person?.full_name ?? ''
+                        const personTypeColor = attendanceTypeColor(pos.person?.attendance_type ?? null)
+                        const personTypeLabel = attendanceTypeLabel(pos.person?.attendance_type ?? null)
                         return (
                           <td key={r.id} className="p-1">
-                            <div className="flex items-center justify-center">
-                              {color ? (
-                                <span
-                                  className="inline-flex items-center justify-center w-6 h-6 rounded text-[10px] font-bold"
-                                  style={{ background: color + '25', color }}
-                                  title={STATUS_LABEL[status!] ?? status!}
+                            {pos.person ? (
+                              meta ? (
+                                <div
+                                  className="rounded px-2 py-1 text-[10.5px] leading-tight"
+                                  style={{ background: meta.bg + '30', borderLeft: `3px solid ${meta.bg}`, color: '#0a1628' }}
+                                  title={`${nameToShow} — ${meta.label}`}
                                 >
-                                  {letter}
-                                </span>
+                                  <div className="font-medium truncate">{nameToShow}</div>
+                                  <div className="flex items-center justify-between gap-1 mt-0.5">
+                                    <span style={{ color: meta.bg, fontWeight: 600 }}>{meta.label}</span>
+                                    {personTypeLabel && (
+                                      <span
+                                        className="text-[9px] uppercase tracking-wider px-1 py-0 rounded font-semibold"
+                                        style={{ background: personTypeColor + '20', color: personTypeColor }}
+                                      >
+                                        {personTypeLabel}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
                               ) : (
-                                <span className="inline-block w-6 h-6 rounded" style={{ background: '#f1f5f9' }} title="fără răspuns" />
-                              )}
-                            </div>
+                                <div
+                                  className="rounded px-2 py-1 text-[10.5px] text-gray-400 leading-tight"
+                                  style={{ background: '#f8fafc', borderLeft: '3px solid #e2e8f0' }}
+                                  title={`${nameToShow} — fără răspuns`}
+                                >
+                                  <div className="truncate">{nameToShow}</div>
+                                  <div className="italic mt-0.5">—</div>
+                                </div>
+                              )
+                            ) : (
+                              <div className="rounded px-2 py-1 text-[10.5px] text-gray-300 italic text-center" style={{ background: '#fafafa' }}>
+                                liber
+                              </div>
+                            )}
                           </td>
                         )
                       })}
@@ -307,13 +354,21 @@ export default function ArchiveView({
 
         <div className="px-3 py-3 text-xs text-gray-500 border-t" style={{ background: '#f8f9fa' }}>
           <div className="flex flex-wrap items-center gap-3">
-            <span className="font-medium">Legendă:</span>
-            <LegendItem letter="P" color="#10B981" label="Prezent" />
-            <LegendItem letter="A" color="#EF4444" label="Absent" />
-            <LegendItem letter="?" color="#9CA3AF" label="Indecis" />
-            <span className="inline-flex items-center gap-1.5 ml-2">
-              <span className="inline-block w-3 h-3 rounded" style={{ background: '#f1f5f9' }} />
-              <span>fără răspuns</span>
+            <span className="font-medium">Legendă status:</span>
+            <LegendItem color="#10B981" label="Prezent" />
+            <LegendItem color="#EF4444" label="Absent" />
+            <LegendItem color="#9CA3AF" label="Indecis" />
+            <LegendItem color="#F59E0B" label="În așteptare" />
+            <span className="text-gray-400">·</span>
+            <span className="font-medium">Tip:</span>
+            <span className="inline-flex items-center gap-1">
+              <span className="inline-block w-2 h-2 rounded" style={{ background: '#FF6B35' }} /> core
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="inline-block w-2 h-2 rounded" style={{ background: '#00A8B5' }} /> occ
+            </span>
+            <span className="inline-flex items-center gap-1">
+              <span className="inline-block w-2 h-2 rounded" style={{ background: '#a855f7' }} /> 1×
             </span>
           </div>
         </div>
@@ -322,15 +377,13 @@ export default function ArchiveView({
   )
 }
 
-function LegendItem({ letter, color, label }: { letter: string; color: string; label: string }) {
+function LegendItem({ color, label }: { color: string; label: string }) {
   return (
     <span className="inline-flex items-center gap-1.5">
       <span
-        className="inline-flex items-center justify-center w-5 h-5 rounded text-[9px] font-bold"
-        style={{ background: color + '25', color }}
-      >
-        {letter}
-      </span>
+        className="inline-block w-3 h-3 rounded"
+        style={{ background: color + '30', borderLeft: `3px solid ${color}` }}
+      />
       <span>{label}</span>
     </span>
   )

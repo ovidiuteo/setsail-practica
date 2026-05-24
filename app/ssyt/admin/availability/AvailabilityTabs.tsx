@@ -46,7 +46,11 @@ export default function AvailabilityTabs(props: {
       )}
 
       {tab === 'archive' && (
-        <ArchiveView regattas={props.regattas} archivedRows={props.archivedRows} />
+        <ArchiveView
+          regattas={props.regattas}
+          archivedRows={props.archivedRows}
+          teams={props.teams}
+        />
       )}
     </div>
   )
