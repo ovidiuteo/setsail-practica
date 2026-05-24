@@ -2,7 +2,29 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Users, CheckCircle2, HelpCircle, XCircle, MinusCircle, UserCheck, UserX, Lock, ChevronDown, ChevronRight, Mail, Phone, MapPin } from 'lucide-react'
+import { Users, CheckCircle2, HelpCircle, XCircle, MinusCircle, UserCheck, UserX, Lock, ChevronDown, ChevronRight, Mail, Phone, MapPin, Copy, Check } from 'lucide-react'
+
+function CopyMini({ value, title }: { value: string; title: string }) {
+  const [copied, setCopied] = useState(false)
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.preventDefault()
+        e.stopPropagation()
+        navigator.clipboard.writeText(value).then(() => {
+          setCopied(true)
+          setTimeout(() => setCopied(false), 1500)
+        })
+      }}
+      title={title}
+      className="inline-flex items-center justify-center p-0.5 rounded hover:bg-blue-50 transition"
+      style={{ color: copied ? '#10B981' : '#0066FF' }}
+    >
+      {copied ? <Check size={10} /> : <Copy size={10} />}
+    </button>
+  )
+}
 
 export type CrewMember = {
   participantId: string
@@ -239,29 +261,36 @@ export default function TeamCrewSection({
                         {(m.email || m.phone || m.city) && (
                           <div className="flex items-center gap-3 mt-1 text-[11px] text-gray-500 flex-wrap">
                             {m.email && (
-                              <a
-                                href={`mailto:${encodeURIComponent(m.email)}`}
-                                className="inline-flex items-center gap-1 hover:underline"
-                                title="Trimite email"
-                              >
+                              <span className="inline-flex items-center gap-1">
                                 <Mail size={10} className="text-gray-400" />
-                                <span className="font-mono">{m.email}</span>
-                              </a>
+                                <a
+                                  href={`mailto:${encodeURIComponent(m.email)}`}
+                                  className="font-mono hover:underline"
+                                  title="Trimite email"
+                                >
+                                  {m.email}
+                                </a>
+                                <CopyMini value={m.email} title="Copiază emailul" />
+                              </span>
                             )}
                             {m.phone && (
-                              <a
-                                href={`tel:${m.phone.replace(/\s+/g, '')}`}
-                                className="inline-flex items-center gap-1 hover:underline"
-                                title="Sună"
-                              >
+                              <span className="inline-flex items-center gap-1">
                                 <Phone size={10} className="text-gray-400" />
-                                <span className="font-mono">{m.phone}</span>
-                              </a>
+                                <a
+                                  href={`tel:${m.phone.replace(/\s+/g, '')}`}
+                                  className="font-mono hover:underline"
+                                  title="Sună"
+                                >
+                                  {m.phone}
+                                </a>
+                                <CopyMini value={m.phone} title="Copiază telefonul" />
+                              </span>
                             )}
                             {m.city && (
                               <span className="inline-flex items-center gap-1">
                                 <MapPin size={10} className="text-gray-400" />
                                 {m.city}
+                                <CopyMini value={m.city} title="Copiază orașul" />
                               </span>
                             )}
                           </div>

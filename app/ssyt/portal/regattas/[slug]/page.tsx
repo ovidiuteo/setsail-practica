@@ -16,19 +16,24 @@ function isRegattaFrozen(end_date: string | null, status: string | null): boolea
   return false
 }
 
-// Heuristic: din "Str. Exemplu nr. 12, bl. A, Sector 1, București" → "București"
-// Ia ultima parte din split pe virgulă, ignoră prefixe gen "Sector X" dacă ultima parte e o capitală română
+// Heuristic: extrage orașul din "adresa_completa" — ignoră coduri poștale
+// și prefixe "Sector X" (în București ordinea poate fi inversă: "..., București, Sector 1")
 function cityFromAddress(addr: string | null): string | null {
   if (!addr) return null
   const parts = addr.split(',').map((s) => s.trim()).filter(Boolean)
   if (parts.length === 0) return null
-  // Ultima parte e cel mai des orașul
-  const last = parts[parts.length - 1]
-  // Ignor coduri poștale pure (doar cifre)
-  if (/^\d+$/.test(last) && parts.length >= 2) {
-    return parts[parts.length - 2]
+  // Pornesc de la ultima parte și merg înapoi, omițând părți care nu sunt orașul:
+  //   - "Sector X" / "Sect. X"
+  //   - cod poștal pur numeric
+  //   - "jud. Foo" / "județul Foo"
+  for (let i = parts.length - 1; i >= 0; i--) {
+    const part = parts[i]
+    if (/^sect(or)?\.?\s*\d+/i.test(part)) continue
+    if (/^\d+$/.test(part)) continue
+    if (/^jud(ețul)?\.?\s+/i.test(part)) continue
+    return part
   }
-  return last
+  return parts[parts.length - 1]
 }
 
 export const dynamic = 'force-dynamic'
