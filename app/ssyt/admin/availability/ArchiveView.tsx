@@ -173,17 +173,18 @@ export default function ArchiveView({
   }
 
   // Calc attendance_type predominant pentru fiecare persoana
-  for (const [teamKey, peopleMap] of peopleByTeam) {
-    for (const [personKey, person] of peopleMap) {
+  peopleByTeam.forEach((peopleMap, teamKey) => {
+    peopleMap.forEach((person, personKey) => {
       const counts = typeCountByPerson.get(`${teamKey}|${personKey}`) || {}
       let best: string | null = null
       let bestCount = 0
-      for (const [t, n] of Object.entries(counts)) {
+      for (const t of Object.keys(counts)) {
+        const n = counts[t]
         if (n > bestCount) { best = t; bestCount = n }
       }
       person.attendance_type = best
-    }
-  }
+    })
+  })
 
   // Sortare echipe (cu team_id live primele)
   const teamList: TeamSnapshot[] = Array.from(teamMap.values()).sort((a, b) => {
