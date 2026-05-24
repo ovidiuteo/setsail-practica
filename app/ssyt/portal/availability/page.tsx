@@ -14,10 +14,21 @@ export default async function PortalAvailabilityPage() {
   // Membership propriu
   const { data: mem } = await supabase
     .from('ssyt_team_memberships')
-    .select('team_id, membership_type')
+    .select('team_id, membership_type, punctual_anchor_regatta_id')
     .eq('participant_id', participant.id)
     .eq('status', 'active')
     .maybeSingle()
+
+  // Pentru membri "punctual": end_date al anchor-ului → regatele cu start_date > acest end sunt locked
+  let punctualAnchorEndDate: string | null = null
+  if (mem?.membership_type === 'punctual' && mem.punctual_anchor_regatta_id) {
+    const { data: anchor } = await supabase
+      .from('ssyt_regattas')
+      .select('end_date, start_date')
+      .eq('id', mem.punctual_anchor_regatta_id)
+      .maybeSingle()
+    punctualAnchorEndDate = anchor?.end_date || anchor?.start_date || null
+  }
 
   // Echipa + colegi cu nume
   let teamName: string | null = null
@@ -88,6 +99,7 @@ export default async function PortalAvailabilityPage() {
         teamId={mem?.team_id || null}
         teamColor={teamColor}
         membershipType={mem?.membership_type || 'core'}
+        punctualAnchorEndDate={punctualAnchorEndDate}
         regattas={regattas || []}
         initialParticipations={myParticipations || []}
         teamMembers={teamMembers}

@@ -29,10 +29,38 @@ export async function POST(req: NextRequest) {
   // Iau team_id din membership activ
   const { data: mem } = await supabase
     .from('ssyt_team_memberships')
-    .select('team_id, membership_type')
+    .select('team_id, membership_type, punctual_anchor_regatta_id')
     .eq('participant_id', session.participantId)
     .eq('status', 'active')
     .maybeSingle()
+
+  // Guard: membri "punctual" nu pot modifica disponibilitatea pentru regate post-anchor
+  if (mem?.membership_type === 'punctual' && mem.punctual_anchor_regatta_id) {
+    const [{ data: anchor }, { data: targetReg }] = await Promise.all([
+      supabase
+        .from('ssyt_regattas')
+        .select('end_date, start_date')
+        .eq('id', mem.punctual_anchor_regatta_id)
+        .maybeSingle(),
+      supabase
+        .from('ssyt_regattas')
+        .select('start_date')
+        .eq('id', regatta_id)
+        .maybeSingle(),
+    ])
+    const anchorEnd = anchor?.end_date || anchor?.start_date
+    if (anchorEnd && targetReg?.start_date) {
+      if (new Date(targetReg.start_date).getTime() > new Date(anchorEnd).getTime()) {
+        return NextResponse.json(
+          {
+            error:
+              'Ești membru one-time. Disponibilitatea pentru regatele de după regata ta nu poate fi modificată.',
+          },
+          { status: 403 }
+        )
+      }
+    }
+  }
 
   // Verific daca exista participation
   const { data: existing } = await supabase

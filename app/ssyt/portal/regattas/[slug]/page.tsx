@@ -90,6 +90,27 @@ export default async function PortalRegattaDetailPage({ params }: { params: { sl
 
   const canEdit = await canEditBoatType(session.participantId)
 
+  // Verific dacă userul curent e punctual și regata e ulterioară anchor-ului → lock pentru self
+  const { data: myMembership } = await supabase
+    .from('ssyt_team_memberships')
+    .select('membership_type, punctual_anchor_regatta_id')
+    .eq('participant_id', session.participantId)
+    .eq('status', 'active')
+    .maybeSingle()
+
+  let isPunctualLockedHere = false
+  if (myMembership?.membership_type === 'punctual' && myMembership.punctual_anchor_regatta_id) {
+    const { data: anchor } = await supabase
+      .from('ssyt_regattas')
+      .select('end_date, start_date')
+      .eq('id', myMembership.punctual_anchor_regatta_id)
+      .maybeSingle()
+    const anchorEnd = anchor?.end_date || anchor?.start_date
+    if (anchorEnd && new Date(regatta.start_date).getTime() > new Date(anchorEnd).getTime()) {
+      isPunctualLockedHere = true
+    }
+  }
+
   // Echipa cursantului + crew pentru regata curentă
   const { teamId, isSkipper, isEditor } = await getMyTeamAndPerms(session.participantId)
   let teamData: { id: string; name: string; short_name: string | null; color_primary: string | null } | null = null
@@ -206,9 +227,19 @@ export default async function PortalRegattaDetailPage({ params }: { params: { sl
             )}
           </div>
           <div className="mt-4">
-            <Link href="/ssyt/portal/availability" className="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md text-white font-medium hover:opacity-90 transition" style={{ background: '#FF6B35' }}>
-              Editează disponibilitatea →
-            </Link>
+            {isPunctualLockedHere ? (
+              <span
+                className="inline-flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-md"
+                style={{ background: 'rgba(168,85,247,0.20)', color: '#e9d5ff', border: '1px solid rgba(168,85,247,0.4)' }}
+                title="Ești membru one-time. Regata ta era cea anterioară — nu mai poți modifica disponibilitatea pentru regatele de după."
+              >
+                🔒 One-time — disponibilitatea înghețată
+              </span>
+            ) : (
+              <Link href="/ssyt/portal/availability" className="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md text-white font-medium hover:opacity-90 transition" style={{ background: '#FF6B35' }}>
+                Editează disponibilitatea →
+              </Link>
+            )}
           </div>
         </div>
       </div>

@@ -1,7 +1,7 @@
 'use client'
 import { useState, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
-import { Check, X, HelpCircle, Users } from 'lucide-react'
+import { Check, X, HelpCircle, Users, Lock } from 'lucide-react'
 
 type Regatta = { id: string; name: string; slug: string; start_date: string; end_date: string | null; event_type: string }
 type Participation = { id?: string; regatta_id: string; confirmation_status: string; on_crewlist?: boolean; team_id?: string | null }
@@ -9,18 +9,26 @@ type TeamParticipation = { regatta_id: string; participant_id: string; confirmat
 type TeamMember = { id: string; full_name: string; first_name: string }
 
 export default function AvailabilityEditor({
-  participantId, teamId, teamColor, membershipType, regattas, initialParticipations,
+  participantId, teamId, teamColor, membershipType, punctualAnchorEndDate, regattas, initialParticipations,
   teamMembers, teamParticipations,
 }: {
   participantId: string
   teamId: string | null
   teamColor: string
   membershipType: string
+  punctualAnchorEndDate: string | null
   regattas: Regatta[]
   initialParticipations: Participation[]
   teamMembers: TeamMember[]
   teamParticipations: TeamParticipation[]
 }) {
+  const isPunctual = membershipType === 'punctual'
+  const anchorEndTs = punctualAnchorEndDate ? new Date(punctualAnchorEndDate).getTime() : null
+
+  function isLockedForPunctual(regattaStart: string): boolean {
+    if (!isPunctual || !anchorEndTs) return false
+    return new Date(regattaStart).getTime() > anchorEndTs
+  }
   const router = useRouter()
   const [busy, setBusy] = useState<string | null>(null)
 
@@ -86,6 +94,19 @@ export default function AvailabilityEditor({
 
   return (
     <div className="space-y-3">
+      {isPunctual && (
+        <div
+          className="rounded-md px-4 py-2.5 text-xs flex items-center gap-2"
+          style={{ background: 'rgba(168,85,247,0.10)', color: '#7e22ce', border: '1px solid rgba(168,85,247,0.3)' }}
+        >
+          <Lock size={13} />
+          <span>
+            Ești membru <strong>one-time</strong>. Poți modifica disponibilitatea doar pentru regata
+            la care ai fost adăugat. Regatele ulterioare sunt înghețate la statusul implicit
+            <em> indecis</em> — contactează skipper-ul dacă vrei să te alăturăm și la alte regate.
+          </span>
+        </div>
+      )}
       {regattas.map((r) => {
         const part = myPartMap[r.id]
         const status = part?.confirmation_status
@@ -94,6 +115,7 @@ export default function AvailabilityEditor({
         const d2 = r.end_date ? new Date(r.end_date) : null
         const isBusy = busy === r.id
         const details = teamDetailsByRegatta[r.id]
+        const lockedForPunctual = isLockedForPunctual(r.start_date)
 
         return (
           <div key={r.id} className="rounded-lg overflow-hidden" style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
@@ -136,11 +158,16 @@ export default function AvailabilityEditor({
                 </div>
               )}
 
-              {/* Butoane status */}
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <StatusButton active={status === 'confirmed'} onClick={() => setStatus(r.id, 'confirmed')} disabled={isBusy} color="#10B981" icon={<Check size={16} />} label="Disponibil" />
-                <StatusButton active={status === 'tentative'} onClick={() => setStatus(r.id, 'tentative')} disabled={isBusy} color="#F59E0B" icon={<HelpCircle size={16} />} label="Nu știu" />
-                <StatusButton active={status === 'declined'} onClick={() => setStatus(r.id, 'declined')} disabled={isBusy} color="#EF4444" icon={<X size={16} />} label="Indisponibil" />
+              {/* Butoane status (disabled pentru one-time pe regate post-anchor) */}
+              <div
+                className="flex items-center gap-2 flex-shrink-0"
+                title={lockedForPunctual ? 'One-time — nu poți modifica pentru regatele de după regata ta' : undefined}
+                style={{ opacity: lockedForPunctual ? 0.4 : 1 }}
+              >
+                {lockedForPunctual && <Lock size={13} className="text-white/80" />}
+                <StatusButton active={status === 'confirmed'} onClick={() => setStatus(r.id, 'confirmed')} disabled={isBusy || lockedForPunctual} color="#10B981" icon={<Check size={16} />} label="Disponibil" />
+                <StatusButton active={status === 'tentative'} onClick={() => setStatus(r.id, 'tentative')} disabled={isBusy || lockedForPunctual} color="#F59E0B" icon={<HelpCircle size={16} />} label="Nu știu" />
+                <StatusButton active={status === 'declined'} onClick={() => setStatus(r.id, 'declined')} disabled={isBusy || lockedForPunctual} color="#EF4444" icon={<X size={16} />} label="Indisponibil" />
               </div>
             </div>
 
