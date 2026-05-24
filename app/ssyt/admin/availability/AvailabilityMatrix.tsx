@@ -23,6 +23,7 @@ type Membership = {
   team_id: string
   participant_id: string
   membership_type: string
+  punctual_anchor_regatta_id?: string | null
   participant: { id: string; full_name: string; first_name: string; last_name: string } | { id: string; full_name: string; first_name: string; last_name: string }[] | null
 }
 type Participation = {
