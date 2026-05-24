@@ -1,5 +1,5 @@
 'use client'
-import { Lock, Users, CheckCircle2, XCircle, HelpCircle, Calendar } from 'lucide-react'
+import { Lock, Archive } from 'lucide-react'
 import Link from 'next/link'
 
 type Regatta = {
@@ -26,11 +26,25 @@ type ArchivedRow = {
   archived_at: string | null
 }
 
-const STATUS_META: Record<string, { label: string; color: string; icon: typeof CheckCircle2 }> = {
-  confirmed: { label: 'Prezent', color: '#10B981', icon: CheckCircle2 },
-  declined: { label: 'Absent', color: '#EF4444', icon: XCircle },
-  tentative: { label: 'Indecis', color: '#9CA3AF', icon: HelpCircle },
-  pending: { label: 'În așteptare', color: '#F59E0B', icon: HelpCircle },
+const STATUS_COLORS: Record<string, string> = {
+  confirmed: '#10B981',
+  declined: '#EF4444',
+  tentative: '#9CA3AF',
+  pending: '#F59E0B',
+}
+
+const STATUS_LETTER: Record<string, string> = {
+  confirmed: 'P',
+  declined: 'A',
+  tentative: '?',
+  pending: '·',
+}
+
+const STATUS_LABEL: Record<string, string> = {
+  confirmed: 'Prezent',
+  declined: 'Absent',
+  tentative: 'Indecis',
+  pending: 'În așteptare',
 }
 
 function isFrozen(r: Regatta): boolean {
@@ -45,11 +59,35 @@ function isFrozen(r: Regatta): boolean {
 }
 
 function attendanceTypeLabel(t: string | null): string {
-  if (!t) return ''
   if (t === 'core') return 'core'
-  if (t === 'occasional') return 'ocazional'
-  if (t === 'punctual') return 'one-time'
-  return t
+  if (t === 'occasional') return 'occ'
+  if (t === 'punctual') return '1×'
+  return ''
+}
+
+function attendanceTypeColor(t: string | null): string {
+  if (t === 'core') return '#FF6B35'
+  if (t === 'occasional') return '#00A8B5'
+  if (t === 'punctual') return '#a855f7'
+  return '#94a3b8'
+}
+
+type TeamKey = string
+
+type TeamSnapshot = {
+  key: TeamKey
+  team_id: string | null
+  name: string
+  short_name: string | null
+  color: string
+}
+
+type Participant = {
+  key: string
+  participant_id: string | null
+  full_name: string
+  email: string | null
+  attendance_type: string | null // tip preponderent (din ultimul rând)
 }
 
 export default function ArchiveView({
@@ -59,7 +97,9 @@ export default function ArchiveView({
   regattas: Regatta[]
   archivedRows: ArchivedRow[]
 }) {
-  const frozenRegattas = regattas.filter(isFrozen)
+  const frozenRegattas = regattas
+    .filter(isFrozen)
+    .sort((a, b) => new Date(a.start_date).getTime() - new Date(b.start_date).getTime())
 
   if (frozenRegattas.length === 0) {
     return (
@@ -76,139 +116,222 @@ export default function ArchiveView({
     )
   }
 
-  // Grupez rândurile arhivate per regată
-  const rowsByRegatta: Record<string, ArchivedRow[]> = {}
-  for (const r of archivedRows) {
-    if (!rowsByRegatta[r.regatta_id]) rowsByRegatta[r.regatta_id] = []
-    rowsByRegatta[r.regatta_id].push(r)
+  const frozenRegattaIds = new Set(frozenRegattas.map((r) => r.id))
+  const rows = archivedRows.filter((r) => frozenRegattaIds.has(r.regatta_id))
+
+  // Grupare pe team (team_id || archived_team_name)
+  const teamMap = new Map<TeamKey, TeamSnapshot>()
+  const participantsByTeam = new Map<TeamKey, Map<string, Participant>>()
+  const cellByTeamPersonRegatta = new Map<string, ArchivedRow>()
+
+  for (const row of rows) {
+    const teamKey: TeamKey = row.team_id ?? `name:${row.archived_team_name ?? 'unknown'}`
+    if (!teamMap.has(teamKey)) {
+      teamMap.set(teamKey, {
+        key: teamKey,
+        team_id: row.team_id,
+        name: row.archived_team_name || '—',
+        short_name: row.archived_team_short_name,
+        color: row.archived_team_color || '#94a3b8',
+      })
+    }
+    const personKey =
+      row.participant_id ??
+      `email:${row.archived_participant_email ?? row.archived_participant_full_name ?? row.id}`
+
+    if (!participantsByTeam.has(teamKey)) participantsByTeam.set(teamKey, new Map())
+    const peopleMap = participantsByTeam.get(teamKey)!
+    if (!peopleMap.has(personKey)) {
+      peopleMap.set(personKey, {
+        key: personKey,
+        participant_id: row.participant_id,
+        full_name: row.archived_participant_full_name || '(participant șters)',
+        email: row.archived_participant_email,
+        attendance_type: row.attendance_type,
+      })
+    } else {
+      // pastrez ultimul tip non-null
+      const existing = peopleMap.get(personKey)!
+      if (row.attendance_type && !existing.attendance_type) {
+        existing.attendance_type = row.attendance_type
+      }
+    }
+
+    cellByTeamPersonRegatta.set(`${teamKey}|${personKey}|${row.regatta_id}`, row)
   }
 
+  // Lista finală de echipe sortată: cele cu team_id real primele, alfabetic
+  const teams: TeamSnapshot[] = Array.from(teamMap.values()).sort((a, b) => {
+    if (a.team_id && !b.team_id) return -1
+    if (!a.team_id && b.team_id) return 1
+    return a.name.localeCompare(b.name, 'ro')
+  })
+
   return (
-    <div className="space-y-6">
+    <div>
       <div
-        className="rounded-md px-4 py-3 text-xs"
+        className="rounded-md px-4 py-3 mb-4 text-xs flex items-center gap-2"
         style={{ background: '#fff7ed', color: '#9a3412', border: '1px solid #fed7aa' }}
       >
-        <strong>Arhivă:</strong> datele de mai jos sunt înghețate. Numele participanților se păstrează
-        chiar dacă sunt scoși ulterior din echipă sau șterși din sezon.
+        <Archive size={14} />
+        <span>
+          <strong>Arhivă:</strong> datele de mai jos sunt înghețate. Numele participanților și
+          echipelor se păstrează chiar dacă sunt scoși ulterior din sezon.
+        </span>
       </div>
 
-      {frozenRegattas.map((r) => {
-        const rows = rowsByRegatta[r.id] ?? []
-        const confirmed = rows.filter((x) => x.confirmation_status === 'confirmed')
-        const declined = rows.filter((x) => x.confirmation_status === 'declined')
-        const tentative = rows.filter((x) => x.confirmation_status === 'tentative' || x.confirmation_status === 'pending')
-
-        const startDate = new Date(r.start_date)
-        const endDate = r.end_date ? new Date(r.end_date) : null
-
-        return (
-          <section
-            key={r.id}
-            className="rounded-lg border overflow-hidden"
-            style={{ borderColor: '#e2e8f0', background: '#fff' }}
-          >
-            <div
-              className="px-5 py-3 flex items-center justify-between flex-wrap gap-2"
-              style={{ background: '#f8fafc', borderBottom: '1px solid #e2e8f0' }}
-            >
-              <div className="flex items-center gap-2 min-w-0">
-                <Lock size={14} style={{ color: '#9a3412' }} />
-                <Link
-                  href={`/ssyt/admin/regattas/${r.id}`}
-                  className="font-semibold text-sm hover:underline"
-                  style={{ color: '#0a1628' }}
-                >
-                  {r.name}
-                </Link>
-                <span className="text-xs text-gray-500">
-                  <Calendar size={11} className="inline align-middle mr-1" />
-                  {startDate.toLocaleDateString('ro-RO', { day: 'numeric', month: 'short', year: 'numeric' })}
-                  {endDate && endDate.getTime() !== startDate.getTime() &&
-                    ` – ${endDate.toLocaleDateString('ro-RO', { day: 'numeric', month: 'short' })}`}
-                </span>
-              </div>
-              <div className="flex items-center gap-3 text-xs text-gray-500">
-                <span className="inline-flex items-center gap-1">
-                  <Users size={11} />
-                  <strong style={{ color: '#0a1628' }}>{rows.length}</strong> total
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <CheckCircle2 size={11} style={{ color: '#10B981' }} />
-                  <strong style={{ color: '#10B981' }}>{confirmed.length}</strong> prezent
-                </span>
-                {declined.length > 0 && (
-                  <span className="inline-flex items-center gap-1">
-                    <XCircle size={11} style={{ color: '#EF4444' }} />
-                    <strong style={{ color: '#EF4444' }}>{declined.length}</strong> absent
-                  </span>
-                )}
-                {tentative.length > 0 && (
-                  <span className="inline-flex items-center gap-1">
-                    <HelpCircle size={11} style={{ color: '#9CA3AF' }} />
-                    <strong style={{ color: '#9CA3AF' }}>{tentative.length}</strong> indecis
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {rows.length === 0 ? (
-              <div className="px-5 py-8 text-center text-sm text-gray-400">
-                Nicio înregistrare pentru această regată.
-              </div>
-            ) : (
-              <table className="w-full text-xs">
-                <thead>
-                  <tr style={{ background: '#fcfcfd', color: '#475569' }}>
-                    <th className="px-4 py-2 text-left font-medium">Participant</th>
-                    <th className="px-4 py-2 text-left font-medium">Echipă</th>
-                    <th className="px-4 py-2 text-left font-medium">Tip</th>
-                    <th className="px-4 py-2 text-center font-medium">Status</th>
+      <div className="rounded-lg overflow-x-auto" style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
+        <table className="text-xs" style={{ borderCollapse: 'collapse', minWidth: '100%' }}>
+          <thead>
+            <tr style={{ background: '#f8f9fa', borderBottom: '1px solid #e5e7eb' }}>
+              <th className="text-left px-3 py-2 sticky left-0 z-10" style={{ background: '#f8f9fa', minWidth: 240 }}>
+                <span className="uppercase tracking-wider text-gray-500 font-medium">Membru</span>
+              </th>
+              {frozenRegattas.map((r) => {
+                const d = new Date(r.start_date)
+                return (
+                  <th key={r.id} className="px-2 py-2 text-center" style={{ minWidth: 100 }}>
+                    <Link href={`/ssyt/admin/regattas/${r.id}`} className="block hover:underline">
+                      <div className="text-[10px] uppercase text-gray-400 flex items-center justify-center gap-1">
+                        {d.toLocaleString('ro-RO', { month: 'short' })}
+                        <Lock size={9} />
+                      </div>
+                      <div className="font-semibold text-sm" style={{ color: '#0a1628' }}>
+                        {d.getDate()}{r.end_date && new Date(r.end_date).getDate() !== d.getDate() ? `-${new Date(r.end_date).getDate()}` : ''}
+                      </div>
+                      <div className="text-[10px] text-gray-500 mt-0.5 truncate max-w-[100px]" title={r.name}>
+                        {r.short_name || r.name.split(' ').slice(0, 2).join(' ')}
+                      </div>
+                    </Link>
+                  </th>
+                )
+              })}
+            </tr>
+          </thead>
+          <tbody>
+            {teams.map((team) => {
+              const peopleMap = participantsByTeam.get(team.key)
+              if (!peopleMap || peopleMap.size === 0) return null
+              const people: Participant[] = Array.from(peopleMap.values()).sort((a, b) =>
+                a.full_name.localeCompare(b.full_name, 'ro')
+              )
+              return (
+                <>
+                  <tr key={`hdr-${team.key}`} style={{ background: team.color }}>
+                    <td
+                      colSpan={frozenRegattas.length + 1}
+                      className="px-3 py-2 text-white font-semibold sticky left-0 z-10"
+                      style={{ background: team.color }}
+                    >
+                      {team.team_id ? (
+                        <Link href={`/ssyt/admin/teams/${team.team_id}`} className="hover:underline">
+                          {team.name}
+                        </Link>
+                      ) : (
+                        <span>{team.name}</span>
+                      )}
+                      <span className="text-white/70 text-xs font-normal ml-2">
+                        ({people.length} {people.length === 1 ? 'persoană' : 'persoane'})
+                      </span>
+                      {!team.team_id && (
+                        <span className="ml-2 text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded font-semibold" style={{ background: 'rgba(255,255,255,0.18)' }}>
+                          echipă ștearsă
+                        </span>
+                      )}
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {rows.map((row) => {
-                    const meta = STATUS_META[row.confirmation_status] ?? STATUS_META.tentative
-                    const Icon = meta.icon
-                    const name = row.archived_participant_full_name ?? (row.participant_id ? '(participant șters)' : '—')
-                    const teamName = row.archived_team_name ?? row.archived_team_short_name ?? '—'
-                    const teamColor = row.archived_team_color ?? '#94a3b8'
-
-                    return (
-                      <tr key={row.id} className="border-t" style={{ borderColor: '#f1f5f9' }}>
-                        <td className="px-4 py-1.5">
-                          <div className="font-medium" style={{ color: '#0a1628' }}>{name}</div>
-                          {row.archived_participant_email && (
-                            <div className="text-[10px] text-gray-400 font-mono">{row.archived_participant_email}</div>
+                  {people.map((p) => (
+                    <tr key={`${team.key}-${p.key}`} style={{ borderTop: '1px solid #f3f4f6' }}>
+                      <td className="px-3 py-2 sticky left-0 z-10" style={{ background: '#fff' }}>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          {p.participant_id ? (
+                            <Link
+                              href={`/ssyt/admin/participants/${p.participant_id}`}
+                              className="hover:underline font-medium"
+                              style={{ color: '#0a1628' }}
+                            >
+                              {p.full_name}
+                            </Link>
+                          ) : (
+                            <span className="font-medium italic text-gray-400">{p.full_name}</span>
                           )}
-                        </td>
-                        <td className="px-4 py-1.5">
-                          <span className="inline-flex items-center gap-1.5">
-                            <span className="inline-block w-2 h-2 rounded-full" style={{ background: teamColor }} />
-                            {teamName}
-                          </span>
-                        </td>
-                        <td className="px-4 py-1.5 text-gray-500">
-                          {attendanceTypeLabel(row.attendance_type)}
-                        </td>
-                        <td className="px-4 py-1.5 text-center">
-                          <span
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-medium"
-                            style={{ background: meta.color + '20', color: meta.color }}
-                          >
-                            <Icon size={10} />
-                            {meta.label}
-                          </span>
-                        </td>
-                      </tr>
-                    )
-                  })}
-                </tbody>
-              </table>
-            )}
-          </section>
-        )
-      })}
+                          {p.attendance_type && (
+                            <span
+                              className="text-[9px] uppercase tracking-wider px-1 py-0.5 rounded"
+                              style={{
+                                background: attendanceTypeColor(p.attendance_type) + '20',
+                                color: attendanceTypeColor(p.attendance_type),
+                              }}
+                              title={p.attendance_type}
+                            >
+                              {attendanceTypeLabel(p.attendance_type)}
+                            </span>
+                          )}
+                        </div>
+                        {p.email && (
+                          <div className="text-[10px] text-gray-400 font-mono mt-0.5 truncate max-w-[220px]">
+                            {p.email}
+                          </div>
+                        )}
+                      </td>
+                      {frozenRegattas.map((r) => {
+                        const cell = cellByTeamPersonRegatta.get(`${team.key}|${p.key}|${r.id}`)
+                        const status = cell?.confirmation_status
+                        const color = status ? STATUS_COLORS[status] : null
+                        const letter = status ? STATUS_LETTER[status] : ''
+                        return (
+                          <td key={r.id} className="p-1">
+                            <div className="flex items-center justify-center">
+                              {color ? (
+                                <span
+                                  className="inline-flex items-center justify-center w-6 h-6 rounded text-[10px] font-bold"
+                                  style={{ background: color + '25', color }}
+                                  title={STATUS_LABEL[status!] ?? status!}
+                                >
+                                  {letter}
+                                </span>
+                              ) : (
+                                <span className="inline-block w-6 h-6 rounded" style={{ background: '#f1f5f9' }} title="fără răspuns" />
+                              )}
+                            </div>
+                          </td>
+                        )
+                      })}
+                    </tr>
+                  ))}
+                </>
+              )
+            })}
+          </tbody>
+        </table>
+
+        <div className="px-3 py-3 text-xs text-gray-500 border-t" style={{ background: '#f8f9fa' }}>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="font-medium">Legendă:</span>
+            <LegendItem letter="P" color="#10B981" label="Prezent" />
+            <LegendItem letter="A" color="#EF4444" label="Absent" />
+            <LegendItem letter="?" color="#9CA3AF" label="Indecis" />
+            <span className="inline-flex items-center gap-1.5 ml-2">
+              <span className="inline-block w-3 h-3 rounded" style={{ background: '#f1f5f9' }} />
+              <span>fără răspuns</span>
+            </span>
+          </div>
+        </div>
+      </div>
     </div>
+  )
+}
+
+function LegendItem({ letter, color, label }: { letter: string; color: string; label: string }) {
+  return (
+    <span className="inline-flex items-center gap-1.5">
+      <span
+        className="inline-flex items-center justify-center w-5 h-5 rounded text-[9px] font-bold"
+        style={{ background: color + '25', color }}
+      >
+        {letter}
+      </span>
+      <span>{label}</span>
+    </span>
   )
 }
