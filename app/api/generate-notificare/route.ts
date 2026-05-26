@@ -177,6 +177,7 @@ export async function POST(req: NextRequest) {
 <html>
 <head>
 <meta charset="UTF-8">
+<title>Instiintare Examinare Practica SetSail ${ziuaSesiune} ${lunaSesiune} ${anulSesiune}</title>
 <style>
   /* Reset */
   * { margin: 0; padding: 0; box-sizing: border-box; }
