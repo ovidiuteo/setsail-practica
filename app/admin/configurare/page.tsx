@@ -166,14 +166,6 @@ export default function ConfigurarePage() {
           <h1 className="text-2xl font-bold text-gray-900" style={{ fontFamily: 'Georgia, serif' }}>Configurare</h1>
           <p className="text-gray-500 text-sm mt-1">Gestionare locații, ambarcațiuni, evaluatori, instructori și persoane de contact</p>
         </div>
-        <div className="flex items-center gap-2">
-        <a href="/admin/configurare/timeline"
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border border-purple-200 text-purple-700 hover:bg-purple-50 transition-colors">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <line x1="3" y1="12" x2="21" y2="12"/><circle cx="6" cy="12" r="2"/><circle cx="14" cy="12" r="2.5"/><circle cx="20" cy="12" r="1.5"/>
-          </svg>
-          Timeline sesiuni
-        </a>
         <a href="/admin/configurare/mail-templates"
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -181,7 +173,6 @@ export default function ConfigurarePage() {
           </svg>
           Template-uri Email
         </a>
-        </div>
       </div>
       <div className="grid grid-cols-2 gap-6">
         <Section title="📍 Locații de practică" table="locations"
@@ -220,6 +211,122 @@ export default function ConfigurarePage() {
             { key: 'rol', label: 'Rol', placeholder: 'ex: instructor, manager' },
           ]} />
       </div>
+
+      {/* Numere notificari - sectiune separata full-width */}
+      <NotificationNumbersSection />
+    </div>
+  )
+}
+
+function NotificationNumbersSection() {
+  const [rows, setRows] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [filterTip, setFilterTip] = useState<'all'|'solicitare'|'document'>('all')
+
+  async function load() {
+    setLoading(true)
+    const { data } = await supabase
+      .from('notification_numbers')
+      .select('*, sessions(session_date, class_caa)')
+      .order('numar', { ascending: false })
+    setRows(data || [])
+    setLoading(false)
+  }
+
+  useEffect(() => { load() }, [])
+
+  async function remove(id: string, numar: number) {
+    if (!confirm(`Ștergi numărul ${numar}? Această acțiune nu poate fi anulată.`)) return
+    await supabase.from('notification_numbers').delete().eq('id', id)
+    setRows(r => r.filter(x => x.id !== id))
+  }
+
+  const TIP_LABELS: Record<string, string> = {
+    'curs-obtinere':     'Curs Obținere',
+    'examen-obtinere':   'Examen Obținere',
+    'curs-prelungire':   'Curs Prelungire',
+    'examen-prelungire': 'Examen Prelungire',
+    'instiintare-anr':   'Înștiințare ANR',
+    'pv-obtinere':       'PV Obținere',
+    'anexa-pv-obtinere': 'Anexă PV Obținere',
+    'pv-prelungire':     'PV Prelungire',
+    'anexa-pv-prelungire':'Anexă PV Prelungire',
+  }
+
+  const filtered = filterTip === 'all' ? rows : rows.filter(r => r.tip === filterTip)
+
+  return (
+    <div className="mt-8 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
+        <div>
+          <h2 className="font-semibold text-gray-900">🔢 Numere notificări alocate</h2>
+          <p className="text-xs text-gray-400 mt-0.5">{rows.length} înregistrări total</p>
+        </div>
+        <div className="flex gap-2">
+          {(['all','solicitare','document'] as const).map(t => (
+            <button key={t} onClick={() => setFilterTip(t)}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
+                filterTip === t ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}>
+              {t === 'all' ? 'Toate' : t === 'solicitare' ? 'Înștiințări' : 'Documente PV'}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="text-center text-gray-400 py-8">Se încarcă...</div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center text-gray-400 py-8">Niciun număr alocat.</div>
+      ) : (
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-50 text-xs text-gray-400 font-medium">
+              <th className="text-left px-6 py-3">Nr.</th>
+              <th className="text-left px-4 py-3">Tip serie</th>
+              <th className="text-left px-4 py-3">Document</th>
+              <th className="text-left px-4 py-3">Data</th>
+              <th className="text-left px-4 py-3">Sesiune</th>
+              <th className="px-4 py-3"></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {filtered.map(r => (
+              <tr key={r.id} className="hover:bg-gray-50 transition-colors">
+                <td className="px-6 py-3 font-bold text-gray-900">{r.numar}</td>
+                <td className="px-4 py-3">
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                    r.tip === 'solicitare'
+                      ? 'bg-blue-50 text-blue-700'
+                      : 'bg-purple-50 text-purple-700'
+                  }`}>
+                    {r.tip === 'solicitare' ? 'Înștiințare' : 'Document PV'}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-gray-700">
+                  {TIP_LABELS[r.document_tip] || r.document || '—'}
+                </td>
+                <td className="px-4 py-3 text-gray-500">
+                  {r.data_notificare
+                    ? new Date(r.data_notificare).toLocaleDateString('ro-RO')
+                    : '—'}
+                </td>
+                <td className="px-4 py-3 text-gray-400 text-xs">
+                  {r.sessions?.session_date
+                    ? new Date(r.sessions.session_date).toLocaleDateString('ro-RO') + ' · ' + (r.sessions.class_caa || '')
+                    : '—'}
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <button onClick={() => remove(r.id, r.numar)}
+                    className="p-1.5 rounded-lg hover:bg-red-50 text-gray-300 hover:text-red-500 transition-colors">
+                    <Trash2 size={14}/>
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   )
 }
