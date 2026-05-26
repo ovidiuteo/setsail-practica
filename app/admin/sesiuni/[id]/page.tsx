@@ -1363,7 +1363,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                   </button>
                   <button onClick={async()=>{try{
                     const res=await fetch('/api/generate-instiintare-ancom',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id,tip:'curs-obtinere',format:'pdf'})})
-                    const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>w.print(),800)}
+                    const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>{w.document.title=w.document.querySelector('title')?.textContent||'Document';w.print()},800)}
                   }catch(e:any){alert(e.message)}}}
                     className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium text-white" style={{background:'#dc2626'}}>
                     <Download size={11}/>PDF Curs Obținere
@@ -1377,7 +1377,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                   </button>
                   <button onClick={async()=>{try{
                     const res=await fetch('/api/generate-instiintare-ancom',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id,tip:'examen-obtinere',format:'pdf'})})
-                    const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>w.print(),800)}
+                    const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>{w.document.title=w.document.querySelector('title')?.textContent||'Document';w.print()},800)}
                   }catch(e:any){alert(e.message)}}}
                     className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium text-white" style={{background:'#dc2626'}}>
                     <Download size={11}/>PDF Examen Obținere
@@ -1393,7 +1393,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                   </button>
                   <button onClick={async()=>{try{
                     const res=await fetch('/api/generate-instiintare-ancom',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id,tip:'curs-prelungire',format:'pdf'})})
-                    const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>w.print(),800)}
+                    const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>{w.document.title=w.document.querySelector('title')?.textContent||'Document';w.print()},800)}
                   }catch(e:any){alert(e.message)}}}
                     className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium text-white" style={{background:'#dc2626'}}>
                     <Download size={11}/>PDF Curs Prelungire
@@ -1407,7 +1407,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                   </button>
                   <button onClick={async()=>{try{
                     const res=await fetch('/api/generate-instiintare-ancom',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id,tip:'examen-prelungire',format:'pdf'})})
-                    const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>w.print(),800)}
+                    const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>{w.document.title=w.document.querySelector('title')?.textContent||'Document';w.print()},800)}
                   }catch(e:any){alert(e.message)}}}
                     className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium text-white" style={{background:'#dc2626'}}>
                     <Download size={11}/>PDF Examen Prelungire
@@ -1429,7 +1429,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                   </button>
                   <button onClick={async()=>{try{
                     const res=await fetch('/api/generate-cereri-radio',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id,tip:'obtinere',format:'pdf'})})
-                    const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>w.print(),800)}
+                    const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>{w.document.title=w.document.querySelector('title')?.textContent||'Document';w.print()},800)}
                   }catch(e:any){alert(e.message)}}}
                     disabled={students.length===0} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#dc2626'}}>
                     <Download size={12}/>PDF Obținere
@@ -1442,7 +1442,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                   </button>
                   <button onClick={async()=>{try{
                     const res=await fetch('/api/generate-cereri-radio',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id,tip:'prelungire',format:'pdf'})})
-                    const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>w.print(),800)}
+                    const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>{w.document.title=w.document.querySelector('title')?.textContent||'Document';w.print()},800)}
                   }catch(e:any){alert(e.message)}}}
                     disabled={students.length===0} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#dc2626'}}>
                     <Download size={12}/>PDF Prelungire
@@ -1464,7 +1464,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                   </button>
                   <button onClick={async()=>{try{
                     const res=await fetch('/api/generate-pv-radio',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id,tip:'obtinere',format:'pdf'})})
-                    const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>w.print(),800)}
+                    const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>{w.document.title=w.document.querySelector('title')?.textContent||'Document';w.print()},800)}
                   }catch(e:any){alert(e.message)}}}
                     disabled={students.length===0} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#dc2626'}}>
                     <Download size={12}/>PDF Obținere LRC
@@ -1478,7 +1478,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                   </button>
                   <button onClick={async()=>{try{
                     const res=await fetch('/api/generate-anexa-pv',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id,tip:'obtinere',format:'pdf'})})
-                    const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>w.print(),800)}
+                    const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>{w.document.title=w.document.querySelector('title')?.textContent||'Document';w.print()},800)}
                   }catch(e:any){alert(e.message)}}}
                     disabled={students.length===0} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#dc2626'}}>
                     <Download size={12}/>PDF Anexă Obținere
@@ -1494,7 +1494,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                   </button>
                   <button onClick={async()=>{try{
                     const res=await fetch('/api/generate-pv-radio',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id,tip:'prelungire',format:'pdf'})})
-                    const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>w.print(),800)}
+                    const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>{w.document.title=w.document.querySelector('title')?.textContent||'Document';w.print()},800)}
                   }catch(e:any){alert(e.message)}}}
                     disabled={students.length===0} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#dc2626'}}>
                     <Download size={12}/>PDF Prelungire LRC
@@ -1508,7 +1508,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                   </button>
                   <button onClick={async()=>{try{
                     const res=await fetch('/api/generate-anexa-pv',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id,tip:'prelungire',format:'pdf'})})
-                    const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>w.print(),800)}
+                    const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>{w.document.title=w.document.querySelector('title')?.textContent||'Document';w.print()},800)}
                   }catch(e:any){alert(e.message)}}}
                     disabled={students.length===0} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#dc2626'}}>
                     <Download size={12}/>PDF Anexă Prelungire
