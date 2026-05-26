@@ -983,7 +983,10 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
     // Salvam intervalul in sesiune
     if (tip === 'solicitare') {
       const lastNr = first + tips.length - 1
-      const nrDisplay = tips.length === 1 ? String(first) : String(first) + '-' + String(lastNr)
+      const dateFormatted = nrModalDate.split('-').reverse().join('.')
+      const nrDisplay = tips.length === 1
+        ? String(first) + '/' + dateFormatted
+        : String(first) + '-' + String(lastNr) + '/' + dateFormatted
       await supabase.from('sessions').update({ request_number: nrDisplay }).eq('id', sess.id)
     } else {
       const lastNr = first + tips.length - 1
@@ -1057,8 +1060,8 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
       // Exista deja — actualizeaza state-ul si returneaza id-ul
       setNotif(existing)
       setNotifForm({
-        nr_notificare: existing.nr_notificare || '',
-        ora_examinare: existing.ora_examinare || '10:00',
+        nr_notificare: existing.nr_notificare || sess.request_number || '',
+        ora_examinare: existing.ora_examinare || (sess as any).practice_start_time || '10:00',
         clasa: existing.clasa || '',
         barci_selectate: existing.barci_selectate || [],
         locatie_curs: existing.locatie_curs || '',
