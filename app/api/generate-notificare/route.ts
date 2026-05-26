@@ -250,7 +250,7 @@ export async function POST(req: NextRequest) {
   }
 
   const buffer = await Packer.toBuffer(doc)
-  const filename = `Notificare_${locNameDisplay}_${ziuaSesiune}_${lunaSesiune}_${anulSesiune}${cu_stampila ? '_semnat' : ''}.docx`
+  const filename = `Instiintare Examinare Practica SetSail ${ziuaSesiune} ${lunaSesiune} ${anulSesiune}.docx`
 
   return new NextResponse(buffer as unknown as BodyInit, {
     headers: {
