@@ -21,9 +21,6 @@ function applyTemplate(text: string, sess: any, contacts?: any[]): string {
     'ora_start':                  sess?.practice_start_time || '9:30',
     'zz_data_start_curs':         sess?.course_start_date ? String(new Date(sess.course_start_date).getDate()) : '',
     'zz_llll_aaaa_data_practica': sd  ? new Date(sd).toLocaleDateString('ro-RO', {day:'2-digit', month:'long', year:'numeric'}) : '',
-    'email_oficial_reprezentant': sess?.evaluators?.email_oficial || '',
-    'email_personal_reprezentant':sess?.evaluators?.email_personal || '',
-    'email_setsail':              'office@setsail.ro',
   }
   const contactIds: string[] = sess?.contact_person_ids || []
   const selected = (contacts || [])
@@ -71,9 +68,8 @@ type Student = {
   notes?: string
   signature_pool?: boolean
   signature_random?: string
-  obtinere_prelungire?: string
 }
-type Session = { id: string; session_date: string; course_start_date?: string; status: string; session_type: string; access_code: string; class_caa: string; request_number?: string; location_detail?: string; parent_session_id?: string; is_clone?: boolean; locations?: any; boats?: any; evaluators?: any; instructors?: any; contact_person_ids?: string[]; practice_start_date?: string; practice_start_time?: string; radio_exam_status?: string }
+type Session = { id: string; session_date: string; course_start_date?: string; status: string; session_type: string; access_code: string; class_caa: string; request_number?: string; location_detail?: string; parent_session_id?: string; is_clone?: boolean; locations?: any; boats?: any; evaluators?: any; instructors?: any; contact_person_ids?: string[]; practice_start_date?: string; practice_start_time?: string }
 
 const EMPTY_ST = { full_name:'', cnp:'', email:'', phone:'', birth_date:'', ci_series:'', ci_number:'', address:'', county:'', class_caa:'C,D' }
 
@@ -150,8 +146,6 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
     selectedIds: Set<string>, setSelectedIds: (s: Set<string>) => void,
     onCiPreview?: (name:string, img:string) => void }) {
 
-  const isRadio = (sess.class_caa || '').toLowerCase().includes('radio')
-               || (sess.class_caa || '').toLowerCase().includes('lrc')
   const [editingId, setEditingId] = useState<string|null>(null)
   const [editValues, setEditValues] = useState<any>({})
   const [saving, setSaving] = useState(false)
@@ -295,12 +289,6 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
     setMoving(null)
   }
 
-
-  async function toggleObtinerePrelungire(s: Student) {
-    const next = s.obtinere_prelungire === 'prelungire' ? 'obtinere' : 'prelungire'
-    await supabase.from('students').update({ obtinere_prelungire: next }).eq('id', s.id)
-    setStudents(students.map(st => st.id === s.id ? { ...st, obtinere_prelungire: next } : st))
-  }
 
   async function markSailing(s: Student) {
     // Gasim sesiunea principala (parent) pentru a muta cursantul acolo
@@ -451,45 +439,13 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
                     </span>
                   </th>
                 ))}
-                {isRadio && (
-                  <th className="px-2 py-2.5 font-medium text-gray-500 text-center whitespace-nowrap">Tip</th>
-                )}
                 <th className="px-2 py-2.5 text-gray-400 text-xs font-medium text-center">CI</th>
                 <th className="px-2 py-2.5 text-gray-400 text-xs font-medium text-center">Sem.</th>
                 <th className="w-24 px-2 py-2.5"></th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {(() => {
-                const baseList = students.filter((s:Student)=>!s.only_sailing)
-                let renderable: Array<{type:'sep'|'student'; s?:Student; label?:string; count?:number}> = []
-                if (isRadio) {
-                  const sortAlpha = (a:Student,b:Student) => (a.full_name||'').localeCompare(b.full_name||'', 'ro')
-                  const obt = baseList.filter(x => x.obtinere_prelungire !== 'prelungire').sort(sortAlpha)
-                  const prel = baseList.filter(x => x.obtinere_prelungire === 'prelungire').sort(sortAlpha)
-                  renderable.push({type:'sep', label:'OBȚINERE', count: obt.length})
-                  obt.forEach(x => renderable.push({type:'student', s:x}))
-                  renderable.push({type:'sep', label:'RECONFIRMARE', count: prel.length})
-                  prel.forEach(x => renderable.push({type:'student', s:x}))
-                } else {
-                  getSorted(baseList).forEach(x => renderable.push({type:'student', s:x}))
-                }
-                let studentIdx = -1
-                return renderable.map((item) => {
-                  if (item.type === 'sep') {
-                    const isObt = item.label === 'OBȚINERE'
-                    return (
-                      <tr key={`sep-${item.label}`} style={{background: isObt ? '#dcfce7' : '#dbeafe'}}>
-                        <td colSpan={15} className="px-3 py-2 text-xs font-bold tracking-wider"
-                          style={{color: isObt ? '#15803d' : '#1d4ed8'}}>
-                          {item.label} ({item.count})
-                        </td>
-                      </tr>
-                    )
-                  }
-                  studentIdx++
-                  const s = item.s!
-                  const i = studentIdx
+              {getSorted(students.filter((s:Student)=>!s.only_sailing)).map((s,i) => {
                 const ps = portalMap[s.portal_status] || portalMap.pending
                 const isEditing = editingId === s.id
                 return (
@@ -508,7 +464,6 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
                       <td className="px-1 py-1.5"><select className={inCls} value={editValues.class_caa} onChange={e=>setEditValues((v:any)=>({...v,class_caa:e.target.value}))}>
                         <option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option><option value="C,D">C,D</option><option value="Radio">Radio</option><option value="Obtinere LRC">Obținere LRC</option><option value="Prelungire LRC">Prelungire LRC</option></select></td>
                       <td className="px-1 py-1.5"><span className="text-xs" style={{color:ps.color}}>{ps.label}</span></td>
-                      {isRadio && <td className="px-1 py-1.5"></td>}
                       <td className="px-2 py-1.5"><div className="flex gap-1">
                         <button onClick={()=>saveEdit(s.id)} disabled={saving} className="p-1 rounded bg-green-100 text-green-700"><Check size={12}/></button>
                         <button onClick={()=>setEditingId(null)} className="p-1 rounded bg-gray-100 text-gray-500"><X size={12}/></button>
@@ -564,21 +519,6 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
                         <span className="text-xs font-medium" style={{color:ps.color}}>{ps.label}</span>
                         {s.signed_at && <div className="text-gray-300 text-xs">{new Date(s.signed_at).toLocaleTimeString('ro-RO',{hour:'2-digit',minute:'2-digit'})}</div>}
                       </td>
-                      {/* O/R toggle - doar pentru Radio */}
-                      {isRadio && (
-                        <td className="px-2 py-2 text-center">
-                          <button onClick={(e)=>{e.stopPropagation();toggleObtinerePrelungire(s)}}
-                            title={s.obtinere_prelungire === 'prelungire'
-                              ? 'Reconfirmare — click pentru a comuta la Obținere'
-                              : 'Obținere — click pentru a comuta la Reconfirmare'}
-                            className="w-7 h-7 rounded-md text-xs font-bold transition-colors hover:opacity-80"
-                            style={s.obtinere_prelungire === 'prelungire'
-                              ? { background: '#dbeafe', color: '#1d4ed8' }
-                              : { background: '#dcfce7', color: '#15803d' }}>
-                            {s.obtinere_prelungire === 'prelungire' ? 'R' : 'O'}
-                          </button>
-                        </td>
-                      )}
                       {/* CI imagine - pictograma */}
                       <td className="px-2 py-2 text-center">
                         {s.ci_image_data ? (
@@ -732,8 +672,7 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
                     </>)}
                   </tr>
                 )
-              })
-              })()}
+              })}
             </tbody>
           </table>
         </div>
@@ -972,10 +911,6 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
   const [authSubject, setAuthSubject] = useState('')
   const [authBody, setAuthBody] = useState('')
   const [authCopied, setAuthCopied] = useState(false)
-  const [selectedAuthCategory, setSelectedAuthCategory] = useState<string | null>(null)
-  const [authTo, setAuthTo] = useState('')
-  const [authCc, setAuthCc] = useState('')
-  const [authBcc, setAuthBcc] = useState('')
   const [showNrModal, setShowNrModal] = useState<'solicitare'|'document'|null>(null)
   const [nrModalData, setNrModalData] = useState<any[]>([])
   const [nrModalNext, setNrModalNext] = useState(1)
@@ -999,11 +934,14 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
       .then(({ data }) => setAllContacts(data || []))
   }, [])
 
-  const SOL_TIPS = [
+  const isRadioSession = (sess.class_caa||'').toLowerCase().includes('radio') || (sess.class_caa||'').toLowerCase().includes('lrc')
+  const SOL_TIPS = isRadioSession ? [
     { key: 'curs-obtinere',    label: 'Curs Obținere LRC' },
     { key: 'examen-obtinere',  label: 'Examen Obținere LRC' },
     { key: 'curs-prelungire',  label: 'Curs Prelungire LRC' },
     { key: 'examen-prelungire',label: 'Examen Prelungire LRC' },
+  ] : [
+    { key: 'instiintare-anr',  label: 'Înștiințare ANR' },
   ]
   const DOC_TIPS = [
     { key: 'pv-obtinere',      label: 'PV Obținere LRC' },
@@ -1044,9 +982,12 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
     await supabase.from('notification_numbers').insert(rows)
     // Salvam intervalul in sesiune
     if (tip === 'solicitare') {
-      await supabase.from('sessions').update({ request_number: String(first) + '-' + String(first+3) }).eq('id', sess.id)
+      const lastNr = first + tips.length - 1
+      const nrDisplay = tips.length === 1 ? String(first) : String(first) + '-' + String(lastNr)
+      await supabase.from('sessions').update({ request_number: nrDisplay }).eq('id', sess.id)
     } else {
-      await supabase.from('sessions').update({ nr_document_ancom: String(first) + '-' + String(first+3) }).eq('id', sess.id)
+      const lastNr = first + tips.length - 1
+      await supabase.from('sessions').update({ nr_document_ancom: String(first) + '-' + String(lastNr) }).eq('id', sess.id)
     }
     setShowNrModal(null)
     // Refresh pagina ca sa apara noile numere
@@ -1080,8 +1021,6 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
   useEffect(()=>{
     setMailTo(selectedEmails.join(', '))
   }, [selectedEmails.join(',')])
-
-  // Adresele TO/CC/BCC pentru Mailing autoritati raman goale - le populeaza utilizatorul prin template sau manual
 
 
 
@@ -1239,7 +1178,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
             ['Ambarcațiune', sess.boats?.name||'—'],
             ['Clasa CAA', sess.class_caa],
             ['Nr. înștiințări', sess.request_number||'—'],
-            ['Nr. documente PV', (sess as any).nr_document_ancom||'—'],
+            ...(isRadioSession ? [['Nr. documente PV', (sess as any).nr_document_ancom||'—'] as [string,string]] : []),
             ['Locație detaliată', sess.location_detail||'—'],
           ] as [string,string][]).map(([label,value]) => (
             <div key={label} className="flex justify-between gap-2">
@@ -1474,29 +1413,6 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                     <Download size={11}/>PDF Examen Prelungire
                   </button>
                 </div>
-                {/* Butoane mari: TOATE Instiintarile intr-un singur PDF - cu/fara stampila */}
-                <div className="border-t border-gray-200 pt-2 mt-2 space-y-1.5">
-                  <div className="flex gap-1.5">
-                    <button onClick={async()=>{try{
-                      const res=await fetch('/api/generate-instiintare-ancom-toate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id, cu_stampila: true})})
-                      if(!res.ok){const e=await res.text();throw new Error(e)}
-                      const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>w.print(),1200)}
-                    }catch(e:any){alert(e.message)}}}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-3 rounded-lg text-xs font-semibold text-white"
-                      style={{background:'#7c3aed'}} title="TOATE înștiințările cu ștampilă și semnătură">
-                      <Download size={13}/>TOATE cu ștamp.
-                    </button>
-                    <button onClick={async()=>{try{
-                      const res=await fetch('/api/generate-instiintare-ancom-toate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id, cu_stampila: false})})
-                      if(!res.ok){const e=await res.text();throw new Error(e)}
-                      const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>w.print(),1200)}
-                    }catch(e:any){alert(e.message)}}}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-3 rounded-lg text-xs font-semibold border-2 border-purple-300 text-purple-700 hover:bg-purple-50"
-                      title="TOATE înștiințările FĂRĂ ștampilă și semnătură">
-                      <Download size={13}/>TOATE fără ștamp.
-                    </button>
-                  </div>
-                </div>
               </div>
             </div>
           )}
@@ -1535,34 +1451,6 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
               </div>
             </div>
           )}
-
-          {/* Examen Radio LRC - doar pentru sesiuni Radio (sub Cereri ANCOM, deasupra Documente) */}
-          {isRadio && (() => {
-            const examStatus = sess.radio_exam_status || 'draft'
-            const examMeta: Record<string, { label: string; bg: string; color: string }> = {
-              draft:  { label: 'Ciornă',  bg: '#6b728020', color: '#6b7280' },
-              active: { label: 'Activ',   bg: '#05966920', color: '#059669' },
-              closed: { label: 'Închis',  bg: '#7c3aed20', color: '#7c3aed' },
-            }
-            const meta = examMeta[examStatus] || examMeta.draft
-            return (
-              <div className="bg-white rounded-xl p-5 shadow-sm border border-purple-100">
-                <h3 className="font-semibold text-sm text-gray-900 mb-3">Examen Radio LRC</h3>
-                <div className="mb-3 flex items-center justify-between">
-                  <span className="text-xs text-gray-500">Status:</span>
-                  <span className="px-2 py-1 rounded-md text-xs font-semibold"
-                    style={{ background: meta.bg, color: meta.color }}>
-                    {meta.label}
-                  </span>
-                </div>
-                <Link href={`/admin/sesiuni/${sess.id}/examen`}
-                  className="w-full flex items-center justify-center gap-2 py-2 rounded-lg text-xs font-medium text-white"
-                  style={{ background: '#7c3aed' }}>
-                  <FileText size={12} />Deschide examen
-                </Link>
-              </div>
-            )
-          })()}
 
           <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
             <h3 className="font-semibold text-sm text-gray-900 mb-3">Documente</h3>
@@ -1626,113 +1514,24 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                     <Download size={12}/>PDF Anexă Prelungire
                   </button>
                 </div>
-                {/* Buton mare: TOATE documentele radio intr-un singur PDF */}
-                <div className="border-t border-gray-200 pt-2 mt-2">
-                  <button onClick={async()=>{try{
-                    const res=await fetch('/api/generate-documente-radio-toate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id})})
-                    if(!res.ok){const e=await res.text();throw new Error(e)}
-                    const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>w.print(),1200)}
-                  }catch(e:any){alert(e.message)}}}
-                    disabled={students.length===0} className="w-full flex items-center justify-center gap-2 py-3 rounded-lg text-sm font-semibold text-white disabled:opacity-50" style={{background:'#7c3aed'}}>
-                    <Download size={14}/>TOATE Documentele PDF
-                  </button>
-                </div>
               </div>
             ) : (
               <div className="space-y-2">
                 {/* Documente standard */}
-                <button onClick={async()=>{setGPV(true);try{
-                  // Renumerotam in DB conform ordinii curente din state (fara only_sailing)
-                  const visibleStudents = students.filter(s=>!s.only_sailing)
-                  for (let i = 0; i < visibleStudents.length; i++) {
-                    if (visibleStudents[i].order_in_session !== i + 1) {
-                      await supabase.from('students').update({ order_in_session: i + 1 }).eq('id', visibleStudents[i].id)
-                    }
-                  }
-                  // Construim numele fisierului: PV_practica_SetSail_DD.MM.YYYY[_lista_N].docx
-                  const [yy, mm, dd] = sess.session_date.split('-')
-                  const dataFormatata = `${dd}.${mm}.${yy}`
-                  // Gasim sesiunile cu aceeasi data (principal + clone, fara absent), ordonate
-                  const sameDay = allSessions
-                    .filter((s:any) => s.session_type !== 'absent' && s.session_date === sess.session_date)
-                    .sort((a:any, b:any) => {
-                      // Principal primul, apoi clone in ordinea creerii (dupa id)
-                      if (a.session_type === 'principal' && b.session_type !== 'principal') return -1
-                      if (b.session_type === 'principal' && a.session_type !== 'principal') return 1
-                      return (a.id || '').localeCompare(b.id || '')
-                    })
-                  let filename = `PV_practica_SetSail_${dataFormatata}.docx`
-                  if (sameDay.length > 1) {
-                    const idx = sameDay.findIndex((s:any) => s.id === sess.id)
-                    filename = `PV_practica_SetSail_${dataFormatata}_lista_${idx + 1}.docx`
-                  }
-                  await generateDoc('/api/generate-pv', filename)
-                }catch(e:any){alert(e.message)}setGPV(false)}}
+                <button onClick={async()=>{setGPV(true);try{await generateDoc('/api/generate-pv',`PV_${sess.session_date}.docx`)}catch(e:any){alert(e.message)}setGPV(false)}}
                   disabled={gPV||students.length===0} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#0a1628'}}>
                   <FileText size={13}/>{gPV?'Se generează...':'Proces Verbal (Anexa 12)'}
                 </button>
-                <button onClick={async()=>{setGFise(true);try{
-                  // Construim numele: Anexa 10 - Fise de evaluare aptitudini CLASA LOCATIE DD.MM.YYYY[_lista_N].docx
-                  const [yy, mm, dd] = sess.session_date.split('-')
-                  const dataFormatata = `${dd}.${mm}.${yy}`
-                  const locName = (sess.locations?.name || '').toUpperCase()
-                  const clasa = (sess.class_caa || '').replace(',', '+')
-                  const sameDay = allSessions
-                    .filter((s:any) => s.session_type !== 'absent' && s.session_date === sess.session_date)
-                    .sort((a:any, b:any) => {
-                      if (a.session_type === 'principal' && b.session_type !== 'principal') return -1
-                      if (b.session_type === 'principal' && a.session_type !== 'principal') return 1
-                      return (a.id || '').localeCompare(b.id || '')
-                    })
-                  let suffix = ''
-                  if (sameDay.length > 1) {
-                    const idx = sameDay.findIndex((s:any) => s.id === sess.id)
-                    suffix = `_lista_${idx + 1}`
-                  }
-                  const filename = `Anexa 10 - Fise de evaluare aptitudini ${clasa} ${locName} ${dataFormatata}${suffix}.docx`
-                  await generateDoc('/api/generate-fise', filename)
-                }catch(e:any){alert(e.message)}setGFise(false)}}
+                <button onClick={async()=>{setGFise(true);try{await generateDoc('/api/generate-fise',`Fise_${sess.session_date}.docx`)}catch(e:any){alert(e.message)}setGFise(false)}}
                   disabled={gFise||students.length===0} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-medium border border-gray-200 hover:bg-gray-50 disabled:opacity-50">
                   <Download size={13}/>{gFise?'Se generează...':'Fișe DOCX (Anexa 10)'}
                 </button>
                 <button onClick={async()=>{setGPDF(true);try{
-                  // Construim numele: Anexa 10 - Fise de evaluare aptitudini CLASA LOCATIE DD.MM.YYYY[_lista_N].pdf
-                  const [yy, mm, dd] = sess.session_date.split('-')
-                  const dataFormatata = `${dd}.${mm}.${yy}`
-                  const locName = (sess.locations?.name || '').toUpperCase()
-                  const clasa = (sess.class_caa || '').replace(',', '+')
-                  const sameDay = allSessions
-                    .filter((s:any) => s.session_type !== 'absent' && s.session_date === sess.session_date)
-                    .sort((a:any, b:any) => {
-                      if (a.session_type === 'principal' && b.session_type !== 'principal') return -1
-                      if (b.session_type === 'principal' && a.session_type !== 'principal') return 1
-                      return (a.id || '').localeCompare(b.id || '')
-                    })
-                  let suffix = ''
-                  if (sameDay.length > 1) {
-                    const idx = sameDay.findIndex((s:any) => s.id === sess.id)
-                    suffix = `_lista_${idx + 1}`
-                  }
-                  const filename = `Anexa 10 - Fise de evaluare aptitudini ${clasa} ${locName} ${dataFormatata}${suffix}.pdf`
-                  const titluFaraExt = filename.replace(/\.pdf$/, '')
                   const res=await fetch('/api/generate-fise-pdf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id})})
                   const isPdfFallback=res.headers.get('X-Pdf-Fallback')==='true'
-                  if(isPdfFallback){
-                    // HTML pentru print - injectam <title> ca sa apara ca filename la Save as PDF
-                    let html = await res.text()
-                    if (/<title>[^<]*<\/title>/i.test(html)) {
-                      html = html.replace(/<title>[^<]*<\/title>/i, `<title>${titluFaraExt}</title>`)
-                    } else if (/<head[^>]*>/i.test(html)) {
-                      html = html.replace(/<head[^>]*>/i, m => `${m}<title>${titluFaraExt}</title>`)
-                    } else {
-                      html = `<title>${titluFaraExt}</title>` + html
-                    }
-                    const win = window.open('', '_blank')
-                    if (win) { win.document.write(html); win.document.close(); setTimeout(()=>win.print(), 1000) }
-                  } else {
-                    const blob=await res.blob();const url=URL.createObjectURL(blob)
-                    const a=document.createElement('a');a.href=url;a.download=filename;a.click()
-                  }
+                  const blob=await res.blob();const url=URL.createObjectURL(blob)
+                  if(isPdfFallback){const win=window.open(url,'_blank');if(win)win.onload=()=>win.print()}
+                  else{const a=document.createElement('a');a.href=url;a.download=`Fise_${sess.session_date}.pdf`;a.click()}
                 }catch(e:any){alert(e.message)}setGPDF(false)}}
                   disabled={gPDF||students.length===0} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-medium border border-red-100 text-red-700 hover:bg-red-50 disabled:opacity-50">
                   <Download size={13}/>{gPDF?'Se generează...':'Fișe PDF cu semnături'}
@@ -1979,37 +1778,28 @@ Set Sail NauticSchool
                 <div>
                   <div className="flex items-center justify-between mb-1">
                     <label className="text-xs text-gray-400">TO</label>
-                    <button onClick={()=>navigator.clipboard.writeText(authTo)}
+                    <button onClick={()=>navigator.clipboard.writeText(sess.evaluators?.email_oficial||(isRadio?'secretariat@ancom.ro':'autorizari@rna.ro'))}
                       className="text-xs text-blue-500 hover:text-blue-700 flex items-center gap-1">
                       <Copy size={11}/>Copiază
                     </button>
                   </div>
-                  <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-400"
-                    value={authTo} onChange={e=>setAuthTo(e.target.value)} placeholder="destinatar@..."/>
+                  <div className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-700 bg-gray-50 select-all">
+                    {sess.evaluators?.email_oficial || (isRadio ? 'secretariat@ancom.ro' : 'autorizari@rna.ro')}
+                  </div>
                 </div>
-                {/* CC */}
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs text-gray-400">CC</label>
-                    <button onClick={()=>navigator.clipboard.writeText(authCc)}
-                      className="text-xs text-blue-500 hover:text-blue-700 flex items-center gap-1">
-                      <Copy size={11}/>Copiază
-                    </button>
+                {isRadio && sess.evaluators?.email_personal && (
+                  <div>
+                    <label className="text-xs text-gray-400 block mb-1">CC</label>
+                    <div className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-700 bg-gray-50 select-all">
+                      {sess.evaluators.email_personal}
+                    </div>
                   </div>
-                  <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-400"
-                    value={authCc} onChange={e=>setAuthCc(e.target.value)} placeholder="cc@... (opțional)"/>
-                </div>
-                {/* BCC */}
+                )}
                 <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <label className="text-xs text-gray-400">BCC</label>
-                    <button onClick={()=>navigator.clipboard.writeText(authBcc)}
-                      className="text-xs text-blue-500 hover:text-blue-700 flex items-center gap-1">
-                      <Copy size={11}/>Copiază
-                    </button>
+                  <label className="text-xs text-gray-400 block mb-1">BCC</label>
+                  <div className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-700 bg-gray-50 select-all">
+                    office@setsail.ro
                   </div>
-                  <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-700 focus:outline-none focus:ring-1 focus:ring-blue-400"
-                    value={authBcc} onChange={e=>setAuthBcc(e.target.value)} placeholder="bcc@..."/>
                 </div>
                 {/* Subiect */}
                 <div>
@@ -2050,13 +1840,6 @@ Set Sail NauticSchool
                               const rawBody = t.body_html || t.body_text || ''
                               setAuthSubject(applyTemplate(t.subject, sess, allContacts))
                               setAuthBody(applyTemplate(rawBody, sess, allContacts))
-                              setSelectedAuthCategory(catKey)
-                              // Daca template-ul are adrese, le aplicam (suprascriu cele din UI)
-                              // Curatare: scoatem {{}} orfane si separatori orfani (', ,' sau ',  ')
-                              const cleanEmail = (s:string) => s.replace(/\{\{\s*\}\}/g, '').replace(/,\s*,/g, ',').replace(/^[,\s]+|[,\s]+$/g, '').trim()
-                              if (t.to_emails)  setAuthTo(cleanEmail(applyTemplate(t.to_emails, sess, allContacts)))
-                              if (t.cc_emails)  setAuthCc(cleanEmail(applyTemplate(t.cc_emails, sess, allContacts)))
-                              if (t.bcc_emails) setAuthBcc(cleanEmail(applyTemplate(t.bcc_emails, sess, allContacts)))
                             }}
                             className="text-left px-3 py-2 rounded-lg text-xs border border-gray-200 hover:bg-blue-50 hover:border-blue-200 transition-colors">
                             {t.label}
@@ -2067,60 +1850,12 @@ Set Sail NauticSchool
                   )
                 })()}
                 {/* Gmail */}
-                <a href={`https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(authTo)}${authCc?'&cc='+encodeURIComponent(authCc):''}${authBcc?'&bcc='+encodeURIComponent(authBcc):''}&su=${encodeURIComponent(authSubject)}&body=${encodeURIComponent(authBody)}`}
+                <a href={`https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(sess.evaluators?.email_oficial||(isRadio?'secretariat@ancom.ro':'autorizari@rna.ro'))}${isRadio&&sess.evaluators?.email_personal?'&cc='+encodeURIComponent(sess.evaluators.email_personal):''}&bcc=${encodeURIComponent('office@setsail.ro')}&su=${encodeURIComponent(authSubject)}&body=${encodeURIComponent(authBody)}`}
                   target="_blank" rel="noopener noreferrer"
                   className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-medium text-white"
                   style={{background:'#0a1628'}}>
                   <Mail size={13}/> Deschide în Gmail
                 </a>
-                {/* Butoane ATAS toate instiintarile - apar doar daca template-ul selectat e ANCOM */}
-                {selectedAuthCategory === 'ancom' && (
-                  <>
-                    <div className="flex gap-1.5">
-                      <button onClick={async()=>{
-                        try {
-                          const res = await fetch('/api/generate-instiintare-ancom-toate',{
-                            method:'POST',
-                            headers:{'Content-Type':'application/json'},
-                            body: JSON.stringify({session_id: sess.id, cu_stampila: true})
-                          })
-                          if (!res.ok) { const e = await res.text(); throw new Error(e) }
-                          const html = await res.text()
-                          const wPdf = window.open('', '_blank')
-                          if (wPdf) { wPdf.document.write(html); wPdf.document.close(); setTimeout(() => wPdf.print(), 1200) }
-                          const gmailUrl = `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(authTo)}${authCc?'&cc='+encodeURIComponent(authCc):''}${authBcc?'&bcc='+encodeURIComponent(authBcc):''}&su=${encodeURIComponent(authSubject)}&body=${encodeURIComponent(authBody)}`
-                          setTimeout(() => window.open(gmailUrl, '_blank'), 600)
-                        } catch(e:any) { alert(e.message) }
-                      }}
-                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-semibold text-white"
-                        style={{background:'#7c3aed'}} title="PDF cu ștampilă și semnătură + deschide Gmail">
-                        <Download size={12}/> PDF cu ștamp.+ Gmail
-                      </button>
-                      <button onClick={async()=>{
-                        try {
-                          const res = await fetch('/api/generate-instiintare-ancom-toate',{
-                            method:'POST',
-                            headers:{'Content-Type':'application/json'},
-                            body: JSON.stringify({session_id: sess.id, cu_stampila: false})
-                          })
-                          if (!res.ok) { const e = await res.text(); throw new Error(e) }
-                          const html = await res.text()
-                          const wPdf = window.open('', '_blank')
-                          if (wPdf) { wPdf.document.write(html); wPdf.document.close(); setTimeout(() => wPdf.print(), 1200) }
-                          const gmailUrl = `https://mail.google.com/mail/?view=cm&to=${encodeURIComponent(authTo)}${authCc?'&cc='+encodeURIComponent(authCc):''}${authBcc?'&bcc='+encodeURIComponent(authBcc):''}&su=${encodeURIComponent(authSubject)}&body=${encodeURIComponent(authBody)}`
-                          setTimeout(() => window.open(gmailUrl, '_blank'), 600)
-                        } catch(e:any) { alert(e.message) }
-                      }}
-                        className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-semibold border-2 border-purple-300 text-purple-700 hover:bg-purple-50"
-                        title="PDF FĂRĂ ștampilă/semnătură + deschide Gmail">
-                        <Download size={12}/> PDF fără ștamp.+ Gmail
-                      </button>
-                    </div>
-                    <p className="text-xs text-gray-400 text-center -mt-1">
-                      După deschidere atașează PDF-ul salvat la mailul Gmail
-                    </p>
-                  </>
-                )}
               </div>
             )}
           </div>
@@ -2296,7 +2031,9 @@ Set Sail NauticSchool
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
             <div className="flex items-center justify-between p-5 border-b border-gray-100">
               <h3 className="font-semibold text-gray-900">
-                {showNrModal === 'solicitare' ? 'Nr. înștiințări ANCOM' : 'Nr. documente PV (LRC)'}
+                {showNrModal === 'solicitare'
+                ? (isRadioSession ? 'Nr. înștiințări ANCOM' : 'Nr. înștiințare ANR')
+                : 'Nr. documente PV (LRC)'}
               </h3>
               <button onClick={()=>setShowNrModal(null)} className="p-1 rounded hover:bg-gray-100 text-gray-400">
                 <X size={16}/>
@@ -2337,7 +2074,9 @@ Set Sail NauticSchool
                 <button onClick={confirmNrModal}
                   className="w-full py-2.5 rounded-xl text-sm font-medium text-white mb-5"
                   style={{background:'#0a1628'}}>
-                  ✓ Alocă numerele {nrModalNext}–{nrModalNext+3}
+                  ✓ {(showNrModal === 'solicitare' ? SOL_TIPS : DOC_TIPS).length === 1
+                    ? 'Alocă numărul ' + nrModalNext
+                    : 'Alocă numerele ' + nrModalNext + '–' + (nrModalNext + (showNrModal === 'solicitare' ? SOL_TIPS : DOC_TIPS).length - 1)}
                 </button>
 
                 {/* Istoric */}
