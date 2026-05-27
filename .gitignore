@@ -1,4 +1,30 @@
 node_modules/
 .next/
 .env.local
+.env
+.env.*
+!.env.example
 *.log
+
+# Claude Code preview config (local-only)
+.claude/
+
+# Mailing module — credentials, tokens, generated artifacts
+mailing/credentials/
+mailing/.env
+mailing/.env.*
+!mailing/.env.example
+mailing/node_modules/
+mailing/dist/
+mailing/build/
+mailing/token.json
+mailing/*.token.json
+mailing/output/
+
+# Misc secrets
+**/client_secret*.json
+**/credentials.json
+**/token.json
+**/refresh_token*
+*.pem
+*.key

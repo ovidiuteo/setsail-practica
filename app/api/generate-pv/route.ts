@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
   const evaluatorNume = session.evaluators?.full_name || '................................'
   const evaluatorFunctie = session.evaluators?.title || '................................'
   const decizieANR = session.evaluators?.decision_number || '................................'
-  const nrSolicitare = session.request_number || '……../….......……'
+  const nrSolicitare = session.nr_instiintare_anr || '……../….......……'
   const locatieDetaliata = session.location_detail ||
     session.locations?.location_detail ||
     `${session.locations?.name || ''}, jud. ${session.locations?.county || ''}`

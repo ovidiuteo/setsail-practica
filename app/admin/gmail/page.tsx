@@ -1,0 +1,543 @@
+'use client'
+
+import { useEffect, useMemo, useState } from 'react'
+import {
+  Search,
+  RefreshCw,
+  Check,
+  X,
+  Trash2,
+  Edit2,
+  ChevronDown,
+  ChevronUp,
+  Sparkles,
+  Save,
+} from 'lucide-react'
+import GoogleGIcon from '@/components/GoogleGIcon'
+
+type Template = {
+  id: string
+  key: string
+  label: string
+  category: 'scoala' | 'expeditii' | 'sales' | 'admin' | 'altele'
+  subject: string
+  body_text: string
+  body_html: string | null
+  variables: string[]
+  is_active: boolean
+  is_proposed: boolean
+  source_message_ids: string[]
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+const CATEGORY_LABELS: Record<Template['category'], string> = {
+  scoala: 'Școală',
+  expeditii: 'Expediții',
+  sales: 'Sales',
+  admin: 'Admin',
+  altele: 'Altele',
+}
+
+const CATEGORY_COLORS: Record<Template['category'], { bg: string; fg: string }> = {
+  scoala: { bg: '#dbeafe', fg: '#1e40af' },
+  expeditii: { bg: '#dcfce7', fg: '#15803d' },
+  sales: { bg: '#fef3c7', fg: '#92400e' },
+  admin: { bg: '#f3e8ff', fg: '#6b21a8' },
+  altele: { bg: '#f3f4f6', fg: '#374151' },
+}
+
+function highlightVars(text: string) {
+  return text.split(/(\{\{[^}]+\}\})/g).map((p, i) =>
+    p.startsWith('{{') && p.endsWith('}}') ? (
+      <code
+        key={i}
+        style={{
+          background: '#fef3c7',
+          color: '#92400e',
+          padding: '1px 5px',
+          borderRadius: 4,
+          fontSize: '0.85em',
+          fontFamily: 'ui-monospace, monospace',
+        }}
+      >
+        {p}
+      </code>
+    ) : (
+      <span key={i}>{p}</span>
+    ),
+  )
+}
+
+export default function GmailTemplatesPage() {
+  const [templates, setTemplates] = useState<Template[]>([])
+  const [loading, setLoading] = useState(true)
+  const [category, setCategory] = useState<'all' | Template['category']>('all')
+  const [status, setStatus] = useState<'all' | 'proposed' | 'active' | 'inactive'>('all')
+  const [search, setSearch] = useState('')
+  const [expandedId, setExpandedId] = useState<string | null>(null)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [draft, setDraft] = useState<Partial<Template>>({})
+  const [savingId, setSavingId] = useState<string | null>(null)
+
+  async function load() {
+    setLoading(true)
+    const res = await fetch('/api/gmail-templates')
+    const data = await res.json()
+    setTemplates(data.templates ?? [])
+    setLoading(false)
+  }
+  useEffect(() => { load() }, [])
+
+  const filtered = useMemo(() => {
+    return templates.filter((t) => {
+      if (category !== 'all' && t.category !== category) return false
+      if (status === 'proposed' && !t.is_proposed) return false
+      if (status === 'active' && !t.is_active) return false
+      if (status === 'inactive' && (t.is_active || t.is_proposed)) return false
+      if (search) {
+        const s = search.toLowerCase()
+        if (
+          !t.label.toLowerCase().includes(s) &&
+          !t.subject.toLowerCase().includes(s) &&
+          !t.body_text.toLowerCase().includes(s) &&
+          !t.key.toLowerCase().includes(s)
+        ) return false
+      }
+      return true
+    })
+  }, [templates, category, status, search])
+
+  const stats = useMemo(() => ({
+    total: templates.length,
+    proposed: templates.filter((t) => t.is_proposed).length,
+    active: templates.filter((t) => t.is_active).length,
+    inactive: templates.filter((t) => !t.is_active && !t.is_proposed).length,
+  }), [templates])
+
+  async function patch(id: string, body: Partial<Template>) {
+    setSavingId(id)
+    const res = await fetch(`/api/gmail-templates/${id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    })
+    if (res.ok) {
+      const data = await res.json()
+      setTemplates((cur) => cur.map((t) => (t.id === id ? data.template : t)))
+    } else {
+      alert('Eroare la salvare')
+    }
+    setSavingId(null)
+  }
+
+  async function activate(t: Template) {
+    await patch(t.id, { is_active: true, is_proposed: false })
+  }
+  async function deactivate(t: Template) {
+    await patch(t.id, { is_active: false, is_proposed: false })
+  }
+  async function discard(t: Template) {
+    if (!confirm(`Ștergi template-ul "${t.label}"?`)) return
+    setSavingId(t.id)
+    const res = await fetch(`/api/gmail-templates/${t.id}`, { method: 'DELETE' })
+    if (res.ok) setTemplates((cur) => cur.filter((x) => x.id !== t.id))
+    else alert('Eroare la ștergere')
+    setSavingId(null)
+  }
+
+  function startEdit(t: Template) {
+    setEditingId(t.id)
+    setExpandedId(t.id)
+    setDraft({
+      label: t.label,
+      subject: t.subject,
+      body_text: t.body_text,
+      variables: t.variables,
+      category: t.category,
+      notes: t.notes ?? '',
+    })
+  }
+  function cancelEdit() {
+    setEditingId(null)
+    setDraft({})
+  }
+  async function saveEdit(id: string) {
+    await patch(id, draft)
+    setEditingId(null)
+    setDraft({})
+  }
+
+  return (
+    <div className="p-6 max-w-6xl mx-auto">
+      {/* Header */}
+      <div className="flex items-center gap-3 mb-6">
+        <GoogleGIcon size={32} />
+        <div className="flex-1">
+          <h1 className="text-2xl font-bold text-gray-900">Gmail Templates</h1>
+          <p className="text-sm text-gray-500">
+            Template-uri propuse de scanner pe office@setsail.ro
+          </p>
+        </div>
+        <button
+          onClick={load}
+          className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 rounded-lg text-sm hover:bg-gray-50"
+          disabled={loading}
+        >
+          <RefreshCw size={14} className={loading ? 'animate-spin' : ''} />
+          Reîncarcă
+        </button>
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-4 gap-3 mb-5">
+        <StatCard label="Total" value={stats.total} color="#374151" />
+        <StatCard label="Propuse" value={stats.proposed} color="#d97706" />
+        <StatCard label="Active" value={stats.active} color="#15803d" />
+        <StatCard label="Inactive" value={stats.inactive} color="#6b7280" />
+      </div>
+
+      {/* Filters */}
+      <div className="bg-white rounded-lg border border-gray-200 p-3 mb-4 flex flex-wrap items-center gap-2">
+        <div className="relative flex-1 min-w-[200px]">
+          <Search
+            size={14}
+            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400"
+          />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Caută în label, subject, body..."
+            className="w-full pl-8 pr-3 py-1.5 text-sm border border-gray-200 rounded-md focus:outline-none focus:border-gray-400"
+          />
+        </div>
+        <div className="flex gap-1">
+          <FilterChip active={status === 'all'} onClick={() => setStatus('all')}>
+            Toate
+          </FilterChip>
+          <FilterChip active={status === 'proposed'} onClick={() => setStatus('proposed')} color="#d97706">
+            Propuse
+          </FilterChip>
+          <FilterChip active={status === 'active'} onClick={() => setStatus('active')} color="#15803d">
+            Active
+          </FilterChip>
+          <FilterChip active={status === 'inactive'} onClick={() => setStatus('inactive')}>
+            Inactive
+          </FilterChip>
+        </div>
+        <div className="flex gap-1">
+          <FilterChip active={category === 'all'} onClick={() => setCategory('all')}>
+            Toate cat.
+          </FilterChip>
+          {(['scoala', 'expeditii', 'sales', 'admin', 'altele'] as const).map((c) => (
+            <FilterChip
+              key={c}
+              active={category === c}
+              onClick={() => setCategory(c)}
+            >
+              {CATEGORY_LABELS[c]}
+            </FilterChip>
+          ))}
+        </div>
+      </div>
+
+      {/* List */}
+      {loading ? (
+        <div className="text-center text-gray-500 py-12">Se încarcă...</div>
+      ) : filtered.length === 0 ? (
+        <div className="text-center text-gray-500 py-12">
+          {templates.length === 0
+            ? 'Niciun template încă. Rulează scanner-ul.'
+            : 'Niciun template cu filtrele curente.'}
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {filtered.map((t) => {
+            const expanded = expandedId === t.id
+            const editing = editingId === t.id
+            const cat = CATEGORY_COLORS[t.category]
+            return (
+              <div
+                key={t.id}
+                className="bg-white rounded-lg border border-gray-200 overflow-hidden"
+              >
+                {/* Row header */}
+                <div className="p-3 flex items-start gap-3">
+                  {/* Status dot */}
+                  <div
+                    title={
+                      t.is_active ? 'Activ' : t.is_proposed ? 'Propus' : 'Inactiv'
+                    }
+                    className="w-2 h-2 rounded-full mt-2 shrink-0"
+                    style={{
+                      background: t.is_active
+                        ? '#22c55e'
+                        : t.is_proposed
+                        ? '#f59e0b'
+                        : '#9ca3af',
+                    }}
+                  />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <span className="font-semibold text-gray-900">
+                        {t.label}
+                      </span>
+                      <span
+                        className="text-xs px-2 py-0.5 rounded-full font-medium"
+                        style={{ background: cat.bg, color: cat.fg }}
+                      >
+                        {CATEGORY_LABELS[t.category]}
+                      </span>
+                      <code className="text-xs text-gray-400 font-mono">
+                        {t.key}
+                      </code>
+                    </div>
+                    <div className="text-sm text-gray-700 truncate">
+                      <span className="text-gray-400">Subject: </span>
+                      {highlightVars(t.subject)}
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1 flex gap-3 flex-wrap">
+                      <span>{t.variables.length} variabile</span>
+                      <span>·</span>
+                      <span>{t.source_message_ids?.length ?? 0} mesaje sursă</span>
+                      {t.is_proposed && (
+                        <>
+                          <span>·</span>
+                          <span className="flex items-center gap-1" style={{ color: '#d97706' }}>
+                            <Sparkles size={11} /> Necesită revizie
+                          </span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  {/* Actions */}
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button
+                      onClick={() => setExpandedId(expanded ? null : t.id)}
+                      className="p-1.5 rounded hover:bg-gray-100 text-gray-500"
+                      title={expanded ? 'Restrânge' : 'Vezi body'}
+                    >
+                      {expanded ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
+                    </button>
+                    {!editing && (
+                      <button
+                        onClick={() => startEdit(t)}
+                        className="p-1.5 rounded hover:bg-gray-100 text-gray-500"
+                        title="Editează"
+                        disabled={savingId === t.id}
+                      >
+                        <Edit2 size={14} />
+                      </button>
+                    )}
+                    {t.is_active ? (
+                      <button
+                        onClick={() => deactivate(t)}
+                        className="px-2 py-1 rounded text-xs font-medium border border-gray-300 text-gray-600 hover:bg-gray-50"
+                        disabled={savingId === t.id}
+                      >
+                        Dezactivează
+                      </button>
+                    ) : (
+                      <button
+                        onClick={() => activate(t)}
+                        className="px-2 py-1 rounded text-xs font-medium text-white hover:opacity-90 flex items-center gap-1"
+                        style={{ background: '#22c55e' }}
+                        disabled={savingId === t.id}
+                      >
+                        <Check size={12} /> Activează
+                      </button>
+                    )}
+                    <button
+                      onClick={() => discard(t)}
+                      className="p-1.5 rounded hover:bg-red-50 text-red-500"
+                      title="Șterge"
+                      disabled={savingId === t.id}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                </div>
+
+                {/* Expanded body */}
+                {expanded && (
+                  <div className="border-t border-gray-100 bg-gray-50 p-3">
+                    {editing ? (
+                      <div className="space-y-2">
+                        <Field label="Label">
+                          <input
+                            value={draft.label as string}
+                            onChange={(e) => setDraft({ ...draft, label: e.target.value })}
+                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                          />
+                        </Field>
+                        <Field label="Categorie">
+                          <select
+                            value={draft.category as string}
+                            onChange={(e) => setDraft({ ...draft, category: e.target.value as any })}
+                            className="px-2 py-1 text-sm border border-gray-300 rounded"
+                          >
+                            {(['scoala', 'expeditii', 'sales', 'admin', 'altele'] as const).map((c) => (
+                              <option key={c} value={c}>{CATEGORY_LABELS[c]}</option>
+                            ))}
+                          </select>
+                        </Field>
+                        <Field label="Subject">
+                          <input
+                            value={draft.subject as string}
+                            onChange={(e) => setDraft({ ...draft, subject: e.target.value })}
+                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded font-mono"
+                          />
+                        </Field>
+                        <Field label="Variabile (comma-separated)">
+                          <input
+                            value={(draft.variables as string[] ?? []).join(', ')}
+                            onChange={(e) =>
+                              setDraft({
+                                ...draft,
+                                variables: e.target.value
+                                  .split(',')
+                                  .map((s) => s.trim())
+                                  .filter(Boolean),
+                              })
+                            }
+                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded font-mono"
+                          />
+                        </Field>
+                        <Field label="Body">
+                          <textarea
+                            value={draft.body_text as string}
+                            onChange={(e) => setDraft({ ...draft, body_text: e.target.value })}
+                            rows={12}
+                            className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded font-mono whitespace-pre-wrap"
+                            style={{ fontFamily: 'ui-monospace, monospace' }}
+                          />
+                        </Field>
+                        <Field label="Note">
+                          <textarea
+                            value={(draft.notes as string) ?? ''}
+                            onChange={(e) => setDraft({ ...draft, notes: e.target.value })}
+                            rows={2}
+                            className="w-full px-2 py-1 text-sm border border-gray-300 rounded"
+                          />
+                        </Field>
+                        <div className="flex gap-2 pt-1">
+                          <button
+                            onClick={() => saveEdit(t.id)}
+                            disabled={savingId === t.id}
+                            className="flex items-center gap-1 px-3 py-1.5 text-sm rounded text-white"
+                            style={{ background: '#2563eb' }}
+                          >
+                            <Save size={13} /> Salvează
+                          </button>
+                          <button
+                            onClick={cancelEdit}
+                            className="px-3 py-1.5 text-sm border border-gray-300 rounded text-gray-600"
+                          >
+                            <X size={13} className="inline mr-1" /> Anulează
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <div>
+                          <div className="text-xs uppercase tracking-wider text-gray-400 mb-1">
+                            Variabile
+                          </div>
+                          {t.variables.length > 0 ? (
+                            <div className="flex flex-wrap gap-1">
+                              {t.variables.map((v) => (
+                                <code
+                                  key={v}
+                                  className="text-xs px-1.5 py-0.5 rounded"
+                                  style={{
+                                    background: '#fef3c7',
+                                    color: '#92400e',
+                                    fontFamily: 'ui-monospace, monospace',
+                                  }}
+                                >
+                                  {`{{${v}}}`}
+                                </code>
+                              ))}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-gray-400 italic">
+                              Nicio variabilă
+                            </span>
+                          )}
+                        </div>
+                        <div>
+                          <div className="text-xs uppercase tracking-wider text-gray-400 mb-1">
+                            Body
+                          </div>
+                          <div
+                            className="bg-white border border-gray-200 rounded p-2 text-sm whitespace-pre-wrap"
+                            style={{ fontFamily: 'ui-monospace, monospace' }}
+                          >
+                            {highlightVars(t.body_text)}
+                          </div>
+                        </div>
+                        {t.notes && (
+                          <div>
+                            <div className="text-xs uppercase tracking-wider text-gray-400 mb-1">
+                              Note
+                            </div>
+                            <div className="text-sm text-gray-700">{t.notes}</div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function StatCard({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <div className="bg-white rounded-lg border border-gray-200 p-3">
+      <div className="text-xs text-gray-500">{label}</div>
+      <div className="text-2xl font-bold" style={{ color }}>{value}</div>
+    </div>
+  )
+}
+
+function FilterChip({
+  children,
+  active,
+  onClick,
+  color = '#374151',
+}: {
+  children: React.ReactNode
+  active: boolean
+  onClick: () => void
+  color?: string
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className="px-2.5 py-1 text-xs rounded-md transition-colors"
+      style={
+        active
+          ? { background: color, color: '#fff' }
+          : { background: '#f3f4f6', color: '#6b7280' }
+      }
+    >
+      {children}
+    </button>
+  )
+}
+
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <div className="text-xs uppercase tracking-wider text-gray-500 mb-1">{label}</div>
+      {children}
+    </div>
+  )
+}

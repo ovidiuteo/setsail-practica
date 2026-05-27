@@ -2357,6 +2357,7 @@ export default function SessionDetailPage() {
       evaluator_id: (sess as any).evaluator_id || '',
       instructor_id: (sess as any).instructor_id || '',
       class_caa: sess.class_caa || 'C,D',
+      nr_instiintare_anr: (sess as any).nr_instiintare_anr || '',
       request_number: sess.request_number || '',
       nr_document_ancom: (sess as any).nr_document_ancom || '',
       location_detail: sess.location_detail || '',
@@ -2365,7 +2366,21 @@ export default function SessionDetailPage() {
 
   async function saveEditSession(sid: string) {
     setSavingSession(true)
-    await supabase.from('sessions').update(editSessionValues).eq('id', sid)
+    // Postgres respinge '' pentru coloane date/uuid — convertim la null.
+    const nullableEmpty = [
+      'course_start_date', 'session_date', 'practice_start_date',
+      'location_id', 'boat_id', 'evaluator_id', 'instructor_id',
+    ]
+    const payload: any = { ...editSessionValues }
+    for (const col of nullableEmpty) {
+      if (payload[col] === '') payload[col] = null
+    }
+    const { error } = await supabase.from('sessions').update(payload).eq('id', sid)
+    if (error) {
+      alert('Eroare la salvare: ' + error.message)
+      setSavingSession(false)
+      return
+    }
     // Reload session data
     const { data: updated } = await supabase.from('sessions').select('*, locations(*), boats(*), evaluators(*), instructors(*)').eq('id', sid).single()
     if (updated) {
@@ -2650,8 +2665,9 @@ export default function SessionDetailPage() {
                 ['Data start curs', 'course_start_date', 'date'],
                 ['Data start practică', 'practice_start_date', 'date'],
                 ['Data practică', 'session_date', 'date'],
-                ['Nr. înștiințări', 'request_number', 'text'],
                 ['Nr. documente PV', 'nr_document_ancom', 'text'],
+                ['Nr. înștiintare reg ANR', 'nr_instiintare_anr', 'text'],
+                ['Nr. înștiințări', 'request_number', 'text'],
                 ['Locație detaliată', 'location_detail', 'text'],
                 ['Clasa CAA', 'class_caa', 'select-class'],
               ].map(([label, key, type]) => (
