@@ -28,10 +28,30 @@ export async function POST(req: NextRequest) {
   }
 
   const headerImageBuffer = getHeaderImage(session.locations?.header_image || null)
-  const dateStr = session.session_date.replace(/-/g, '_')
   const sessionDate = new Date(session.session_date).toLocaleDateString('ro-RO', {
     day: '2-digit', month: 'long', year: 'numeric'
   })
+
+  // Sufix _lista_N pentru clonele unei sesiuni principale (principala rămâne fără sufix).
+  // N = poziția (cronologică) + 2 — adică principala e implicit lista 1, prima clonă = lista 2.
+  let listaSuffix = ''
+  if (session.parent_session_id) {
+    // Doar clonele (NU și sesiunea de absenți care e tot copilă a principalei)
+    const { data: siblings } = await supabase
+      .from('sessions')
+      .select('id, created_at')
+      .eq('parent_session_id', session.parent_session_id)
+      .eq('session_type', 'clone')
+      .order('created_at', { ascending: true })
+    const idx = (siblings ?? []).findIndex((s: any) => s.id === session_id)
+    listaSuffix = `_lista_${Math.max(idx, 0) + 2}`
+  }
+  // Nume locație sanitizat (păstrăm doar litere/cifre, fără spații/diacritice problematice în filename)
+  const locSlug = (session.locations?.name || 'Sesiune')
+    .normalize('NFD').replace(/[̀-ͯ]/g, '') // strip diacritics
+    .replace(/[^A-Za-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '')
+  const fileBase = `PV_Practica_${session.session_date}_${locSlug}${listaSuffix}`
 
   const {
     Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
@@ -395,7 +415,7 @@ export async function POST(req: NextRequest) {
   return new NextResponse(uint8, {
     headers: {
       'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'Content-Disposition': `attachment; filename="PV_Practic_${dateStr}.docx"`,
+      'Content-Disposition': `attachment; filename="${fileBase}.docx"`,
     }
   })
 }
