@@ -239,32 +239,24 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
     const originLabel = `${new Date(originSess.session_date).toLocaleDateString('ro-RO',{day:'2-digit',month:'long',year:'numeric'})} — ${(originSess as any).locations?.name||''}`
 
     if (isAbsent) {
-      // Absent -> alta sesiune: cream profil nou cu toate datele + nota
+      // Absent -> alta sesiune: UPDATE simplu (NU mai cream profil duplicat).
+      // Păstrăm în notă urma trecerii prin absenți.
       const noteNou = [s.notes, `Absent de la sesiunea ${originLabel}`].filter(Boolean).join(' | ')
-      await supabase.from('students').insert({
+      await supabase.from('students').update({
         session_id: targetSessionId,
-        full_name: s.full_name,
-        cnp: s.cnp,
-        email: s.email,
-        phone: s.phone,
-        birth_date: s.birth_date,
-        ci_series: s.ci_series,
-        ci_number: s.ci_number,
-        ci_image_data: s.ci_image_data,
-        address: s.address,
-        city: (s as any).city,
-        county: s.county,
-        class_caa: s.class_caa,
         order_in_session: maxOrder + 1,
         portal_status: 'pending',
-        original_session_id: targetSessionId,
         notes: noteNou,
-      })
-      // Pe profilul vechi (sesiunea absent) adaugam nota si il lasam acolo
-      const noteVechi = [s.notes, `A făcut practica la sesiunea ${targetLabel}`].filter(Boolean).join(' | ')
-      await supabase.from('students').update({ notes: noteVechi }).eq('id', s.id)
+      }).eq('id', s.id)
       // Scoatem din lista de absenti in UI
       setStudents(students.filter(st => st.id !== s.id))
+      setAllStudents(targetSessionId, [...targetStudents, {
+        ...s,
+        session_id: targetSessionId,
+        portal_status: 'pending',
+        order_in_session: maxOrder + 1,
+        notes: noteNou,
+      }])
     } else {
       // Mutare normala (non-absent) -> alt slot
       await supabase.from('students').update({ session_id: targetSessionId, order_in_session: maxOrder+1 }).eq('id', s.id)
