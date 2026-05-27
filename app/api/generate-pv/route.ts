@@ -56,7 +56,8 @@ export async function POST(req: NextRequest) {
   const {
     Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
     AlignmentType, BorderStyle, WidthType, ShadingType, ImageRun,
-    TabStopType, PageNumber, Footer, Header, convertMillimetersToTwip
+    TabStopType, PageNumber, Footer, Header, convertMillimetersToTwip,
+    VerticalAlign,
   } = await import('docx')
 
   // Rezolva capitania bazata pe locatie (#...# logic)
@@ -174,23 +175,23 @@ export async function POST(req: NextRequest) {
     const headerRow = new TableRow({
       tableHeader: true,
       children: [
-        new TableCell({ borders, width: { size: colW[0], type: WidthType.DXA }, margins: cellM, shading: { fill: 'FFFFFF', type: ShadingType.CLEAR }, verticalMerge: 'restart' as any,
+        new TableCell({ borders, width: { size: colW[0], type: WidthType.DXA }, margins: cellM, shading: { fill: 'FFFFFF', type: ShadingType.CLEAR }, verticalAlign: VerticalAlign.CENTER, verticalMerge: 'restart' as any,
           children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Nr.', italics: true, size: 22 })] }),
                      new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'crt.', italics: true, size: 22 })] })] }),
-        new TableCell({ borders, width: { size: colW[1], type: WidthType.DXA }, margins: cellM, shading: { fill: 'FFFFFF', type: ShadingType.CLEAR },
+        new TableCell({ borders, width: { size: colW[1], type: WidthType.DXA }, margins: cellM, shading: { fill: 'FFFFFF', type: ShadingType.CLEAR }, verticalAlign: VerticalAlign.CENTER,
           children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Nume', italics: true, size: 22 })] })] }),
-        new TableCell({ borders, width: { size: colW[2], type: WidthType.DXA }, margins: cellM, shading: { fill: 'FFFFFF', type: ShadingType.CLEAR },
+        new TableCell({ borders, width: { size: colW[2], type: WidthType.DXA }, margins: cellM, shading: { fill: 'FFFFFF', type: ShadingType.CLEAR }, verticalAlign: VerticalAlign.CENTER,
           children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Prenume', italics: true, size: 22 })] })] }),
-        new TableCell({ borders, width: { size: colW[3], type: WidthType.DXA }, margins: cellM, shading: { fill: 'FFFFFF', type: ShadingType.CLEAR },
+        new TableCell({ borders, width: { size: colW[3], type: WidthType.DXA }, margins: cellM, shading: { fill: 'FFFFFF', type: ShadingType.CLEAR }, verticalAlign: VerticalAlign.CENTER,
           children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'CNP', italics: true, size: 22 })] })] }),
-        new TableCell({ borders, width: { size: colW[4], type: WidthType.DXA }, margins: cellM, shading: { fill: 'FFFFFF', type: ShadingType.CLEAR },
+        new TableCell({ borders, width: { size: colW[4], type: WidthType.DXA }, margins: cellM, shading: { fill: 'FFFFFF', type: ShadingType.CLEAR }, verticalAlign: VerticalAlign.CENTER,
           children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Clasa', italics: true, size: 22 })] }),
                      new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'CAA', italics: true, size: 22 })] })] }),
-        new TableCell({ borders, width: { size: colW[5], type: WidthType.DXA }, margins: cellM, shading: { fill: 'FFFFFF', type: ShadingType.CLEAR },
+        new TableCell({ borders, width: { size: colW[5], type: WidthType.DXA }, margins: cellM, shading: { fill: 'FFFFFF', type: ShadingType.CLEAR }, verticalAlign: VerticalAlign.CENTER,
           children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Admis', italics: true, size: 22 })] })] }),
-        new TableCell({ borders, width: { size: colW[6], type: WidthType.DXA }, margins: cellM, shading: { fill: 'FFFFFF', type: ShadingType.CLEAR },
+        new TableCell({ borders, width: { size: colW[6], type: WidthType.DXA }, margins: cellM, shading: { fill: 'FFFFFF', type: ShadingType.CLEAR }, verticalAlign: VerticalAlign.CENTER,
           children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Respins', italics: true, size: 22 })] })] }),
-        new TableCell({ borders, width: { size: colW[7], type: WidthType.DXA }, margins: cellM, shading: { fill: 'FFFFFF', type: ShadingType.CLEAR },
+        new TableCell({ borders, width: { size: colW[7], type: WidthType.DXA }, margins: cellM, shading: { fill: 'FFFFFF', type: ShadingType.CLEAR }, verticalAlign: VerticalAlign.CENTER,
           children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Absent', italics: true, size: 22 })] })] }),
       ]
     })
@@ -290,6 +291,10 @@ export async function POST(req: NextRequest) {
   }
 
   const children: any[] = [
+    // 2 paragrafe goale înainte de antet (împing antetul mai jos)
+    new Paragraph({ children: [new TextRun({ text: '', size: 22 })] }),
+    new Paragraph({ children: [new TextRun({ text: '', size: 22 })] }),
+
     // Antet
     ...makeHeader(),
 
