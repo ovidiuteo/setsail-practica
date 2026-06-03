@@ -1,5 +1,5 @@
 import Link from 'next/link'
-import { Anchor, MapPin } from 'lucide-react'
+import { Anchor, MapPin, Image as ImageIcon } from 'lucide-react'
 import { supabase, getActiveSeason, getRegattasBySeason } from '@/lib/ssyt/supabase'
 
 export const dynamic = 'force-dynamic'
@@ -7,6 +7,20 @@ export const dynamic = 'force-dynamic'
 export default async function PublicRegattasPage() {
   const season = await getActiveSeason()
   const regattas = season ? await getRegattasBySeason(season.id) : []
+
+  // Regate care au cel puțin o poză publică (pentru link-ul „Vezi poze" la cele trecute)
+  const regattaIdsWithPhotos = new Set<string>()
+  if (regattas.length > 0) {
+    const { data: photoRows } = await supabase
+      .from('ssyt_media')
+      .select('regatta_id')
+      .eq('media_type', 'photo')
+      .eq('visibility', 'public')
+      .in('regatta_id', regattas.map((r: any) => r.id))
+    for (const row of photoRows || []) {
+      if (row.regatta_id) regattaIdsWithPhotos.add(row.regatta_id as string)
+    }
+  }
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-12">
@@ -27,7 +41,7 @@ export default async function PublicRegattasPage() {
       {regattas.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {regattas.map((r: any) => (
-            <RegattaCard key={r.id} regatta={r} />
+            <RegattaCard key={r.id} regatta={r} hasPhotos={regattaIdsWithPhotos.has(r.id)} />
           ))}
         </div>
       ) : (
@@ -89,7 +103,7 @@ function getDynamicStatus(startDate: string, endDate: string | null): {
   return { state: 'upcoming', label: 'UPCOMING', color: '#3B82F6', bg: 'rgba(59,130,246,0.12)', subText }
 }
 
-function RegattaCard({ regatta }: { regatta: any }) {
+function RegattaCard({ regatta, hasPhotos = false }: { regatta: any; hasPhotos?: boolean }) {
   const eventTypeColors: Record<string, string> = {
     regatta: '#FF6B35',
     training: '#00A8B5',
@@ -107,14 +121,26 @@ function RegattaCard({ regatta }: { regatta: any }) {
   const day2 = d2 ? d2.getDate() : null
   const monthShort = d1.toLocaleString('ro-RO', { month: 'short' })
 
-  // Past events: gri + opacitate redusa, nu mai sunt clickable
+  // Past events: gri + opacitate redusa, nu mai sunt clickable — dar daca au poze, link „Vezi poze"
   if (isPast) {
     return (
       <div
-        className="block rounded-xl overflow-hidden cursor-not-allowed"
-        style={{ background: '#fff', border: '1px solid #e5e7eb', opacity: 0.55, filter: 'grayscale(60%)' }}
+        className="group relative block rounded-xl overflow-hidden cursor-not-allowed"
+        style={{ background: '#fff', border: '1px solid #e5e7eb' }}
       >
-        <CardContent regatta={regatta} status={status} eventColor="#9CA3AF" monthShort={monthShort} day1={day1} day2={day2} d1={d1} disabled />
+        <div style={{ opacity: 0.55, filter: 'grayscale(60%)' }}>
+          <CardContent regatta={regatta} status={status} eventColor="#9CA3AF" monthShort={monthShort} day1={day1} day2={day2} d1={d1} disabled />
+        </div>
+        {hasPhotos && (
+          <Link
+            href={`/ssyt/media?regatta=${regatta.id}`}
+            title="Vezi poze"
+            className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-white opacity-0 group-hover:opacity-100 transition cursor-pointer hover:opacity-100"
+            style={{ background: '#0a1628' }}
+          >
+            <ImageIcon size={13} /> Vezi poze
+          </Link>
+        )}
       </div>
     )
   }
