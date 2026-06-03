@@ -67,20 +67,23 @@ export default function MediaTab({ regattaId, media, onChange }: { regattaId: st
                 )}
               </div>
               <div className="p-3">
-                {m.team && (
-                  <div className="text-xs font-medium mb-2" style={{ color: '#0a1628' }}>
+                {m.team ? (
+                  <div className="text-xs font-medium mb-3" style={{ color: '#0a1628' }}>
                     Echipa {m.team.short_name || m.team.name}
                   </div>
+                ) : (
+                  <>
+                    <div className="text-xs text-gray-600 mb-2">
+                      <EditableField value={m.caption} onSave={(v) => updateField(m.id, 'caption', v)} placeholder="Caption..." />
+                    </div>
+                    <div className="text-xs text-gray-500 mb-2">
+                      Credit: <EditableField value={m.credit} onSave={(v) => updateField(m.id, 'credit', v)} placeholder="autor / fotograf" />
+                    </div>
+                    <div className="text-xs text-gray-400 font-mono break-all mb-3">
+                      <EditableField value={m.url} onSave={(v) => updateField(m.id, 'url', v)} placeholder="URL" type="url" />
+                    </div>
+                  </>
                 )}
-                <div className="text-xs text-gray-600 mb-2">
-                  <EditableField value={m.caption} onSave={(v) => updateField(m.id, 'caption', v)} placeholder="Caption..." />
-                </div>
-                <div className="text-xs text-gray-500 mb-2">
-                  Credit: <EditableField value={m.credit} onSave={(v) => updateField(m.id, 'credit', v)} placeholder="autor / fotograf" />
-                </div>
-                <div className="text-xs text-gray-400 font-mono break-all mb-3">
-                  <EditableField value={m.url} onSave={(v) => updateField(m.id, 'url', v)} placeholder="URL" type="url" />
-                </div>
                 <div className="flex items-center justify-between text-xs">
                   {!m.is_featured ? (
                     <button onClick={() => setFeatured(m.id)} className="text-gray-500 hover:text-gray-900 inline-flex items-center gap-1">
