@@ -39,10 +39,10 @@ export default async function AdminAvailabilityPage() {
     supabase
       .from('ssyt_team_memberships')
       .select(`
-        id, team_id, participant_id, membership_type, punctual_anchor_regatta_id,
+        id, team_id, participant_id, membership_type, status, punctual_anchor_regatta_id,
         participant:ssyt_participants(id, full_name, first_name, last_name)
       `)
-      .eq('status', 'active')
+      .in('status', ['active', 'left'])
       .limit(2000),
     supabase
       .from('ssyt_regatta_participation')
@@ -86,8 +86,13 @@ export default async function AdminAvailabilityPage() {
     participant: participantMap[p.participant_id] || null,
   }))
 
+  // Membership-uri: active (randuri cu nume) vs ascunse 'left' (placeholder anonim)
+  const allMemberships = membershipsRes.data || []
+  const activeMemberships = allMemberships.filter((m: any) => m.status === 'active')
+  const hiddenMemberships = allMemberships.filter((m: any) => m.status === 'left')
+
   // Filtru nealocati: participanti care nu sunt in nicio echipa activa
-  const allocatedIds = new Set((membershipsRes.data || []).map((m) => m.participant_id))
+  const allocatedIds = new Set(activeMemberships.map((m) => m.participant_id))
   const unallocatedParticipants = (unallocatedParticipantsRes.data || [])
     .filter((p) => !allocatedIds.has(p.id))
 
@@ -109,7 +114,8 @@ export default async function AdminAvailabilityPage() {
       <AvailabilityTabs
         regattas={regattas || []}
         teams={teamsRes.data || []}
-        memberships={membershipsRes.data || []}
+        memberships={activeMemberships}
+        hiddenMemberships={hiddenMemberships}
         participation={enrichedParticipation}
         unallocatedParticipants={unallocatedParticipants}
         archivedRows={archivedRowsRes.data || []}

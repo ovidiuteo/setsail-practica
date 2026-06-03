@@ -11,6 +11,7 @@ export default function AvailabilityTabs(props: {
   regattas: any[]
   teams: any[]
   memberships: any[]
+  hiddenMemberships?: any[]
   participation: any[]
   unallocatedParticipants: any[]
   archivedRows: any[]
@@ -30,6 +31,7 @@ export default function AvailabilityTabs(props: {
           regattas={props.regattas}
           teams={props.teams}
           memberships={props.memberships}
+          hiddenMemberships={props.hiddenMemberships || []}
           participation={props.participation}
           unallocatedParticipants={props.unallocatedParticipants}
         />
