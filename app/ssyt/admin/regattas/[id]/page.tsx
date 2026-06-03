@@ -25,7 +25,7 @@ export default async function AdminRegattaDetailPage({ params }: { params: { id:
     `).eq('regatta_id', regatta.id),
     supabase.from('ssyt_results').select(`*, team:ssyt_teams(id, name, short_name, color_primary)`).eq('regatta_id', regatta.id).order('ssyt_internal_place'),
     supabase.from('ssyt_regatta_documents').select('*, document_type:ssyt_document_types(name, code)').eq('regatta_id', regatta.id).order('uploaded_at', { ascending: false }),
-    supabase.from('ssyt_media').select('*').eq('regatta_id', regatta.id).order('display_order'),
+    supabase.from('ssyt_media').select('*, team:ssyt_teams(id, name, short_name)').eq('regatta_id', regatta.id).order('display_order'),
     supabase.from('ssyt_teams').select('id, name, short_name, color_primary, boat:ssyt_boats(name)').eq('status', 'active').order('display_order'),
     supabase.from('ssyt_participants').select('id, full_name').in('status', ['active', 'accepted']).order('full_name'),
     supabase.from('ssyt_roles').select('*').eq('is_active', true).order('display_order'),

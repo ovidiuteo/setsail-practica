@@ -67,6 +67,11 @@ export default function MediaTab({ regattaId, media, onChange }: { regattaId: st
                 )}
               </div>
               <div className="p-3">
+                {m.team && (
+                  <div className="text-xs font-medium mb-2" style={{ color: '#0a1628' }}>
+                    Echipa {m.team.short_name || m.team.name}
+                  </div>
+                )}
                 <div className="text-xs text-gray-600 mb-2">
                   <EditableField value={m.caption} onSave={(v) => updateField(m.id, 'caption', v)} placeholder="Caption..." />
                 </div>
