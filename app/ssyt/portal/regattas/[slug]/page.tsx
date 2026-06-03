@@ -6,6 +6,7 @@ import RegattaDocsList from './RegattaDocsList'
 import TeamCrewSection, { type CrewMember } from './TeamCrewSection'
 import RegattaPhotoGallery, { type RegattaPhoto } from '@/components/ssyt/portal/RegattaPhotoGallery'
 import RegattaJournal from '@/components/ssyt/portal/RegattaJournal'
+import RegattaTeamsFeed from '@/components/ssyt/portal/RegattaTeamsFeed'
 
 function isRegattaFrozen(end_date: string | null, status: string | null): boolean {
   if (status === 'completed' || status === 'cancelled') return true
@@ -202,6 +203,52 @@ export default async function PortalRegattaDetailPage({ params }: { params: { sl
     }
   }
 
+  // Feed: jurnale + poze de la toate echipele (read-only), echipa proprie prima
+  const { data: allTeamsData } = await supabase
+    .from('ssyt_teams')
+    .select('id, name, short_name, color_primary, slug, display_order')
+    .eq('season_id', session.seasonId)
+    .eq('status', 'active')
+    .order('display_order')
+
+  const { data: allJournals } = await supabase
+    .from('ssyt_team_regatta_journal')
+    .select('team_id, content, updated_at')
+    .eq('regatta_id', regatta.id)
+
+  const { data: allTeamPhotos } = await supabase
+    .from('ssyt_media')
+    .select('id, url, caption, team_id')
+    .eq('regatta_id', regatta.id)
+    .eq('media_type', 'photo')
+    .eq('visibility', 'public')
+    .not('team_id', 'is', null)
+    .order('created_at', { ascending: false })
+
+  const journalByTeam: Record<string, string> = {}
+  for (const j of allJournals ?? []) {
+    if (j.team_id) journalByTeam[j.team_id] = j.content ?? ''
+  }
+  const photosByTeam: Record<string, RegattaPhoto[]> = {}
+  for (const ph of allTeamPhotos ?? []) {
+    if (!ph.team_id) continue
+    ;(photosByTeam[ph.team_id] ||= []).push({ id: ph.id, url: ph.url, caption: ph.caption })
+  }
+
+  const teamsFeed = [...(allTeamsData ?? [])]
+    .sort((a, b) => {
+      if (a.id === teamId) return -1
+      if (b.id === teamId) return 1
+      return (a.display_order ?? 0) - (b.display_order ?? 0)
+    })
+    .map((t) => ({
+      team: t,
+      journal: journalByTeam[t.id] ?? '',
+      photos: photosByTeam[t.id] ?? [],
+      isOwn: t.id === teamId,
+    }))
+    .filter((f) => f.journal.trim().length > 0 || f.photos.length > 0)
+
   const regattaIsFrozen = isRegattaFrozen(regatta.end_date, regatta.status)
   const canEditCrewlist = (isSkipper || isEditor) && !regattaIsFrozen
 
@@ -348,6 +395,9 @@ export default async function PortalRegattaDetailPage({ params }: { params: { sl
           canEdit={canEdit}
         />
       </div>
+
+      {/* Jurnale + media de la echipe (read-only, echipa proprie prima) */}
+      <RegattaTeamsFeed feed={teamsFeed as any} />
     </div>
   )
 }
