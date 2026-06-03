@@ -25,15 +25,15 @@ export default async function CalendarPage() {
       </div>
 
       {regattas.length > 0 ? (
-        <div className="relative">
-          {/* Linia timeline-ului */}
-          <div className="absolute left-7 top-2 bottom-2 w-0.5" style={{ background: '#e5e7eb' }}></div>
-
-          <div className="space-y-4">
-            {regattas.map((r) => (
-              <TimelineItem key={r.id} regatta={r} />
-            ))}
-          </div>
+        <div>
+          {regattas.map((r, i) => (
+            <TimelineItem
+              key={r.id}
+              regatta={r}
+              isFirst={i === 0}
+              isLast={i === regattas.length - 1}
+            />
+          ))}
         </div>
       ) : (
         <div className="rounded-xl p-16 text-center text-gray-500" style={{ background: '#fff', border: '1px dashed #e5e7eb' }}>
@@ -45,7 +45,7 @@ export default async function CalendarPage() {
   )
 }
 
-function TimelineItem({ regatta }: { regatta: any }) {
+function TimelineItem({ regatta, isFirst, isLast }: { regatta: any; isFirst: boolean; isLast: boolean }) {
   const date = new Date(regatta.start_date)
   const monthShort = date.toLocaleString('ro-RO', { month: 'short' })
   const day = date.getDate()
@@ -62,14 +62,19 @@ function TimelineItem({ regatta }: { regatta: any }) {
       href={`/ssyt/regattas/${regatta.slug || regatta.id}`}
       className="flex gap-5 group"
     >
-      <div className="flex-shrink-0 relative z-10">
-        <div className="w-14 h-14 rounded-full flex flex-col items-center justify-center text-white font-medium" style={{ background: color }}>
+      {/* Coloana bulină: linie sus + bulină centrată + linie jos.
+          Bulina e centrată pe verticală față de card (segmentele flex-1 egale).
+          Fără linie deasupra primei / sub ultima (după ultimul eveniment). */}
+      <div className="flex-shrink-0 w-14 flex flex-col items-center self-stretch">
+        <div className="w-0.5 flex-1" style={{ background: isFirst ? 'transparent' : '#e5e7eb' }} />
+        <div className="w-14 h-14 flex-shrink-0 rounded-full flex flex-col items-center justify-center text-white font-medium" style={{ background: color }}>
           <span className="text-[10px] uppercase opacity-90 leading-none">{monthShort}</span>
           <span className="text-lg font-semibold leading-none mt-0.5">{day}</span>
         </div>
+        <div className="w-0.5 flex-1" style={{ background: isLast ? 'transparent' : '#e5e7eb' }} />
       </div>
 
-      <div className="flex-1 pb-2 pt-1">
+      <div className="flex-1 py-2">
         <div className="rounded-lg p-5 hover:shadow-md transition" style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
           <div className="flex items-start justify-between gap-3 mb-2">
             <h3 className="font-semibold text-lg text-gray-900">{regatta.name}</h3>
