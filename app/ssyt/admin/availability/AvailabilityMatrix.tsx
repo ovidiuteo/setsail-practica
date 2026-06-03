@@ -107,35 +107,35 @@ export default function AvailabilityMatrix({
     return punctualLockMap[participantId]?.has(regattaId) ?? false
   }
 
-  // Participanti cu membership activ, pe echipe (pentru detectarea orfanilor)
-  const activeByTeam: Record<string, Set<string>> = {}
-  for (const m of memberships) {
-    ;(activeByTeam[m.team_id] ||= new Set()).add(m.participant_id)
-  }
+  // Lookup echipe (pt badge la one-timers)
+  const teamById: Record<string, Team> = {}
+  for (const t of teams) teamById[t.id] = t
 
-  // Placeholder-uri (orfani) per echipa: membership-uri marcate 'left' prin butonul Hide.
-  // Daca persoana a fost realocata activ in aceeasi echipa, nu mai e placeholder acolo.
-  // Pastram patratelele (istoric prezenta) prin participant_id.
-  const orphansByTeam: Record<string, string[]> = {}
-  const allOrphanIds = new Set<string>()
-  for (const team of teams) {
-    const seen: string[] = []
-    const seenSet = new Set<string>()
-    for (const m of hiddenMemberships) {
-      if (m.team_id !== team.id) continue
-      if (activeByTeam[team.id]?.has(m.participant_id)) continue // realocat activ aici
-      if (seenSet.has(m.participant_id)) continue
-      seenSet.add(m.participant_id)
-      seen.push(m.participant_id)
-    }
-    if (seen.length > 0) {
-      orphansByTeam[team.id] = seen
-      seen.forEach((id) => allOrphanIds.add(id))
-    }
-  }
+  // Participanti cu membership activ oriunde (pentru a sti cine a fost realocat)
+  const activeParticipantIds = new Set<string>()
+  for (const m of memberships) activeParticipantIds.add(m.participant_id)
 
-  // Nealocati afisati: excludem orfanii (apar deja ca placeholder in echipa lor)
-  const visibleUnallocated = unallocatedParticipants.filter((p) => !allOrphanIds.has(p.id))
+  // One-timers: membership-uri marcate 'left' prin butonul Hide, al caror participant
+  // NU mai are membership activ nicaieri. Ii scoatem din liste si ii grupam intr-o
+  // sectiune dedicata sub Nealocati, cu numele + istoricul (patratelele).
+  const oneTimers: { participantId: string; name: string; team: Team | null }[] = []
+  const oneTimerSeen = new Set<string>()
+  for (const m of hiddenMemberships) {
+    if (activeParticipantIds.has(m.participant_id)) continue // realocat activ → apare in echipa lui
+    if (oneTimerSeen.has(m.participant_id)) continue
+    oneTimerSeen.add(m.participant_id)
+    const p = getParticipant(m)
+    oneTimers.push({
+      participantId: m.participant_id,
+      name: p?.full_name || '—',
+      team: teamById[m.team_id] || null,
+    })
+  }
+  oneTimers.sort((a, b) => a.name.localeCompare(b.name, 'ro'))
+  const oneTimerIds = new Set(oneTimers.map((o) => o.participantId))
+
+  // Nealocati afisati: excludem one-timers (apar in sectiunea lor)
+  const visibleUnallocated = unallocatedParticipants.filter((p) => !oneTimerIds.has(p.id))
 
   async function cycleStatus(regattaId: string, participantId: string, teamId: string | null) {
     if (isLockedFor(participantId, regattaId)) return // one-time post-anchor
@@ -259,7 +259,6 @@ export default function AvailabilityMatrix({
           {/* Sectiuni pe echipe */}
           {teams.map((team) => {
             const teamMembers = memberships.filter((m) => m.team_id === team.id)
-            const orphans = orphansByTeam[team.id] || []
             return (
               <>
                 <tr key={`hdr-${team.id}`} style={{ background: team.color_primary || '#4A5568' }}>
@@ -296,23 +295,6 @@ export default function AvailabilityMatrix({
                     />
                   )
                 })}
-                {/* Placeholder-uri: membri ascunsi (orfani) — anonimi, doar istoric */}
-                {orphans.map((pid, idx) => (
-                  <ParticipantRow
-                    key={`ph-${team.id}-${pid}`}
-                    participantId={pid}
-                    participantName={`Crew ascuns #${idx + 1}`}
-                    teamId={team.id}
-                    isPlaceholder
-                    isOccasional={false}
-                    regattas={regattas}
-                    partMap={partMap}
-                    busy={busy}
-                    frozenIds={frozenIds}
-                    onCycleStatus={cycleStatus}
-                    onToggleCrewlist={toggleCrewlist}
-                  />
-                ))}
               </>
             )
           })}
@@ -344,13 +326,43 @@ export default function AvailabilityMatrix({
               ))}
             </>
           )}
+
+          {/* Sectiune One timers (ascunsi din liste prin Hide) */}
+          {oneTimers.length > 0 && (
+            <>
+              <tr style={{ background: '#a855f7' }}>
+                <td colSpan={regattas.length + 1} className="px-3 py-2 text-white font-semibold sticky left-0 z-10" style={{ background: '#a855f7' }}>
+                  One timers
+                  <span className="text-white/70 text-xs font-normal ml-2">({oneTimers.length} ascunși din liste — doar istoric prezență)</span>
+                </td>
+              </tr>
+              {oneTimers.map((o) => (
+                <ParticipantRow
+                  key={`ot-${o.participantId}`}
+                  participantId={o.participantId}
+                  participantName={o.name}
+                  teamId={o.team?.id ?? null}
+                  teamBadge={o.team ? { label: o.team.short_name || o.team.name, color: o.team.color_primary } : undefined}
+                  historyOnly
+                  hideCrewlist
+                  isOccasional={false}
+                  regattas={regattas}
+                  partMap={partMap}
+                  busy={busy}
+                  frozenIds={frozenIds}
+                  onCycleStatus={cycleStatus}
+                  onToggleCrewlist={toggleCrewlist}
+                />
+              ))}
+            </>
+          )}
         </tbody>
       </table>
 
       <div className="px-3 py-3 text-xs text-gray-500 border-t space-y-1" style={{ background: '#f8f9fa' }}>
         <div>💡 <strong>Click pe pătrat</strong>: comută disponibilitatea (verde → roșu → gri → fără înregistrare → verde...).</div>
         <div>👤 <strong>Click pe iconul cap-de-om</strong>: pune/scoate de pe crewlist (doar dacă e disponibil și alocat la echipă).</div>
-        <div>🙈 <strong>Hide</strong> (ocazional/one-time): mută persoana la nealocați; rândul rămâne ca placeholder anonim, cu istoricul.</div>
+        <div>🙈 <strong>Hide</strong> (ocazional/one-time): mută persoana în secțiunea <strong>One timers</strong> (jos), păstrând istoricul prezenței.</div>
         <div>🔒 <strong>Regate trecute</strong>: editabile doar cu confirmare (corecție istoric).</div>
         <div className="pt-1 flex flex-wrap items-center gap-3">
           <span className="font-medium">Legendă:</span>
@@ -368,7 +380,7 @@ export default function AvailabilityMatrix({
 }
 
 function ParticipantRow({
-  participantId, participantName, teamId, membershipId, canHide, isOccasional, isPunctual, isUnallocated, isPlaceholder, lockedRegattaIds, regattas, partMap, busy, frozenIds, onCycleStatus, onToggleCrewlist, onHide,
+  participantId, participantName, teamId, membershipId, canHide, isOccasional, isPunctual, isUnallocated, teamBadge, historyOnly, hideCrewlist, lockedRegattaIds, regattas, partMap, busy, frozenIds, onCycleStatus, onToggleCrewlist, onHide,
 }: {
   participantId: string
   participantName: string
@@ -378,7 +390,9 @@ function ParticipantRow({
   isOccasional: boolean
   isPunctual?: boolean
   isUnallocated?: boolean
-  isPlaceholder?: boolean
+  teamBadge?: { label: string; color: string | null }
+  historyOnly?: boolean
+  hideCrewlist?: boolean
   lockedRegattaIds?: Set<string>
   regattas: Regatta[]
   partMap: Record<string, Participation>
@@ -389,18 +403,17 @@ function ParticipantRow({
   onHide?: (membershipId: string, name: string) => void
 }) {
   return (
-    <tr style={{ borderTop: '1px solid #f3f4f6', background: isPlaceholder ? '#fafafa' : undefined }}>
-      <td className="px-3 py-2 sticky left-0 z-10" style={{ background: isPlaceholder ? '#fafafa' : '#fff' }}>
+    <tr style={{ borderTop: '1px solid #f3f4f6', background: historyOnly ? '#faf5ff' : undefined }}>
+      <td className="px-3 py-2 sticky left-0 z-10" style={{ background: historyOnly ? '#faf5ff' : '#fff' }}>
         <div className="flex items-center justify-between gap-2">
           <div className="min-w-0">
-            {isPlaceholder ? (
-              <span className="text-gray-400 italic inline-flex items-center gap-1">
-                <EyeOff size={11} /> {participantName}
+            <Link href={`/ssyt/admin/participants/${participantId}`} className="hover:underline" style={{ color: '#0a1628' }}>
+              {participantName}
+            </Link>
+            {teamBadge && (
+              <span className="ml-1.5 text-[9px] uppercase tracking-wider px-1 py-0.5 rounded text-white" style={{ background: teamBadge.color || '#4A5568' }}>
+                {teamBadge.label}
               </span>
-            ) : (
-              <Link href={`/ssyt/admin/participants/${participantId}`} className="hover:underline" style={{ color: '#0a1628' }}>
-                {participantName}
-              </Link>
             )}
             {isOccasional && (
               <span className="ml-1.5 text-[9px] uppercase tracking-wider px-1 py-0.5 rounded" style={{ background: 'rgba(0,168,181,0.12)', color: '#00A8B5' }}>
@@ -423,7 +436,7 @@ function ParticipantRow({
               onClick={() => onHide(membershipId, participantName)}
               disabled={busy === `hide-${membershipId}`}
               className="flex-shrink-0 inline-flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition disabled:opacity-50"
-              title="Ascunde: mută la nealocați, păstrează istoricul ca placeholder anonim"
+              title="Ascunde: mută în secțiunea One timers (păstrează istoricul prezenței)"
             >
               <EyeOff size={11} /> hide
             </button>
@@ -441,10 +454,10 @@ function ParticipantRow({
         const lockedPunctual = lockedRegattaIds?.has(r.id) ?? false
 
         // Status: editabil chiar si pe regate trecute (cu confirm), dar nu pe lock punctual.
-        // Pentru placeholder: doar celule cu participare existenta (nu adaugam istoric nou gol).
-        const statusDisabled = isBusy || lockedPunctual || (isPlaceholder && !part)
-        // Crewlist: read-only pe regate trecute si placeholder
-        const crewlistDisabled = isBusy || frozen || lockedPunctual || isPlaceholder || !isConfirmed || !part?.team_id
+        // historyOnly (one-timers): doar celule cu participare existenta (nu adaugam istoric nou gol).
+        const statusDisabled = isBusy || lockedPunctual || (historyOnly && !part)
+        // Crewlist: read-only pe regate trecute / one-timers
+        const crewlistDisabled = isBusy || frozen || lockedPunctual || hideCrewlist || !isConfirmed || !part?.team_id
 
         const cellTitle = lockedPunctual
           ? 'One-time — regată ulterioară regatei membrului'
@@ -471,7 +484,7 @@ function ParticipantRow({
                 hasTeam={!!part?.team_id}
                 onClick={() => onToggleCrewlist(r.id, participantId, teamId)}
                 disabled={crewlistDisabled}
-                hidden={isPlaceholder}
+                hidden={hideCrewlist}
               />
             </div>
           </td>
