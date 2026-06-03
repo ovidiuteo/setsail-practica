@@ -135,10 +135,11 @@ function RegattaCard({ regatta, hasPhotos = false }: { regatta: any; hasPhotos?:
           <Link
             href={`/ssyt/media?regatta=${regatta.id}`}
             title="Vezi poze"
-            className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-white opacity-0 group-hover:opacity-100 transition cursor-pointer hover:opacity-100"
+            className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 px-2 py-1.5 rounded-full text-xs font-medium text-white transition cursor-pointer hover:opacity-90"
             style={{ background: '#0a1628' }}
           >
-            <ImageIcon size={13} /> Vezi poze
+            <ImageIcon size={13} />
+            <span className="hidden group-hover:inline whitespace-nowrap">Vezi poze</span>
           </Link>
         )}
       </div>
