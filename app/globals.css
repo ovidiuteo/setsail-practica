@@ -16,3 +16,29 @@ body {
   cursor: crosshair;
   touch-action: none;
 }
+
+/* ===== Landing /curs-yachting-cds ===== */
+.reveal { opacity: 0; transform: translateY(28px); transition: opacity .7s ease, transform .7s ease; }
+.reveal.in { opacity: 1; transform: none; }
+
+.cds-hero {
+  background:
+    linear-gradient(100deg, rgba(6,32,60,0.94) 0%, rgba(8,38,70,0.78) 38%, rgba(10,42,78,0.30) 68%, rgba(10,42,78,0.10) 100%),
+    url('https://images.unsplash.com/photo-1500627964684-141351970a7f?auto=format&fit=crop&w=2400&q=80');
+  background-size: cover;
+  background-position: center;
+}
+@media (max-width: 768px) {
+  .cds-hero {
+    background:
+      linear-gradient(180deg, rgba(6,32,60,0.80) 0%, rgba(8,38,70,0.86) 55%, rgba(6,32,60,0.95) 100%),
+      url('https://images.unsplash.com/photo-1500627964684-141351970a7f?auto=format&fit=crop&w=2400&q=80');
+    background-size: cover;
+    background-position: center;
+  }
+}
+
+@keyframes cds-floaty { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+.cds-floaty { animation: cds-floaty 5s ease-in-out infinite; }
+
+.cds-tl-line { background: linear-gradient(90deg, #2ea8d8 0%, #103a66 100%); }
