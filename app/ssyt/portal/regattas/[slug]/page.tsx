@@ -4,6 +4,8 @@ import { ArrowLeft, MapPin, Calendar, ExternalLink, FileText, Users, AlertCircle
 import { getPortalSession, getPortalSupabase, canEditBoatType, getMyTeamAndPerms } from '@/lib/ssyt/portal-session'
 import RegattaDocsList from './RegattaDocsList'
 import TeamCrewSection, { type CrewMember } from './TeamCrewSection'
+import RegattaPhotoGallery, { type RegattaPhoto } from '@/components/ssyt/portal/RegattaPhotoGallery'
+import RegattaJournal from '@/components/ssyt/portal/RegattaJournal'
 
 function isRegattaFrozen(end_date: string | null, status: string | null): boolean {
   if (status === 'completed' || status === 'cancelled') return true
@@ -115,6 +117,8 @@ export default async function PortalRegattaDetailPage({ params }: { params: { sl
   const { teamId, isSkipper, isEditor } = await getMyTeamAndPerms(session.participantId)
   let teamData: { id: string; name: string; short_name: string | null; color_primary: string | null } | null = null
   let crew: CrewMember[] = []
+  let teamPhotos: RegattaPhoto[] = []
+  let journalContent = ''
   if (teamId) {
     const { data: team } = await supabase
       .from('ssyt_teams')
@@ -176,6 +180,24 @@ export default async function PortalRegattaDetailPage({ params }: { params: { sl
         if (!a.isSkipper && b.isSkipper) return 1
         return a.fullName.localeCompare(b.fullName, 'ro')
       })
+
+      // Poze echipă pentru regata curentă
+      const { data: photos } = await supabase
+        .from('ssyt_team_regatta_media')
+        .select('id, url, caption')
+        .eq('team_id', teamId)
+        .eq('regatta_id', regatta.id)
+        .order('created_at', { ascending: false })
+      teamPhotos = (photos ?? []) as RegattaPhoto[]
+
+      // Jurnal echipă pentru regata curentă
+      const { data: journal } = await supabase
+        .from('ssyt_team_regatta_journal')
+        .select('content')
+        .eq('team_id', teamId)
+        .eq('regatta_id', regatta.id)
+        .maybeSingle()
+      journalContent = journal?.content ?? ''
     }
   }
 
@@ -254,6 +276,26 @@ export default async function PortalRegattaDetailPage({ params }: { params: { sl
           regattaIsFrozen={regattaIsFrozen}
           meParticipantId={session.participantId}
         />
+      )}
+
+      {/* Poze + Jurnal echipă */}
+      {teamData && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+          <RegattaPhotoGallery
+            teamId={teamData.id}
+            regattaId={regatta.id}
+            teamName={teamData.short_name || teamData.name}
+            initialPhotos={teamPhotos}
+            canEdit={isSkipper || isEditor}
+          />
+          <RegattaJournal
+            teamId={teamData.id}
+            regattaId={regatta.id}
+            teamName={teamData.short_name || teamData.name}
+            initialContent={journalContent}
+            canEdit={isSkipper || isEditor}
+          />
+        </div>
       )}
 
       {/* Description */}
