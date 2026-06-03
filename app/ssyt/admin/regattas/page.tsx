@@ -89,7 +89,7 @@ export default async function AdminRegattasListPage() {
                       {teamsCount}
                     </td>
                     <td className="px-5 py-3 text-center">
-                      <StatusBadge status={r.status} />
+                      <StatusBadge status={effectiveStatus(r)} />
                     </td>
                     <td className="pr-5">
                       <Link href={`/ssyt/admin/regattas/${r.id}`} className="text-gray-400 hover:text-gray-700">
@@ -152,10 +152,23 @@ function EventTypeBadge({ type }: { type: string }) {
   )
 }
 
+// Status efectiv pentru afisare: stari explicite (completed/cancelled/draft) raman;
+// altfel deriva din date (ex: 'upcoming' in DB dar regata a trecut -> 'passed').
+function effectiveStatus(r: any): string {
+  if (r.status === 'completed' || r.status === 'cancelled' || r.status === 'draft') return r.status
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const start = new Date(r.start_date); start.setHours(0, 0, 0, 0)
+  const end = r.end_date ? new Date(r.end_date) : start; end.setHours(0, 0, 0, 0)
+  if (today > end) return 'passed'
+  if (today >= start && today <= end) return 'live'
+  return 'upcoming'
+}
+
 function StatusBadge({ status }: { status: string }) {
   const colors: Record<string, string> = {
     upcoming: '#3B82F6',
     live: '#EF4444',
+    passed: '#9CA3AF',
     completed: '#10B981',
     cancelled: '#6B7280',
     draft: '#9CA3AF',
