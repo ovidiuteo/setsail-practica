@@ -15,7 +15,7 @@ export default async function AdminRegattaDetailPage({ params }: { params: { id:
 
   if (!regatta) notFound()
 
-  const [racesRes, participationRes, resultsRes, documentsRes, mediaRes, teamsRes, participantsRes, rolesRes, docTypesRes] = await Promise.all([
+  const [racesRes, participationRes, resultsRes, documentsRes, mediaRes, teamsRes, participantsRes, rolesRes, docTypesRes, journalsRes] = await Promise.all([
     supabase.from('ssyt_races').select('*').eq('regatta_id', regatta.id).order('race_number'),
     supabase.from('ssyt_regatta_participation').select(`
       *,
@@ -30,6 +30,7 @@ export default async function AdminRegattaDetailPage({ params }: { params: { id:
     supabase.from('ssyt_participants').select('id, full_name').in('status', ['active', 'accepted']).order('full_name'),
     supabase.from('ssyt_roles').select('*').eq('is_active', true).order('display_order'),
     supabase.from('ssyt_document_types').select('*').eq('is_active', true).order('display_order'),
+    supabase.from('ssyt_team_regatta_journal').select('id, team_id, content, updated_at, team:ssyt_teams(id, name, short_name, color_primary)').eq('regatta_id', regatta.id),
   ])
 
   const eventTypeColors: Record<string, string> = {
@@ -88,6 +89,7 @@ export default async function AdminRegattaDetailPage({ params }: { params: { id:
         allParticipants={participantsRes.data || []}
         roles={rolesRes.data || []}
         docTypes={docTypesRes.data || []}
+        journals={journalsRes.data || []}
       />
     </div>
   )

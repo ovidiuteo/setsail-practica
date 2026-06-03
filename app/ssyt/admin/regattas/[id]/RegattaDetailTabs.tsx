@@ -1,15 +1,16 @@
 'use client'
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { FileText, Anchor, Users, Trophy, Image as ImageIcon, Info } from 'lucide-react'
+import { FileText, Anchor, Users, Trophy, Image as ImageIcon, Info, BookOpen } from 'lucide-react'
 import RegattaOverviewTab from './tabs/RegattaOverviewTab'
 import RacesTab from './tabs/RacesTab'
 import CrewlistTab from './tabs/CrewlistTab'
 import DocumentsTab from './tabs/DocumentsTab'
 import ResultsTab from './tabs/ResultsTab'
 import MediaTab from './tabs/MediaTab'
+import JournalsTab from './tabs/JournalsTab'
 
-type TabKey = 'overview' | 'races' | 'crewlist' | 'documents' | 'results' | 'media'
+type TabKey = 'overview' | 'races' | 'crewlist' | 'documents' | 'results' | 'media' | 'journals'
 
 const TABS: { key: TabKey; label: string; icon: any }[] = [
   { key: 'overview', label: 'Overview', icon: Info },
@@ -18,6 +19,7 @@ const TABS: { key: TabKey; label: string; icon: any }[] = [
   { key: 'documents', label: 'Documente', icon: FileText },
   { key: 'results', label: 'Rezultate', icon: Trophy },
   { key: 'media', label: 'Media', icon: ImageIcon },
+  { key: 'journals', label: 'Jurnale', icon: BookOpen },
 ]
 
 export default function RegattaDetailTabs(props: {
@@ -31,6 +33,7 @@ export default function RegattaDetailTabs(props: {
   allParticipants: any[]
   roles: any[]
   docTypes: any[]
+  journals: any[]
 }) {
   const [tab, setTab] = useState<TabKey>('overview')
   const router = useRouter()
@@ -47,7 +50,8 @@ export default function RegattaDetailTabs(props: {
             t.key === 'crewlist' ? props.participation.length :
             t.key === 'documents' ? props.documents.length :
             t.key === 'results' ? props.results.length :
-            t.key === 'media' ? props.media.length : null
+            t.key === 'media' ? props.media.length :
+            t.key === 'journals' ? props.journals.length : null
 
           return (
             <button
@@ -77,6 +81,7 @@ export default function RegattaDetailTabs(props: {
         {tab === 'documents' && <DocumentsTab regattaId={props.regatta.id} documents={props.documents} docTypes={props.docTypes} onChange={refresh} />}
         {tab === 'results' && <ResultsTab regattaId={props.regatta.id} results={props.results} teams={props.teams} onChange={refresh} />}
         {tab === 'media' && <MediaTab regattaId={props.regatta.id} media={props.media} onChange={refresh} />}
+        {tab === 'journals' && <JournalsTab journals={props.journals} teams={props.teams} />}
       </div>
     </div>
   )
