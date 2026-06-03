@@ -181,12 +181,13 @@ export default async function PortalRegattaDetailPage({ params }: { params: { sl
         return a.fullName.localeCompare(b.fullName, 'ro')
       })
 
-      // Poze echipă pentru regata curentă
+      // Poze echipă pentru regata curentă (din ssyt_media — apar și în galeria /ssyt/media)
       const { data: photos } = await supabase
-        .from('ssyt_team_regatta_media')
+        .from('ssyt_media')
         .select('id, url, caption')
         .eq('team_id', teamId)
         .eq('regatta_id', regatta.id)
+        .eq('media_type', 'photo')
         .order('created_at', { ascending: false })
       teamPhotos = (photos ?? []) as RegattaPhoto[]
 

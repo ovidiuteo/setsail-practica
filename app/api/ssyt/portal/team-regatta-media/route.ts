@@ -49,6 +49,7 @@ function extFromMime(mime: string): string {
 }
 
 // POST - upload poză nouă (multipart: file, team_id, regatta_id, caption?)
+// Scrie în ssyt_media (vizibilitate public) ca să apară și în galeria /ssyt/media + admin.
 export async function POST(req: NextRequest) {
   const supabase = client()
   const pid = await getParticipant(req, supabase)
@@ -69,6 +70,14 @@ export async function POST(req: NextRequest) {
   if (!(await canEditTeam(pid, teamId, supabase)))
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
+  // season_id pentru consistență cu galeria publică (filtrată pe season activ)
+  const { data: regatta } = await supabase
+    .from('ssyt_regattas')
+    .select('season_id')
+    .eq('id', regattaId)
+    .maybeSingle()
+  if (!regatta) return NextResponse.json({ error: 'Regata nu există.' }, { status: 404 })
+
   const ext = extFromMime(file.type)
   const path = `${teamId}/${regattaId}/${Date.now()}-${Math.round(file.size % 100000)}.${ext}`
   const arrayBuffer = await file.arrayBuffer()
@@ -82,12 +91,15 @@ export async function POST(req: NextRequest) {
   const publicUrl = pub.publicUrl
 
   const { data: inserted, error: dbErr } = await supabase
-    .from('ssyt_team_regatta_media')
+    .from('ssyt_media')
     .insert({
+      season_id: regatta.season_id,
       team_id: teamId,
       regatta_id: regattaId,
-      storage_path: path,
+      media_type: 'photo',
+      visibility: 'public',
       url: publicUrl,
+      storage_path: path,
       caption,
       uploaded_by: pid,
     })
@@ -102,7 +114,8 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ success: true, media: inserted })
 }
 
-// DELETE - șterge o poză (body: { id })
+// DELETE - șterge o poză de echipă (body: { id })
+// Doar poze încărcate prin portal (au storage_path în bucket-ul nostru) și doar de editorii echipei.
 export async function DELETE(req: NextRequest) {
   const supabase = client()
   const pid = await getParticipant(req, supabase)
@@ -112,17 +125,20 @@ export async function DELETE(req: NextRequest) {
   if (!id) return NextResponse.json({ error: 'id lipsă.' }, { status: 400 })
 
   const { data: row } = await supabase
-    .from('ssyt_team_regatta_media')
+    .from('ssyt_media')
     .select('id, team_id, storage_path')
     .eq('id', id)
     .maybeSingle()
   if (!row) return NextResponse.json({ error: 'Poza nu există.' }, { status: 404 })
+  if (!row.storage_path)
+    return NextResponse.json({ error: 'Poză adăugată din admin — șterge-o din panoul admin.' }, { status: 403 })
+  if (!row.team_id) return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   if (!(await canEditTeam(pid, row.team_id, supabase)))
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
 
   await supabase.storage.from(BUCKET).remove([row.storage_path])
-  const { error } = await supabase.from('ssyt_team_regatta_media').delete().eq('id', id)
+  const { error } = await supabase.from('ssyt_media').delete().eq('id', id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   return NextResponse.json({ success: true })
