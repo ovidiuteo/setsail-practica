@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { BookOpen, Camera } from 'lucide-react'
+import PhotoLightbox from './PhotoLightbox'
 
 export type FeedPhoto = { id: string; url: string; caption: string | null }
 export type TeamFeedEntry = {
@@ -57,25 +58,7 @@ export default function RegattaTeamsFeed({ feed }: { feed: TeamFeedEntry[] }) {
                     <div className="text-xs font-medium uppercase tracking-wider text-gray-400 mb-2 inline-flex items-center gap-1.5">
                       <Camera size={11} /> Poze <span className="text-gray-300 normal-case">· {f.photos.length}</span>
                     </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                      {f.photos.map((p) => (
-                        <a
-                          key={p.id}
-                          href={p.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="group relative block aspect-square rounded-lg overflow-hidden"
-                          style={{ background: '#f3f4f6' }}
-                        >
-                          <img src={p.url} alt={p.caption || ''} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" loading="lazy" />
-                          {p.caption && (
-                            <div className="absolute bottom-0 inset-x-0 px-2 py-1 text-[11px] text-white bg-gradient-to-t from-black/70 to-transparent truncate">
-                              {p.caption}
-                            </div>
-                          )}
-                        </a>
-                      ))}
-                    </div>
+                    <PhotoLightbox photos={f.photos} />
                   </div>
                 )}
               </div>

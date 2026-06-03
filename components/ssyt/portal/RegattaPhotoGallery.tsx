@@ -2,6 +2,7 @@
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ImagePlus, Trash2, Camera, Loader2 } from 'lucide-react'
+import PhotoLightbox from './PhotoLightbox'
 
 export type RegattaPhoto = {
   id: string
@@ -106,30 +107,19 @@ export default function RegattaPhotoGallery({
           Nicio poză încă.{canEdit ? ' Adaugă primele poze cu butonul de mai sus.' : ''}
         </p>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-          {initialPhotos.map((p) => (
-            <div key={p.id} className="group relative rounded-lg overflow-hidden" style={{ background: '#f3f4f6' }}>
-              <a href={p.url} target="_blank" rel="noopener noreferrer" className="block aspect-square">
-                <img src={p.url} alt={p.caption || ''} className="w-full h-full object-cover" loading="lazy" />
-              </a>
-              {canEdit && (
-                <button
-                  onClick={() => remove(p.id)}
-                  disabled={deletingId === p.id}
-                  className="absolute top-1.5 right-1.5 p-1.5 rounded-md bg-black/50 text-white opacity-0 group-hover:opacity-100 transition hover:bg-red-600 disabled:opacity-50"
-                  title="Șterge poza"
-                >
-                  {deletingId === p.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
-                </button>
-              )}
-              {p.caption && (
-                <div className="absolute bottom-0 inset-x-0 px-2 py-1 text-[11px] text-white bg-gradient-to-t from-black/70 to-transparent truncate">
-                  {p.caption}
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
+        <PhotoLightbox
+          photos={initialPhotos}
+          corner={canEdit ? (p) => (
+            <button
+              onClick={(e) => { e.stopPropagation(); remove(p.id) }}
+              disabled={deletingId === p.id}
+              className="absolute top-1.5 right-1.5 z-10 p-1.5 rounded-md bg-black/50 text-white opacity-0 group-hover:opacity-100 transition hover:bg-red-600 disabled:opacity-50"
+              title="Șterge poza"
+            >
+              {deletingId === p.id ? <Loader2 size={12} className="animate-spin" /> : <Trash2 size={12} />}
+            </button>
+          ) : undefined}
+        />
       )}
     </div>
   )

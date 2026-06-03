@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, MapPin, Calendar, ExternalLink, Users, Image as ImageIcon } from 'lucide-react'
 import { supabase, getActiveSeason } from '@/lib/ssyt/supabase'
+import PhotoLightbox from '@/components/ssyt/portal/PhotoLightbox'
 
 export const dynamic = 'force-dynamic'
 
@@ -163,28 +164,12 @@ export default async function PublicRegattaPage({ params }: { params: { slug: st
           <h2 className="text-sm font-medium uppercase tracking-wider text-gray-500 mb-3">
             <ImageIcon size={12} className="inline mr-1.5" /> Galerie foto
           </h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-            {mediaPhotos.map((m: any) => {
+          <PhotoLightbox
+            photos={mediaPhotos.map((m: any) => {
               const team = Array.isArray(m.team) ? m.team[0] : m.team
-              return (
-                <a
-                  key={m.id}
-                  href={m.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="group relative block aspect-square rounded-lg overflow-hidden"
-                  style={{ background: '#f3f4f6' }}
-                >
-                  <img src={m.url} alt={m.caption || ''} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" loading="lazy" />
-                  {team && (
-                    <div className="absolute bottom-0 inset-x-0 px-2 py-1 text-[11px] font-medium text-white bg-gradient-to-t from-black/70 to-transparent">
-                      Echipa {team.short_name || team.name}
-                    </div>
-                  )}
-                </a>
-              )
+              return { id: m.id, url: m.url, caption: m.caption, badge: team ? `Echipa ${team.short_name || team.name}` : null }
             })}
-          </div>
+          />
           <div className="mt-3">
             <Link href={`/ssyt/media?regatta=${regatta.id}`} className="text-sm font-medium hover:underline" style={{ color: '#FF6B35' }}>
               Vezi toată galeria →
