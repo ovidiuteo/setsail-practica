@@ -42,7 +42,7 @@ export default function RegattaJournal({
     <div className="rounded-lg p-5" style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
       <div className="flex items-center justify-between mb-3">
         <div className="text-sm font-medium uppercase tracking-wider text-gray-500 inline-flex items-center gap-1.5">
-          <BookOpen size={12} /> Jurnal {teamName}
+          <BookOpen size={12} /> Echipa {teamName} — Jurnal de regatta
         </div>
         {canEdit && !editing && (
           <button

@@ -279,9 +279,9 @@ export default async function PortalRegattaDetailPage({ params }: { params: { sl
         />
       )}
 
-      {/* Poze + Jurnal echipă */}
+      {/* Poze echipă */}
       {teamData && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+        <div className="mb-6">
           <RegattaPhotoGallery
             teamId={teamData.id}
             regattaId={regatta.id}
@@ -289,20 +289,27 @@ export default async function PortalRegattaDetailPage({ params }: { params: { sl
             initialPhotos={teamPhotos}
             canEdit={isSkipper || isEditor}
           />
-          <RegattaJournal
-            teamId={teamData.id}
-            regattaId={regatta.id}
-            teamName={teamData.short_name || teamData.name}
-            initialContent={journalContent}
-            canEdit={isSkipper || isEditor}
-          />
         </div>
       )}
 
-      {/* Description */}
-      {regatta.description && (
-        <div className="rounded-lg p-5 mb-6" style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
-          <p className="text-gray-700 text-sm leading-relaxed">{regatta.description}</p>
+      {/* Descriere + Jurnal echipă */}
+      {(regatta.description || teamData) && (
+        <div className="mb-6 space-y-4">
+          {regatta.description && (
+            <div className="rounded-lg p-5" style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
+              <h2 className="text-sm font-medium uppercase tracking-wider text-gray-500 mb-2">Descriere</h2>
+              <p className="text-gray-700 text-sm leading-relaxed">{regatta.description}</p>
+            </div>
+          )}
+          {teamData && (
+            <RegattaJournal
+              teamId={teamData.id}
+              regattaId={regatta.id}
+              teamName={teamData.short_name || teamData.name}
+              initialContent={journalContent}
+              canEdit={isSkipper || isEditor}
+            />
+          )}
         </div>
       )}
 
