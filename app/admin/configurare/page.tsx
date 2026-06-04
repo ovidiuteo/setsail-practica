@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Plus, Trash2, Check, X, Pencil } from 'lucide-react'
+import { Plus, Trash2, Check, X, Pencil, Copy, RefreshCw, ExternalLink, KeyRound, Loader2 } from 'lucide-react'
 
 type Entity = { id: string; [key: string]: string }
 type Field = { key: string; label: string; placeholder?: string }
@@ -183,6 +183,8 @@ export default function ConfigurarePage() {
         </a>
         </div>
       </div>
+      <LandingTokenSection />
+
       <div className="grid grid-cols-2 gap-6">
         <Section title="📍 Locații de practică" table="locations"
           fields={[
@@ -223,6 +225,86 @@ export default function ConfigurarePage() {
 
       {/* Numere notificari - sectiune separata full-width */}
       <NotificationNumbersSection />
+    </div>
+  )
+}
+
+function LandingTokenSection() {
+  const [token, setToken] = useState<string>('')
+  const [loading, setLoading] = useState(true)
+  const [regenerating, setRegenerating] = useState(false)
+  const [copied, setCopied] = useState<'token' | 'link' | null>(null)
+
+  const editorUrl = token ? `${typeof window !== 'undefined' ? window.location.origin : ''}/curs-yachting-cds/admin?token=${token}` : ''
+
+  async function load() {
+    setLoading(true)
+    const json = await fetch('/api/cds-landing/token').then(r => r.json()).catch(() => null)
+    setToken(json?.token || '')
+    setLoading(false)
+  }
+  useEffect(() => { load() }, [])
+
+  async function regenerate() {
+    if (!confirm('Regenerezi token-ul? Link-urile vechi de editare nu vor mai funcționa.')) return
+    setRegenerating(true)
+    const json = await fetch('/api/cds-landing/token', { method: 'POST' }).then(r => r.json()).catch(() => null)
+    if (json?.token) setToken(json.token)
+    setRegenerating(false)
+  }
+
+  function copy(what: 'token' | 'link') {
+    navigator.clipboard.writeText(what === 'token' ? token : editorUrl)
+    setCopied(what)
+    setTimeout(() => setCopied(null), 1500)
+  }
+
+  return (
+    <div className="mb-8 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <KeyRound size={18} className="text-[#2ea8d8]" />
+          <div>
+            <h2 className="font-semibold text-gray-900">Landing page CDS — token editor</h2>
+            <p className="text-xs text-gray-400 mt-0.5">Acces la editorul paginii <code className="text-gray-500">/curs-yachting-cds</code> (texte, imagini, lead-uri)</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <a href={editorUrl || '#'} target="_blank" rel="noreferrer"
+            className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium border transition-colors ${token ? 'border-[#2ea8d8] text-[#103a66] hover:bg-blue-50' : 'border-gray-200 text-gray-300 pointer-events-none'}`}>
+            <ExternalLink size={15} /> Deschide editorul
+          </a>
+          <button onClick={regenerate} disabled={regenerating || loading}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium border border-amber-200 text-amber-700 hover:bg-amber-50 transition-colors disabled:opacity-50">
+            {regenerating ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />} Regenerează token
+          </button>
+        </div>
+      </div>
+      <div className="p-6 space-y-4">
+        <div>
+          <label className="text-xs font-medium text-gray-500">Token</label>
+          <div className="flex gap-2 mt-1">
+            <input readOnly value={loading ? 'Se încarcă…' : token}
+              className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono text-gray-600 bg-gray-50" />
+            <button onClick={() => copy('token')} disabled={!token}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-sm text-gray-600 transition-colors disabled:opacity-50">
+              {copied === 'token' ? <Check size={15} className="text-green-600" /> : <Copy size={15} />} {copied === 'token' ? 'Copiat' : 'Copiază'}
+            </button>
+          </div>
+        </div>
+        <div>
+          <label className="text-xs font-medium text-gray-500">Link direct către editor</label>
+          <div className="flex gap-2 mt-1">
+            <input readOnly value={loading ? '' : editorUrl}
+              className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-600 bg-gray-50 truncate" />
+            <button onClick={() => copy('link')} disabled={!token}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-sm text-gray-600 transition-colors disabled:opacity-50">
+              {copied === 'link' ? <Check size={15} className="text-green-600" /> : <Copy size={15} />} {copied === 'link' ? 'Copiat' : 'Copiază'}
+            </button>
+          </div>
+          <p className="text-xs text-gray-400 mt-2">Oricine are acest link poate edita pagina. Regenerează token-ul pentru a revoca accesul.</p>
+        </div>
+      </div>
     </div>
   )
 }
