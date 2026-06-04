@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import {
   Loader2, Upload, Trash2, RefreshCw, ShieldAlert, FileText, Download,
-  Receipt, Landmark, FileSignature, ScrollText, Files, Search,
+  Receipt, Landmark, FileSignature, ScrollText, Files, Search, Eye, X, FileSpreadsheet,
 } from 'lucide-react'
 
 type Doc = {
@@ -37,6 +37,14 @@ function fmtSize(n: number | null) {
   return `${(n / 1024 / 1024).toFixed(1)} MB`
 }
 
+function docKind(d: { file_type: string | null; file_name: string | null }): 'pdf' | 'image' | 'other' {
+  const t = (d.file_type || '').toLowerCase()
+  const n = (d.file_name || '').toLowerCase()
+  if (t === 'application/pdf' || n.endsWith('.pdf')) return 'pdf'
+  if (t.startsWith('image/') || /\.(jpe?g|png|webp|avif|heic|gif)$/.test(n)) return 'image'
+  return 'other'
+}
+
 export default function ActeContabilePage({ params }: { params: { entity: string } }) {
   const entity = params.entity
   const [token, setToken] = useState<string | null>(null)
@@ -45,6 +53,7 @@ export default function ActeContabilePage({ params }: { params: { entity: string
   const [docs, setDocs] = useState<Doc[] | null>(null)
   const [filter, setFilter] = useState<string>('all')
   const [q, setQ] = useState('')
+  const [preview, setPreview] = useState<Doc | null>(null)
 
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get('token')
@@ -170,6 +179,12 @@ export default function ActeContabilePage({ params }: { params: { entity: string
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1.5 justify-end">
                         {d.url && (
+                          <button onClick={() => setPreview(d)}
+                            className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-[#0a1628] hover:bg-slate-50 transition" title="Previzualizează">
+                            <Eye size={15} />
+                          </button>
+                        )}
+                        {d.url && (
                           <a href={d.url} target="_blank" rel="noreferrer" download={d.file_name || undefined}
                             className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-[#0a1628] hover:bg-slate-50 transition" title="Descarcă / deschide">
                             <Download size={15} />
@@ -190,6 +205,71 @@ export default function ActeContabilePage({ params }: { params: { entity: string
           Documentele sunt confidențiale. Acest link oferă acces complet — nu îl distribui în afara contabilității.
         </p>
       </main>
+
+      {preview && <PreviewModal doc={preview} onClose={() => setPreview(null)} />}
+    </div>
+  )
+}
+
+function PreviewModal({ doc, onClose }: { doc: Doc; onClose: () => void }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    document.addEventListener('keydown', onKey)
+    const prev = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => { document.removeEventListener('keydown', onKey); document.body.style.overflow = prev }
+  }, [onClose])
+
+  const kind = docKind(doc)
+  const title = doc.nume || doc.file_name || 'document'
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden"
+        onClick={e => e.stopPropagation()}>
+        {/* header */}
+        <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-slate-100 shrink-0">
+          <div className="min-w-0">
+            <div className="font-semibold text-[#0a1628] truncate">{title}</div>
+            <div className="text-xs text-slate-400 truncate">
+              {CAT_LABEL(doc.categorie)}{doc.file_name ? ` · ${doc.file_name}` : ''}{doc.file_size ? ` · ${fmtSize(doc.file_size)}` : ''}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {doc.url && (
+              <a href={doc.url} target="_blank" rel="noreferrer" download={doc.file_name || undefined}
+                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium text-[#0a1628] transition"
+                style={{ background: '#f5c842' }}>
+                <Download size={15} /> Descarcă
+              </a>
+            )}
+            <button onClick={onClose} className="p-2 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 transition" title="Închide">
+              <X size={16} />
+            </button>
+          </div>
+        </div>
+
+        {/* body */}
+        <div className="flex-1 overflow-auto bg-slate-100 flex items-center justify-center min-h-[50vh]">
+          {!doc.url ? (
+            <div className="text-slate-400 text-sm p-10">Documentul nu este disponibil.</div>
+          ) : kind === 'pdf' ? (
+            <iframe src={doc.url} title={title} className="w-full h-[80vh] bg-white" />
+          ) : kind === 'image' ? (
+            <img src={doc.url} alt={title} className="max-w-full max-h-[80vh] object-contain" />
+          ) : (
+            <div className="text-center p-10">
+              <FileSpreadsheet size={48} className="mx-auto text-slate-300 mb-4" />
+              <p className="text-slate-500 text-sm mb-4">Previzualizarea nu este disponibilă pentru acest tip de fișier.</p>
+              <a href={doc.url} target="_blank" rel="noreferrer" download={doc.file_name || undefined}
+                className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl text-sm font-semibold text-[#0a1628] transition"
+                style={{ background: '#f5c842' }}>
+                <Download size={15} /> Descarcă fișierul
+              </a>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
