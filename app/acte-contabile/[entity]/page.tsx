@@ -155,7 +155,6 @@ export default function ActeContabilePage({ params }: { params: { entity: string
                   <th className="px-4 py-3">Categorie</th>
                   <th className="px-4 py-3 whitespace-nowrap">Data act</th>
                   <th className="px-4 py-3 whitespace-nowrap">Încărcat</th>
-                  <th className="px-4 py-3"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-50">
@@ -166,6 +165,24 @@ export default function ActeContabilePage({ params }: { params: { entity: string
                       {d.nume && d.file_name && <div className="text-xs text-slate-400">{d.file_name}</div>}
                       {d.note && <div className="text-xs text-slate-400 mt-0.5 italic">{d.note}</div>}
                       {d.file_size ? <div className="text-[11px] text-slate-300 mt-0.5">{fmtSize(d.file_size)}</div> : null}
+                      {/* Acțiuni — sub denumire, ușor accesibile */}
+                      <div className="flex items-center gap-2 mt-2">
+                        {d.url && (
+                          <button onClick={() => setPreview(d)}
+                            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-[#0a1628] hover:opacity-90 transition"
+                            style={{ background: '#f5c842' }} title="Previzualizează">
+                            <Eye size={14} /> Vezi
+                          </button>
+                        )}
+                        {d.url && (
+                          <a href={d.url} target="_blank" rel="noreferrer" download={d.file_name || undefined}
+                            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 transition" title="Descarcă / deschide">
+                            <Download size={14} /> Descarcă
+                          </a>
+                        )}
+                        <DeleteButton entity={entity} token={token} id={d.id}
+                          onDeleted={() => setDocs(prev => (prev || []).filter(x => x.id !== d.id))} />
+                      </div>
                     </td>
                     <td className="px-4 py-3">
                       <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700">{CAT_LABEL(d.categorie)}</span>
@@ -175,24 +192,6 @@ export default function ActeContabilePage({ params }: { params: { entity: string
                     </td>
                     <td className="px-4 py-3 text-slate-400 text-xs whitespace-nowrap">
                       {new Date(d.created_at).toLocaleDateString('ro-RO')}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-1.5 justify-end">
-                        {d.url && (
-                          <button onClick={() => setPreview(d)}
-                            className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-[#0a1628] hover:bg-slate-50 transition" title="Previzualizează">
-                            <Eye size={15} />
-                          </button>
-                        )}
-                        {d.url && (
-                          <a href={d.url} target="_blank" rel="noreferrer" download={d.file_name || undefined}
-                            className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-[#0a1628] hover:bg-slate-50 transition" title="Descarcă / deschide">
-                            <Download size={15} />
-                          </a>
-                        )}
-                        <DeleteButton entity={entity} token={token} id={d.id}
-                          onDeleted={() => setDocs(prev => (prev || []).filter(x => x.id !== d.id))} />
-                      </div>
                     </td>
                   </tr>
                 ))}
