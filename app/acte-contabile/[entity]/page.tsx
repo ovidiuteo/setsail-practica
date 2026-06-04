@@ -1,0 +1,290 @@
+'use client'
+
+import { useEffect, useState, useCallback, useRef } from 'react'
+import {
+  Loader2, Upload, Trash2, RefreshCw, ShieldAlert, FileText, Download,
+  Receipt, Landmark, FileSignature, ScrollText, Files, Search,
+} from 'lucide-react'
+
+type Doc = {
+  id: string
+  entity: string
+  categorie: string
+  nume: string | null
+  data_doc: string | null
+  file_name: string | null
+  file_type: string | null
+  file_size: number | null
+  note: string | null
+  created_at: string
+  url: string | null
+}
+
+const CATEGORII: { key: string; label: string; icon: any }[] = [
+  { key: 'factura',  label: 'Facturi',          icon: FileText },
+  { key: 'chitanta', label: 'Chitanțe',         icon: Receipt },
+  { key: 'extras',   label: 'Extrase bancare',  icon: Landmark },
+  { key: 'contract', label: 'Contracte',        icon: FileSignature },
+  { key: 'bon',      label: 'Bonuri fiscale',   icon: ScrollText },
+  { key: 'altele',   label: 'Altele',           icon: Files },
+]
+const CAT_LABEL = (k: string) => CATEGORII.find(c => c.key === k)?.label || k
+
+function fmtSize(n: number | null) {
+  if (!n) return ''
+  if (n < 1024) return `${n} B`
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`
+  return `${(n / 1024 / 1024).toFixed(1)} MB`
+}
+
+export default function ActeContabilePage({ params }: { params: { entity: string } }) {
+  const entity = params.entity
+  const [token, setToken] = useState<string | null>(null)
+  const [phase, setPhase] = useState<'checking' | 'denied' | 'ready'>('checking')
+  const [meta, setMeta] = useState<{ label: string; full: string } | null>(null)
+  const [docs, setDocs] = useState<Doc[] | null>(null)
+  const [filter, setFilter] = useState<string>('all')
+  const [q, setQ] = useState('')
+
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get('token')
+    setToken(t)
+    ;(async () => {
+      const v = await fetch(`/api/acte-contabile/verify?entity=${entity}&token=${encodeURIComponent(t || '')}`)
+        .then(r => r.json()).catch(() => ({ valid: false }))
+      if (!v.valid) { setPhase('denied'); return }
+      setMeta(v.meta || null)
+      setPhase('ready')
+    })()
+  }, [entity])
+
+  const load = useCallback(async () => {
+    const json = await fetch(`/api/acte-contabile/list?entity=${entity}&token=${encodeURIComponent(token || '')}`)
+      .then(r => r.json()).catch(() => null)
+    setDocs(json?.docs || [])
+  }, [entity, token])
+
+  useEffect(() => { if (phase === 'ready') load() }, [phase, load])
+
+  if (phase === 'checking') {
+    return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-400"><Loader2 className="w-6 h-6 animate-spin mr-2" /> Se verifică accesul…</div>
+  }
+  if (phase === 'denied') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-10 max-w-md text-center">
+          <div className="w-14 h-14 rounded-full bg-red-50 text-red-500 flex items-center justify-center mx-auto mb-5"><ShieldAlert className="w-8 h-8" /></div>
+          <h1 className="text-2xl font-bold text-[#0a1628] mb-2">Acces refuzat</h1>
+          <p className="text-slate-500 text-sm">Token invalid sau lipsă. Link-ul corect se găsește în panoul de administrare → <span className="font-medium">Configurare → Acte contabile</span>.</p>
+        </div>
+      </div>
+    )
+  }
+
+  const counts = (docs || []).reduce((a, d) => { a[d.categorie] = (a[d.categorie] || 0) + 1; return a }, {} as Record<string, number>)
+  const ql = q.trim().toLowerCase()
+  const shown = (docs || [])
+    .filter(d => filter === 'all' || d.categorie === filter)
+    .filter(d => !ql || [d.nume, d.file_name, d.note].some(s => (s || '').toLowerCase().includes(ql)))
+
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-800">
+      {/* top bar */}
+      <header className="sticky top-0 z-30 bg-[#0a1628] text-white">
+        <div className="max-w-5xl mx-auto px-5 py-4 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg p-2" style={{ background: '#f5c842' }}>
+              <FileText size={18} style={{ color: '#0a1628' }} />
+            </div>
+            <div>
+              <h1 className="font-bold leading-tight">Acte contabile — {meta?.label || entity.toUpperCase()}</h1>
+              <p className="text-xs text-white/50">{meta?.full || ''}</p>
+            </div>
+          </div>
+          <button onClick={load} className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-white/10 hover:bg-white/20 transition">
+            <RefreshCw size={14} /> Reîncarcă
+          </button>
+        </div>
+      </header>
+
+      <main className="max-w-5xl mx-auto px-5 py-6">
+        <UploadBox entity={entity} token={token} onUploaded={d => setDocs(prev => [d, ...(prev || [])])} />
+
+        {/* filtre + cautare */}
+        <div className="flex items-center justify-between gap-3 flex-wrap mt-6 mb-4">
+          <div className="flex gap-2 flex-wrap">
+            <button onClick={() => setFilter('all')}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium ${filter === 'all' ? 'bg-[#0a1628] text-white' : 'bg-white border border-slate-200 text-slate-600'}`}>
+              Toate ({docs?.length || 0})
+            </button>
+            {CATEGORII.map(c => (
+              <button key={c.key} onClick={() => setFilter(c.key)}
+                className={`px-3 py-1.5 rounded-full text-xs font-medium ${filter === c.key ? 'bg-[#0a1628] text-white' : 'bg-white border border-slate-200 text-slate-600'}`}>
+                {c.label} ({counts[c.key] || 0})
+              </button>
+            ))}
+          </div>
+          <div className="relative">
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+            <input value={q} onChange={e => setQ(e.target.value)} placeholder="Caută…"
+              className="pl-8 pr-3 py-1.5 text-sm border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-[#f5c842] bg-white" />
+          </div>
+        </div>
+
+        {docs === null ? (
+          <div className="text-center text-slate-400 py-16"><Loader2 className="w-6 h-6 animate-spin mx-auto" /></div>
+        ) : shown.length === 0 ? (
+          <div className="text-center text-slate-400 py-16 bg-white rounded-xl border border-slate-200">
+            {docs.length === 0 ? 'Niciun document încărcat încă.' : 'Niciun document pentru acest filtru.'}
+          </div>
+        ) : (
+          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-50 text-xs text-slate-400 text-left">
+                  <th className="px-4 py-3">Document</th>
+                  <th className="px-4 py-3">Categorie</th>
+                  <th className="px-4 py-3 whitespace-nowrap">Data act</th>
+                  <th className="px-4 py-3 whitespace-nowrap">Încărcat</th>
+                  <th className="px-4 py-3"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-50">
+                {shown.map(d => (
+                  <tr key={d.id} className="hover:bg-slate-50 align-top">
+                    <td className="px-4 py-3">
+                      <div className="font-medium text-[#0a1628]">{d.nume || d.file_name || 'document'}</div>
+                      {d.nume && d.file_name && <div className="text-xs text-slate-400">{d.file_name}</div>}
+                      {d.note && <div className="text-xs text-slate-400 mt-0.5 italic">{d.note}</div>}
+                      {d.file_size ? <div className="text-[11px] text-slate-300 mt-0.5">{fmtSize(d.file_size)}</div> : null}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700">{CAT_LABEL(d.categorie)}</span>
+                    </td>
+                    <td className="px-4 py-3 text-slate-500 text-xs whitespace-nowrap">
+                      {d.data_doc ? new Date(d.data_doc).toLocaleDateString('ro-RO') : '—'}
+                    </td>
+                    <td className="px-4 py-3 text-slate-400 text-xs whitespace-nowrap">
+                      {new Date(d.created_at).toLocaleDateString('ro-RO')}
+                    </td>
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-1.5 justify-end">
+                        {d.url && (
+                          <a href={d.url} target="_blank" rel="noreferrer" download={d.file_name || undefined}
+                            className="p-1.5 rounded-lg border border-slate-200 text-slate-500 hover:text-[#0a1628] hover:bg-slate-50 transition" title="Descarcă / deschide">
+                            <Download size={15} />
+                          </a>
+                        )}
+                        <DeleteButton entity={entity} token={token} id={d.id}
+                          onDeleted={() => setDocs(prev => (prev || []).filter(x => x.id !== d.id))} />
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <p className="text-xs text-slate-400 text-center mt-6">
+          Documentele sunt confidențiale. Acest link oferă acces complet — nu îl distribui în afara contabilității.
+        </p>
+      </main>
+    </div>
+  )
+}
+
+function UploadBox({ entity, token, onUploaded }: { entity: string; token: string | null; onUploaded: (d: Doc) => void }) {
+  const [categorie, setCategorie] = useState('factura')
+  const [nume, setNume] = useState('')
+  const [dataDoc, setDataDoc] = useState('')
+  const [note, setNote] = useState('')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const [ok, setOk] = useState('')
+  const fileRef = useRef<HTMLInputElement | null>(null)
+
+  async function upload(file: File) {
+    setBusy(true); setErr(''); setOk('')
+    const fd = new FormData()
+    fd.append('file', file)
+    fd.append('entity', entity)
+    fd.append('token', token || '')
+    fd.append('categorie', categorie)
+    fd.append('nume', nume)
+    fd.append('data_doc', dataDoc)
+    fd.append('note', note)
+    try {
+      const res = await fetch('/api/acte-contabile/upload', { method: 'POST', body: fd })
+      const json = await res.json()
+      if (!res.ok || !json.ok) { setErr(json.error || 'Upload eșuat.'); return }
+      onUploaded(json.doc)
+      setOk(`„${json.doc.file_name || 'document'}” încărcat.`)
+      setNume(''); setDataDoc(''); setNote('')
+      setTimeout(() => setOk(''), 3000)
+    } catch { setErr('Conexiune eșuată.') }
+    finally { setBusy(false); if (fileRef.current) fileRef.current.value = '' }
+  }
+
+  const inp = 'w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#f5c842] bg-white'
+
+  return (
+    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+      <h2 className="font-semibold text-[#0a1628] mb-4 flex items-center gap-2">
+        <Upload size={16} className="text-amber-500" /> Încarcă document nou
+      </h2>
+      <div className="grid sm:grid-cols-4 gap-3 mb-3">
+        <div>
+          <label className="block text-xs font-medium text-slate-500 mb-1">Categorie</label>
+          <select value={categorie} onChange={e => setCategorie(e.target.value)} className={inp}>
+            {CATEGORII.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+          </select>
+        </div>
+        <div className="sm:col-span-2">
+          <label className="block text-xs font-medium text-slate-500 mb-1">Denumire (opțional)</label>
+          <input value={nume} onChange={e => setNume(e.target.value)} placeholder="ex: Factura furnizor X" className={inp} />
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-500 mb-1">Data actului</label>
+          <input type="date" value={dataDoc} onChange={e => setDataDoc(e.target.value)} className={inp} />
+        </div>
+      </div>
+      <div className="mb-4">
+        <label className="block text-xs font-medium text-slate-500 mb-1">Notă (opțional)</label>
+        <input value={note} onChange={e => setNote(e.target.value)} placeholder="ex: achitată, de verificat TVA…" className={inp} />
+      </div>
+
+      <input ref={fileRef} type="file" className="hidden"
+        accept=".pdf,.jpg,.jpeg,.png,.webp,.avif,.heic,.xls,.xlsx,.csv,application/pdf,image/*"
+        onChange={e => { const f = e.target.files?.[0]; if (f) upload(f) }} />
+      <button onClick={() => fileRef.current?.click()} disabled={busy}
+        className="flex items-center justify-center gap-2 w-full py-3 rounded-xl font-semibold text-[#0a1628] transition disabled:opacity-60"
+        style={{ background: '#f5c842' }}>
+        {busy ? <Loader2 size={17} className="animate-spin" /> : <Upload size={17} />}
+        {busy ? 'Se încarcă…' : 'Alege fișier (PDF, imagine, Excel) — max 20 MB'}
+      </button>
+      {err && <p className="text-sm text-red-600 mt-2">{err}</p>}
+      {ok && <p className="text-sm text-emerald-600 mt-2">{ok}</p>}
+    </div>
+  )
+}
+
+function DeleteButton({ entity, token, id, onDeleted }: { entity: string; token: string | null; id: string; onDeleted: () => void }) {
+  const [busy, setBusy] = useState(false)
+  async function remove() {
+    if (!confirm('Ștergi definitiv acest document?')) return
+    setBusy(true)
+    try {
+      const res = await fetch(`/api/acte-contabile/delete?entity=${entity}&id=${id}&token=${encodeURIComponent(token || '')}`, { method: 'DELETE' })
+      const json = await res.json()
+      if (json.ok) onDeleted()
+      else alert(json.error || 'Ștergere eșuată.')
+    } finally { setBusy(false) }
+  }
+  return (
+    <button onClick={remove} disabled={busy}
+      className="p-1.5 rounded-lg border border-slate-100 text-red-300 hover:text-red-500 hover:bg-red-50 transition" title="Șterge">
+      {busy ? <Loader2 size={15} className="animate-spin" /> : <Trash2 size={15} />}
+    </button>
+  )
+}

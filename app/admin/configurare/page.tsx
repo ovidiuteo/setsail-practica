@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Plus, Trash2, Check, X, Pencil, Copy, RefreshCw, ExternalLink, KeyRound, Loader2 } from 'lucide-react'
+import { Plus, Trash2, Check, X, Pencil, Copy, RefreshCw, ExternalLink, KeyRound, Loader2, FileText } from 'lucide-react'
 
 type Entity = { id: string; [key: string]: string }
 type Field = { key: string; label: string; placeholder?: string }
@@ -184,6 +184,7 @@ export default function ConfigurarePage() {
         </div>
       </div>
       <LandingTokenSection />
+      <ActeContabileSection />
 
       <div className="grid grid-cols-2 gap-6">
         <Section title="📍 Locații de practică" table="locations"
@@ -304,6 +305,87 @@ function LandingTokenSection() {
           </div>
           <p className="text-xs text-gray-400 mt-2">Oricine are acest link poate edita pagina. Regenerează token-ul pentru a revoca accesul.</p>
         </div>
+      </div>
+    </div>
+  )
+}
+
+function ActeContabileSection() {
+  const ENTITIES = [
+    { key: 'ssa', label: 'SSA — Set Sail Advertising', color: '#2563eb' },
+    { key: 'ssy', label: 'SSY — Set Sail Yachting',     color: '#0a8a6f' },
+  ] as const
+
+  return (
+    <div className="mb-8 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="px-6 py-4 border-b border-gray-100 flex items-center gap-2">
+        <FileText size={18} className="text-amber-500" />
+        <div>
+          <h2 className="font-semibold text-gray-900">Acte contabile — link-uri contabil</h2>
+          <p className="text-xs text-gray-400 mt-0.5">Pagini private de încărcare documente pentru fiecare firmă. Distribuie link-ul contabilului; regenerează pentru a revoca accesul.</p>
+        </div>
+      </div>
+      <div className="divide-y divide-gray-50">
+        {ENTITIES.map(e => <ActeEntityRow key={e.key} entity={e.key} label={e.label} color={e.color} />)}
+      </div>
+    </div>
+  )
+}
+
+function ActeEntityRow({ entity, label, color }: { entity: string; label: string; color: string }) {
+  const [token, setToken] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [regenerating, setRegenerating] = useState(false)
+  const [copied, setCopied] = useState(false)
+
+  const url = token ? `${typeof window !== 'undefined' ? window.location.origin : ''}/acte-contabile/${entity}?token=${token}` : ''
+
+  async function load() {
+    setLoading(true)
+    const json = await fetch(`/api/acte-contabile/token?entity=${entity}`).then(r => r.json()).catch(() => null)
+    setToken(json?.token || '')
+    setLoading(false)
+  }
+  useEffect(() => { load() }, [])
+
+  async function regenerate() {
+    if (!confirm(`Regenerezi token-ul pentru ${entity.toUpperCase()}? Link-ul vechi nu va mai funcționa.`)) return
+    setRegenerating(true)
+    const json = await fetch(`/api/acte-contabile/token?entity=${entity}`, { method: 'POST' }).then(r => r.json()).catch(() => null)
+    if (json?.token) setToken(json.token)
+    setRegenerating(false)
+  }
+
+  function copy() {
+    navigator.clipboard.writeText(url)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }
+
+  return (
+    <div className="px-6 py-4">
+      <div className="flex items-center justify-between gap-3 mb-2">
+        <span className="text-sm font-medium text-gray-800 flex items-center gap-2">
+          <span className="w-2 h-2 rounded-full inline-block" style={{ background: color }} /> {label}
+        </span>
+        <div className="flex items-center gap-2">
+          <a href={url || '#'} target="_blank" rel="noreferrer"
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${token ? 'border-gray-200 text-gray-700 hover:bg-gray-50' : 'border-gray-100 text-gray-300 pointer-events-none'}`}>
+            <ExternalLink size={13} /> Deschide pagina
+          </a>
+          <button onClick={regenerate} disabled={regenerating || loading}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-amber-200 text-amber-700 hover:bg-amber-50 transition-colors disabled:opacity-50">
+            {regenerating ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />} Regenerează
+          </button>
+        </div>
+      </div>
+      <div className="flex gap-2">
+        <input readOnly value={loading ? 'Se încarcă…' : url}
+          className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-600 bg-gray-50 truncate" />
+        <button onClick={copy} disabled={!token}
+          className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-xs text-gray-600 transition-colors disabled:opacity-50">
+          {copied ? <Check size={14} className="text-green-600" /> : <Copy size={14} />} {copied ? 'Copiat' : 'Copiază link'}
+        </button>
       </div>
     </div>
   )
