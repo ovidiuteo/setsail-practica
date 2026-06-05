@@ -3,6 +3,7 @@
 // ============================================================================
 import 'server-only'
 import { cookies } from 'next/headers'
+import { revalidatePath, revalidateTag } from 'next/cache'
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { randomBytes } from 'node:crypto'
 import { mergeContent, type LandingContent } from './content'
@@ -12,39 +13,64 @@ const URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 
 export const CDS_BUCKET = 'cds-landing'
+const CONTENT_TAG = 'cds-landing-content'
 
+// Admin / write client — ALWAYS fresh (opts out of Next.js fetch Data Cache).
+// Used for the editor, all writes, leads and token reads.
 export function cdsServiceClient(): SupabaseClient {
   return createClient(URL, SERVICE, {
     auth: { persistSession: false, autoRefreshToken: false },
-    // CMS content must always be fresh — opt out of Next.js fetch Data Cache,
-    // otherwise the DB-driven landing page can render stale content.
     global: {
       fetch: (input: any, init?: any) => fetch(input, { ...init, cache: 'no-store' }),
     },
   })
 }
 
-// --- content -------------------------------------------------------------
-async function getRow() {
-  const sb = cdsServiceClient()
-  const { data } = await sb.from('cds_landing').select('content, admin_token, updated_at').eq('id', 1).maybeSingle()
-  return data
+// Cached read client for the PUBLIC page — the content fetch is cached in the
+// Next.js Data Cache (revalidate 300s) and tagged, so a busy/poller-hit page
+// does NOT re-read the DB on every request. Busted instantly on save.
+function cdsCachedClient(): SupabaseClient {
+  return createClient(URL, SERVICE, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: {
+      fetch: (input: any, init?: any) => {
+        const { cache, ...rest } = init || {} // can't combine `cache` with `next`
+        void cache
+        return fetch(input, { ...rest, next: { revalidate: 300, tags: [CONTENT_TAG] } })
+      },
+    },
+  })
 }
 
+// --- content -------------------------------------------------------------
+// PUBLIC page read: cached + tagged, selects ONLY `content` (never the token).
+export async function getLandingContentCached(): Promise<LandingContent> {
+  const sb = cdsCachedClient()
+  const { data } = await sb.from('cds_landing').select('content').eq('id', 1).maybeSingle()
+  return mergeContent(data?.content)
+}
+
+// Admin/API read: always fresh, selects ONLY `content`.
 export async function getLandingContent(): Promise<LandingContent> {
-  const row = await getRow()
-  return mergeContent(row?.content)
+  const sb = cdsServiceClient()
+  const { data } = await sb.from('cds_landing').select('content').eq('id', 1).maybeSingle()
+  return mergeContent(data?.content)
 }
 
 export async function saveLandingContent(content: any): Promise<void> {
   const sb = cdsServiceClient()
   await sb.from('cds_landing').update({ content, updated_at: new Date().toISOString() }).eq('id', 1)
+  // Bust the public page cache so edits appear immediately despite ISR.
+  try { revalidateTag(CONTENT_TAG) } catch { /* outside request context */ }
+  try { revalidatePath('/curs-yachting-cds') } catch { /* outside request context */ }
 }
 
 // --- token ---------------------------------------------------------------
+// Selects ONLY `admin_token`, always fresh — never on the public render path.
 export async function getAdminToken(): Promise<string | null> {
-  const row = await getRow()
-  return row?.admin_token ?? null
+  const sb = cdsServiceClient()
+  const { data } = await sb.from('cds_landing').select('admin_token').eq('id', 1).maybeSingle()
+  return data?.admin_token ?? null
 }
 
 export async function verifyLandingToken(token: string | null | undefined): Promise<boolean> {
