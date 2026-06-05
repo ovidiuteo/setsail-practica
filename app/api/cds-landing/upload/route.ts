@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cdsServiceClient, isEditor, CDS_BUCKET } from '@/lib/cds-landing/server'
 import { optimizeToWebp } from '@/lib/cds-landing/images'
-import { r2Enabled, r2Upload } from '@/lib/cds-landing/r2'
+import { r2Enabled, r2Upload, r2KeyFromUrl, r2Delete } from '@/lib/cds-landing/r2'
 
 export const dynamic = 'force-dynamic'
 export const runtime = 'nodejs' // sharp needs the Node runtime
@@ -59,4 +59,45 @@ export async function POST(req: NextRequest) {
 
   const { data } = sb.storage.from(CDS_BUCKET).getPublicUrl(key)
   return NextResponse.json({ ok: true, url: data.publicUrl, storage: 'supabase' })
+}
+
+// Delete the underlying storage object for a given image URL (R2 or Supabase).
+// External / /public URLs have no managed object → succeed without deleting.
+function supabaseKeyFromUrl(url: string): string | null {
+  const marker = `/storage/v1/object/public/${CDS_BUCKET}/`
+  const i = url.indexOf(marker)
+  if (i === -1) return null
+  return decodeURIComponent(url.slice(i + marker.length))
+}
+
+export async function DELETE(req: NextRequest) {
+  const body = await req.json().catch(() => ({}))
+  if (!(await isEditor(body?.token))) {
+    return NextResponse.json({ ok: false, error: 'Acces refuzat.' }, { status: 401 })
+  }
+  const url = String(body?.url || '')
+  if (!url) return NextResponse.json({ ok: true, deleted: false })
+
+  // R2 object?
+  const r2key = r2KeyFromUrl(url)
+  if (r2key) {
+    try {
+      await r2Delete(r2key)
+      return NextResponse.json({ ok: true, deleted: true, storage: 'r2' })
+    } catch (e: any) {
+      return NextResponse.json({ ok: false, error: e?.message || 'R2 delete eșuat.' }, { status: 500 })
+    }
+  }
+
+  // Supabase Storage object?
+  const sbKey = supabaseKeyFromUrl(url)
+  if (sbKey) {
+    const sb = cdsServiceClient()
+    const { error } = await sb.storage.from(CDS_BUCKET).remove([sbKey])
+    if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
+    return NextResponse.json({ ok: true, deleted: true, storage: 'supabase' })
+  }
+
+  // External (Unsplash/pravatar) or /public CDN asset → nothing to delete.
+  return NextResponse.json({ ok: true, deleted: false })
 }

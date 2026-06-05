@@ -53,3 +53,25 @@ export async function r2Upload(key: string, body: Buffer, contentType: string): 
 
   return `${PUBLIC_BASE!.replace(/\/+$/, '')}/${key}`
 }
+
+// Returns the R2 object key if `url` is one of our R2 public URLs, else null.
+export function r2KeyFromUrl(url: string): string | null {
+  if (!PUBLIC_BASE || !url) return null
+  const base = PUBLIC_BASE.replace(/\/+$/, '')
+  if (!url.startsWith(base + '/')) return null
+  return decodeURIComponent(url.slice(base.length + 1))
+}
+
+export async function r2Delete(key: string): Promise<void> {
+  const client = new AwsClient({ accessKeyId: KEY!, secretAccessKey: SECRET!, service: 's3', region: 'auto' })
+  const endpoint = `https://${ACCOUNT}.r2.cloudflarestorage.com/${BUCKET}/${key
+    .split('/')
+    .map(encodeURIComponent)
+    .join('/')}`
+  const res = await client.fetch(endpoint, { method: 'DELETE' })
+  // S3 DELETE returns 204; treat 404 as already-gone (idempotent)
+  if (!res.ok && res.status !== 404) {
+    const txt = await res.text().catch(() => '')
+    throw new Error(`R2 delete failed (${res.status}): ${txt.slice(0, 200)}`)
+  }
+}

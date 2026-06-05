@@ -170,6 +170,7 @@ function ListTxt({ label, items, onChange, rec }: { label: string; items: string
 
 function ImageField({ label, value, onChange, token, slot, dims }: { label: string; value: string; onChange: (v: string) => void; token: string; slot: string; dims: string }) {
   const [busy, setBusy] = useState(false)
+  const [del, setDel] = useState(false)
   const [e, setE] = useState('')
   async function upload(file: File) {
     setBusy(true); setE('')
@@ -183,6 +184,22 @@ function ImageField({ label, value, onChange, token, slot, dims }: { label: stri
     } catch { setE('Conexiune eșuată.') }
     finally { setBusy(false) }
   }
+  async function removeImg() {
+    if (!value) return
+    if (!confirm('Ștergi imaginea? Obiectul va fi eliminat definitiv din storage (R2/Supabase). Apoi apasă „Salvează" ca să se publice.')) return
+    setDel(true); setE('')
+    try {
+      const res = await fetch('/api/cds-landing/upload', {
+        method: 'DELETE',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ token, url: value }),
+      })
+      const json = await res.json()
+      if (!res.ok || !json.ok) { setE(json.error || 'Ștergere eșuată.'); return }
+      onChange('')
+    } catch { setE('Conexiune eșuată.') }
+    finally { setDel(false) }
+  }
   return (
     <div className="border border-slate-200 rounded-lg p-3">
       <div className="flex items-center justify-between mb-2">
@@ -195,10 +212,18 @@ function ImageField({ label, value, onChange, token, slot, dims }: { label: stri
           : <div className="w-20 h-14 rounded-md bg-slate-100 flex items-center justify-center text-slate-300 shrink-0"><ImageIcon size={18} /></div>}
         <div className="flex-1 min-w-0">
           <input className="w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs text-slate-600 mb-2" placeholder="URL imagine sau încarcă →" value={value || ''} onChange={(ev) => onChange(ev.target.value)} />
-          <label className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer transition">
-            {busy ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />} Încarcă imagine
-            <input type="file" accept="image/*" className="hidden" onChange={(ev) => { const f = ev.target.files?.[0]; if (f) upload(f) }} />
-          </label>
+          <div className="flex items-center gap-2">
+            <label className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-slate-200 hover:bg-slate-50 cursor-pointer transition">
+              {busy ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />} Încarcă imagine
+              <input type="file" accept="image/*" className="hidden" onChange={(ev) => { const f = ev.target.files?.[0]; if (f) upload(f) }} />
+            </label>
+            {value && (
+              <button type="button" onClick={removeImg} disabled={del}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-red-200 text-red-600 hover:bg-red-50 transition disabled:opacity-50">
+                {del ? <Loader2 size={13} className="animate-spin" /> : <Trash2 size={13} />} Șterge
+              </button>
+            )}
+          </div>
         </div>
       </div>
       {e && <p className="text-xs text-red-500 mt-2">{e}</p>}
