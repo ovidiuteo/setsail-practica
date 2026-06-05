@@ -14,7 +14,14 @@ const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC
 export const CDS_BUCKET = 'cds-landing'
 
 export function cdsServiceClient(): SupabaseClient {
-  return createClient(URL, SERVICE, { auth: { persistSession: false, autoRefreshToken: false } })
+  return createClient(URL, SERVICE, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    // CMS content must always be fresh — opt out of Next.js fetch Data Cache,
+    // otherwise the DB-driven landing page can render stale content.
+    global: {
+      fetch: (input: any, init?: any) => fetch(input, { ...init, cache: 'no-store' }),
+    },
+  })
 }
 
 // --- content -------------------------------------------------------------
