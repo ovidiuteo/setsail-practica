@@ -28,6 +28,13 @@ export function isEntity(v: unknown): v is Entity {
   return v === 'ssa' || v === 'ssy'
 }
 
+// Lunile gestionate (sezon). Extensibil ulterior.
+export const LUNI = ['mai', 'iunie', 'iulie'] as const
+export type Luna = typeof LUNI[number]
+export function isLuna(v: unknown): v is Luna {
+  return typeof v === 'string' && (LUNI as readonly string[]).includes(v)
+}
+
 export function acteServiceClient(): SupabaseClient {
   return createClient(URL, SERVICE, { auth: { persistSession: false, autoRefreshToken: false } })
 }
@@ -76,6 +83,8 @@ export type ActDoc = {
   categorie: string
   nume: string | null
   data_doc: string | null
+  luna: string | null
+  luna_manuala: boolean
   file_path: string
   file_name: string | null
   file_type: string | null
@@ -109,6 +118,7 @@ export async function insertDoc(doc: {
   categorie: string
   nume: string | null
   data_doc: string | null
+  luna: string | null
   file_path: string
   file_name: string | null
   file_type: string | null
@@ -118,6 +128,17 @@ export async function insertDoc(doc: {
   const sb = acteServiceClient()
   const { data } = await sb.from('acte_contabile_documente').insert(doc).select().single()
   return (data as ActDoc) ?? null
+}
+
+// Realocă documentul la o lună (marcat ca modificat manual → evidențiat în UI)
+export async function updateDocMonth(entity: Entity, id: string, luna: Luna): Promise<{ ok: boolean; doc?: ActDoc; error?: string }> {
+  const sb = acteServiceClient()
+  const { data, error } = await sb.from('acte_contabile_documente')
+    .update({ luna, luna_manuala: true })
+    .eq('id', id).eq('entity', entity)
+    .select().single()
+  if (error) return { ok: false, error: error.message }
+  return { ok: true, doc: (data as ActDoc) ?? undefined }
 }
 
 export async function deleteDoc(entity: Entity, id: string): Promise<{ ok: boolean; error?: string }> {

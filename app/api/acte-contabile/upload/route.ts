@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { acteServiceClient, canAccess, isEntity, insertDoc, ACTE_BUCKET } from '@/lib/acte-contabile/server'
+import { acteServiceClient, canAccess, isEntity, insertDoc, isLuna, ACTE_BUCKET } from '@/lib/acte-contabile/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -46,6 +46,8 @@ export async function POST(req: NextRequest) {
   const note = ((form.get('note') as string) || '').slice(0, 1000).trim() || null
   const dataDocRaw = ((form.get('data_doc') as string) || '').trim()
   const data_doc = /^\d{4}-\d{2}-\d{2}$/.test(dataDocRaw) ? dataDocRaw : null
+  const lunaRaw = ((form.get('luna') as string) || '').toLowerCase().trim()
+  const luna = isLuna(lunaRaw) ? lunaRaw : null
 
   const ext = extFromName(file.name || '', file.type || '')
   const path = `${entity}/${categorie}/${Date.now()}-${Math.floor(Math.random() * 1e6)}.${ext}`
@@ -59,7 +61,7 @@ export async function POST(req: NextRequest) {
   if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
 
   const doc = await insertDoc({
-    entity, categorie, nume, data_doc,
+    entity, categorie, nume, data_doc, luna,
     file_path: path,
     file_name: file.name || null,
     file_type: file.type || null,

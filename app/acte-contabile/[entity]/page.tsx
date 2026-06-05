@@ -3,7 +3,7 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import {
   Loader2, Upload, Trash2, RefreshCw, ShieldAlert, FileText, Download,
-  Receipt, Landmark, FileSignature, ScrollText, Files, Search, Eye, X, FileSpreadsheet,
+  Receipt, Landmark, FileSignature, ScrollText, Files, Search, Eye, X, FileSpreadsheet, CalendarDays,
 } from 'lucide-react'
 
 type Doc = {
@@ -12,12 +12,23 @@ type Doc = {
   categorie: string
   nume: string | null
   data_doc: string | null
+  luna: string | null
+  luna_manuala: boolean
   file_name: string | null
   file_type: string | null
   file_size: number | null
   note: string | null
   created_at: string
   url: string | null
+}
+
+// Lunile gestionate (sezon)
+const LUNI = ['mai', 'iunie', 'iulie'] as const
+const LUNA_LABEL = (m: string) => m.charAt(0).toUpperCase() + m.slice(1)
+function currentLuna(): string {
+  // getMonth: 0=ian … 4=mai, 5=iunie, 6=iulie. Clamp la sezonul gestionat.
+  const idx = Math.min(Math.max(new Date().getMonth() - 4, 0), LUNI.length - 1)
+  return LUNI[idx]
 }
 
 const CATEGORII: { key: string; label: string; icon: any }[] = [
@@ -54,6 +65,11 @@ export default function ActeContabilePage({ params }: { params: { entity: string
   const [filter, setFilter] = useState<string>('all')
   const [q, setQ] = useState('')
   const [preview, setPreview] = useState<Doc | null>(null)
+  const [months, setMonths] = useState<string[]>([currentLuna()])
+
+  function toggleMonth(m: string) {
+    setMonths(prev => prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m])
+  }
 
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get('token')
@@ -90,11 +106,16 @@ export default function ActeContabilePage({ params }: { params: { entity: string
     )
   }
 
-  const counts = (docs || []).reduce((a, d) => { a[d.categorie] = (a[d.categorie] || 0) + 1; return a }, {} as Record<string, number>)
+  const lunaOf = (d: Doc) => d.luna || currentLuna()
+  const monthCounts = (docs || []).reduce((a, d) => { const m = lunaOf(d); a[m] = (a[m] || 0) + 1; return a }, {} as Record<string, number>)
+  // Documentele din lunile selectate (baza pentru numărători categorii + afișare)
+  const inMonths = (docs || []).filter(d => months.length === 0 || months.includes(lunaOf(d)))
+  const counts = inMonths.reduce((a, d) => { a[d.categorie] = (a[d.categorie] || 0) + 1; return a }, {} as Record<string, number>)
   const ql = q.trim().toLowerCase()
-  const shown = (docs || [])
+  const shown = inMonths
     .filter(d => filter === 'all' || d.categorie === filter)
     .filter(d => !ql || [d.nume, d.file_name, d.note].some(s => (s || '').toLowerCase().includes(ql)))
+  const visibleMonths = LUNI.filter(m => (months.length === 0 || months.includes(m)))
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800">
@@ -119,8 +140,29 @@ export default function ActeContabilePage({ params }: { params: { entity: string
       <main className="max-w-5xl mx-auto px-5 py-6">
         <UploadBox entity={entity} token={token} onUploaded={d => setDocs(prev => [d, ...(prev || [])])} />
 
-        {/* filtre + cautare */}
-        <div className="flex items-center justify-between gap-3 flex-wrap mt-6 mb-4">
+        {/* filtru luni */}
+        <div className="flex items-center gap-2 flex-wrap mt-6 mb-3">
+          <span className="flex items-center gap-1.5 text-xs font-medium text-slate-400 mr-1">
+            <CalendarDays size={14} /> Luna:
+          </span>
+          {LUNI.map(m => {
+            const active = months.includes(m)
+            return (
+              <button key={m} onClick={() => toggleMonth(m)}
+                className={`px-3.5 py-1.5 rounded-full text-sm font-semibold transition ${active ? 'text-[#0a1628]' : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-50'}`}
+                style={active ? { background: '#f5c842' } : {}}>
+                {LUNA_LABEL(m)} ({monthCounts[m] || 0})
+              </button>
+            )
+          })}
+          <button onClick={() => setMonths([...LUNI])}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${months.length === LUNI.length ? 'bg-[#0a1628] text-white' : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
+            Toate lunile
+          </button>
+        </div>
+
+        {/* filtre categorie + cautare */}
+        <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
           <div className="flex gap-2 flex-wrap">
             <button onClick={() => setFilter('all')}
               className={`px-3 py-1.5 rounded-full text-xs font-medium ${filter === 'all' ? 'bg-[#0a1628] text-white' : 'bg-white border border-slate-200 text-slate-600'}`}>
@@ -144,59 +186,44 @@ export default function ActeContabilePage({ params }: { params: { entity: string
           <div className="text-center text-slate-400 py-16"><Loader2 className="w-6 h-6 animate-spin mx-auto" /></div>
         ) : shown.length === 0 ? (
           <div className="text-center text-slate-400 py-16 bg-white rounded-xl border border-slate-200">
-            {docs.length === 0 ? 'Niciun document încărcat încă.' : 'Niciun document pentru acest filtru.'}
+            {docs.length === 0 ? 'Niciun document încărcat încă.' : 'Niciun document pentru filtrul curent.'}
           </div>
         ) : (
-          <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="bg-slate-50 text-xs text-slate-400 text-left">
-                  <th className="px-4 py-3">Document</th>
-                  <th className="px-4 py-3">Categorie</th>
-                  <th className="px-4 py-3 whitespace-nowrap">Data act</th>
-                  <th className="px-4 py-3 whitespace-nowrap">Încărcat</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-50">
-                {shown.map(d => (
-                  <tr key={d.id} className="hover:bg-slate-50 align-top">
-                    <td className="px-4 py-3">
-                      <div className="font-medium text-[#0a1628]">{d.nume || d.file_name || 'document'}</div>
-                      {d.nume && d.file_name && <div className="text-xs text-slate-400">{d.file_name}</div>}
-                      {d.note && <div className="text-xs text-slate-400 mt-0.5 italic">{d.note}</div>}
-                      {d.file_size ? <div className="text-[11px] text-slate-300 mt-0.5">{fmtSize(d.file_size)}</div> : null}
-                      {/* Acțiuni — sub denumire, ușor accesibile */}
-                      <div className="flex items-center gap-2 mt-2">
-                        {d.url && (
-                          <button onClick={() => setPreview(d)}
-                            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-[#0a1628] hover:opacity-90 transition"
-                            style={{ background: '#f5c842' }} title="Previzualizează">
-                            <Eye size={14} /> Vezi
-                          </button>
-                        )}
-                        {d.url && (
-                          <a href={d.url} target="_blank" rel="noreferrer" download={d.file_name || undefined}
-                            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 transition" title="Descarcă / deschide">
-                            <Download size={14} /> Descarcă
-                          </a>
-                        )}
-                        <DeleteButton entity={entity} token={token} id={d.id}
-                          onDeleted={() => setDocs(prev => (prev || []).filter(x => x.id !== d.id))} />
-                      </div>
-                    </td>
-                    <td className="px-4 py-3">
-                      <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700">{CAT_LABEL(d.categorie)}</span>
-                    </td>
-                    <td className="px-4 py-3 text-slate-500 text-xs whitespace-nowrap">
-                      {d.data_doc ? new Date(d.data_doc).toLocaleDateString('ro-RO') : '—'}
-                    </td>
-                    <td className="px-4 py-3 text-slate-400 text-xs whitespace-nowrap">
-                      {new Date(d.created_at).toLocaleDateString('ro-RO')}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div className="space-y-7">
+            {visibleMonths.map(m => {
+              const groupDocs = shown.filter(d => lunaOf(d) === m)
+              if (groupDocs.length === 0) return null
+              return (
+                <section key={m}>
+                  <div className="flex items-baseline gap-2 mb-2.5">
+                    <h2 className="text-xl font-extrabold tracking-wide text-[#0a1628]">{m.toUpperCase()}</h2>
+                    <span className="text-xs text-slate-400">{groupDocs.length} document{groupDocs.length === 1 ? '' : 'e'}</span>
+                  </div>
+                  <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="bg-slate-50 text-xs text-slate-400 text-left">
+                          <th className="px-4 py-3">Document</th>
+                          <th className="px-4 py-3">Categorie</th>
+                          <th className="px-4 py-3 whitespace-nowrap">Lună</th>
+                          <th className="px-4 py-3 whitespace-nowrap">Data act</th>
+                          <th className="px-4 py-3 whitespace-nowrap">Încărcat</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-50">
+                        {groupDocs.map(d => (
+                          <DocRow key={d.id} d={d} entity={entity} token={token}
+                            onPreview={() => setPreview(d)}
+                            onDeleted={() => setDocs(prev => (prev || []).filter(x => x.id !== d.id))}
+                            onMonthChanged={(luna) => setDocs(prev => (prev || []).map(x => x.id === d.id ? { ...x, luna, luna_manuala: true } : x))}
+                          />
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </section>
+              )
+            })}
           </div>
         )}
 
@@ -273,8 +300,78 @@ function PreviewModal({ doc, onClose }: { doc: Doc; onClose: () => void }) {
   )
 }
 
+function DocRow({ d, entity, token, onPreview, onDeleted, onMonthChanged }: {
+  d: Doc; entity: string; token: string | null
+  onPreview: () => void; onDeleted: () => void; onMonthChanged: (luna: string) => void
+}) {
+  const [saving, setSaving] = useState(false)
+  const luna = d.luna || currentLuna()
+
+  async function changeMonth(next: string) {
+    if (next === luna && d.luna) return
+    setSaving(true)
+    try {
+      const res = await fetch('/api/acte-contabile/update-luna', {
+        method: 'PATCH', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ entity, token, id: d.id, luna: next }),
+      })
+      const json = await res.json()
+      if (json.ok) onMonthChanged(next)
+      else alert(json.error || 'Schimbarea lunii a eșuat.')
+    } finally { setSaving(false) }
+  }
+
+  return (
+    <tr className={`align-top transition-colors ${d.luna_manuala ? 'bg-yellow-50 hover:bg-yellow-100' : 'hover:bg-slate-50'}`}>
+      <td className="px-4 py-3">
+        <div className="font-medium text-[#0a1628]">{d.nume || d.file_name || 'document'}</div>
+        {d.nume && d.file_name && <div className="text-xs text-slate-400">{d.file_name}</div>}
+        {d.note && <div className="text-xs text-slate-400 mt-0.5 italic">{d.note}</div>}
+        {d.file_size ? <div className="text-[11px] text-slate-300 mt-0.5">{fmtSize(d.file_size)}</div> : null}
+        {/* Acțiuni — sub denumire, ușor accesibile */}
+        <div className="flex items-center gap-2 mt-2">
+          {d.url && (
+            <button onClick={onPreview}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-[#0a1628] hover:opacity-90 transition"
+              style={{ background: '#f5c842' }} title="Previzualizează">
+              <Eye size={14} /> Vezi
+            </button>
+          )}
+          {d.url && (
+            <a href={d.url} target="_blank" rel="noreferrer" download={d.file_name || undefined}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 transition" title="Descarcă / deschide">
+              <Download size={14} /> Descarcă
+            </a>
+          )}
+          <DeleteButton entity={entity} token={token} id={d.id} onDeleted={onDeleted} />
+        </div>
+      </td>
+      <td className="px-4 py-3">
+        <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700">{CAT_LABEL(d.categorie)}</span>
+      </td>
+      <td className="px-4 py-3">
+        <div className="flex items-center gap-1.5">
+          <select value={luna} disabled={saving} onChange={e => changeMonth(e.target.value)}
+            className={`text-xs font-medium rounded-lg px-2 py-1 border cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#f5c842] ${d.luna_manuala ? 'bg-yellow-100 border-yellow-200 text-yellow-800' : 'bg-white border-slate-200 text-slate-600'}`}>
+            {LUNI.map(m => <option key={m} value={m}>{LUNA_LABEL(m)}</option>)}
+          </select>
+          {saving && <Loader2 size={12} className="animate-spin text-slate-400" />}
+        </div>
+        {d.luna_manuala && <div className="text-[10px] text-yellow-600 mt-1">mutat manual</div>}
+      </td>
+      <td className="px-4 py-3 text-slate-500 text-xs whitespace-nowrap">
+        {d.data_doc ? new Date(d.data_doc).toLocaleDateString('ro-RO') : '—'}
+      </td>
+      <td className="px-4 py-3 text-slate-400 text-xs whitespace-nowrap">
+        {new Date(d.created_at).toLocaleDateString('ro-RO')}
+      </td>
+    </tr>
+  )
+}
+
 function UploadBox({ entity, token, onUploaded }: { entity: string; token: string | null; onUploaded: (d: Doc) => void }) {
   const [categorie, setCategorie] = useState('factura')
+  const [luna, setLuna] = useState(currentLuna())
   const [nume, setNume] = useState('')
   const [dataDoc, setDataDoc] = useState('')
   const [note, setNote] = useState('')
@@ -290,6 +387,7 @@ function UploadBox({ entity, token, onUploaded }: { entity: string; token: strin
     fd.append('entity', entity)
     fd.append('token', token || '')
     fd.append('categorie', categorie)
+    fd.append('luna', luna)
     fd.append('nume', nume)
     fd.append('data_doc', dataDoc)
     fd.append('note', note)
@@ -312,11 +410,17 @@ function UploadBox({ entity, token, onUploaded }: { entity: string; token: strin
       <h2 className="font-semibold text-[#0a1628] mb-4 flex items-center gap-2">
         <Upload size={16} className="text-amber-500" /> Încarcă document nou
       </h2>
-      <div className="grid sm:grid-cols-4 gap-3 mb-3">
+      <div className="grid sm:grid-cols-5 gap-3 mb-3">
         <div>
           <label className="block text-xs font-medium text-slate-500 mb-1">Categorie</label>
           <select value={categorie} onChange={e => setCategorie(e.target.value)} className={inp}>
             {CATEGORII.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+          </select>
+        </div>
+        <div>
+          <label className="block text-xs font-medium text-slate-500 mb-1">Lună</label>
+          <select value={luna} onChange={e => setLuna(e.target.value)} className={inp}>
+            {LUNI.map(m => <option key={m} value={m}>{LUNA_LABEL(m)}</option>)}
           </select>
         </div>
         <div className="sm:col-span-2">
