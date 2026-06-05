@@ -28,8 +28,11 @@ export function isEntity(v: unknown): v is Entity {
   return v === 'ssa' || v === 'ssy'
 }
 
-// Lunile gestionate (sezon). Extensibil ulterior.
-export const LUNI = ['mai', 'iunie', 'iulie'] as const
+// Lunile calendaristice (RO)
+export const LUNI = [
+  'ianuarie', 'februarie', 'martie', 'aprilie', 'mai', 'iunie',
+  'iulie', 'august', 'septembrie', 'octombrie', 'noiembrie', 'decembrie',
+] as const
 export type Luna = typeof LUNI[number]
 export function isLuna(v: unknown): v is Luna {
   return typeof v === 'string' && (LUNI as readonly string[]).includes(v)

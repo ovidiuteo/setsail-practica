@@ -22,13 +22,15 @@ type Doc = {
   url: string | null
 }
 
-// Lunile gestionate (sezon)
-const LUNI = ['mai', 'iunie', 'iulie'] as const
+// Lunile calendaristice (RO)
+const LUNI = [
+  'ianuarie', 'februarie', 'martie', 'aprilie', 'mai', 'iunie',
+  'iulie', 'august', 'septembrie', 'octombrie', 'noiembrie', 'decembrie',
+] as const
 const LUNA_LABEL = (m: string) => m.charAt(0).toUpperCase() + m.slice(1)
 function currentLuna(): string {
-  // getMonth: 0=ian … 4=mai, 5=iunie, 6=iulie. Clamp la sezonul gestionat.
-  const idx = Math.min(Math.max(new Date().getMonth() - 4, 0), LUNI.length - 1)
-  return LUNI[idx]
+  // getMonth: 0=ianuarie … 11=decembrie
+  return LUNI[new Date().getMonth()]
 }
 
 const CATEGORII: { key: string; label: string; icon: any }[] = [
