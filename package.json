@@ -13,6 +13,7 @@
     "@types/node": "^20",
     "@types/react": "^18",
     "autoprefixer": "^10",
+    "aws4fetch": "^1.0.20",
     "docx": "^9.6.1",
     "imapflow": "^1.0.188",
     "lucide-react": "^1.14.0",
