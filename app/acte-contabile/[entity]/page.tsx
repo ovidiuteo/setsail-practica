@@ -68,10 +68,18 @@ export default function ActeContabilePage({ params }: { params: { entity: string
   const [q, setQ] = useState('')
   const [preview, setPreview] = useState<Doc | null>(null)
   const [months, setMonths] = useState<string[]>([currentLuna()])
+  const [showAllMonths, setShowAllMonths] = useState(false)
 
   function toggleMonth(m: string) {
     setMonths(prev => prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m])
   }
+
+  // Implicit: luna precedentă, curentă și următoare (+ orice lună deja selectată)
+  const ci = new Date().getMonth()
+  const nearby = [(ci + 11) % 12, ci, (ci + 1) % 12].map(i => LUNI[i])
+  const monthButtons = showAllMonths
+    ? [...LUNI]
+    : LUNI.filter(m => nearby.includes(m) || months.includes(m))
 
   useEffect(() => {
     const t = new URLSearchParams(window.location.search).get('token')
@@ -147,7 +155,7 @@ export default function ActeContabilePage({ params }: { params: { entity: string
           <span className="flex items-center gap-1.5 text-xs font-medium text-slate-400 mr-1">
             <CalendarDays size={14} /> Luna:
           </span>
-          {LUNI.map(m => {
+          {monthButtons.map(m => {
             const active = months.includes(m)
             return (
               <button key={m} onClick={() => toggleMonth(m)}
@@ -157,9 +165,20 @@ export default function ActeContabilePage({ params }: { params: { entity: string
               </button>
             )
           })}
-          <button onClick={() => setMonths([...LUNI])}
+
+          <span className="w-px h-5 bg-slate-200 mx-1" />
+
+          <button onClick={() => setMonths([currentLuna()])}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${months.length === 1 && months[0] === currentLuna() ? 'bg-[#0a1628] text-white' : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
+            Luna curentă
+          </button>
+          <button onClick={() => { setMonths([...LUNI]); setShowAllMonths(true) }}
             className={`px-3 py-1.5 rounded-full text-xs font-medium transition ${months.length === LUNI.length ? 'bg-[#0a1628] text-white' : 'bg-white border border-slate-200 text-slate-500 hover:bg-slate-50'}`}>
             Toate lunile
+          </button>
+          <button onClick={() => setShowAllMonths(v => !v)}
+            className="px-3 py-1.5 rounded-full text-xs font-medium text-slate-500 border border-slate-200 hover:bg-slate-50 transition">
+            {showAllMonths ? 'Vezi mai puține' : 'Vezi toate lunile'}
           </button>
         </div>
 
