@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Plus, Trash2, Check, X, Pencil, Copy, RefreshCw, ExternalLink, KeyRound, Loader2, FileText } from 'lucide-react'
+import { Plus, Trash2, Check, X, Pencil, Copy, RefreshCw, ExternalLink, KeyRound, Loader2, FileText, Eye } from 'lucide-react'
 
 type Entity = { id: string; [key: string]: string }
 type Field = { key: string; label: string; placeholder?: string }
@@ -271,6 +271,10 @@ function LandingTokenSection() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <a href="/curs-yachting-cds" target="_blank" rel="noreferrer"
+            className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors">
+            <Eye size={15} /> Deschide pagina
+          </a>
           <a href={editorUrl || '#'} target="_blank" rel="noreferrer"
             className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium border transition-colors ${token ? 'border-[#2ea8d8] text-[#103a66] hover:bg-blue-50' : 'border-gray-200 text-gray-300 pointer-events-none'}`}>
             <ExternalLink size={15} /> Deschide editorul
