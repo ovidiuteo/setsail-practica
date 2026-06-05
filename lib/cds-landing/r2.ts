@@ -30,13 +30,15 @@ export async function r2Upload(key: string, body: Buffer, contentType: string): 
     .map(encodeURIComponent)
     .join('/')}`
 
+  const bytes = new Uint8Array(body)
   let res: Response
   try {
     res = await client.fetch(endpoint, {
       method: 'PUT',
-      body: new Uint8Array(body),
+      body: bytes,
       headers: {
         'content-type': contentType,
+        'content-length': String(bytes.byteLength), // R2 requires Content-Length on PUT
         'cache-control': 'public, max-age=31536000, immutable',
       },
     })
