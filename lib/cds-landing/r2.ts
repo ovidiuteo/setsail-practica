@@ -5,11 +5,13 @@
 import 'server-only'
 import { AwsClient } from 'aws4fetch'
 
-const ACCOUNT = process.env.R2_ACCOUNT_ID
-const KEY = process.env.R2_ACCESS_KEY_ID
-const SECRET = process.env.R2_SECRET_ACCESS_KEY
-const BUCKET = process.env.R2_BUCKET
-const PUBLIC_BASE = process.env.R2_PUBLIC_BASE_URL
+const clean = (v?: string) => (v || '').trim()
+// account id is 32 hex chars — strip any stray leading/trailing dots or spaces
+const ACCOUNT = clean(process.env.R2_ACCOUNT_ID).replace(/^\.+|\.+$/g, '')
+const KEY = clean(process.env.R2_ACCESS_KEY_ID)
+const SECRET = clean(process.env.R2_SECRET_ACCESS_KEY)
+const BUCKET = clean(process.env.R2_BUCKET).replace(/^\/+|\/+$/g, '')
+const PUBLIC_BASE = clean(process.env.R2_PUBLIC_BASE_URL)
 
 export function r2Enabled(): boolean {
   return Boolean(ACCOUNT && KEY && SECRET && BUCKET && PUBLIC_BASE)
