@@ -16,24 +16,35 @@ export function r2Enabled(): boolean {
 }
 
 export async function r2Upload(key: string, body: Buffer, contentType: string): Promise<string> {
-  const client = new AwsClient({ accessKeyId: KEY!, secretAccessKey: SECRET! })
-  const endpoint = `https://${ACCOUNT}.r2.cloudflarestorage.com/${BUCKET}/${key
+  const client = new AwsClient({
+    accessKeyId: KEY!,
+    secretAccessKey: SECRET!,
+    service: 's3',
+    region: 'auto',
+  })
+  const host = `${ACCOUNT}.r2.cloudflarestorage.com`
+  const endpoint = `https://${host}/${BUCKET}/${key
     .split('/')
     .map(encodeURIComponent)
     .join('/')}`
 
-  const res = await client.fetch(endpoint, {
-    method: 'PUT',
-    body: new Uint8Array(body),
-    headers: {
-      'content-type': contentType,
-      'cache-control': 'public, max-age=31536000, immutable',
-    },
-  })
+  let res: Response
+  try {
+    res = await client.fetch(endpoint, {
+      method: 'PUT',
+      body: new Uint8Array(body),
+      headers: {
+        'content-type': contentType,
+        'cache-control': 'public, max-age=31536000, immutable',
+      },
+    })
+  } catch (e: any) {
+    throw new Error(`R2 connect failed (host ${host}): ${e?.cause?.message || e?.message || String(e)}`)
+  }
 
   if (!res.ok) {
     const txt = await res.text().catch(() => '')
-    throw new Error(`R2 upload failed (${res.status}): ${txt.slice(0, 200)}`)
+    throw new Error(`R2 upload failed (${res.status}): ${txt.slice(0, 300)}`)
   }
 
   return `${PUBLIC_BASE!.replace(/\/+$/, '')}/${key}`
