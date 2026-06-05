@@ -29,7 +29,7 @@ function setPath(obj: any, path: Path, val: any): any {
 export default function LandingAdminPage() {
   const [token, setToken] = useState<string | null>(null)
   const [phase, setPhase] = useState<'checking' | 'denied' | 'ready'>('checking')
-  const [tab, setTab] = useState<'content' | 'leads'>('content')
+  const [tab, setTab] = useState<'content' | 'leads'>('leads')
   const [draft, setDraft] = useState<any>(null)
   const [saving, setSaving] = useState(false)
   const [savedAt, setSavedAt] = useState<string>('')
@@ -98,7 +98,7 @@ export default function LandingAdminPage() {
         </div>
         {/* tabs */}
         <div className="max-w-5xl mx-auto px-5 flex gap-1">
-          {([['content', 'Conținut', FileText], ['leads', 'Lead-uri', Users]] as const).map(([k, label, Icon]) => (
+          {([['leads', 'Lead-uri', Users], ['content', 'Conținut', FileText]] as const).map(([k, label, Icon]) => (
             <button key={k} onClick={() => setTab(k)} className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition ${tab === k ? 'border-[#2ea8d8] text-[#0a2a4e]' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>
               <Icon size={15} /> {label}
             </button>
