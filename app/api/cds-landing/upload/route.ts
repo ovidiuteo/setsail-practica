@@ -9,6 +9,32 @@ export const runtime = 'nodejs' // sharp needs the Node runtime
 const MAX_SIZE = 12 * 1024 * 1024 // 12 MB raw input (optimized down to webp after)
 const ALLOWED = ['image/jpeg', 'image/png', 'image/webp', 'image/avif']
 
+// --- delete the underlying object for a given image URL (R2 or Supabase) ---
+function supabaseKeyFromUrl(url: string): string | null {
+  const marker = `/storage/v1/object/public/${CDS_BUCKET}/`
+  const i = url.indexOf(marker)
+  if (i === -1) return null
+  return decodeURIComponent(url.slice(i + marker.length))
+}
+
+async function deleteObjectByUrl(url: string): Promise<{ deleted: boolean; storage?: string }> {
+  if (!url) return { deleted: false }
+  const r2key = r2KeyFromUrl(url)
+  if (r2key) {
+    await r2Delete(r2key)
+    return { deleted: true, storage: 'r2' }
+  }
+  const sbKey = supabaseKeyFromUrl(url)
+  if (sbKey) {
+    const sb = cdsServiceClient()
+    const { error } = await sb.storage.from(CDS_BUCKET).remove([sbKey])
+    if (error) throw new Error(error.message)
+    return { deleted: true, storage: 'supabase' }
+  }
+  // external (Unsplash/pravatar) or /public CDN asset → nothing to delete
+  return { deleted: false }
+}
+
 export async function POST(req: NextRequest) {
   const form = await req.formData().catch(() => null)
   if (!form) return NextResponse.json({ ok: false, error: 'Cerere invalidă.' }, { status: 400 })
@@ -28,6 +54,7 @@ export async function POST(req: NextRequest) {
   }
 
   const slot = ((form.get('slot') as string) || 'img').replace(/[^a-z0-9_-]/gi, '').slice(0, 40)
+  const prevUrl = (form.get('prevUrl') as string) || ''
 
   // Optimize: resize per slot + convert to webp
   let optimized: Buffer
@@ -39,35 +66,34 @@ export async function POST(req: NextRequest) {
 
   const key = `${slot}/${Date.now()}-${Math.floor(Math.random() * 1e6)}.webp`
 
-  // Prefer Cloudflare R2 (egress-free); fall back to Supabase Storage if not configured.
-  if (r2Enabled()) {
-    try {
-      const url = await r2Upload(key, optimized, 'image/webp')
-      return NextResponse.json({ ok: true, url, storage: 'r2' })
-    } catch (e: any) {
-      return NextResponse.json({ ok: false, error: e?.message || 'R2 upload eșuat.' }, { status: 500 })
+  // Store: prefer Cloudflare R2 (egress-free); fall back to Supabase Storage.
+  let url: string
+  let storage: string
+  try {
+    if (r2Enabled()) {
+      url = await r2Upload(key, optimized, 'image/webp')
+      storage = 'r2'
+    } else {
+      const sb = cdsServiceClient()
+      const { error } = await sb.storage.from(CDS_BUCKET).upload(key, optimized, {
+        contentType: 'image/webp',
+        upsert: true,
+        cacheControl: '31536000',
+      })
+      if (error) throw new Error(error.message)
+      url = sb.storage.from(CDS_BUCKET).getPublicUrl(key).data.publicUrl
+      storage = 'supabase'
     }
+  } catch (e: any) {
+    return NextResponse.json({ ok: false, error: e?.message || 'Stocare eșuată.' }, { status: 500 })
   }
 
-  const sb = cdsServiceClient()
-  const { error } = await sb.storage.from(CDS_BUCKET).upload(key, optimized, {
-    contentType: 'image/webp',
-    upsert: true,
-    cacheControl: '31536000',
-  })
-  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
+  // Best-effort cleanup of the replaced image so we don't leave orphans.
+  if (prevUrl && prevUrl !== url) {
+    try { await deleteObjectByUrl(prevUrl) } catch { /* ignore cleanup errors */ }
+  }
 
-  const { data } = sb.storage.from(CDS_BUCKET).getPublicUrl(key)
-  return NextResponse.json({ ok: true, url: data.publicUrl, storage: 'supabase' })
-}
-
-// Delete the underlying storage object for a given image URL (R2 or Supabase).
-// External / /public URLs have no managed object → succeed without deleting.
-function supabaseKeyFromUrl(url: string): string | null {
-  const marker = `/storage/v1/object/public/${CDS_BUCKET}/`
-  const i = url.indexOf(marker)
-  if (i === -1) return null
-  return decodeURIComponent(url.slice(i + marker.length))
+  return NextResponse.json({ ok: true, url, storage })
 }
 
 export async function DELETE(req: NextRequest) {
@@ -77,27 +103,10 @@ export async function DELETE(req: NextRequest) {
   }
   const url = String(body?.url || '')
   if (!url) return NextResponse.json({ ok: true, deleted: false })
-
-  // R2 object?
-  const r2key = r2KeyFromUrl(url)
-  if (r2key) {
-    try {
-      await r2Delete(r2key)
-      return NextResponse.json({ ok: true, deleted: true, storage: 'r2' })
-    } catch (e: any) {
-      return NextResponse.json({ ok: false, error: e?.message || 'R2 delete eșuat.' }, { status: 500 })
-    }
+  try {
+    const res = await deleteObjectByUrl(url)
+    return NextResponse.json({ ok: true, ...res })
+  } catch (e: any) {
+    return NextResponse.json({ ok: false, error: e?.message || 'Ștergere eșuată.' }, { status: 500 })
   }
-
-  // Supabase Storage object?
-  const sbKey = supabaseKeyFromUrl(url)
-  if (sbKey) {
-    const sb = cdsServiceClient()
-    const { error } = await sb.storage.from(CDS_BUCKET).remove([sbKey])
-    if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
-    return NextResponse.json({ ok: true, deleted: true, storage: 'supabase' })
-  }
-
-  // External (Unsplash/pravatar) or /public CDN asset → nothing to delete.
-  return NextResponse.json({ ok: true, deleted: false })
 }

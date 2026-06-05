@@ -176,6 +176,7 @@ function ImageField({ label, value, onChange, token, slot, dims }: { label: stri
     setBusy(true); setE('')
     const fd = new FormData()
     fd.append('file', file); fd.append('token', token); fd.append('slot', slot)
+    if (value) fd.append('prevUrl', value) // auto-cleanup the replaced image
     try {
       const res = await fetch('/api/cds-landing/upload', { method: 'POST', body: fd })
       const json = await res.json()
