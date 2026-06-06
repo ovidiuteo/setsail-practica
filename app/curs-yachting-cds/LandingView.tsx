@@ -34,6 +34,15 @@ export default function LandingView({ content: c }: { content: LandingContent })
   const [formOpen, setFormOpen] = useState(false)
 
   useEffect(() => {
+    // visit beacon — count once per browser session (page is cached, so the
+    // server doesn't run on every hit; we track real client views instead)
+    try {
+      if (!sessionStorage.getItem('cds_visit')) {
+        sessionStorage.setItem('cds_visit', '1')
+        fetch('/api/cds-landing/track', { method: 'POST', keepalive: true }).catch(() => {})
+      }
+    } catch { /* ignore */ }
+
     const onScroll = () => setScrolled(window.scrollY > 40)
     window.addEventListener('scroll', onScroll)
     onScroll()

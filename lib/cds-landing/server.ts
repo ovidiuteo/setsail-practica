@@ -97,6 +97,27 @@ export function isAdminRequest(): boolean {
   return verifyAdminCookieToken(c)
 }
 
+// --- visit stats ---------------------------------------------------------
+export async function trackVisit(): Promise<void> {
+  const sb = cdsServiceClient()
+  await sb.rpc('cds_track_visit')
+}
+
+export async function getVisitStats() {
+  const sb = cdsServiceClient()
+  const { data } = await sb
+    .from('cds_visit_stats')
+    .select('day, count')
+    .order('day', { ascending: false })
+  const rows = (data || []) as { day: string; count: number }[]
+  const total = rows.reduce((a, r) => a + (r.count || 0), 0)
+  const todayStr = new Date().toISOString().slice(0, 10)
+  const today = rows.find((r) => r.day === todayStr)?.count || 0
+  const weekAgo = new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10)
+  const last7 = rows.filter((r) => r.day >= weekAgo).reduce((a, r) => a + (r.count || 0), 0)
+  return { total, today, last7, daily: rows.slice(0, 14) }
+}
+
 // Editor access = valid landing token OR a logged-in /admin session
 export async function isEditor(token: string | null | undefined): Promise<boolean> {
   if (isAdminRequest()) return true

@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback } from 'react'
 import {
   Loader2, Save, Trash2, RefreshCw, Upload,
   Image as ImageIcon, FileText, Users, ShieldAlert, Eye,
+  CalendarDays, TrendingUp,
 } from 'lucide-react'
 
 const display = 'font-[family-name:var(--font-playfair)]'
@@ -445,10 +446,13 @@ const STATUS_STYLE: Record<string, string> = {
 function LeadsTab({ token }: { token: string }) {
   const [leads, setLeads] = useState<any[] | null>(null)
   const [filter, setFilter] = useState<string>('all')
+  const [stats, setStats] = useState<{ total: number; today: number; last7: number } | null>(null)
 
   const load = useCallback(async () => {
     const json = await fetch(`/api/cds-landing/leads?token=${encodeURIComponent(token)}`).then((r) => r.json()).catch(() => null)
     setLeads(json?.leads || [])
+    const s = await fetch(`/api/cds-landing/stats?token=${encodeURIComponent(token)}`).then((r) => r.json()).catch(() => null)
+    if (s && typeof s.total === 'number') setStats(s)
   }, [token])
 
   useEffect(() => { load() }, [load])
@@ -468,8 +472,27 @@ function LeadsTab({ token }: { token: string }) {
   const shown = filter === 'all' ? leads : leads.filter((l) => l.status === filter)
   const counts = STATUSES.reduce((a, s) => ({ ...a, [s]: leads.filter((l) => l.status === s).length }), {} as Record<string, number>)
 
+  const visitCards = [
+    { icon: Eye, label: 'Total vizite', value: stats?.total, hint: 'de la lansare' },
+    { icon: CalendarDays, label: 'Azi', value: stats?.today, hint: 'vizite astăzi' },
+    { icon: TrendingUp, label: 'Ultimele 7 zile', value: stats?.last7, hint: 'vizite / săptămână' },
+  ]
+
   return (
     <div>
+      {/* visit counter */}
+      <div className="grid grid-cols-3 gap-3 mb-5">
+        {visitCards.map(({ icon: Icon, label, value, hint }) => (
+          <div key={label} className="bg-white rounded-xl border border-slate-200 p-4 flex items-center gap-3">
+            <span className="w-10 h-10 rounded-lg bg-[#eef4fb] text-[#2ea8d8] flex items-center justify-center shrink-0"><Icon size={18} /></span>
+            <div className="min-w-0">
+              <p className="text-2xl font-extrabold text-[#0a2a4e] leading-none">{value ?? '—'}</p>
+              <p className="text-xs text-slate-500 mt-1 truncate">{label}<span className="hidden sm:inline text-slate-400"> · {hint}</span></p>
+            </div>
+          </div>
+        ))}
+      </div>
+
       <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
         <div className="flex gap-2 flex-wrap">
           <button onClick={() => setFilter('all')} className={`px-3 py-1.5 rounded-full text-xs font-medium ${filter === 'all' ? 'bg-[#0a2a4e] text-white' : 'bg-white border border-slate-200 text-slate-600'}`}>Toate ({leads.length})</button>
