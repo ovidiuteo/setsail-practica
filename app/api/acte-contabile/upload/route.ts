@@ -11,7 +11,7 @@ const ALLOWED = [
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'text/csv',
 ]
-const CATEGORII = ['factura', 'chitanta', 'extras', 'contract', 'bon', 'altele']
+const CATEGORII = ['factura', 'chitanta', 'extras', 'contract', 'bon', 'altele', 'extras_cont', 'sumar_facturi']
 
 function extFromName(name: string, type: string): string {
   const dot = name.lastIndexOf('.')

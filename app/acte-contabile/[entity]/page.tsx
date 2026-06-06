@@ -4,6 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import {
   Loader2, Upload, Trash2, RefreshCw, ShieldAlert, FileText, Download,
   Receipt, Landmark, FileSignature, ScrollText, Files, Search, Eye, X, FileSpreadsheet, CalendarDays,
+  ChevronDown, ChevronUp, Wallet, ReceiptText, Check, AlertCircle,
 } from 'lucide-react'
 
 type Doc = {
@@ -31,6 +32,25 @@ const LUNA_LABEL = (m: string) => m.charAt(0).toUpperCase() + m.slice(1)
 function currentLuna(): string {
   // getMonth: 0=ianuarie … 11=decembrie
   return LUNI[new Date().getMonth()]
+}
+
+// Poziții obligatorii lunare (PDF) — afișate în panoul mov de checklist
+const SLOTS: { key: string; label: string; icon: any }[] = [
+  { key: 'extras_cont',   label: 'Extras de cont',       icon: Wallet },
+  { key: 'sumar_facturi', label: 'Sumar lunar facturi',  icon: ReceiptText },
+]
+const SLOT_KEYS = SLOTS.map(s => s.key)
+
+// Praguri pe lună raportat la data de azi (an curent). past27 → afișat default; past30 → colorat roșu/verde.
+function monthDateInfo(m: string): { past27: boolean; past30: boolean } {
+  const now = new Date()
+  const idx = (LUNI as readonly string[]).indexOf(m)
+  if (idx < 0) return { past27: false, past30: false }
+  const y = now.getFullYear()
+  const daysInMonth = new Date(y, idx + 1, 0).getDate()
+  const d27 = new Date(y, idx, Math.min(27, daysInMonth), 0, 0, 0)
+  const d30 = new Date(y, idx, Math.min(30, daysInMonth), 0, 0, 0)
+  return { past27: now >= d27, past30: now >= d30 }
 }
 
 const CATEGORII: { key: string; label: string; icon: any }[] = [
@@ -117,9 +137,12 @@ export default function ActeContabilePage({ params }: { params: { entity: string
   }
 
   const lunaOf = (d: Doc) => d.luna || currentLuna()
-  const monthCounts = (docs || []).reduce((a, d) => { const m = lunaOf(d); a[m] = (a[m] || 0) + 1; return a }, {} as Record<string, number>)
+  // Pozițiile speciale (Extras de cont / Sumar facturi) trăiesc doar în panoul de checklist
+  const slotDocs = (docs || []).filter(d => SLOT_KEYS.includes(d.categorie))
+  const normalDocs = (docs || []).filter(d => !SLOT_KEYS.includes(d.categorie))
+  const monthCounts = normalDocs.reduce((a, d) => { const m = lunaOf(d); a[m] = (a[m] || 0) + 1; return a }, {} as Record<string, number>)
   // Documentele din lunile selectate (baza pentru numărători categorii + afișare)
-  const inMonths = (docs || []).filter(d => months.length === 0 || months.includes(lunaOf(d)))
+  const inMonths = normalDocs.filter(d => months.length === 0 || months.includes(lunaOf(d)))
   const counts = inMonths.reduce((a, d) => { a[d.categorie] = (a[d.categorie] || 0) + 1; return a }, {} as Record<string, number>)
   const ql = q.trim().toLowerCase()
   const shown = inMonths
@@ -205,48 +228,68 @@ export default function ActeContabilePage({ params }: { params: { entity: string
 
         {docs === null ? (
           <div className="text-center text-slate-400 py-16"><Loader2 className="w-6 h-6 animate-spin mx-auto" /></div>
-        ) : shown.length === 0 ? (
-          <div className="text-center text-slate-400 py-16 bg-white rounded-xl border border-slate-200">
-            {docs.length === 0 ? 'Niciun document încărcat încă.' : 'Niciun document pentru filtrul curent.'}
-          </div>
-        ) : (
-          <div className="space-y-7">
-            {visibleMonths.map(m => {
-              const groupDocs = shown.filter(d => lunaOf(d) === m)
-              if (groupDocs.length === 0) return null
-              return (
-                <section key={m}>
-                  <div className="flex items-baseline gap-2 mb-2.5">
-                    <h2 className="text-xl font-extrabold tracking-wide text-[#0a1628]">{m.toUpperCase()}</h2>
-                    <span className="text-xs text-slate-400">{groupDocs.length} document{groupDocs.length === 1 ? '' : 'e'}</span>
-                  </div>
-                  <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="bg-slate-50 text-xs text-slate-400 text-left">
-                          <th className="px-4 py-3">Document</th>
-                          <th className="px-4 py-3">Categorie</th>
-                          <th className="px-4 py-3 whitespace-nowrap">Lună</th>
-                          <th className="px-4 py-3 whitespace-nowrap">Data act</th>
-                          <th className="px-4 py-3 whitespace-nowrap">Încărcat</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-50">
-                        {groupDocs.map(d => (
-                          <DocRow key={d.id} d={d} entity={entity} token={token}
-                            onPreview={() => setPreview(d)}
-                            onDeleted={() => setDocs(prev => (prev || []).filter(x => x.id !== d.id))}
-                            onMonthChanged={(luna) => setDocs(prev => (prev || []).map(x => x.id === d.id ? { ...x, luna, luna_manuala: true } : x))}
-                          />
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </section>
-              )
-            })}
-          </div>
-        )}
+        ) : (() => {
+          // Secțiuni: lunile vizibile care au documente SAU luna curentă (mereu prezentă)
+          const sectionMonths = visibleMonths.filter(m => shown.some(d => lunaOf(d) === m) || m === currentLuna())
+          if (sectionMonths.length === 0) {
+            return (
+              <div className="text-center text-slate-400 py-16 bg-white rounded-xl border border-slate-200">
+                {normalDocs.length === 0 ? 'Niciun document încărcat încă.' : 'Niciun document pentru filtrul curent.'}
+              </div>
+            )
+          }
+          return (
+            <div className="space-y-7">
+              {sectionMonths.map(m => {
+                const groupDocs = shown.filter(d => lunaOf(d) === m)
+                const monthSlotDocs = slotDocs.filter(d => lunaOf(d) === m)
+                return (
+                  <section key={m}>
+                    <div className="flex items-baseline gap-2 mb-2.5">
+                      <h2 className="text-xl font-extrabold tracking-wide text-[#0a1628]">{m.toUpperCase()}</h2>
+                      <span className="text-xs text-slate-400">{groupDocs.length} document{groupDocs.length === 1 ? '' : 'e'}</span>
+                    </div>
+
+                    <MonthChecklist month={m} entity={entity} token={token} slotDocs={monthSlotDocs}
+                      onPreview={d => setPreview(d)}
+                      onAdd={d => setDocs(prev => [d, ...(prev || [])])}
+                      onRemove={id => setDocs(prev => (prev || []).filter(x => x.id !== id))}
+                    />
+
+                    {groupDocs.length === 0 ? (
+                      <div className="text-center text-slate-400 py-8 bg-white rounded-xl border border-slate-200 text-sm">
+                        Niciun document în această lună.
+                      </div>
+                    ) : (
+                      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="bg-slate-50 text-xs text-slate-400 text-left">
+                              <th className="px-4 py-3">Document</th>
+                              <th className="px-4 py-3">Categorie</th>
+                              <th className="px-4 py-3 whitespace-nowrap">Lună</th>
+                              <th className="px-4 py-3 whitespace-nowrap">Data act</th>
+                              <th className="px-4 py-3 whitespace-nowrap">Încărcat</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-50">
+                            {groupDocs.map(d => (
+                              <DocRow key={d.id} d={d} entity={entity} token={token}
+                                onPreview={() => setPreview(d)}
+                                onDeleted={() => setDocs(prev => (prev || []).filter(x => x.id !== d.id))}
+                                onMonthChanged={(luna) => setDocs(prev => (prev || []).map(x => x.id === d.id ? { ...x, luna, luna_manuala: true } : x))}
+                              />
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </section>
+                )
+              })}
+            </div>
+          )
+        })()}
 
         <p className="text-xs text-slate-400 text-center mt-6">
           Documentele sunt confidențiale. Acest link oferă acces complet — nu îl distribui în afara contabilității.
@@ -317,6 +360,138 @@ function PreviewModal({ doc, onClose }: { doc: Doc; onClose: () => void }) {
           )}
         </div>
       </div>
+    </div>
+  )
+}
+
+function MonthChecklist({ month, entity, token, slotDocs, onPreview, onAdd, onRemove }: {
+  month: string; entity: string; token: string | null; slotDocs: Doc[]
+  onPreview: (d: Doc) => void; onAdd: (d: Doc) => void; onRemove: (id: string) => void
+}) {
+  const { past27, past30 } = monthDateInfo(month)
+  const [open, setOpen] = useState(past27)
+
+  return (
+    <div className="mb-3 rounded-xl border border-purple-200 bg-purple-50 overflow-hidden">
+      <button onClick={() => setOpen(v => !v)}
+        className="w-full flex items-center justify-between gap-3 px-4 py-3 text-left hover:bg-purple-100/60 transition">
+        <span className="flex items-center gap-2 font-semibold text-purple-900">
+          <FileText size={16} /> Extrase cont și facturi
+          {!past27 && <span className="text-[11px] font-normal text-purple-400">(se activează pe 27)</span>}
+        </span>
+        <span className="text-purple-500">{open ? <ChevronUp size={18} /> : <ChevronDown size={18} />}</span>
+      </button>
+
+      {open && (
+        <div className="px-4 pb-4 pt-1 grid sm:grid-cols-2 gap-3">
+          {SLOTS.map(slot => (
+            <SlotCard key={slot.key} slot={slot} month={month} entity={entity} token={token}
+              doc={slotDocs.find(d => d.categorie === slot.key) || null}
+              past30={past30}
+              onPreview={onPreview} onAdd={onAdd} onRemove={onRemove} />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SlotCard({ slot, month, entity, token, doc, past30, onPreview, onAdd, onRemove }: {
+  slot: { key: string; label: string; icon: any }; month: string; entity: string; token: string | null
+  doc: Doc | null; past30: boolean
+  onPreview: (d: Doc) => void; onAdd: (d: Doc) => void; onRemove: (id: string) => void
+}) {
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+  const fileRef = useRef<HTMLInputElement | null>(null)
+  const Icon = slot.icon
+  const uploaded = !!doc
+
+  // Culoare: după 30 → roșu (lipsă) / verde (încărcat); altfel neutru
+  const tone = past30
+    ? (uploaded ? 'bg-green-50 border-green-300' : 'bg-red-50 border-red-300')
+    : 'bg-white border-purple-100'
+
+  async function upload(file: File) {
+    setBusy(true); setErr('')
+    const fd = new FormData()
+    fd.append('file', file)
+    fd.append('entity', entity)
+    fd.append('token', token || '')
+    fd.append('categorie', slot.key)
+    fd.append('luna', month)
+    fd.append('nume', slot.label)
+    try {
+      const res = await fetch('/api/acte-contabile/upload', { method: 'POST', body: fd })
+      const json = await res.json()
+      if (!res.ok || !json.ok) { setErr(json.error || 'Upload eșuat.'); return }
+      // înlocuiește fișierul anterior (o singură poziție/lună)
+      if (doc) {
+        await fetch(`/api/acte-contabile/delete?entity=${entity}&id=${doc.id}&token=${encodeURIComponent(token || '')}`, { method: 'DELETE' }).catch(() => {})
+        onRemove(doc.id)
+      }
+      onAdd(json.doc)
+    } catch { setErr('Conexiune eșuată.') }
+    finally { setBusy(false); if (fileRef.current) fileRef.current.value = '' }
+  }
+
+  async function remove() {
+    if (!doc) return
+    if (!confirm(`Ștergi „${slot.label}” pentru ${LUNA_LABEL(month)}?`)) return
+    setBusy(true)
+    try {
+      const res = await fetch(`/api/acte-contabile/delete?entity=${entity}&id=${doc.id}&token=${encodeURIComponent(token || '')}`, { method: 'DELETE' }).then(r => r.json())
+      if (res.ok) onRemove(doc.id)
+    } finally { setBusy(false) }
+  }
+
+  return (
+    <div className={`rounded-lg border p-3 ${tone}`}>
+      <div className="flex items-center justify-between gap-2 mb-2">
+        <span className="flex items-center gap-1.5 text-sm font-medium text-[#0a1628]">
+          <Icon size={15} className="text-purple-500" /> {slot.label}
+        </span>
+        {past30 && (
+          uploaded
+            ? <span className="flex items-center gap-1 text-[11px] font-medium text-green-700"><Check size={12} /> Încărcat</span>
+            : <span className="flex items-center gap-1 text-[11px] font-medium text-red-600"><AlertCircle size={12} /> Lipsă</span>
+        )}
+      </div>
+
+      {doc ? (
+        <div className="text-xs text-slate-500 mb-2 truncate">{doc.file_name || 'document.pdf'}</div>
+      ) : (
+        <div className="text-xs text-slate-400 mb-2 italic">Neîncărcat</div>
+      )}
+
+      <input ref={fileRef} type="file" accept=".pdf,application/pdf" className="hidden"
+        onChange={e => { const f = e.target.files?.[0]; if (f) upload(f) }} />
+
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {doc?.url && (
+          <button onClick={() => onPreview(doc)}
+            className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium text-[#0a1628]" style={{ background: '#f5c842' }} title="Previzualizează">
+            <Eye size={13} /> Vezi
+          </button>
+        )}
+        {doc?.url && (
+          <a href={doc.url} target="_blank" rel="noreferrer" download={doc.file_name || undefined}
+            className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border border-slate-200 bg-white text-slate-600 hover:bg-slate-50" title="Descarcă">
+            <Download size={13} /> Descarcă
+          </a>
+        )}
+        <button onClick={() => fileRef.current?.click()} disabled={busy}
+          className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border border-slate-200 bg-white text-slate-600 hover:bg-slate-50 disabled:opacity-60">
+          {busy ? <Loader2 size={13} className="animate-spin" /> : <Upload size={13} />} {uploaded ? 'Înlocuiește' : 'Încarcă PDF'}
+        </button>
+        {doc && (
+          <button onClick={remove} disabled={busy}
+            className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border border-slate-100 text-red-400 hover:text-red-600 hover:bg-red-50" title="Șterge">
+            <Trash2 size={13} />
+          </button>
+        )}
+      </div>
+      {err && <p className="text-[11px] text-red-600 mt-1.5">{err}</p>}
     </div>
   )
 }
