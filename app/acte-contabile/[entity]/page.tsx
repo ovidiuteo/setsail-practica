@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import {
   Loader2, Upload, Trash2, RefreshCw, ShieldAlert, FileText, Download,
   Receipt, Landmark, FileSignature, ScrollText, Files, Search, Eye, X, FileSpreadsheet, CalendarDays,
-  ChevronDown, ChevronUp, Wallet, ReceiptText, Check, AlertCircle,
+  ChevronDown, ChevronUp, Wallet, ReceiptText, Check, AlertCircle, FolderArchive,
 } from 'lucide-react'
 
 type Doc = {
@@ -243,11 +243,15 @@ export default function ActeContabilePage({ params }: { params: { entity: string
               {sectionMonths.map(m => {
                 const groupDocs = shown.filter(d => lunaOf(d) === m)
                 const monthSlotDocs = slotDocs.filter(d => lunaOf(d) === m)
+                const monthHasFiles = normalDocs.some(d => lunaOf(d) === m) || monthSlotDocs.length > 0
                 return (
                   <section key={m}>
-                    <div className="flex items-baseline gap-2 mb-2.5">
-                      <h2 className="text-xl font-extrabold tracking-wide text-[#0a1628]">{m.toUpperCase()}</h2>
-                      <span className="text-xs text-slate-400">{groupDocs.length} document{groupDocs.length === 1 ? '' : 'e'}</span>
+                    <div className="flex items-center justify-between gap-3 mb-2.5">
+                      <div className="flex items-baseline gap-2">
+                        <h2 className="text-xl font-extrabold tracking-wide text-[#0a1628]">{m.toUpperCase()}</h2>
+                        <span className="text-xs text-slate-400">{groupDocs.length} document{groupDocs.length === 1 ? '' : 'e'}</span>
+                      </div>
+                      {monthHasFiles && <DownloadMonthButton entity={entity} token={token} month={m} />}
                     </div>
 
                     <MonthChecklist month={m} entity={entity} token={token} slotDocs={monthSlotDocs}
@@ -360,6 +364,45 @@ function PreviewModal({ doc, onClose }: { doc: Doc; onClose: () => void }) {
           )}
         </div>
       </div>
+    </div>
+  )
+}
+
+function DownloadMonthButton({ entity, token, month }: { entity: string; token: string | null; month: string }) {
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState('')
+
+  async function download() {
+    setBusy(true); setErr('')
+    try {
+      const res = await fetch(`/api/acte-contabile/zip?entity=${entity}&luna=${month}&token=${encodeURIComponent(token || '')}`)
+      if (!res.ok) {
+        const j = await res.json().catch(() => null)
+        setErr(j?.error || 'Descărcare eșuată.')
+        return
+      }
+      const blob = await res.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `acte-${entity}-${month}.zip`
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      setTimeout(() => URL.revokeObjectURL(url), 4000)
+    } catch { setErr('Conexiune eșuată.') }
+    finally { setBusy(false) }
+  }
+
+  return (
+    <div className="flex flex-col items-end">
+      <button onClick={download} disabled={busy}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-[#0a1628] hover:opacity-90 transition disabled:opacity-60"
+        style={{ background: '#f5c842' }} title="Descarcă toate fișierele lunii ca ZIP">
+        {busy ? <Loader2 size={14} className="animate-spin" /> : <FolderArchive size={14} />}
+        {busy ? 'Se arhivează…' : 'Descarcă toată luna'}
+      </button>
+      {err && <span className="text-[11px] text-red-600 mt-1">{err}</span>}
     </div>
   )
 }
