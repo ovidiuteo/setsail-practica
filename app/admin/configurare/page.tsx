@@ -167,6 +167,13 @@ export default function ConfigurarePage() {
           <p className="text-gray-500 text-sm mt-1">Gestionare locații, ambarcațiuni, evaluatori, instructori și persoane de contact</p>
         </div>
         <div className="flex items-center gap-2">
+        <a href="/admin/configurare/dashboards"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border border-[#2ea8d8] text-[#103a66] hover:bg-blue-50 transition-colors">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/>
+          </svg>
+          Dashboard-uri persoane
+        </a>
         <a href="/admin/configurare/timeline"
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border border-purple-200 text-purple-700 hover:bg-purple-50 transition-colors">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
