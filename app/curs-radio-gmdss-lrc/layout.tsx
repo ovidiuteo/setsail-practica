@@ -5,7 +5,7 @@ const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'sw
 const mono = JetBrains_Mono({ subsets: ['latin'], weight: ['500', '700'], variable: '--font-mono', display: 'swap' })
 
 export const metadata: Metadata = {
-  title: 'Curs radiocomunicații maritime GMDSS / LRC — online pe Zoom | SetSail',
+  title: 'SETSAIL GMDSS/LRC — Curs radiocomunicații maritime online pe Zoom',
   description:
     'Certificat radio GMDSS / LRC: VHF, MF/HF, DSC, EPIRB, SART și proceduri GMDSS. Obligatoriu pentru a opera stația de la bord și pentru charter. 100% online, 15–17 iunie.',
   openGraph: {

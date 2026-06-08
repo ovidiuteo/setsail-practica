@@ -16,7 +16,7 @@ const playfair = Playfair_Display({
 })
 
 export const metadata: Metadata = {
-  title: 'Curs intensiv yachting CDS — În 4 zile înveți să conduci o barcă | SetSail',
+  title: 'SETSAIL CDS — Curs intensiv yachting (în 4 zile înveți să conduci o barcă)',
   description:
     'Curs intensiv de yachting C+D+S la Limanu, Marea Neagră. 50% teorie + 50% practică reală pe mare. Un skill internațional pe care îl folosești oriunde în lume. 8–11 iunie.',
   openGraph: {

@@ -1,6 +1,7 @@
 'use client'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
+import { useEffect } from 'react'
 import { Ship, Calendar, Users, Settings, Anchor, Building2, Mail, PenTool, LogOut, Ticket } from 'lucide-react'
 import GoogleGIcon from '@/components/GoogleGIcon'
 
@@ -16,9 +17,45 @@ const nav = [
   { href: '/admin/configurare', label: 'Configurare',       icon: Settings },
 ]
 
+// Titlul tab-ului de browser pentru fiecare pagina admin.
+// Paginile dinamice (sesiune/cursant) primesc un titlu de baza aici,
+// pe care pagina il rafineaza dupa ce incarca datele.
+const ADMIN_TAB_TITLES: Record<string, string> = {
+  '/admin':                            'SetSail Admin',
+  '/admin/login':                      'Login Admin',
+  '/admin/sesiuni':                    'Sesiuni Practică',
+  '/admin/sesiuni/nou':                'Sesiune nouă',
+  '/admin/cursanti':                   'Cursanți',
+  '/admin/cursanti/import':            'Import cursanți',
+  '/admin/vouchere':                   'Vouchere',
+  '/admin/emailuri':                   'Emailuri',
+  '/admin/emailuri/reguli':            'Reguli email',
+  '/admin/gmail':                      'Gmail Templates',
+  '/admin/semnaturi':                  'Semnături',
+  '/admin/setsail':                    'SetSail Firmă',
+  '/admin/pool-radio':                 'Pool Radio',
+  '/admin/configurare':                'Configurare',
+  '/admin/configurare/dashboards':     'Dashboard-uri persoane',
+  '/admin/configurare/mail-templates': 'Template-uri Email',
+  '/admin/configurare/timeline':       'Timeline sesiuni',
+}
+
+function adminTabTitle(path: string): string {
+  if (ADMIN_TAB_TITLES[path]) return ADMIN_TAB_TITLES[path]
+  if (/^\/admin\/sesiuni\/[^/]+\/clone$/.test(path))  return 'Clonează sesiune'
+  if (/^\/admin\/sesiuni\/[^/]+\/examen$/.test(path)) return 'Examen sesiune'
+  if (/^\/admin\/sesiuni\/[^/]+$/.test(path))         return 'Sesiune'       // pagina suprascrie cu data
+  if (/^\/admin\/cursanti\/[^/]+$/.test(path))        return 'Fișă cursant'  // pagina suprascrie cu numele
+  return 'SetSail Admin'
+}
+
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const path = usePathname()
   const router = useRouter()
+
+  // Titlu tab browser per pagina (paginile dinamice il rafineaza ulterior)
+  useEffect(() => { document.title = adminTabTitle(path) }, [path])
+
   // Login page: fără sidebar
   if (path === '/admin/login') return <>{children}</>
 

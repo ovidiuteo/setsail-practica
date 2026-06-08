@@ -113,6 +113,11 @@ export default function ActeContabilePage({ params }: { params: { entity: string
     })()
   }, [entity])
 
+  // Titlul tab-ului de browser
+  useEffect(() => {
+    document.title = `Acte contabile ${(meta?.label || entity || '').toString().toUpperCase()}`
+  }, [meta, entity])
+
   const load = useCallback(async () => {
     const json = await fetch(`/api/acte-contabile/list?entity=${entity}&token=${encodeURIComponent(token || '')}`)
       .then(r => r.json()).catch(() => null)

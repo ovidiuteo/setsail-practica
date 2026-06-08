@@ -2,7 +2,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react'
 import CIImageEditor from '@/components/CIImageEditor'
 import { supabase } from '@/lib/supabase'
-import { TIMELINE_SCOPES, timelineScopeLabel } from '@/lib/timeline-scope'
+import { TIMELINE_SCOPES, timelineScopeLabel, scopeForSession } from '@/lib/timeline-scope'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Download, FileText, Users, Copy, Plus, Trash2, Check, X, Pencil, GitBranch, ArrowRight, UserX, Mail, ChevronDown, Database } from 'lucide-react'
@@ -2318,6 +2318,24 @@ function OnlySailingSection({ sessions, studentsMap, setStudentsMap }: {
 }
 
 
+// Titlu scurt pentru tab-ul de browser: "11 iunie Pra CDS"
+function sessionTabTitle(sess: any): string {
+  if (!sess) return 'Sesiune'
+  const date = sess.session_date
+    ? new Date(sess.session_date).toLocaleDateString('ro-RO', { day: 'numeric', month: 'long' })
+    : ''
+  const scope = scopeForSession(sess)
+  const prefix = scope.startsWith('practica') ? 'Pra'
+    : scope.startsWith('intensiv') ? 'Int'
+    : scope.startsWith('curs') ? 'Curs'
+    : scope.startsWith('radio') ? 'Radio' : ''
+  const cls = String(sess.class_caa || '').toUpperCase()
+  const clsShort = (cls.includes('C') && cls.includes('D')) ? 'CDS'
+    : /RADIO|LRC/.test(cls) ? ''            // prefixul spune deja Radio
+    : cls.replace(/[,\s]+/g, '/')           // "A,B" -> "A/B"
+  return [date, prefix, clsShort].filter(Boolean).join(' ') || 'Sesiune'
+}
+
 export default function SessionDetailPage() {
   const { id } = useParams() as { id: string }
   const [mainSession, setMainSession] = useState<Session|null>(null)
@@ -2352,6 +2370,11 @@ export default function SessionDetailPage() {
   const [editSessionValues, setEditSessionValues] = useState<any>({})
   const [savingSession, setSavingSession] = useState(false)
   const [refs, setRefs] = useState<any>({locations:[], boats:[], evaluators:[], instructors:[]})
+
+  // Titlul tab-ului = data + tip + clasa sesiunii (ex. "11 iunie Pra CDS")
+  useEffect(() => {
+    if (mainSession) document.title = sessionTabTitle(mainSession)
+  }, [mainSession])
 
   function setMailEmails(sessionId: string, emails: string[]) {
     setMailEmailsMap(prev => ({...prev, [sessionId]: emails}))
