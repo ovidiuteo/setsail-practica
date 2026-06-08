@@ -1,13 +1,14 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Loader2, Copy, Check, Anchor, Ship, Mail, Ticket, Eye, Zap, Wallet, RefreshCw } from 'lucide-react'
+import { Loader2, Copy, Check, Anchor, Ship, Mail, Ticket, Eye, Zap, Wallet, RefreshCw, Save, Settings } from 'lucide-react'
+import type { VoucherConfig } from '@/lib/voucher-config'
 
 type Result = { email: string; token: string; amount: number }
 type VoucherRow = { email: string; token: string; amount: number; cashed: boolean; created_at: string; cashed_at: string | null }
 type Stats = { bancomat: { visit: number; generate: number; cashout: number }; vouchers: VoucherRow[] }
 
-const VOUCHER_EXP = '17.06.2026'
+function fmtCut(c: string): string { const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(c || ''); return m ? `${m[3]}.${m[2]}.${m[1]}` : c }
 
 export default function VouchereAdminPage() {
   const [email, setEmail] = useState('')
@@ -17,6 +18,9 @@ export default function VouchereAdminPage() {
   const [copied, setCopied] = useState(false)
   const [stats, setStats] = useState<Stats | null>(null)
   const [statsLoading, setStatsLoading] = useState(true)
+  const [cfg, setCfg] = useState<VoucherConfig | null>(null)
+  const [cfgSaving, setCfgSaving] = useState(false)
+  const [cfgMsg, setCfgMsg] = useState('')
 
   async function loadStats() {
     setStatsLoading(true)
@@ -27,7 +31,30 @@ export default function VouchereAdminPage() {
     } catch {}
     setStatsLoading(false)
   }
-  useEffect(() => { loadStats() }, [])
+  async function loadConfig() {
+    try {
+      const res = await fetch('/api/voucher/config', { cache: 'no-store' })
+      const json = await res.json()
+      if (res.ok && json.ok) setCfg(json.config)
+    } catch {}
+  }
+  useEffect(() => { loadStats(); loadConfig() }, [])
+
+  async function saveConfig() {
+    if (!cfg) return
+    setCfgSaving(true); setCfgMsg('')
+    try {
+      const res = await fetch('/api/voucher/config', {
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(cfg),
+      })
+      const json = await res.json()
+      if (res.ok && json.ok) { setCfg(json.config); setCfgMsg('Salvat ✓') }
+      else setCfgMsg(json.error || 'Eroare la salvare.')
+    } catch { setCfgMsg('Conexiune eșuată.') }
+    setCfgSaving(false)
+    setTimeout(() => setCfgMsg(''), 2500)
+  }
+  const setF = (k: keyof VoucherConfig, v: any) => setCfg((c) => (c ? { ...c, [k]: v } : c))
 
   async function generate() {
     const e = email.trim()
@@ -98,7 +125,7 @@ export default function VouchereAdminPage() {
 
       {result && (
         <div className="mt-7">
-          <Banknote token={result.token} email={result.email} amount={result.amount} />
+          <Banknote token={result.token} email={result.email} amount={result.amount} desc={cfg?.banknoteDesc || ''} exp={cfg ? fmtCut(cfg.cutoff) : ''} />
           <div className="mt-4 flex items-center justify-center">
             <button
               onClick={copyToken}
@@ -114,6 +141,81 @@ export default function VouchereAdminPage() {
           </p>
         </div>
       )}
+
+      {/* CONFIGURARE PROGRAM (bancomat) */}
+      <div className="mt-10 bg-white border border-slate-200 rounded-2xl p-5 shadow-sm">
+        <div className="flex items-center gap-2 mb-1">
+          <Settings size={16} className="text-[#2ea8d8]" />
+          <h2 className="text-lg font-extrabold text-[#0a2a4e]">Configurare program bancomat</h2>
+        </div>
+        <p className="text-xs text-slate-500 mb-4">
+          Personalizează valoarea, textele și data de expirare/închidere a bancomatului public.
+        </p>
+
+        {!cfg ? (
+          <p className="text-sm text-slate-400 flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> Se încarcă…</p>
+        ) : (
+          <div className="space-y-4">
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Valoare voucher (EUR)</label>
+                <input type="number" min={0} value={cfg.amount}
+                  onChange={(e) => setF('amount', Number(e.target.value))}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[#0a2a4e] focus:outline-none focus:ring-2 focus:ring-[#2ea8d8]" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Dată închidere / expirare (OUT OF ORDER din această zi)</label>
+                <input type="date" value={cfg.cutoff}
+                  onChange={(e) => setF('cutoff', e.target.value)}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[#0a2a4e] focus:outline-none focus:ring-2 focus:ring-[#2ea8d8]" />
+                <p className="text-[11px] text-slate-400 mt-1">Afișat ca „Exp {fmtCut(cfg.cutoff)}".</p>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">Titlu pagină</label>
+              <input value={cfg.pageTitle} onChange={(e) => setF('pageTitle', e.target.value)}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[#0a2a4e] focus:outline-none focus:ring-2 focus:ring-[#2ea8d8]" />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">Subtitlu pagină</label>
+              <textarea rows={2} value={cfg.pageSubtitle} onChange={(e) => setF('pageSubtitle', e.target.value)}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[#0a2a4e] focus:outline-none focus:ring-2 focus:ring-[#2ea8d8]" />
+            </div>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Text buton „cheltuie"</label>
+                <input value={cfg.ctaLabel} onChange={(e) => setF('ctaLabel', e.target.value)}
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[#0a2a4e] focus:outline-none focus:ring-2 focus:ring-[#2ea8d8]" />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">Link buton (unde duce)</label>
+                <input value={cfg.spendUrl} onChange={(e) => setF('spendUrl', e.target.value)} placeholder="/curs-radio-gmdss-lrc"
+                  className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[#0a2a4e] focus:outline-none focus:ring-2 focus:ring-[#2ea8d8]" />
+              </div>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">Descriere pe bancnotă</label>
+              <input value={cfg.banknoteDesc} onChange={(e) => setF('banknoteDesc', e.target.value)}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[#0a2a4e] focus:outline-none focus:ring-2 focus:ring-[#2ea8d8]" />
+              <p className="text-[11px] text-slate-400 mt-1">Apare ca „{cfg.banknoteDesc} {cfg.amount} EUR · exp {fmtCut(cfg.cutoff)}".</p>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-slate-500 mb-1">Mesaj OUT OF ORDER</label>
+              <textarea rows={2} value={cfg.outOfOrderText} onChange={(e) => setF('outOfOrderText', e.target.value)}
+                className="w-full border border-slate-200 rounded-lg px-3 py-2 text-[#0a2a4e] focus:outline-none focus:ring-2 focus:ring-[#2ea8d8]" />
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button onClick={saveConfig} disabled={cfgSaving}
+                className="flex items-center gap-2 bg-[#0a2a4e] hover:brightness-110 text-white font-semibold px-5 py-2.5 rounded-lg transition disabled:opacity-60">
+                {cfgSaving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />} Salvează
+              </button>
+              {cfgMsg && <span className={`text-sm ${cfgMsg.includes('✓') ? 'text-emerald-600' : 'text-red-600'}`}>{cfgMsg}</span>}
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* DASHBOARD bancomat */}
       <div className="mt-10">
@@ -177,7 +279,7 @@ export default function VouchereAdminPage() {
             </div>
           )}
         </div>
-        <p className="text-[11px] text-slate-400 mt-2">Toate voucherele expiră după {VOUCHER_EXP}.</p>
+        <p className="text-[11px] text-slate-400 mt-2">Toate voucherele expiră după {cfg ? fmtCut(cfg.cutoff) : '…'}.</p>
       </div>
     </div>
   )
@@ -191,7 +293,7 @@ function fmtDate(iso: string): string {
   } catch { return iso }
 }
 
-function Banknote({ token, email, amount }: { token: string; email: string; amount: number }) {
+function Banknote({ token, email, amount, desc, exp }: { token: string; email: string; amount: number; desc: string; exp: string }) {
   return (
     <div
       className="relative w-full rounded-2xl overflow-hidden shadow-xl text-white select-none"
@@ -241,7 +343,7 @@ function Banknote({ token, email, amount }: { token: string; email: string; amou
         {/* bottom */}
         <div className="flex items-end justify-between">
           <p className="text-[10px] sm:text-[11px] text-white/70 max-w-[60%] leading-tight">
-            Curs Radio GMDSS / LRC · reducere {amount} EUR · exp {VOUCHER_EXP}
+            {desc} {amount} EUR · exp {exp}
           </p>
           <p className="text-[10px] sm:text-[11px] text-white/60 font-mono truncate max-w-[40%] text-right">{email}</p>
         </div>

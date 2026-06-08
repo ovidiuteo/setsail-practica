@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { cookies } from 'next/headers'
 import { verifyToken, ADMIN_COOKIE_NAME } from '@/lib/admin-auth'
-import { voucherToken, normalizeEmail, VOUCHER_AMOUNT_EUR } from '@/lib/voucher'
+import { voucherToken, normalizeEmail } from '@/lib/voucher'
+import { getVoucherConfig } from '@/lib/voucher-config'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,5 +16,6 @@ export async function POST(req: NextRequest) {
   if (!email || email.indexOf('@') === -1) {
     return NextResponse.json({ ok: false, error: 'Email invalid.' }, { status: 400 })
   }
-  return NextResponse.json({ ok: true, email, token: voucherToken(email), amount: VOUCHER_AMOUNT_EUR })
+  const amount = (await getVoucherConfig()).amount
+  return NextResponse.json({ ok: true, email, token: voucherToken(email), amount })
 }

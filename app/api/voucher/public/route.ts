@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { voucherToken, normalizeEmail, VOUCHER_AMOUNT_EUR } from '@/lib/voucher'
+import { voucherToken, normalizeEmail } from '@/lib/voucher'
 import { trackBancomat, logVoucher } from '@/lib/voucher-stats'
+import { getVoucherConfig } from '@/lib/voucher-config'
 
 export const dynamic = 'force-dynamic'
 
@@ -18,8 +19,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'Introdu o adresă de email validă.' }, { status: 400 })
   }
   const token = voucherToken(email)
+  const amount = (await getVoucherConfig()).amount
   // contor „coduri generate" (apăsare Enter) + log în lista de vouchere; best-effort.
   try { await trackBancomat('generate') } catch {}
-  try { await logVoucher(email, token, VOUCHER_AMOUNT_EUR) } catch {}
-  return NextResponse.json({ ok: true, email, token, amount: VOUCHER_AMOUNT_EUR })
+  try { await logVoucher(email, token, amount) } catch {}
+  return NextResponse.json({ ok: true, email, token, amount })
 }
