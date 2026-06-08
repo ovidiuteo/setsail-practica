@@ -25,6 +25,11 @@ export default function DashboardPage({ params }: { params: { slug: string } }) 
     })()
   }, [slug])
 
+  // Titlul tab-ului de browser = "Dashboard {nume}"
+  useEffect(() => {
+    if (data?.name) document.title = `Dashboard ${data.name}`
+  }, [data])
+
   if (phase === 'checking') {
     return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-400"><Loader2 className="w-6 h-6 animate-spin mr-2" /> Se verifică accesul…</div>
   }
