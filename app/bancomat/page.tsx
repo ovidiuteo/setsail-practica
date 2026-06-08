@@ -70,7 +70,7 @@ export default function BancomatPage() {
             <Ship size={18} style={{ color: '#0a1628' }} />
           </div>
           <span className="font-extrabold tracking-wide text-lg">SETSAIL</span>
-          <span className="text-[10px] tracking-[0.3em] text-[#9fd8f0]">YACHTING SCHOOL</span>
+          <span className="text-[10px] tracking-[0.3em] text-[#9fd8f0]">NAUTICSCHOOL</span>
         </div>
         <h1 className="text-2xl sm:text-3xl font-black">Bancomatul de vouchere</h1>
         <p className="text-sm text-white/60 mt-1.5 max-w-md mx-auto">
@@ -172,7 +172,7 @@ export default function BancomatPage() {
                 href={spendHref}
                 className="flex-1 flex items-center justify-center gap-2 bg-[#f5b528] hover:brightness-95 text-[#0a2a4e] font-bold px-5 py-3.5 rounded-xl transition"
               >
-                Cheltuie la cursul Radio <ArrowRight size={18} />
+                Achită parțial cursul Radio <ArrowRight size={18} />
               </a>
               <button
                 onClick={copyToken}
@@ -219,7 +219,7 @@ function Banknote({ token, email, amount }: { token: string; email: string; amou
             </div>
             <div className="leading-none">
               <p className="font-extrabold tracking-tight text-sm sm:text-base">SETSAIL</p>
-              <p className="text-[9px] sm:text-[10px] tracking-[0.3em] text-[#9fd8f0]">YACHTING SCHOOL</p>
+              <p className="text-[9px] sm:text-[10px] tracking-[0.3em] text-[#9fd8f0]">NAUTICSCHOOL</p>
             </div>
           </div>
           <div className="text-right leading-none">

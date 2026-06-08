@@ -124,7 +124,7 @@ export const DEFAULT_CONTENT = {
   },
   footer: {
     brandTitle: 'SETSAIL',
-    brandSubtitle: 'YACHTING SCHOOL',
+    brandSubtitle: 'NAUTICSCHOOL',
     about: 'Școala de yachting din Limanu. Cursuri de navigație și radiocomunicații maritime GMDSS / LRC.',
     linksTitle: 'LINKURI UTILE',
     infoTitle: 'INFORMAȚII',

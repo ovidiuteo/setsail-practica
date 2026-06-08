@@ -11,7 +11,7 @@ export type LandingContent = typeof DEFAULT_CONTENT
 export const DEFAULT_CONTENT = {
   nav: {
     brandTitle: 'SETSAIL',
-    brandSubtitle: 'YACHTING SCHOOL',
+    brandSubtitle: 'NAUTICSCHOOL',
     links: [
       { label: 'DESPRE NOI', href: '#despre' },
       { label: 'CURSURI', href: '#structura' },
@@ -141,7 +141,7 @@ export const DEFAULT_CONTENT = {
   },
   footer: {
     brandTitle: 'SETSAIL',
-    brandSubtitle: 'YACHTING SCHOOL',
+    brandSubtitle: 'NAUTICSCHOOL',
     about: 'Școala de yachting din Limanu, dedicată celor care iubesc marea și vor să navigheze în siguranță.',
     linksTitle: 'LINKURI UTILE',
     infoTitle: 'INFORMAȚII',

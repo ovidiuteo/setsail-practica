@@ -131,7 +131,7 @@ function Banknote({ token, email, amount }: { token: string; email: string; amou
             </div>
             <div className="leading-none">
               <p className="font-extrabold tracking-tight text-sm sm:text-base">SETSAIL</p>
-              <p className="text-[9px] sm:text-[10px] tracking-[0.3em] text-[#9fd8f0]">YACHTING SCHOOL</p>
+              <p className="text-[9px] sm:text-[10px] tracking-[0.3em] text-[#9fd8f0]">NAUTICSCHOOL</p>
             </div>
           </div>
           <div className="text-right leading-none">
