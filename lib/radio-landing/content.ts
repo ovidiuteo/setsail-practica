@@ -41,6 +41,7 @@ export const DEFAULT_CONTENT = {
   examHighlight: {
     title: 'Examen de certificat',
     detail: '17 iunie · 20:00–21:00 · online Zoom',
+    note: 'Brevetul radio îl ridici de la sediul SetSail sau indici o adresă de expediere prin curier.',
   },
   coverage: {
     eyebrow: 'CE ACOPERĂ CURSUL',

@@ -5,7 +5,7 @@ import {
   Anchor, Menu, X, Loader2, Check, ArrowRight, Phone, Mail, Send, MapPin,
   Radio, Satellite, LifeBuoy, Languages, ShieldAlert, Wifi, GraduationCap,
   Ship, Globe, Waves, CalendarDays, Video, ClipboardList, AlertTriangle,
-  CheckCircle2,
+  CheckCircle2, Truck,
 } from 'lucide-react'
 import type { RadioContent } from '@/lib/radio-landing/content'
 
@@ -97,6 +97,11 @@ export default function RadioLandingView({ content: c }: { content: RadioContent
                 <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" strokeWidth={2} />
                 <span className="text-sm leading-snug"><b className="text-white">{c.examHighlight.title}</b><span className="text-white/70"> — {c.examHighlight.detail}</span></span>
               </div>
+            )}
+            {c.examHighlight?.note && (
+              <p className="mt-3 flex items-start gap-2 text-xs text-white/60 max-w-md leading-snug">
+                <Truck className="w-4 h-4 text-[#5cc2ea] shrink-0 mt-0.5" strokeWidth={1.8} /> {c.examHighlight.note}
+              </p>
             )}
           </div>
 

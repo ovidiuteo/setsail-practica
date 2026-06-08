@@ -147,6 +147,7 @@ function ContentEditor({ draft, update }: { draft: any; update: (p: Path, v: any
 
       <Card title="Examen de certificat (highlight verde)">
         <div className="grid sm:grid-cols-2 gap-4">{T(['examHighlight', 'title'], 'Titlu', { rec: 24 })}{T(['examHighlight', 'detail'], 'Detaliu (dată/oră/Zoom)', { rec: 44 })}</div>
+        {T(['examHighlight', 'note'], 'Notă sub examen (ridicare brevet)', { rec: 110, area: true })}
       </Card>
 
       <Card title="Ce acoperă cursul (grid)">
