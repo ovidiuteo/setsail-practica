@@ -12,7 +12,7 @@ export async function POST(req: NextRequest) {
   if (!name && !email && !phone) {
     return NextResponse.json({ ok: false, error: 'Completează cel puțin numele și un contact.' }, { status: 400 })
   }
-  const res = await insertLead({ name, email, phone, message: body?.message })
+  const res = await insertLead({ name, email, phone, message: body?.message, leadType: body?.leadType })
   if (!res.ok) return NextResponse.json({ ok: false, error: res.error }, { status: 500 })
   return NextResponse.json({ ok: true })
 }

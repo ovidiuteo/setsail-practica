@@ -370,12 +370,13 @@ export default function RadioLandingView({ content: c }: { content: RadioContent
 }
 
 function LeadModal({ content: c, onClose }: { content: RadioContent; onClose: () => void }) {
-  const [form, setForm] = useState({ name: '', email: '', phone: '', message: '', website: '' })
+  const [form, setForm] = useState({ name: '', email: '', phone: '', message: '', website: '', leadType: '' })
   const [state, setState] = useState<'idle' | 'sending' | 'done' | 'error'>('idle')
   const [err, setErr] = useState('')
 
   async function submit(e: React.FormEvent) {
     e.preventDefault()
+    if (!form.leadType) { setErr('Alege tipul înscrierii: Obținere sau Reînnoire.'); setState('error'); return }
     setState('sending'); setErr('')
     try {
       const res = await fetch('/api/radio-landing/leads', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(form) })
@@ -417,6 +418,27 @@ function LeadModal({ content: c, onClose }: { content: RadioContent; onClose: ()
                 <div>
                   <label className="block text-xs font-medium text-slate-500 mb-1">{c.leadForm.emailLabel}</label>
                   <input className={input} type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1.5">{c.leadForm.typeLabel}</label>
+                <div className="grid grid-cols-2 gap-2.5">
+                  {[
+                    { val: c.leadForm.typeObtinere, hint: c.leadForm.typeObtinereHint },
+                    { val: c.leadForm.typeReinnoire, hint: c.leadForm.typeReinnoireHint },
+                  ].map((o) => {
+                    const active = form.leadType === o.val
+                    return (
+                      <button type="button" key={o.val} onClick={() => setForm({ ...form, leadType: o.val })}
+                        className={`text-left rounded-lg border p-3 transition ${active ? 'border-[#2ea8d8] bg-[#eef4fb] ring-2 ring-[#2ea8d8]/30' : 'border-slate-200 hover:border-slate-300'}`}>
+                        <span className="flex items-center gap-2">
+                          <span className={`w-4 h-4 rounded-full border-2 flex items-center justify-center shrink-0 ${active ? 'border-[#2ea8d8]' : 'border-slate-300'}`}>{active && <span className="w-2 h-2 rounded-full bg-[#2ea8d8]" />}</span>
+                          <span className="font-semibold text-sm text-[#0a2a4e]">{o.val}</span>
+                        </span>
+                        <span className="block text-[11px] text-slate-500 mt-1 leading-snug">{o.hint}</span>
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
               <div>

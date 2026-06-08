@@ -217,6 +217,8 @@ function ContentEditor({ draft, update }: { draft: any; update: (p: Path, v: any
       <Card title="Formular de înscriere (popup)">
         {T(['leadForm', 'title'], 'Titlu', { rec: 30 })}{T(['leadForm', 'subtitle'], 'Subtitlu', { rec: 120, area: true })}
         <div className="grid sm:grid-cols-2 gap-4">{T(['leadForm', 'nameLabel'], 'Etichetă nume', { rec: 24 })}{T(['leadForm', 'phoneLabel'], 'Etichetă telefon', { rec: 20 })}{T(['leadForm', 'emailLabel'], 'Etichetă email', { rec: 20 })}{T(['leadForm', 'messageLabel'], 'Etichetă mesaj', { rec: 30 })}</div>
+        {T(['leadForm', 'typeLabel'], 'Etichetă tip înscriere', { rec: 24 })}
+        <div className="grid sm:grid-cols-2 gap-4">{T(['leadForm', 'typeObtinere'], 'Opțiune 1 — titlu', { rec: 16 })}{T(['leadForm', 'typeObtinereHint'], 'Opțiune 1 — explicație', { rec: 44 })}{T(['leadForm', 'typeReinnoire'], 'Opțiune 2 — titlu', { rec: 16 })}{T(['leadForm', 'typeReinnoireHint'], 'Opțiune 2 — explicație', { rec: 44 })}</div>
         {T(['leadForm', 'submitLabel'], 'Buton trimite', { rec: 30 })}{T(['leadForm', 'successTitle'], 'Titlu confirmare', { rec: 24 })}{T(['leadForm', 'successMsg'], 'Mesaj confirmare', { rec: 140, area: true })}
       </Card>
     </div>
@@ -282,12 +284,13 @@ function LeadsTab({ token }: { token: string }) {
       ) : (
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
           <table className="w-full text-sm">
-            <thead><tr className="bg-slate-50 text-xs text-slate-400 text-left"><th className="px-4 py-3">Data</th><th className="px-4 py-3">Nume</th><th className="px-4 py-3">Contact</th><th className="px-4 py-3">Mesaj</th><th className="px-4 py-3">Status</th><th className="px-4 py-3"></th></tr></thead>
+            <thead><tr className="bg-slate-50 text-xs text-slate-400 text-left"><th className="px-4 py-3">Data</th><th className="px-4 py-3">Nume</th><th className="px-4 py-3">Tip</th><th className="px-4 py-3">Contact</th><th className="px-4 py-3">Mesaj</th><th className="px-4 py-3">Status</th><th className="px-4 py-3"></th></tr></thead>
             <tbody className="divide-y divide-slate-50">
               {shown.map((l) => (
                 <tr key={l.id} className="hover:bg-slate-50 align-top">
                   <td className="px-4 py-3 text-slate-400 text-xs whitespace-nowrap">{new Date(l.created_at).toLocaleDateString('ro-RO')}<br />{new Date(l.created_at).toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' })}</td>
                   <td className="px-4 py-3 font-medium text-[#0a2a4e]">{l.name || '—'}</td>
+                  <td className="px-4 py-3">{l.lead_type ? <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${/re[iî]n/i.test(l.lead_type) ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>{l.lead_type}</span> : <span className="text-slate-300">—</span>}</td>
                   <td className="px-4 py-3 text-slate-600 text-xs">{l.phone && <div><a href={`tel:${l.phone}`} className="hover:text-[#2ea8d8]">{l.phone}</a></div>}{l.email && <div><a href={`mailto:${l.email}`} className="hover:text-[#2ea8d8]">{l.email}</a></div>}</td>
                   <td className="px-4 py-3 text-slate-500 text-xs max-w-[200px]">{l.message || '—'}</td>
                   <td className="px-4 py-3"><select value={l.status} onChange={(e) => setStatus(l.id, e.target.value)} className={`text-xs font-medium rounded-full px-2.5 py-1 border-0 cursor-pointer ${STATUS_STYLE[l.status] || ''}`}>{STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}</select></td>

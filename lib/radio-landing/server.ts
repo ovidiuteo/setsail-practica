@@ -107,13 +107,14 @@ export async function listLeads(): Promise<Lead[]> {
   const { data } = await sb.from('radio_leads').select('*').order('created_at', { ascending: false })
   return (data ?? []) as Lead[]
 }
-export async function insertLead(p: { name?: string; email?: string; phone?: string; message?: string }) {
+export async function insertLead(p: { name?: string; email?: string; phone?: string; message?: string; leadType?: string }) {
   const sb = radioServiceClient()
   const { error } = await sb.from('radio_leads').insert({
     name: (p.name || '').slice(0, 200) || null,
     email: (p.email || '').slice(0, 200) || null,
     phone: (p.phone || '').slice(0, 60) || null,
     message: (p.message || '').slice(0, 2000) || null,
+    lead_type: (p.leadType || '').slice(0, 40) || null,
     source: 'landing-radio',
   })
   return { ok: !error, error: error?.message }
