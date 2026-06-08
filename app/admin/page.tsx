@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase'
 import { Calendar, Users, CheckCircle, Clock, Plus, ExternalLink, GitBranch, UserX, ArrowRight, Bell } from 'lucide-react'
 import Link from 'next/link'
 import { resolveColor, DEFAULT_GLOBAL_DAY, DEFAULT_GLOBAL_WEEKEND } from '@/lib/timeline-colors'
+import { scopeForSession } from '@/lib/timeline-scope'
 
 // ---------- Helper timeline TO DO ----------
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -14,10 +15,6 @@ function startOfDay(d: Date): Date { const x = new Date(d); x.setHours(0,0,0,0);
 function shortDate(d: Date | null): string {
   if (!d) return ''
   return `${d.getDate()} ${MONTHS_RO_SHORT[d.getMonth()]}`
-}
-function scopeForSession(s: any): string {
-  const c = (s?.class_caa || '').toLowerCase()
-  return (c.includes('radio') || c.includes('lrc')) ? 'radio_lrc' : 'practica'
 }
 function getAnchorDate(s: any, anchor: string): Date | null {
   const raw = s?.[anchor]

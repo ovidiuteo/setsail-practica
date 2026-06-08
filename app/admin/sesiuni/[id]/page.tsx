@@ -2,6 +2,7 @@
 import React, { useEffect, useState, useRef, useCallback } from 'react'
 import CIImageEditor from '@/components/CIImageEditor'
 import { supabase } from '@/lib/supabase'
+import { TIMELINE_SCOPES, timelineScopeLabel } from '@/lib/timeline-scope'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Download, FileText, Users, Copy, Plus, Trash2, Check, X, Pencil, GitBranch, ArrowRight, UserX, Mail, ChevronDown, Database } from 'lucide-react'
@@ -1184,6 +1185,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
             ['Nr. înștiințări', sess.request_number||'—'],
             ...(isRadioSession ? [['Nr. documente PV', (sess as any).nr_document_ancom||'—'] as [string,string]] : []),
             ['Locație detaliată', sess.location_detail||'—'],
+            ['Categorie', timelineScopeLabel((sess as any).timeline_scope)],
             ['Link skipper', (sess as any).skipper_url||'—'],
           ] as [string,string][]).map(([label,value]) => (
             <div key={label} className="flex justify-between gap-2">
@@ -2376,6 +2378,7 @@ export default function SessionDetailPage() {
       nr_document_ancom: (sess as any).nr_document_ancom || '',
       location_detail: sess.location_detail || '',
       skipper_url: (sess as any).skipper_url || '',
+      timeline_scope: (sess as any).timeline_scope || '',
     })
   }
 
@@ -2384,7 +2387,7 @@ export default function SessionDetailPage() {
     // Postgres respinge '' pentru coloane date/uuid — convertim la null.
     const nullableEmpty = [
       'course_start_date', 'session_date', 'practice_start_date',
-      'location_id', 'boat_id', 'evaluator_id', 'instructor_id',
+      'location_id', 'boat_id', 'evaluator_id', 'instructor_id', 'timeline_scope',
     ]
     const payload: any = { ...editSessionValues }
     for (const col of nullableEmpty) {
@@ -2815,14 +2818,21 @@ export default function SessionDetailPage() {
                 ['Nr. înștiințări', 'request_number', 'text'],
                 ['Locație detaliată', 'location_detail', 'text'],
                 ['Link skipper.setsail.ro', 'skipper_url', 'text'],
+                ['Categorie timeline', 'timeline_scope', 'select-scope'],
                 ['Clasa CAA', 'class_caa', 'select-class'],
               ].map(([label, key, type]) => (
-                <div key={key} className={(key==='location_detail'||key==='skipper_url')?'col-span-2':''}>
+                <div key={key} className={(key==='location_detail'||key==='skipper_url'||key==='timeline_scope')?'col-span-2':''}>
                   <div className="text-xs text-gray-400 mb-1">{label}</div>
                   {type==='select-class' ? (
                     <select className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs w-full focus:outline-none focus:ring-1 focus:ring-blue-400"
                       value={editSessionValues[key]} onChange={e=>setEditSessionValues((v:any)=>({...v,[key]:e.target.value}))}>
                       {['A','B','C','D','C,D','Radio','Obtinere LRC','Prelungire LRC'].map(c=><option key={c} value={c}>{c}</option>)}
+                    </select>
+                  ) : type==='select-scope' ? (
+                    <select className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs w-full focus:outline-none focus:ring-1 focus:ring-blue-400"
+                      value={editSessionValues[key]||''} onChange={e=>setEditSessionValues((v:any)=>({...v,[key]:e.target.value}))}>
+                      <option value="">— Selectează categoria —</option>
+                      {TIMELINE_SCOPES.map(sc=><option key={sc.value} value={sc.value}>{sc.label}</option>)}
                     </select>
                   ) : (
                     <input type={type} className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs w-full focus:outline-none focus:ring-1 focus:ring-blue-400"

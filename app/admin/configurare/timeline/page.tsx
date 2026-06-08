@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
 import { ArrowLeft, Plus, Trash2, Loader2, RotateCcw, ArrowDownUp } from 'lucide-react'
 import { resolveColor, defaultDayColor, defaultWeekendColor } from '@/lib/timeline-colors'
+import { TIMELINE_SCOPES, scopeForSession, timelineScopeLabel, DEFAULT_TIMELINE_SCOPE, type TimelineScope } from '@/lib/timeline-scope'
 
 type Milestone = {
   id: string
@@ -17,11 +18,6 @@ type Milestone = {
   color_weekend: string | null
   order_index: number
 }
-
-const SCOPES: Array<{ value: 'practica' | 'radio_lrc'; label: string }> = [
-  { value: 'practica', label: 'Practică (A/B/C/D)' },
-  { value: 'radio_lrc', label: 'Radio LRC' },
-]
 
 const ANCHORS: Array<{ value: string; label: string }> = [
   { value: 'created_at', label: 'Data creării sesiunii' },
@@ -66,16 +62,12 @@ type SessionLite = {
   class_caa: string | null
   access_code: string | null
   session_type: string | null
+  timeline_scope: string | null
   locations: { name: string } | null
 }
 
-function scopeForSession(s: SessionLite): 'radio_lrc' | 'practica' {
-  const c = (s.class_caa || '').toLowerCase()
-  return (c.includes('radio') || c.includes('lrc')) ? 'radio_lrc' : 'practica'
-}
-
 export default function TimelineConfigPage() {
-  const [scope, setScope] = useState<'practica' | 'radio_lrc'>('radio_lrc')
+  const [scope, setScope] = useState<TimelineScope>(DEFAULT_TIMELINE_SCOPE)
   const [milestones, setMilestones] = useState<Milestone[]>([])
   const [sessions, setSessions] = useState<SessionLite[]>([])
   const [previewSessionId, setPreviewSessionId] = useState<string>('')
@@ -87,7 +79,7 @@ export default function TimelineConfigPage() {
     const [{ data: ms }, { data: sess }] = await Promise.all([
       supabase.from('timeline_milestones').select('*').order('order_index'),
       supabase.from('sessions')
-        .select('id, session_date, created_at, course_start_date, practice_start_date, class_caa, access_code, session_type, locations(name)')
+        .select('id, session_date, created_at, course_start_date, practice_start_date, class_caa, access_code, session_type, timeline_scope, locations(name)')
         .eq('session_type', 'principal')
         .order('session_date', { ascending: false }),
     ])
@@ -284,8 +276,8 @@ export default function TimelineConfigPage() {
         </div>
 
         {/* Scope tabs */}
-        <div className="flex gap-2 border-b border-gray-200">
-          {SCOPES.map(s => (
+        <div className="flex flex-wrap gap-2 border-b border-gray-200">
+          {TIMELINE_SCOPES.map(s => (
             <button key={s.value} onClick={() => setScope(s.value)}
               className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${
                 scope === s.value ? 'border-purple-600 text-purple-700' : 'border-transparent text-gray-500 hover:text-gray-700'
@@ -312,12 +304,12 @@ export default function TimelineConfigPage() {
                 })}
               </select>
             ) : (
-              <span className="text-xs text-gray-400 italic">Nicio sesiune {scope === 'radio_lrc' ? 'Radio LRC' : 'Practică'} disponibilă. Preview cu sesiune fictivă.</span>
+              <span className="text-xs text-gray-400 italic">Nicio sesiune „{timelineScopeLabel(scope)}" disponibilă. Preview cu sesiune fictivă.</span>
             )}
           </div>
           {renderPreview()}
           <p className="text-xs text-gray-400 mt-2">
-            Modificările la milestones / perioade se aplică <strong>tuturor sesiunilor {scope === 'radio_lrc' ? 'Radio LRC' : 'Practică'}</strong>.
+            Modificările la milestones / perioade se aplică <strong>tuturor sesiunilor „{timelineScopeLabel(scope)}"</strong>.
             Sesiunea selectată e doar pentru previzualizare.
           </p>
         </div>

@@ -4,6 +4,7 @@ import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
 import { Plus, Copy, ExternalLink, Trash2, Pencil, Check, X } from 'lucide-react'
 import { resolveColor } from '@/lib/timeline-colors'
+import { scopeForSession, DEFAULT_TIMELINE_SCOPE } from '@/lib/timeline-scope'
 
 const statusMap: Record<string, { label: string; color: string }> = {
   draft:     { label: 'Ciornă',     color: '#6b7280' },
@@ -32,11 +33,6 @@ export type TimelineMilestone = {
 }
 export type TimelineConfig = { milestones: TimelineMilestone[] }
 
-function scopeForSession(session: any): 'radio_lrc' | 'practica' {
-  const c = (session?.class_caa || '').toLowerCase()
-  return (c.includes('radio') || c.includes('lrc')) ? 'radio_lrc' : 'practica'
-}
-
 function getAnchorDate(session: any, anchor: string): Date | null {
   const raw = session?.[anchor]
   if (raw) return startOfDay(new Date(raw))
@@ -47,7 +43,7 @@ function getAnchorDate(session: any, anchor: string): Date | null {
 
 function SessionTimeline({ session, config }: { session: any; config: Record<string, TimelineConfig> }) {
   const scope = scopeForSession(session)
-  const scopeCfg = config[scope] || config['practica'] || { milestones: [] }
+  const scopeCfg = config[scope] || config[DEFAULT_TIMELINE_SCOPE] || { milestones: [] }
 
   // Calculez datele tuturor milestone-urilor pentru această sesiune
   const milestoneDates = scopeCfg.milestones.map(m => {
