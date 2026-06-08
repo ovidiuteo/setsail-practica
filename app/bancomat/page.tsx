@@ -89,7 +89,7 @@ export default function BancomatPage() {
         </div>
         <h1 className="text-2xl sm:text-3xl font-black">Bancomatul de vouchere</h1>
         <p className="text-sm text-white/60 mt-1.5 max-w-md mx-auto">
-          Introdu adresa ta de email și retrage un voucher de 20&nbsp;EUR pentru cursul Radio GMDSS / LRC.
+          Introdu adresa ta de email și retrage un voucher de 20&nbsp;EUR pentru cursul Radio GMDSS / LRC. (Un voucher/email/pers)
         </p>
       </div>
 
