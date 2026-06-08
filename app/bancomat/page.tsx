@@ -113,9 +113,12 @@ export default function BancomatPage() {
             style={{ background: 'linear-gradient(135deg,#0a2a4e 0%,#0e3a63 55%,#15527e 100%)' }}
           >
             <div className="flex items-center justify-between mb-4">
-              <span className="text-[10px] tracking-[0.25em] text-white/60">
+              <span
+                className={`text-[10px] tracking-[0.25em] ${phase === 'validated' ? 'text-white font-semibold' : 'text-white/60'}`}
+                style={phase === 'validated' ? { textShadow: '0 0 8px rgba(255,255,255,0.55)' } : undefined}
+              >
                 {phase === 'input' ? 'VOUCHER ATM' : (
-                  <>CREDIT ATM <span className="font-bold" style={{ color: phase === 'cashed' ? '#fb923c' : '#f5c842' }}>{phase === 'cashed' ? 0 : result?.amount}€</span></>
+                  <>CREDIT ATM <span className="font-bold" style={phase === 'cashed' ? { color: '#fb923c' } : undefined}>{phase === 'cashed' ? 0 : result?.amount}€</span></>
                 )}
               </span>
               <span className="flex items-center gap-1.5 text-[10px] text-emerald-300">
