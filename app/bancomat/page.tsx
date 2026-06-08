@@ -1,22 +1,25 @@
 'use client'
 
 import { useState } from 'react'
-import { Loader2, Copy, Check, Anchor, Ship, ArrowRight } from 'lucide-react'
+import { Loader2, Copy, Check, Anchor, Ship, ArrowRight, CornerDownLeft, RotateCcw } from 'lucide-react'
 
 type Result = { email: string; token: string; amount: number }
+type Phase = 'input' | 'validated' | 'cashed'
 
 export default function BancomatPage() {
   const [email, setEmail] = useState('')
   const [website, setWebsite] = useState('') // honeypot
-  const [state, setState] = useState<'idle' | 'loading' | 'error'>('idle')
+  const [phase, setPhase] = useState<Phase>('input')
+  const [loading, setLoading] = useState(false)
   const [err, setErr] = useState('')
   const [result, setResult] = useState<Result | null>(null)
   const [copied, setCopied] = useState(false)
 
-  async function withdraw() {
+  // Pasul 1 — butonul verde de enter validează emailul și încarcă creditul.
+  async function validate() {
     const e = email.trim()
-    if (!e || e.indexOf('@') === -1) { setErr('Introdu o adresă de email validă.'); setState('error'); return }
-    setState('loading'); setErr(''); setCopied(false); setResult(null)
+    if (!e || e.indexOf('@') === -1) { setErr('Introdu o adresă de email validă.'); return }
+    setLoading(true); setErr(''); setCopied(false)
     try {
       const res = await fetch('/api/voucher/public', {
         method: 'POST',
@@ -24,12 +27,24 @@ export default function BancomatPage() {
         body: JSON.stringify({ email: e, website }),
       })
       const json = await res.json()
-      if (!res.ok || !json.ok) { setErr(json.error || 'A apărut o eroare.'); setState('error'); return }
+      if (!res.ok || !json.ok) { setErr(json.error || 'A apărut o eroare.'); setLoading(false); return }
       setResult({ email: json.email, token: json.token, amount: json.amount })
-      setState('idle')
+      setPhase('validated')
     } catch {
-      setErr('Conexiune eșuată. Încearcă din nou.'); setState('error')
+      setErr('Conexiune eșuată. Încearcă din nou.')
+    } finally {
+      setLoading(false)
     }
+  }
+
+  // Pasul 2 — eliberează bancnota și golește creditul.
+  function cashout() {
+    if (phase !== 'validated') return
+    setPhase('cashed')
+  }
+
+  function restart() {
+    setPhase('input'); setEmail(''); setResult(null); setErr(''); setCopied(false)
   }
 
   async function copyToken() {
@@ -98,36 +113,53 @@ export default function BancomatPage() {
             style={{ background: 'linear-gradient(135deg,#0a2a4e 0%,#0e3a63 55%,#15527e 100%)' }}
           >
             <div className="flex items-center justify-between mb-4">
-              <span className="text-[10px] tracking-[0.25em] text-white/60">VOUCHER ATM</span>
+              <span className="text-[10px] tracking-[0.25em] text-white/60">
+                {phase === 'input' ? 'VOUCHER ATM' : (
+                  <>CREDIT ATM <span className="font-bold" style={{ color: phase === 'cashed' ? '#fb923c' : '#f5c842' }}>{phase === 'cashed' ? 0 : result?.amount}€</span></>
+                )}
+              </span>
               <span className="flex items-center gap-1.5 text-[10px] text-emerald-300">
                 <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" /> ONLINE
               </span>
             </div>
 
-            {!result ? (
+            {phase !== 'cashed' && (
               <>
                 <label className="block text-xs font-medium text-white/70 mb-1.5">Adresa ta de email</label>
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  onKeyDown={(e) => { if (e.key === 'Enter') withdraw() }}
-                  placeholder="nume@exemplu.ro"
-                  autoFocus
-                  className="w-full rounded-lg bg-[#06203c]/70 border border-white/15 px-3.5 py-3 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-[#5cc2ea] focus:border-transparent"
-                />
+                <div className="flex gap-2">
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => { setEmail(e.target.value); if (phase === 'validated') { setPhase('input'); setResult(null) } }}
+                    onKeyDown={(e) => { if (e.key === 'Enter') validate() }}
+                    placeholder="nume@exemplu.ro"
+                    autoFocus
+                    className="flex-1 rounded-lg bg-[#06203c]/70 border border-white/15 px-3.5 py-3 text-white placeholder-white/30 focus:outline-none focus:ring-2 focus:ring-[#5cc2ea] focus:border-transparent"
+                  />
+                  {/* buton verde de enter, ca la PIN-ul de bancomat */}
+                  <button
+                    onClick={validate}
+                    disabled={loading}
+                    aria-label="Validează emailul"
+                    className={`shrink-0 w-12 rounded-lg text-white flex items-center justify-center transition disabled:opacity-60 ${phase === 'validated' ? 'bg-emerald-600' : 'bg-emerald-500 hover:bg-emerald-400'} shadow-[0_0_0_3px_rgba(16,185,129,0.18)]`}
+                  >
+                    {loading ? <Loader2 size={18} className="animate-spin" /> : phase === 'validated' ? <Check size={20} strokeWidth={2.5} /> : <CornerDownLeft size={20} strokeWidth={2.5} />}
+                  </button>
+                </div>
                 {/* honeypot ascuns */}
                 <input
                   className="hidden" tabIndex={-1} autoComplete="off" aria-hidden
                   value={website} onChange={(e) => setWebsite(e.target.value)}
                 />
-                {state === 'error' && <p className="text-sm text-red-300 mt-2">{err}</p>}
+                {err && <p className="text-sm text-red-300 mt-2">{err}</p>}
               </>
-            ) : (
+            )}
+
+            {phase === 'cashed' && (
               <div className="text-center py-1">
                 <p className="text-[11px] tracking-[0.2em] text-white/60">VOUCHER ELIBERAT</p>
-                <p className="text-4xl font-black mt-1" style={{ color: '#f5c842' }}>
-                  {result.amount}<span className="text-2xl align-top">€</span>
+                <p className="text-5xl font-black mt-1" style={{ color: '#f5c842' }}>
+                  {result?.amount}<span className="text-3xl align-top">€</span>
                 </p>
                 <p className="text-xs text-white/60 mt-1">Ia bancnota din fanta de mai jos 👇</p>
               </div>
@@ -135,35 +167,34 @@ export default function BancomatPage() {
           </div>
 
           {/* BUTON */}
-          {!result ? (
+          {phase === 'cashed' ? (
             <button
-              onClick={withdraw}
-              disabled={state === 'loading'}
-              className="w-full flex items-center justify-center gap-2 bg-[#f5b528] hover:brightness-95 text-[#0a2a4e] font-bold py-3.5 rounded-xl transition disabled:opacity-60"
+              onClick={restart}
+              className="w-full flex items-center justify-center gap-2 bg-white/10 hover:bg-white/15 border border-white/15 text-white font-semibold py-3.5 rounded-xl transition"
             >
-              {state === 'loading' ? <Loader2 size={18} className="animate-spin" /> : null}
-              {state === 'loading' ? 'Se procesează…' : 'Retrage voucher'}
+              <RotateCcw size={18} /> Restart
             </button>
           ) : (
             <button
-              onClick={() => { setResult(null); setEmail(''); setState('idle') }}
-              className="w-full text-center text-sm text-white/60 hover:text-white py-2 transition"
+              onClick={cashout}
+              disabled={phase !== 'validated'}
+              className="w-full flex items-center justify-center gap-2 bg-[#f5b528] hover:brightness-95 text-[#0a2a4e] font-bold py-3.5 rounded-xl transition disabled:opacity-40 disabled:cursor-not-allowed"
             >
-              ← Retrage alt voucher
+              Cashout Credit
             </button>
           )}
 
           {/* FANTA DISPENSER */}
           <div className="mt-5">
             <div
-              className={`h-3 rounded-full bg-[#05101d] ${state === 'loading' || result ? 'ss-slot-active' : ''}`}
+              className={`h-3 rounded-full bg-[#05101d] ${phase === 'cashed' ? 'ss-slot-active' : ''}`}
               style={{ boxShadow: 'inset 0 6px 14px rgba(0,0,0,.7)' }}
             />
           </div>
         </div>
 
         {/* BANCNOTA dispensată */}
-        {result && (
+        {phase === 'cashed' && result && (
           <div className="mt-5 ss-note-out">
             <Banknote token={result.token} email={result.email} amount={result.amount} />
 
