@@ -5,6 +5,7 @@ import {
   Anchor, Menu, X, Loader2, Check, ArrowRight, Phone, Mail, Send, MapPin,
   Radio, Satellite, LifeBuoy, Languages, ShieldAlert, Wifi, GraduationCap,
   Ship, Globe, Waves, CalendarDays, Video, ClipboardList, AlertTriangle,
+  CheckCircle2,
 } from 'lucide-react'
 import type { RadioContent } from '@/lib/radio-landing/content'
 
@@ -83,6 +84,12 @@ export default function RadioLandingView({ content: c }: { content: RadioContent
                 <div key={i}><div className="text-2xl font-bold text-white">{s.value}</div>{s.label}</div>
               ))}
             </div>
+            {c.examHighlight?.title && (
+              <div className="mt-5 inline-flex items-center gap-3 rounded-xl border border-emerald-400/40 bg-emerald-400/10 px-4 py-3 max-w-md">
+                <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" strokeWidth={2} />
+                <span className="text-sm leading-snug"><b className="text-white">{c.examHighlight.title}</b><span className="text-white/70"> — {c.examHighlight.detail}</span></span>
+              </div>
+            )}
           </div>
 
           {/* console card */}
@@ -127,6 +134,12 @@ export default function RadioLandingView({ content: c }: { content: RadioContent
               )
             })}
           </div>
+          {c.examHighlight?.title && (
+            <div className="mt-8 inline-flex items-center gap-3 rounded-xl border-2 border-emerald-500/30 bg-emerald-50 px-5 py-3.5 reveal">
+              <CheckCircle2 className="w-6 h-6 text-emerald-600 shrink-0" strokeWidth={2} />
+              <span className="text-sm sm:text-base"><b className="text-[#0a2a4e]">{c.examHighlight.title}</b><span className="text-slate-500"> — {c.examHighlight.detail}</span></span>
+            </div>
+          )}
         </div>
       </section>
 
@@ -145,6 +158,12 @@ export default function RadioLandingView({ content: c }: { content: RadioContent
                   <ul className="space-y-1.5 text-white/60 text-sm">
                     {day.items.map((it, k) => <li key={k}>• {it}</li>)}
                   </ul>
+                  {last && c.timeline.examBadge && (
+                    <div className="mt-5 -mx-7 -mb-7 rounded-b-2xl bg-emerald-500/15 border-t border-emerald-400/30 px-7 py-3.5 flex items-center gap-2">
+                      <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" strokeWidth={2} />
+                      <span className="text-sm font-semibold text-emerald-300">{c.timeline.examBadge}</span>
+                    </div>
+                  )}
                 </div>
               )
             })}
@@ -216,6 +235,11 @@ export default function RadioLandingView({ content: c }: { content: RadioContent
                   <span className={i === c.enroll.points.length - 1 ? 'text-[#f5b528] font-semibold' : ''}>{p}</span>
                 </p>
               ))}
+              {c.enroll.examNote && (
+                <p className="flex items-center gap-3 text-emerald-300 font-semibold">
+                  <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0" strokeWidth={2} /> {c.enroll.examNote}
+                </p>
+              )}
             </div>
           </div>
 

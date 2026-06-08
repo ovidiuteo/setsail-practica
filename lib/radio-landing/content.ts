@@ -27,7 +27,7 @@ export const DEFAULT_CONTENT = {
     stats: [
       { value: '3', label: 'seri · 18–21' },
       { value: '5', label: 'ani valabil' },
-      { value: '16+', label: 'fără cerințe' },
+      { value: '18+', label: 'fără cerințe' },
     ],
     console: {
       title: 'GMDSS · DSC CONTROLLER',
@@ -37,6 +37,10 @@ export const DEFAULT_CONTENT = {
       chips: ['VHF', 'MF/HF', 'NAVTEX', 'SART'],
       distressLabel: 'DISTRESS',
     },
+  },
+  examHighlight: {
+    title: 'Examen de certificat',
+    detail: '17 iunie · 20:00–21:00 · online Zoom',
   },
   coverage: {
     eyebrow: 'CE ACOPERĂ CURSUL',
@@ -56,6 +60,7 @@ export const DEFAULT_CONTENT = {
       { title: 'Echipamente & GMDSS', items: ['DSC, NAVTEX, EPIRB, SART', 'Simulare trafic GMDSS', 'Exerciții SAR + operare stație'] },
       { title: 'Engleză maritimă & examen', items: ['Phraseology standard', 'Proceduri de pericol', 'Examen de certificare'] },
     ],
+    examBadge: 'Examen VHF — live, online',
   },
   benefits: {
     eyebrow: 'CE OBȚII LA FINAL',
@@ -88,6 +93,7 @@ export const DEFAULT_CONTENT = {
     dateBig: '15 – 17\nIUNIE',
     dateSub: 'Luni – Miercuri · 18:00–21:00 · pe Zoom',
     points: ['3 seri intensive online', 'Certificat valabil 5 ani', 'Locuri limitate'],
+    examNote: 'Examen VHF — online, live',
     cardTitle: 'Curs radio GMDSS / LRC',
     cardPoints: ['3 seri (luni–miercuri)', 'Online pe Zoom', 'Examen de certificare inclus'],
     priceGrad: '€160',

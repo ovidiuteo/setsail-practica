@@ -145,6 +145,10 @@ function ContentEditor({ draft, update }: { draft: any; update: (p: Path, v: any
         </div>
       </Card>
 
+      <Card title="Examen de certificat (highlight verde)">
+        <div className="grid sm:grid-cols-2 gap-4">{T(['examHighlight', 'title'], 'Titlu', { rec: 24 })}{T(['examHighlight', 'detail'], 'Detaliu (dată/oră/Zoom)', { rec: 44 })}</div>
+      </Card>
+
       <Card title="Ce acoperă cursul (grid)">
         {T(['coverage', 'eyebrow'], 'Eyebrow', { rec: 24 })}{T(['coverage', 'title'], 'Titlu', { rec: 40 })}
         <div className="grid sm:grid-cols-2 gap-3">{(g(['coverage', 'items']) || []).map((it: any, i: number) => (
@@ -154,6 +158,7 @@ function ContentEditor({ draft, update }: { draft: any; update: (p: Path, v: any
 
       <Card title="Structura cursului (3 seri)">
         {T(['timeline', 'eyebrow'], 'Eyebrow', { rec: 24 })}{T(['timeline', 'title'], 'Titlu', { rec: 40 })}
+        {T(['timeline', 'examBadge'], 'Bandă examen (seara 3)', { rec: 30 })}
         <div className="grid sm:grid-cols-3 gap-3">{(g(['timeline', 'days']) || []).map((day: any, i: number) => (
           <div key={i} className="space-y-2 border border-slate-100 rounded-lg p-3"><Txt label={`Seara ${i + 1} — titlu`} value={day.title} rec={28} onChange={(v) => update(['timeline', 'days', i, 'title'], v)} /><ListTxt label="puncte" items={day.items} rec={36} onChange={(v) => update(['timeline', 'days', i, 'items'], v)} /></div>
         ))}</div>
@@ -178,6 +183,7 @@ function ContentEditor({ draft, update }: { draft: any; update: (p: Path, v: any
         {T(['enroll', 'eyebrow'], 'Eyebrow', { rec: 24 })}
         <div className="grid sm:grid-cols-2 gap-4">{T(['enroll', 'dateBig'], 'Data mare (Enter = rând nou)', { rec: 16, area: true })}{T(['enroll', 'dateSub'], 'Subtitlu dată', { rec: 44 })}</div>
         <ListTxt label="Puncte (ultimul = auriu)" items={g(['enroll', 'points'])} rec={40} onChange={(v) => update(['enroll', 'points'], v)} />
+        {T(['enroll', 'examNote'], 'Notă examen (verde, sub puncte)', { rec: 36 })}
         {T(['enroll', 'cardTitle'], 'Titlu card', { rec: 34 })}
         <ListTxt label="Puncte card" items={g(['enroll', 'cardPoints'])} rec={34} onChange={(v) => update(['enroll', 'cardPoints'], v)} />
         <div className="grid sm:grid-cols-2 gap-4">{T(['enroll', 'priceGrad'], 'Preț absolvent (mare)', { rec: 10 })}{T(['enroll', 'priceGradUnit'], 'Unitate absolvent', { rec: 28 })}</div>
