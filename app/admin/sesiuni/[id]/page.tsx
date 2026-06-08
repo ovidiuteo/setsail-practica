@@ -4,7 +4,7 @@ import CIImageEditor from '@/components/CIImageEditor'
 import { supabase } from '@/lib/supabase'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Download, FileText, Users, Copy, Plus, Trash2, Check, X, Pencil, GitBranch, ArrowRight, UserX, Mail, ChevronDown } from 'lucide-react'
+import { ArrowLeft, Download, FileText, Users, Copy, Plus, Trash2, Check, X, Pencil, GitBranch, ArrowRight, UserX, Mail, ChevronDown, Database } from 'lucide-react'
 
 function applyTemplate(text: string, sess: any, contacts?: any[]): string {
   if (!text) return ''
@@ -2321,6 +2321,9 @@ export default function SessionDetailPage() {
   }
   const [loading, setLoading] = useState(true)
   const [showRandomizer, setShowRandomizer] = useState(false)
+  const [showSqlTemplate, setShowSqlTemplate] = useState(false)
+  const [sqlGroupId, setSqlGroupId] = useState('')
+  const [sqlCopied, setSqlCopied] = useState(false)
   const [ciPreview, setCiPreview] = useState<{name:string, img:string}|null>(null)
   const [randomCounts, setRandomCounts] = useState<number[]>([])
   const [randomizing, setRandomizing] = useState(false)
@@ -2495,6 +2498,86 @@ export default function SessionDetailPage() {
     setRandomizing(false)
   }
 
+  // --- Template SQL: UPDATE-uri MySQL (rnauti39_teste) din datele Supabase ---
+  // Doar UPDATE, scopuit pe payments.group + email. Sursa de adevar = practica-setsail.
+  function sqlEsc(v: string) { return String(v).trim().replace(/'/g, "''") }
+  function toMysqlDate(v: string): string | null {
+    const t = String(v).trim()
+    if (/^\d{4}-\d{2}-\d{2}$/.test(t)) return t                       // deja ISO
+    const m = t.match(/^(\d{1,2})[.\-/](\d{1,2})[.\-/](\d{4})$/)      // dd.mm.yyyy | dd-mm-yyyy | dd/mm/yyyy
+    if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`
+    return null                                                      // format neconform
+  }
+  function buildSqlTemplate(gid: string): string {
+    const groupNum = gid.trim()
+    const gExpr = groupNum || '{{ID_SERIE}}'
+    const seriesStudents = sessions.flatMap(se => studentsMap[se.id] || [])
+    const seen = new Set<string>()
+    const blocks: string[] = []
+    const noEmail: string[] = []
+    const noData: string[] = []
+    const badBirth: string[] = []
+    let count = 0
+
+    for (const s of seriesStudents) {
+      const email = (s.email || '').trim().toLowerCase()
+      if (!email) { if (s.full_name) noEmail.push(s.full_name); continue }
+      if (seen.has(email)) continue
+      seen.add(email)
+
+      const sets: string[] = []
+      const add = (col: string, val?: string) => {
+        const v = (val ?? '').trim()
+        if (v) sets.push(`s.${col}='${sqlEsc(v)}'`)
+      }
+      add('cnp', s.cnp)
+      add('address', s.address)
+      add('city', s.city)
+      add('county', s.county)
+      add('phone', s.phone)
+      add('id_series', s.ci_series)
+      add('id_number', s.ci_number)
+      const bd = (s.birth_date || '').trim()
+      if (bd) {
+        const iso = toMysqlDate(bd)
+        if (iso) sets.push(`s.birth_date='${iso}'`)
+        else badBirth.push(`${s.full_name || email}: "${bd}"`)
+      }
+
+      if (sets.length === 0) { noData.push(s.full_name || email); continue }
+      count++
+      blocks.push(
+        `-- ${s.full_name || ''}`.trimEnd() + '\n' +
+        `UPDATE students s\n` +
+        `  JOIN users u ON u.id = s.user\n` +
+        `  JOIN payments p ON p.student = u.id\n` +
+        `SET ${sets.join(', ')}, s.updated_at=NOW()\n` +
+        `WHERE p.\`group\` = ${gExpr} AND lower(trim(u.email)) = '${sqlEsc(email)}';`
+      )
+    }
+
+    const d = new Date()
+    const ymd = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, '0')}${String(d.getDate()).padStart(2, '0')}`
+    const header = [
+      `-- ============================================================`,
+      `-- UPDATE cursanti serie (group = ${gExpr}) -> rnauti39_teste`,
+      `-- Sursa de adevar: Supabase practica-setsail. DOAR UPDATE, fara INSERT/DELETE.`,
+      `-- Ruleaza pe baza rnauti39_teste, conexiune utf8mb4 (altfel se strica diacriticele).`,
+      `-- Backup recomandat inainte (de-comenteaza randul urmator):`,
+      `-- CREATE TABLE students_backup_${ymd} AS SELECT * FROM students;`,
+      `-- Cursanti actualizati: ${count}`,
+      `-- ============================================================`,
+      ``,
+    ].join('\n')
+
+    const footer: string[] = []
+    if (noEmail.length) footer.push(`-- NEINCLUSI (fara email in Supabase): ${noEmail.join('; ')}`)
+    if (noData.length) footer.push(`-- NEINCLUSI (niciun camp completat): ${noData.join('; ')}`)
+    if (badBirth.length) footer.push(`-- birth_date IGNORAT (format neconform; restul campurilor s-au scris): ${badBirth.join('; ')}`)
+
+    return header + blocks.join('\n\n') + (footer.length ? '\n\n' + footer.join('\n') : '') + '\n'
+  }
+
   if (loading) return <div className="p-8 text-center text-gray-400">Se încarcă...</div>
   if (!mainSession) return <div className="p-8 text-center text-gray-400">Sesiunea nu a fost găsită.</div>
 
@@ -2573,6 +2656,10 @@ export default function SessionDetailPage() {
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">
           <Pencil size={12}/> Editează sesiunea
         </button>
+        <button onClick={()=>{setSqlGroupId('');setSqlCopied(false);setShowSqlTemplate(true)}}
+          className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-emerald-200 text-emerald-700 hover:bg-emerald-50">
+          <Database size={12}/> Template SQL
+        </button>
         <button onClick={()=>{
           const activeSess = sessions.filter(s=>s.session_type!=='absent')
           setRandomCounts(activeSess.map(s=>(studentsMap[s.id]||[]).filter((st:Student)=>!st.only_sailing).length))
@@ -2640,6 +2727,42 @@ export default function SessionDetailPage() {
                   className="px-5 py-2 rounded-lg text-xs font-medium text-white disabled:opacity-50"
                   style={{background:'#7c3aed'}}>
                   {randomizing?'Se randomizează...':'🎲 Randomize allocation'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* Modal Template SQL */}
+      {showSqlTemplate && (() => {
+        const sql = buildSqlTemplate(sqlGroupId)
+        return (
+          <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={()=>setShowSqlTemplate(false)}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl p-6" onClick={e=>e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-1">
+                <h3 className="font-semibold text-gray-900 flex items-center gap-2"><Database size={16}/> Template SQL — UPDATE cursanți în MySQL</h3>
+                <button onClick={()=>setShowSqlTemplate(false)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><X size={16}/></button>
+              </div>
+              <p className="text-xs text-gray-400 mb-4">
+                Generează UPDATE-uri pentru <strong>rnauti39_teste</strong> din datele completate în practica-setsail.
+                Doar <strong>UPDATE</strong>, scopuit pe <code>payments.group</code> + email. Copiezi și rulezi în phpMyAdmin (conexiune utf8mb4).
+              </p>
+              <div className="flex items-center gap-2 mb-3">
+                <label className="text-xs text-gray-500">ID serie (<code>payments.group</code>):</label>
+                <input value={sqlGroupId} onChange={e=>setSqlGroupId(e.target.value.replace(/[^0-9]/g,''))}
+                  placeholder="ex. 224" inputMode="numeric"
+                  className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm w-28"/>
+                <span className="text-xs text-gray-400">din URL-ul admin /groups/&lt;id&gt;</span>
+              </div>
+              <textarea readOnly value={sql} spellCheck={false}
+                className="w-full h-72 font-mono text-[11px] leading-relaxed p-3 rounded-xl border border-gray-200 bg-gray-50 text-gray-700"/>
+              <div className="flex justify-end gap-2 mt-4">
+                <button onClick={()=>setShowSqlTemplate(false)} className="px-4 py-2 rounded-lg text-xs border border-gray-200 text-gray-500 hover:bg-gray-50">Închide</button>
+                <button onClick={()=>{navigator.clipboard.writeText(sql);setSqlCopied(true);setTimeout(()=>setSqlCopied(false),2000)}}
+                  disabled={!sqlGroupId}
+                  className="flex items-center gap-1.5 px-5 py-2 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#0a1628'}}>
+                  {sqlCopied ? <><Check size={12}/> Copiat</> : <><Copy size={12}/> Copy</>}
                 </button>
               </div>
             </div>
