@@ -180,8 +180,9 @@ function ContentEditor({ draft, update }: { draft: any; update: (p: Path, v: any
         <ListTxt label="Puncte (ultimul = auriu)" items={g(['enroll', 'points'])} rec={40} onChange={(v) => update(['enroll', 'points'], v)} />
         {T(['enroll', 'cardTitle'], 'Titlu card', { rec: 34 })}
         <ListTxt label="Puncte card" items={g(['enroll', 'cardPoints'])} rec={34} onChange={(v) => update(['enroll', 'cardPoints'], v)} />
-        <div className="grid sm:grid-cols-3 gap-4">{T(['enroll', 'priceValue'], 'Preț', { rec: 10 })}{T(['enroll', 'priceUnit'], 'Unitate', { rec: 20 })}{T(['enroll', 'priceBadge'], 'Badge', { rec: 16 })}</div>
-        {T(['enroll', 'priceNote'], 'Notă preț', { rec: 80 })}
+        <div className="grid sm:grid-cols-2 gap-4">{T(['enroll', 'priceGrad'], 'Preț absolvent (mare)', { rec: 10 })}{T(['enroll', 'priceGradUnit'], 'Unitate absolvent', { rec: 28 })}</div>
+        <div className="grid sm:grid-cols-2 gap-4">{T(['enroll', 'priceRenew'], 'Preț reînnoire (mare)', { rec: 10 })}{T(['enroll', 'priceRenewUnit'], 'Unitate reînnoire', { rec: 24 })}</div>
+        {T(['enroll', 'priceStd'], 'Tarif standard (mic)', { rec: 50 })}
         {T(['enroll', 'ctaLabel'], 'Buton CTA', { rec: 24 })}{T(['enroll', 'ctaNote'], 'Notă sub buton', { rec: 70 })}
         {T(['enroll', 'bonusTitle'], 'Titlu bonus', { rec: 30 })}
         <ListTxt label="Bonusuri" items={g(['enroll', 'bonusItems'])} rec={40} onChange={(v) => update(['enroll', 'bonusItems'], v)} />

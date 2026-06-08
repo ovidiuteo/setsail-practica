@@ -227,14 +227,19 @@ export default function RadioLandingView({ content: c }: { content: RadioContent
                 return <li key={i} className="flex items-center gap-3 text-slate-700"><Icon className="w-5 h-5 text-[#2ea8d8] shrink-0" strokeWidth={1.7} /> {p}</li>
               })}
             </ul>
-            <div className="bg-[#eef4fb] rounded-xl p-4 mb-3 flex items-end justify-between">
-              <div>
-                <p className="text-xs text-slate-500 uppercase tracking-wide">Investiție</p>
-                <p className="text-3xl font-black text-[#0a2a4e] leading-tight">{c.enroll.priceValue} <span className="text-sm font-medium text-slate-400">{c.enroll.priceUnit}</span></p>
+            <div className="bg-[#eef4fb] rounded-xl p-4 mb-3">
+              <div className="flex items-end justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[11px] text-[#e0a014] font-bold uppercase tracking-wide">Absolvent SetSail</p>
+                  <p className="text-3xl font-black text-[#0a2a4e] leading-tight">{c.enroll.priceGrad}<span className="block text-[11px] font-medium text-slate-400 normal-case">{c.enroll.priceGradUnit}</span></p>
+                </div>
+                <div className="text-right min-w-0">
+                  <p className="text-[11px] text-slate-500 uppercase tracking-wide">Reînnoire</p>
+                  <p className="text-3xl font-black text-[#0a2a4e] leading-tight">{c.enroll.priceRenew}<span className="block text-[11px] font-medium text-slate-400 normal-case">{c.enroll.priceRenewUnit}</span></p>
+                </div>
               </div>
-              <span className="text-xs bg-[#f5b528]/20 text-[#e0a014] font-bold px-2.5 py-1 rounded-full">{c.enroll.priceBadge}</span>
+              <p className="text-xs text-slate-400 mt-2.5 pt-2.5 border-t border-slate-200">{c.enroll.priceStd}</p>
             </div>
-            <p className="text-xs text-slate-400 mb-5">{c.enroll.priceNote}</p>
             <button onClick={openForm} className="block w-full text-center bg-[#f5b528] hover:brightness-95 text-[#0a2a4e] font-bold tracking-wide py-4 rounded-xl transition">{c.enroll.ctaLabel}</button>
             <p className="text-center text-xs text-slate-400 mt-4">{c.enroll.ctaNote}</p>
           </div>
