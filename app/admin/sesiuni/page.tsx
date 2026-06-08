@@ -4,7 +4,7 @@ import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
 import { Plus, Copy, ExternalLink, Trash2, Pencil, Check, X } from 'lucide-react'
 import { resolveColor } from '@/lib/timeline-colors'
-import { scopeForSession, DEFAULT_TIMELINE_SCOPE } from '@/lib/timeline-scope'
+import { scopeForSession, DEFAULT_TIMELINE_SCOPE, TIMELINE_SCOPES } from '@/lib/timeline-scope'
 
 const statusMap: Record<string, { label: string; color: string }> = {
   draft:     { label: 'Ciornă',     color: '#6b7280' },
@@ -191,6 +191,8 @@ export default function SesiuniPage() {
   function startEdit(s: any) {
     setEditingId(s.id)
     setEditValues({
+      course_start_date: s.course_start_date || '',
+      practice_start_date: s.practice_start_date || '',
       session_date: s.session_date,
       location_id: s.location_id,
       boat_id: s.boat_id || '',
@@ -198,9 +200,13 @@ export default function SesiuniPage() {
       instructor_id: s.instructor_id,
       class_caa: s.class_caa,
       status: s.status,
+      timeline_scope: s.timeline_scope || '',
       notes: s.notes || '',
       request_number: s.request_number || '',
+      nr_instiintare_anr: s.nr_instiintare_anr || '',
+      nr_document_ancom: s.nr_document_ancom || '',
       location_detail: s.location_detail || '',
+      skipper_url: s.skipper_url || '',
     })
   }
 
@@ -211,8 +217,15 @@ export default function SesiuniPage() {
 
   async function saveEdit(id: string) {
     setSaving(true)
+    // Postgres respinge '' pentru coloane date/uuid — convertim la null.
+    const nullableEmpty = [
+      'course_start_date', 'session_date', 'practice_start_date',
+      'location_id', 'boat_id', 'evaluator_id', 'instructor_id', 'timeline_scope',
+    ]
+    const payload: any = { ...editValues }
+    for (const col of nullableEmpty) if (payload[col] === '') payload[col] = null
     const { data } = await supabase.from('sessions')
-      .update(editValues)
+      .update(payload)
       .eq('id', id)
       .select('*, locations(name, county), evaluators(full_name), instructors(full_name), boats(name)')
       .single()
@@ -292,7 +305,19 @@ export default function SesiuniPage() {
                   <div className="p-5">
                     <div className="grid grid-cols-3 gap-3 mb-3">
                       <div>
-                        <div className="text-xs text-gray-400 mb-1">Data</div>
+                        <div className="text-xs text-gray-400 mb-1">Data start curs</div>
+                        <input type="date" className={inputCls + ' w-full'}
+                          value={editValues.course_start_date || ''}
+                          onChange={e => setEditValues((v: any) => ({ ...v, course_start_date: e.target.value }))} />
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-400 mb-1">Data start practică</div>
+                        <input type="date" className={inputCls + ' w-full'}
+                          value={editValues.practice_start_date || ''}
+                          onChange={e => setEditValues((v: any) => ({ ...v, practice_start_date: e.target.value }))} />
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-400 mb-1">Data examen</div>
                         <input type="date" className={inputCls + ' w-full'}
                           value={editValues.session_date}
                           onChange={e => setEditValues((v: any) => ({ ...v, session_date: e.target.value }))} />
@@ -356,6 +381,14 @@ export default function SesiuniPage() {
                         </select>
                       </div>
                       <div>
+                        <div className="text-xs text-gray-400 mb-1">Categorie timeline</div>
+                        <select className={selectCls + ' w-full'} value={editValues.timeline_scope || ''}
+                          onChange={e => setEditValues((v: any) => ({ ...v, timeline_scope: e.target.value }))}>
+                          <option value="">— Selectează —</option>
+                          {TIMELINE_SCOPES.map(sc => <option key={sc.value} value={sc.value}>{sc.label}</option>)}
+                        </select>
+                      </div>
+                      <div>
                         <div className="text-xs text-gray-400 mb-1">Locație detaliată</div>
                         <input className={inputCls + ' w-full'} value={editValues.location_detail}
                           onChange={e => setEditValues((v: any) => ({ ...v, location_detail: e.target.value }))}
@@ -366,6 +399,22 @@ export default function SesiuniPage() {
                         <input className={inputCls + ' w-full'} value={editValues.request_number}
                           onChange={e => setEditValues((v: any) => ({ ...v, request_number: e.target.value }))}
                           placeholder="ex: 16/ 23.08.2024" />
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-400 mb-1">Nr. înștiintare reg ANR</div>
+                        <input className={inputCls + ' w-full'} value={editValues.nr_instiintare_anr}
+                          onChange={e => setEditValues((v: any) => ({ ...v, nr_instiintare_anr: e.target.value }))} />
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-400 mb-1">Nr. documente PV</div>
+                        <input className={inputCls + ' w-full'} value={editValues.nr_document_ancom}
+                          onChange={e => setEditValues((v: any) => ({ ...v, nr_document_ancom: e.target.value }))} />
+                      </div>
+                      <div className="col-span-2">
+                        <div className="text-xs text-gray-400 mb-1">Link skipper.setsail.ro</div>
+                        <input className={inputCls + ' w-full'} value={editValues.skipper_url}
+                          onChange={e => setEditValues((v: any) => ({ ...v, skipper_url: e.target.value }))}
+                          placeholder="https://skipper.setsail.ro/admin/groups/224" />
                       </div>
                       <div>
                         <div className="text-xs text-gray-400 mb-1">Observații</div>
