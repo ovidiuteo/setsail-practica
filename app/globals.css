@@ -42,3 +42,14 @@ body {
 .cds-floaty { animation: cds-floaty 5s ease-in-out infinite; }
 
 .cds-tl-line { background: linear-gradient(90deg, #2ea8d8 0%, #103a66 100%); }
+
+/* ===== Landing /curs-radio-gmdss-lrc (Variant B) ===== */
+.radio-hero { background: linear-gradient(115deg, #06203c 0%, #0a2a4e 60%, #103a66 100%); }
+.radio-grid {
+  background-image:
+    linear-gradient(rgba(92,194,234,0.07) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(92,194,234,0.07) 1px, transparent 1px);
+  background-size: 34px 34px;
+}
+@keyframes radio-blink { 50% { opacity: 0.35; } }
+.radio-blink { animation: radio-blink 1.4s steps(1) infinite; }
