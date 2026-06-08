@@ -77,6 +77,9 @@ function skipperGroupId(url?: string): string {
   return m ? m[1] : ''
 }
 
+// phpMyAdmin (rnauti39_teste) — ATENTIE: tokenul cpsessXXXX expira la fiecare login cPanel; actualizeaza-l aici cand nu mai merge.
+const PHPMYADMIN_URL = 'https://www.setsail.ro:2083/cpsess6483062998/3rdparty/phpMyAdmin/index.php?route=/database/sql&db=rnauti39_teste'
+
 const EMPTY_ST = { full_name:'', cnp:'', email:'', phone:'', birth_date:'', ci_series:'', ci_number:'', address:'', county:'', class_caa:'C,D' }
 
 
@@ -2767,7 +2770,7 @@ export default function SessionDetailPage() {
                 Doar <strong>UPDATE</strong>, scopuit pe <code>sheets.group</code> + <strong>email</strong>. Copiezi și rulezi în phpMyAdmin (conexiune utf8mb4).
               </p>
               <div className="flex items-center gap-2 mb-3">
-                <label className="text-xs text-gray-500">ID serie (<code>payments.group</code>):</label>
+                <label className="text-xs text-gray-500">ID serie (<code>sheets.group</code>):</label>
                 <input value={sqlGroupId} onChange={e=>setSqlGroupId(e.target.value.replace(/[^0-9]/g,''))}
                   placeholder="ex. 224" inputMode="numeric"
                   className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm w-28"/>
@@ -2775,12 +2778,21 @@ export default function SessionDetailPage() {
               </div>
               <textarea readOnly value={sql} spellCheck={false}
                 className="w-full h-72 font-mono text-[11px] leading-relaxed p-3 rounded-xl border border-gray-200 bg-gray-50 text-gray-700"/>
-              <div className="flex justify-end gap-2 mt-4">
+              <p className="text-xs text-gray-400 mt-3">
+                phpMyAdmin (rnauti39_teste):{' '}
+                <a href={PHPMYADMIN_URL} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline break-all">{PHPMYADMIN_URL}</a>
+              </p>
+              <div className="flex justify-end gap-2 mt-3">
                 <button onClick={()=>setShowSqlTemplate(false)} className="px-4 py-2 rounded-lg text-xs border border-gray-200 text-gray-500 hover:bg-gray-50">Închide</button>
                 <button onClick={()=>{navigator.clipboard.writeText(sql);setSqlCopied(true);setTimeout(()=>setSqlCopied(false),2000)}}
                   disabled={!sqlGroupId}
+                  className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-xs font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                  {sqlCopied ? <><Check size={12}/> Copiat</> : <><Copy size={12}/> Copy txt</>}
+                </button>
+                <button onClick={()=>{navigator.clipboard.writeText(sql);window.open(PHPMYADMIN_URL,'_blank','noopener,noreferrer')}}
+                  disabled={!sqlGroupId}
                   className="flex items-center gap-1.5 px-5 py-2 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#0a1628'}}>
-                  {sqlCopied ? <><Check size={12}/> Copiat</> : <><Copy size={12}/> Copy</>}
+                  <Copy size={12}/> Copy &amp; open url
                 </button>
               </div>
             </div>
