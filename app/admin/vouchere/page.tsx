@@ -1,9 +1,13 @@
 'use client'
 
-import { useState } from 'react'
-import { Loader2, Copy, Check, Anchor, Ship, Mail, Ticket } from 'lucide-react'
+import { useEffect, useState } from 'react'
+import { Loader2, Copy, Check, Anchor, Ship, Mail, Ticket, Eye, Zap, Wallet, RefreshCw } from 'lucide-react'
 
 type Result = { email: string; token: string; amount: number }
+type VoucherRow = { email: string; token: string; amount: number; cashed: boolean; created_at: string; cashed_at: string | null }
+type Stats = { bancomat: { visit: number; generate: number; cashout: number }; vouchers: VoucherRow[] }
+
+const VOUCHER_EXP = '17.06.2026'
 
 export default function VouchereAdminPage() {
   const [email, setEmail] = useState('')
@@ -11,6 +15,19 @@ export default function VouchereAdminPage() {
   const [err, setErr] = useState('')
   const [result, setResult] = useState<Result | null>(null)
   const [copied, setCopied] = useState(false)
+  const [stats, setStats] = useState<Stats | null>(null)
+  const [statsLoading, setStatsLoading] = useState(true)
+
+  async function loadStats() {
+    setStatsLoading(true)
+    try {
+      const res = await fetch('/api/voucher/stats', { cache: 'no-store' })
+      const json = await res.json()
+      if (res.ok && json.ok) setStats({ bancomat: json.bancomat, vouchers: json.vouchers })
+    } catch {}
+    setStatsLoading(false)
+  }
+  useEffect(() => { loadStats() }, [])
 
   async function generate() {
     const e = email.trim()
@@ -97,8 +114,81 @@ export default function VouchereAdminPage() {
           </p>
         </div>
       )}
+
+      {/* DASHBOARD bancomat */}
+      <div className="mt-10">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-lg font-extrabold text-[#0a2a4e]">Bancomat — statistici</h2>
+          <button onClick={loadStats} className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-[#0a2a4e] transition">
+            <RefreshCw size={14} className={statsLoading ? 'animate-spin' : ''} /> Reîmprospătează
+          </button>
+        </div>
+
+        <div className="grid grid-cols-3 gap-3">
+          {[
+            { icon: Eye, label: 'Vizite bancomat', value: stats?.bancomat.visit, color: '#2ea8d8' },
+            { icon: Zap, label: 'Coduri generate', value: stats?.bancomat.generate, color: '#0a2a4e' },
+            { icon: Wallet, label: 'Cashout Credit', value: stats?.bancomat.cashout, color: '#f5b528' },
+          ].map(({ icon: Icon, label, value, color }) => (
+            <div key={label} className="bg-white border border-slate-200 rounded-xl p-4 shadow-sm">
+              <Icon size={18} style={{ color }} />
+              <p className="text-2xl font-extrabold text-[#0a2a4e] mt-2 leading-none">
+                {statsLoading && value === undefined ? '—' : (value ?? 0)}
+              </p>
+              <p className="text-[11px] text-slate-500 mt-1">{label}</p>
+            </div>
+          ))}
+        </div>
+
+        <h3 className="text-sm font-bold text-[#0a2a4e] mt-6 mb-2">
+          Vouchere generate la bancomat {stats?.vouchers ? `(${stats.vouchers.length})` : ''}
+        </h3>
+        <div className="bg-white border border-slate-200 rounded-xl overflow-hidden shadow-sm">
+          {statsLoading && !stats ? (
+            <p className="text-sm text-slate-400 p-4 flex items-center gap-2"><Loader2 size={14} className="animate-spin" /> Se încarcă…</p>
+          ) : !stats?.vouchers?.length ? (
+            <p className="text-sm text-slate-400 p-4">Niciun voucher generat încă.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-[11px] uppercase tracking-wide text-slate-400 border-b border-slate-100">
+                    <th className="px-3 py-2 font-semibold">Email</th>
+                    <th className="px-3 py-2 font-semibold">Cod</th>
+                    <th className="px-3 py-2 font-semibold">Cashout</th>
+                    <th className="px-3 py-2 font-semibold whitespace-nowrap">Data</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stats.vouchers.map((v) => (
+                    <tr key={v.email} className="border-b border-slate-50 last:border-0">
+                      <td className="px-3 py-2 text-[#0a2a4e] font-medium">{v.email}</td>
+                      <td className="px-3 py-2 font-mono text-xs text-slate-600">{v.token}</td>
+                      <td className="px-3 py-2">
+                        {v.cashed
+                          ? <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700">cheltuit</span>
+                          : <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500">doar generat</span>}
+                      </td>
+                      <td className="px-3 py-2 text-xs text-slate-500 whitespace-nowrap">{fmtDate(v.created_at)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+        <p className="text-[11px] text-slate-400 mt-2">Toate voucherele expiră după {VOUCHER_EXP}.</p>
+      </div>
     </div>
   )
+}
+
+function fmtDate(iso: string): string {
+  try {
+    const d = new Date(iso)
+    const p = (n: number) => String(n).padStart(2, '0')
+    return `${p(d.getDate())}.${p(d.getMonth() + 1)}.${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`
+  } catch { return iso }
 }
 
 function Banknote({ token, email, amount }: { token: string; email: string; amount: number }) {
@@ -151,7 +241,7 @@ function Banknote({ token, email, amount }: { token: string; email: string; amou
         {/* bottom */}
         <div className="flex items-end justify-between">
           <p className="text-[10px] sm:text-[11px] text-white/70 max-w-[60%] leading-tight">
-            Curs Radio GMDSS / LRC · reducere {amount} EUR
+            Curs Radio GMDSS / LRC · reducere {amount} EUR · exp {VOUCHER_EXP}
           </p>
           <p className="text-[10px] sm:text-[11px] text-white/60 font-mono truncate max-w-[40%] text-right">{email}</p>
         </div>

@@ -1,10 +1,12 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Loader2, Copy, Check, Anchor, Ship, ArrowRight, CornerDownLeft, RotateCcw } from 'lucide-react'
 
 type Result = { email: string; token: string; amount: number }
 type Phase = 'input' | 'validated' | 'cashed'
+
+const VOUCHER_EXP = '17.06.2026'
 
 export default function BancomatPage() {
   const [email, setEmail] = useState('')
@@ -14,6 +16,20 @@ export default function BancomatPage() {
   const [err, setErr] = useState('')
   const [result, setResult] = useState<Result | null>(null)
   const [copied, setCopied] = useState(false)
+
+  // contor vizite bancomat (o dată / sesiune de browser).
+  useEffect(() => {
+    try {
+      if (!sessionStorage.getItem('bancomat_visit')) {
+        sessionStorage.setItem('bancomat_visit', '1')
+        fetch('/api/bancomat/track', {
+          method: 'POST', keepalive: true,
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ kind: 'visit' }),
+        }).catch(() => {})
+      }
+    } catch {}
+  }, [])
 
   // Pasul 1 — butonul verde de enter validează emailul și încarcă creditul.
   async function validate() {
@@ -41,6 +57,14 @@ export default function BancomatPage() {
   function cashout() {
     if (phase !== 'validated') return
     setPhase('cashed')
+    // contor cashout + marchează voucherul ca „cheltuit" în log.
+    try {
+      fetch('/api/bancomat/track', {
+        method: 'POST', keepalive: true,
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ kind: 'cashout', email: result?.email }),
+      }).catch(() => {})
+    } catch {}
   }
 
   function restart() {
@@ -218,7 +242,7 @@ export default function BancomatPage() {
             </div>
 
             <p className="text-center text-xs text-white/40 mt-3">
-              Codul e valabil la înscriere doar cu adresa <span className="font-mono text-white/60">{result.email}</span>.
+              Codul e valabil la înscriere doar cu adresa <span className="font-mono text-white/60">{result.email}</span>. Exp {VOUCHER_EXP}
             </p>
           </div>
         )}
@@ -271,7 +295,7 @@ function Banknote({ token, email, amount }: { token: string; email: string; amou
 
         <div className="flex items-end justify-between">
           <p className="text-[10px] sm:text-[11px] text-white/70 max-w-[60%] leading-tight">
-            Curs Radio GMDSS / LRC · reducere {amount} EUR
+            Curs Radio GMDSS / LRC · reducere {amount} EUR · exp {VOUCHER_EXP}
           </p>
           <p className="text-[10px] sm:text-[11px] text-white/60 font-mono truncate max-w-[40%] text-right">{email}</p>
         </div>
