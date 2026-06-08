@@ -23,6 +23,7 @@ const BAR_HEIGHTS = [40, 70, 55, 90, 65, 30, 80]
 export default function RadioLandingView({ content: c }: { content: RadioContent }) {
   const [menuOpen, setMenuOpen] = useState(false)
   const [formOpen, setFormOpen] = useState(false)
+  const [prefill, setPrefill] = useState<{ email?: string; voucher?: string }>({})
   const openForm = () => setFormOpen(true)
 
   useEffect(() => {
@@ -31,6 +32,13 @@ export default function RadioLandingView({ content: c }: { content: RadioContent
         sessionStorage.setItem('radio_visit', '1')
         fetch('/api/radio-landing/track', { method: 'POST', keepalive: true }).catch(() => {})
       }
+    } catch {}
+    // Deep-link din bancomatul de vouchere: precompletează codul + emailul și deschide formularul.
+    try {
+      const sp = new URLSearchParams(window.location.search)
+      const voucher = (sp.get('voucher') || '').toUpperCase().trim()
+      const email = (sp.get('email') || '').trim()
+      if (voucher || email) { setPrefill({ voucher, email }); setFormOpen(true) }
     } catch {}
     const io = new IntersectionObserver(
       (entries) => entries.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target) } }),
@@ -364,13 +372,13 @@ export default function RadioLandingView({ content: c }: { content: RadioContent
         {c.hero.ctaPrimary} →
       </button>
 
-      {formOpen && <LeadModal content={c} onClose={() => setFormOpen(false)} />}
+      {formOpen && <LeadModal content={c} initial={prefill} onClose={() => setFormOpen(false)} />}
     </div>
   )
 }
 
-function LeadModal({ content: c, onClose }: { content: RadioContent; onClose: () => void }) {
-  const [form, setForm] = useState({ name: '', email: '', phone: '', message: '', website: '', leadType: '', voucher: '' })
+function LeadModal({ content: c, onClose, initial }: { content: RadioContent; onClose: () => void; initial?: { email?: string; voucher?: string } }) {
+  const [form, setForm] = useState({ name: '', email: initial?.email || '', phone: '', message: '', website: '', leadType: '', voucher: initial?.voucher || '' })
   const [state, setState] = useState<'idle' | 'sending' | 'done' | 'error'>('idle')
   const [err, setErr] = useState('')
 
