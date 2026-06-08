@@ -21,6 +21,7 @@ export default function VouchereAdminPage() {
   const [cfg, setCfg] = useState<VoucherConfig | null>(null)
   const [cfgSaving, setCfgSaving] = useState(false)
   const [cfgMsg, setCfgMsg] = useState('')
+  const [tab, setTab] = useState<'stats' | 'info'>('stats')
 
   async function loadStats() {
     setStatsLoading(true)
@@ -86,12 +87,28 @@ export default function VouchereAdminPage() {
 
   return (
     <div className="max-w-2xl mx-auto px-5 py-8">
-      <div className="flex items-center gap-2.5 mb-1">
+      <div className="flex items-center gap-2.5 mb-4">
         <div className="rounded-lg p-1.5" style={{ background: '#f5c842' }}>
           <Ticket size={18} style={{ color: '#0a1628' }} />
         </div>
-        <h1 className="text-2xl font-extrabold text-[#0a2a4e]">Vouchere 20 EUR</h1>
+        <h1 className="text-2xl font-extrabold text-[#0a2a4e]">VOUCHERE SETSAIL</h1>
       </div>
+
+      {/* TABURI */}
+      <div className="flex gap-1 border-b border-slate-200 mb-6">
+        {([['stats', 'Statistici și lead-uri'], ['info', 'Info']] as const).map(([key, label]) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            className={`px-4 py-2.5 text-sm font-semibold -mb-px border-b-2 transition ${tab === key ? 'border-[#2ea8d8] text-[#0a2a4e]' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'info' && (
+      <>
       <p className="text-sm text-slate-500 mb-6">
         Codul e derivat determinist din adresa de email. Aceeași adresă produce mereu același cod;
         validarea înscrierii se face manual din tabelul de lead-uri.
@@ -216,9 +233,11 @@ export default function VouchereAdminPage() {
           </div>
         )}
       </div>
+      </>
+      )}
 
-      {/* DASHBOARD bancomat */}
-      <div className="mt-10">
+      {tab === 'stats' && (
+      <div className="mt-2">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-extrabold text-[#0a2a4e]">Bancomat — statistici</h2>
           <button onClick={loadStats} className="flex items-center gap-1.5 text-xs text-slate-500 hover:text-[#0a2a4e] transition">
@@ -281,6 +300,7 @@ export default function VouchereAdminPage() {
         </div>
         <p className="text-[11px] text-slate-400 mt-2">Toate voucherele expiră după {cfg ? fmtCut(cfg.cutoff) : '…'}.</p>
       </div>
+      )}
     </div>
   )
 }
