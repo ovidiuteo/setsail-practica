@@ -1,12 +1,16 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Loader2, Copy, Check, Anchor, Ship, ArrowRight, CornerDownLeft, RotateCcw } from 'lucide-react'
+import { Loader2, Copy, Check, Anchor, Ship, ArrowRight, CornerDownLeft, RotateCcw, AlertTriangle } from 'lucide-react'
 
 type Result = { email: string; token: string; amount: number }
 type Phase = 'input' | 'validated' | 'cashed'
 
 const VOUCHER_EXP = '17.06.2026'
+// Bancomatul se închide după 16 iunie 2026 (din 17 iunie → OUT OF ORDER),
+// până la pornirea unui nou program de vouchere.
+const CUTOFF = new Date('2026-06-17T00:00:00').getTime()
+function isClosed(): boolean { return Date.now() >= CUTOFF }
 
 export default function BancomatPage() {
   const [email, setEmail] = useState('')
@@ -16,9 +20,11 @@ export default function BancomatPage() {
   const [err, setErr] = useState('')
   const [result, setResult] = useState<Result | null>(null)
   const [copied, setCopied] = useState(false)
+  const [closed] = useState(isClosed())
 
   // contor vizite bancomat (o dată / sesiune de browser).
   useEffect(() => {
+    if (closed) return
     try {
       if (!sessionStorage.getItem('bancomat_visit')) {
         sessionStorage.setItem('bancomat_visit', '1')
@@ -29,7 +35,7 @@ export default function BancomatPage() {
         }).catch(() => {})
       }
     } catch {}
-  }, [])
+  }, [closed])
 
   // Pasul 1 — butonul verde de enter validează emailul și încarcă creditul.
   async function validate() {
@@ -83,6 +89,49 @@ export default function BancomatPage() {
   const spendHref = result
     ? `/curs-radio-gmdss-lrc?voucher=${encodeURIComponent(result.token)}&email=${encodeURIComponent(result.email)}`
     : '#'
+
+  // Program încheiat — bancomatul e indisponibil până la un nou program.
+  if (closed) {
+    return (
+      <main
+        className="min-h-screen flex flex-col items-center justify-center px-4 py-10 text-white"
+        style={{ background: 'radial-gradient(120% 120% at 50% 0%,#0e3a63 0%,#06203c 55%,#041527 100%)' }}
+      >
+        <div className="text-center mb-7">
+          <div className="inline-flex items-center gap-2.5 mb-2">
+            <div className="rounded-lg p-1.5" style={{ background: '#f5c842' }}>
+              <Ship size={18} style={{ color: '#0a1628' }} />
+            </div>
+            <span className="font-extrabold tracking-wide text-lg">SETSAIL</span>
+            <span className="text-[10px] tracking-[0.3em] text-[#9fd8f0]">NAUTICSCHOOL</span>
+          </div>
+          <h1 className="text-2xl sm:text-3xl font-black">Bancomatul de vouchere</h1>
+        </div>
+
+        <div className="w-full max-w-md">
+          <div
+            className="relative rounded-[28px] p-5 sm:p-6 shadow-2xl"
+            style={{ background: 'linear-gradient(160deg,#2b3a4c 0%,#1b2735 50%,#121b26 100%)', border: '1px solid rgba(255,255,255,0.08)' }}
+          >
+            <div className="absolute right-5 top-5 flex gap-1.5">
+              {[0, 1, 2].map((i) => <span key={i} className="w-1.5 h-1.5 rounded-full bg-white/15" />)}
+            </div>
+            <div
+              className="rounded-2xl px-5 py-10 mb-5 border border-white/10 text-center"
+              style={{ background: 'linear-gradient(135deg,#3a1212 0%,#2a0d0d 60%,#180808 100%)' }}
+            >
+              <AlertTriangle size={42} className="mx-auto text-amber-400" strokeWidth={2} />
+              <p className="text-2xl sm:text-3xl font-black tracking-[0.18em] text-amber-400 mt-3">OUT OF ORDER</p>
+              <p className="text-sm text-white/55 mt-3 max-w-xs mx-auto">
+                Programul de vouchere s-a încheiat. Revenim cu un nou program — mulțumim!
+              </p>
+            </div>
+            <div className="h-3 rounded-full bg-[#05101d]" style={{ boxShadow: 'inset 0 6px 14px rgba(0,0,0,.7)' }} />
+          </div>
+        </div>
+      </main>
+    )
+  }
 
   return (
     <main
