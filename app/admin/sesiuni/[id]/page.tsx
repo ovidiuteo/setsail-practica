@@ -69,7 +69,13 @@ type Student = {
   signature_pool?: boolean
   signature_random?: string
 }
-type Session = { id: string; session_date: string; course_start_date?: string; status: string; session_type: string; access_code: string; class_caa: string; request_number?: string; location_detail?: string; parent_session_id?: string; is_clone?: boolean; locations?: any; boats?: any; evaluators?: any; instructors?: any; contact_person_ids?: string[]; practice_start_date?: string; practice_start_time?: string }
+type Session = { id: string; session_date: string; course_start_date?: string; status: string; session_type: string; access_code: string; class_caa: string; request_number?: string; location_detail?: string; parent_session_id?: string; is_clone?: boolean; locations?: any; boats?: any; evaluators?: any; instructors?: any; contact_person_ids?: string[]; practice_start_date?: string; practice_start_time?: string; skipper_url?: string }
+
+// Extrage id-ul seriei din linkul skipper, ex. https://skipper.setsail.ro/admin/groups/224 -> "224"
+function skipperGroupId(url?: string): string {
+  const m = String(url || '').match(/\/groups\/(\d+)/)
+  return m ? m[1] : ''
+}
 
 const EMPTY_ST = { full_name:'', cnp:'', email:'', phone:'', birth_date:'', ci_series:'', ci_number:'', address:'', county:'', class_caa:'C,D' }
 
@@ -1175,6 +1181,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
             ['Nr. înștiințări', sess.request_number||'—'],
             ...(isRadioSession ? [['Nr. documente PV', (sess as any).nr_document_ancom||'—'] as [string,string]] : []),
             ['Locație detaliată', sess.location_detail||'—'],
+            ['Link skipper', (sess as any).skipper_url||'—'],
           ] as [string,string][]).map(([label,value]) => (
             <div key={label} className="flex justify-between gap-2">
               <span className="text-gray-400 text-xs shrink-0">{label}</span>
@@ -1188,6 +1195,15 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                   className="text-xs font-medium text-purple-600 hover:underline text-right">
                   {value === '—' ? '+ Alocă număr' : value}
                 </button>
+              ) : label === 'Link skipper' ? (
+                value === '—' ? (
+                  <span className="text-gray-300 text-xs">—</span>
+                ) : (
+                  <a href={value} target="_blank" rel="noopener noreferrer"
+                    className="text-xs font-medium text-blue-600 hover:underline text-right inline-flex items-center gap-1">
+                    {skipperGroupId(value) ? `Grupa ${skipperGroupId(value)}` : 'Deschide'} ↗
+                  </a>
+                )
               ) : (
                 <span className="text-gray-900 text-xs text-right font-medium">{value}</span>
               )}
@@ -2356,6 +2372,7 @@ export default function SessionDetailPage() {
       request_number: sess.request_number || '',
       nr_document_ancom: (sess as any).nr_document_ancom || '',
       location_detail: sess.location_detail || '',
+      skipper_url: (sess as any).skipper_url || '',
     })
   }
 
@@ -2657,7 +2674,7 @@ export default function SessionDetailPage() {
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">
           <Pencil size={12}/> Editează sesiunea
         </button>
-        <button onClick={()=>{setSqlGroupId('');setSqlCopied(false);setShowSqlTemplate(true)}}
+        <button onClick={()=>{setSqlGroupId(skipperGroupId(mainSession.skipper_url));setSqlCopied(false);setShowSqlTemplate(true)}}
           className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-emerald-200 text-emerald-700 hover:bg-emerald-50">
           <Database size={12}/> Template SQL
         </button>
@@ -2754,7 +2771,7 @@ export default function SessionDetailPage() {
                 <input value={sqlGroupId} onChange={e=>setSqlGroupId(e.target.value.replace(/[^0-9]/g,''))}
                   placeholder="ex. 224" inputMode="numeric"
                   className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm w-28"/>
-                <span className="text-xs text-gray-400">din URL-ul admin /groups/&lt;id&gt;</span>
+                <span className="text-xs text-gray-400">preluat din linkul skipper al sesiunii</span>
               </div>
               <textarea readOnly value={sql} spellCheck={false}
                 className="w-full h-72 font-mono text-[11px] leading-relaxed p-3 rounded-xl border border-gray-200 bg-gray-50 text-gray-700"/>
@@ -2785,9 +2802,10 @@ export default function SessionDetailPage() {
                 ['Nr. înștiintare reg ANR', 'nr_instiintare_anr', 'text'],
                 ['Nr. înștiințări', 'request_number', 'text'],
                 ['Locație detaliată', 'location_detail', 'text'],
+                ['Link skipper.setsail.ro', 'skipper_url', 'text'],
                 ['Clasa CAA', 'class_caa', 'select-class'],
               ].map(([label, key, type]) => (
-                <div key={key} className={key==='location_detail'?'col-span-2':''}>
+                <div key={key} className={(key==='location_detail'||key==='skipper_url')?'col-span-2':''}>
                   <div className="text-xs text-gray-400 mb-1">{label}</div>
                   {type==='select-class' ? (
                     <select className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs w-full focus:outline-none focus:ring-1 focus:ring-blue-400"
