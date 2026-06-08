@@ -354,10 +354,7 @@ export default function RadioLandingView({ content: c }: { content: RadioContent
             <div>
               <h4 className="text-white font-bold text-sm tracking-wide mb-5">{c.footer.newsletterTitle}</h4>
               <p className="text-sm mb-4">{c.footer.newsletterText}</p>
-              <form className="flex" onSubmit={(e) => e.preventDefault()}>
-                <input type="email" placeholder="Emailul tău" className="flex-1 min-w-0 bg-white/10 border border-white/15 rounded-l-lg px-4 py-3 text-sm text-white placeholder-white/40 focus:outline-none focus:border-[#2ea8d8]" />
-                <button className="bg-[#2ea8d8] hover:bg-[#5cc2ea] text-white px-4 rounded-r-lg transition" aria-label="Abonează-te"><Send className="w-5 h-5" strokeWidth={1.8} /></button>
-              </form>
+              <NewsletterForm />
             </div>
           </div>
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-8 text-xs text-white/50">
@@ -374,6 +371,54 @@ export default function RadioLandingView({ content: c }: { content: RadioContent
 
       {formOpen && <LeadModal content={c} initial={prefill} onClose={() => setFormOpen(false)} />}
     </div>
+  )
+}
+
+function NewsletterForm() {
+  const [email, setEmail] = useState('')
+  const [state, setState] = useState<'idle' | 'sending' | 'done' | 'error'>('idle')
+
+  async function submit(e: React.FormEvent) {
+    e.preventDefault()
+    const em = email.trim()
+    if (!em || em.indexOf('@') === -1) { setState('error'); return }
+    setState('sending')
+    try {
+      const res = await fetch('/api/radio-landing/leads', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ email: em, leadType: 'Newsletter' }),
+      })
+      const json = await res.json()
+      if (!res.ok || !json.ok) { setState('error'); return }
+      setState('done'); setEmail('')
+    } catch { setState('error') }
+  }
+
+  if (state === 'done') {
+    return (
+      <p className="text-sm text-emerald-300 flex items-center gap-2">
+        <Check className="w-4 h-4" strokeWidth={2.5} /> Te-ai abonat. Mulțumim!
+      </p>
+    )
+  }
+
+  return (
+    <>
+      <form className="flex" onSubmit={submit}>
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => { setEmail(e.target.value); if (state === 'error') setState('idle') }}
+          placeholder="Emailul tău"
+          className="flex-1 min-w-0 bg-white/10 border border-white/15 rounded-l-lg px-4 py-3 text-sm text-white placeholder-white/40 focus:outline-none focus:border-[#2ea8d8]"
+        />
+        <button type="submit" disabled={state === 'sending'} className="bg-[#2ea8d8] hover:bg-[#5cc2ea] text-white px-4 rounded-r-lg transition disabled:opacity-60" aria-label="Abonează-te">
+          {state === 'sending' ? <Loader2 className="w-5 h-5 animate-spin" /> : <Send className="w-5 h-5" strokeWidth={1.8} />}
+        </button>
+      </form>
+      {state === 'error' && <p className="text-xs text-red-300 mt-2">Introdu o adresă de email validă.</p>}
+    </>
   )
 }
 
