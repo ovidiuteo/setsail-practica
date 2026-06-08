@@ -370,7 +370,7 @@ export default function RadioLandingView({ content: c }: { content: RadioContent
 }
 
 function LeadModal({ content: c, onClose }: { content: RadioContent; onClose: () => void }) {
-  const [form, setForm] = useState({ name: '', email: '', phone: '', message: '', website: '', leadType: '' })
+  const [form, setForm] = useState({ name: '', email: '', phone: '', message: '', website: '', leadType: '', voucher: '' })
   const [state, setState] = useState<'idle' | 'sending' | 'done' | 'error'>('idle')
   const [err, setErr] = useState('')
 
@@ -379,7 +379,7 @@ function LeadModal({ content: c, onClose }: { content: RadioContent; onClose: ()
     if (!form.leadType) { setErr('Alege tipul înscrierii: Obținere sau Reînnoire.'); setState('error'); return }
     setState('sending'); setErr('')
     try {
-      const res = await fetch('/api/radio-landing/leads', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(form) })
+      const res = await fetch('/api/radio-landing/leads', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ ...form, voucherCode: form.voucher }) })
       const json = await res.json()
       if (!res.ok || !json.ok) { setErr(json.error || 'A apărut o eroare.'); setState('error'); return }
       setState('done')
@@ -444,6 +444,10 @@ function LeadModal({ content: c, onClose }: { content: RadioContent; onClose: ()
               <div>
                 <label className="block text-xs font-medium text-slate-500 mb-1">{c.leadForm.messageLabel}</label>
                 <textarea className={input} rows={3} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-xs font-medium text-slate-500 mb-1">{c.leadForm.voucherLabel}</label>
+                <input className={`${input} font-mono uppercase tracking-wider`} value={form.voucher} onChange={(e) => setForm({ ...form, voucher: e.target.value.toUpperCase() })} placeholder="SS-XXXX-XXXX" />
               </div>
               {state === 'error' && <p className="text-sm text-red-600">{err}</p>}
               <button type="submit" disabled={state === 'sending'} className="w-full flex items-center justify-center gap-2 bg-[#f5b528] hover:brightness-95 text-[#0a2a4e] font-bold py-3.5 rounded-xl transition disabled:opacity-60">

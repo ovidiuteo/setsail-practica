@@ -8,6 +8,7 @@ import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { randomBytes } from 'node:crypto'
 import { mergeContent, type RadioContent } from './content'
 import { verifyToken as verifyAdminCookieToken, ADMIN_COOKIE_NAME } from '@/lib/admin-auth'
+import { verifyVoucher } from '@/lib/voucher'
 
 const URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -101,13 +102,15 @@ export async function getVisitStats() {
 export type Lead = {
   id: string; created_at: string; name: string | null; email: string | null
   phone: string | null; message: string | null; source: string; status: string; notes: string | null
+  voucher_code: string | null; voucher_valid: boolean
 }
 export async function listLeads(): Promise<Lead[]> {
   const sb = radioServiceClient()
   const { data } = await sb.from('radio_leads').select('*').order('created_at', { ascending: false })
-  return (data ?? []) as Lead[]
+  const rows = (data ?? []) as any[]
+  return rows.map((l) => ({ ...l, voucher_valid: verifyVoucher(l.email, l.voucher_code) })) as Lead[]
 }
-export async function insertLead(p: { name?: string; email?: string; phone?: string; message?: string; leadType?: string }) {
+export async function insertLead(p: { name?: string; email?: string; phone?: string; message?: string; leadType?: string; voucherCode?: string }) {
   const sb = radioServiceClient()
   const { error } = await sb.from('radio_leads').insert({
     name: (p.name || '').slice(0, 200) || null,
@@ -115,6 +118,7 @@ export async function insertLead(p: { name?: string; email?: string; phone?: str
     phone: (p.phone || '').slice(0, 60) || null,
     message: (p.message || '').slice(0, 2000) || null,
     lead_type: (p.leadType || '').slice(0, 40) || null,
+    voucher_code: (p.voucherCode || '').slice(0, 40).toUpperCase() || null,
     source: 'landing-radio',
   })
   return { ok: !error, error: error?.message }

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Loader2, Save, Trash2, RefreshCw, FileText, Users, ShieldAlert, Eye, CalendarDays, TrendingUp } from 'lucide-react'
+import { Loader2, Save, Trash2, RefreshCw, FileText, Users, ShieldAlert, Eye, CalendarDays, TrendingUp, CheckCircle2, XCircle } from 'lucide-react'
 
 const API = '/api/radio-landing'
 
@@ -284,7 +284,7 @@ function LeadsTab({ token }: { token: string }) {
       ) : (
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
           <table className="w-full text-sm">
-            <thead><tr className="bg-slate-50 text-xs text-slate-400 text-left"><th className="px-4 py-3">Data</th><th className="px-4 py-3">Nume</th><th className="px-4 py-3">Tip</th><th className="px-4 py-3">Contact</th><th className="px-4 py-3">Mesaj</th><th className="px-4 py-3">Status</th><th className="px-4 py-3"></th></tr></thead>
+            <thead><tr className="bg-slate-50 text-xs text-slate-400 text-left"><th className="px-4 py-3">Data</th><th className="px-4 py-3">Nume</th><th className="px-4 py-3">Tip</th><th className="px-4 py-3">Contact</th><th className="px-4 py-3">Voucher</th><th className="px-4 py-3">Mesaj</th><th className="px-4 py-3">Status</th><th className="px-4 py-3"></th></tr></thead>
             <tbody className="divide-y divide-slate-50">
               {shown.map((l) => (
                 <tr key={l.id} className="hover:bg-slate-50 align-top">
@@ -292,9 +292,25 @@ function LeadsTab({ token }: { token: string }) {
                   <td className="px-4 py-3 font-medium text-[#0a2a4e]">{l.name || '—'}</td>
                   <td className="px-4 py-3">{l.lead_type ? <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${/re[iî]n/i.test(l.lead_type) ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>{l.lead_type}</span> : <span className="text-slate-300">—</span>}</td>
                   <td className="px-4 py-3 text-slate-600 text-xs">{l.phone && <div><a href={`tel:${l.phone}`} className="hover:text-[#2ea8d8]">{l.phone}</a></div>}{l.email && <div><a href={`mailto:${l.email}`} className="hover:text-[#2ea8d8]">{l.email}</a></div>}</td>
+                  <td className="px-4 py-3">{l.voucher_code ? (
+                    <div className="flex flex-col gap-1">
+                      <span className="font-mono text-[11px] font-semibold text-[#0a2a4e] whitespace-nowrap">{l.voucher_code}</span>
+                      {l.voucher_valid
+                        ? <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 w-fit"><CheckCircle2 size={11} /> valid</span>
+                        : <span className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-red-50 text-red-600 w-fit"><XCircle size={11} /> ne-match</span>}
+                    </div>
+                  ) : <span className="text-slate-300">—</span>}</td>
                   <td className="px-4 py-3 text-slate-500 text-xs max-w-[200px]">{l.message || '—'}</td>
                   <td className="px-4 py-3"><select value={l.status} onChange={(e) => setStatus(l.id, e.target.value)} className={`text-xs font-medium rounded-full px-2.5 py-1 border-0 cursor-pointer ${STATUS_STYLE[l.status] || ''}`}>{STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}</select></td>
-                  <td className="px-4 py-3 text-right"><button onClick={() => remove(l.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-slate-300 hover:text-red-500 transition"><Trash2 size={14} /></button></td>
+                  <td className="px-4 py-3 text-right whitespace-nowrap">
+                    {l.voucher_code && l.status !== 'inscris' && l.status !== 'respins' && (
+                      <>
+                        <button onClick={() => setStatus(l.id, 'inscris')} title="Validează (înscris)" className="p-1.5 rounded-lg hover:bg-emerald-50 text-slate-300 hover:text-emerald-600 transition"><CheckCircle2 size={15} /></button>
+                        <button onClick={() => setStatus(l.id, 'respins')} title="Respinge" className="p-1.5 rounded-lg hover:bg-amber-50 text-slate-300 hover:text-amber-600 transition"><XCircle size={15} /></button>
+                      </>
+                    )}
+                    <button onClick={() => remove(l.id)} title="Șterge" className="p-1.5 rounded-lg hover:bg-red-50 text-slate-300 hover:text-red-500 transition"><Trash2 size={14} /></button>
+                  </td>
                 </tr>
               ))}
             </tbody>

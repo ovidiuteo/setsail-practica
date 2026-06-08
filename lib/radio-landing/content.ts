@@ -142,6 +142,7 @@ export const DEFAULT_CONTENT = {
     emailLabel: 'Email',
     phoneLabel: 'Telefon',
     messageLabel: 'Mesaj (opțional)',
+    voucherLabel: 'Cod voucher (opțional)',
     typeLabel: 'Tip înscriere',
     typeObtinere: 'Obținere',
     typeObtinereHint: 'brevet nou sau brevet vechi expirat',

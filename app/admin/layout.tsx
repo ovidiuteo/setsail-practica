@@ -1,13 +1,14 @@
 'use client'
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
-import { Ship, Calendar, Users, Settings, Anchor, Building2, Mail, PenTool, LogOut } from 'lucide-react'
+import { Ship, Calendar, Users, Settings, Anchor, Building2, Mail, PenTool, LogOut, Ticket } from 'lucide-react'
 import GoogleGIcon from '@/components/GoogleGIcon'
 
 const nav = [
   { href: '/admin',             label: 'Dashboard',         icon: Anchor },
   { href: '/admin/sesiuni',     label: 'Sesiuni Practică',  icon: Calendar },
   { href: '/admin/cursanti',    label: 'Cursanți',          icon: Users },
+  { href: '/admin/vouchere',    label: 'Vouchere',          icon: Ticket },
   { href: '/admin/emailuri',    label: 'Emailuri',          icon: Mail },
   { href: '/admin/gmail',       label: 'Gmail Templates',   icon: GoogleGIcon },
   { href: '/admin/semnaturi',   label: 'Semnături',         icon: PenTool },
