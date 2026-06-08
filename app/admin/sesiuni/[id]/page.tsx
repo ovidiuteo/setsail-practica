@@ -2499,7 +2499,7 @@ export default function SessionDetailPage() {
   }
 
   // --- Template SQL: UPDATE-uri MySQL (rnauti39_teste) din datele Supabase ---
-  // Doar UPDATE, match pe email (seria e filtrata in app). Sursa de adevar = practica-setsail.
+  // Doar UPDATE, scopuit pe sheets.group (apartenenta la serie) + email. Sursa de adevar = practica-setsail.
   function sqlEsc(v: string) { return String(v).trim().replace(/'/g, "''") }
   function toMysqlDate(v: string): string | null {
     const t = String(v).trim()
@@ -2550,8 +2550,9 @@ export default function SessionDetailPage() {
         `-- ${s.full_name || ''}`.trimEnd() + '\n' +
         `UPDATE students s\n` +
         `  JOIN users u ON u.id = s.user\n` +
+        `  JOIN sheets sh ON sh.user = u.id\n` +
         `SET ${sets.join(', ')}, s.updated_at=NOW()\n` +
-        `WHERE lower(trim(u.email)) = '${sqlEsc(email)}';`
+        `WHERE sh.\`group\` = ${gExpr} AND lower(trim(u.email)) = '${sqlEsc(email)}';`
       )
     }
 
@@ -2560,7 +2561,8 @@ export default function SessionDetailPage() {
     const header = [
       `-- ============================================================`,
       `-- UPDATE cursanti serie ${gExpr} -> rnauti39_teste`,
-      `-- Sursa de adevar: Supabase practica-setsail. DOAR UPDATE, fara INSERT/DELETE. Match pe email.`,
+      `-- Sursa de adevar: Supabase practica-setsail. DOAR UPDATE, fara INSERT/DELETE.`,
+      `-- Scope: sheets.group = ${gExpr} (apartenenta la serie, incl. neplatiti) + match pe email.`,
       `-- Ruleaza pe baza rnauti39_teste, conexiune utf8mb4 (altfel se strica diacriticele).`,
       `-- Backup recomandat inainte (de-comenteaza randul urmator):`,
       `-- CREATE TABLE students_backup_${ymd} AS SELECT * FROM students;`,
@@ -2745,7 +2747,7 @@ export default function SessionDetailPage() {
               </div>
               <p className="text-xs text-gray-400 mb-4">
                 Generează UPDATE-uri pentru <strong>rnauti39_teste</strong> din datele completate în practica-setsail.
-                Doar <strong>UPDATE</strong>, match pe <strong>email</strong> (seria e deja filtrată în listă). Copiezi și rulezi în phpMyAdmin (conexiune utf8mb4).
+                Doar <strong>UPDATE</strong>, scopuit pe <code>sheets.group</code> + <strong>email</strong>. Copiezi și rulezi în phpMyAdmin (conexiune utf8mb4).
               </p>
               <div className="flex items-center gap-2 mb-3">
                 <label className="text-xs text-gray-500">ID serie (<code>payments.group</code>):</label>
