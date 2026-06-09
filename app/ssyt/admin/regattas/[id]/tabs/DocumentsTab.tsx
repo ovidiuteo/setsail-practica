@@ -1,8 +1,9 @@
 'use client'
-import { useState } from 'react'
-import { Plus, FileText, Trash2, X, Download } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { Plus, FileText, Trash2, X, Download, Upload, Loader2 } from 'lucide-react'
 import { supabase } from '@/lib/ssyt/supabase'
 import EditableField from '@/components/ssyt/EditableField'
+import { uploadSsytFile, deleteSsytFile } from '@/lib/ssyt/upload-client'
 
 export default function DocumentsTab({
   regattaId, documents, docTypes, onChange,
@@ -18,10 +19,12 @@ export default function DocumentsTab({
     onChange()
   }
 
-  async function remove(id: string) {
+  async function remove(d: any) {
     if (!confirm('Ștergi acest document?')) return
-    const { error } = await supabase.from('ssyt_regatta_documents').delete().eq('id', id)
+    const { error } = await supabase.from('ssyt_regatta_documents').delete().eq('id', d.id)
     if (error) { alert(error.message); return }
+    // Șterge și fișierul găzduit pe R2 (dacă e cazul)
+    if (d.file_url) await deleteSsytFile({ url: d.file_url, admin: true })
     onChange()
   }
 
@@ -36,9 +39,9 @@ export default function DocumentsTab({
 
       {showNew && <NewDocForm regattaId={regattaId} docTypes={docTypes} onClose={() => setShowNew(false)} onSaved={() => { setShowNew(false); onChange() }} />}
 
-      <div className="rounded-lg p-3 mb-4 text-xs flex items-start gap-2" style={{ background: 'rgba(59,130,246,0.08)', color: '#1E40AF' }}>
-        <span>ℹ️</span>
-        <span>Pentru moment se adaugă link-uri spre fișiere externe. Upload direct în Supabase Storage va veni în Sprint 3.</span>
+      <div className="rounded-lg p-3 mb-4 text-xs flex items-start gap-2" style={{ background: 'rgba(16,185,129,0.08)', color: '#065F46' }}>
+        <span>📎</span>
+        <span>Poți încărca fișierul direct (PDF/JPG/PNG/WebP — găzduit pe Cloudflare R2) sau adăuga un link extern.</span>
       </div>
 
       {documents.length === 0 ? (
@@ -94,7 +97,7 @@ export default function DocumentsTab({
                         <Download size={14} />
                       </a>
                     )}
-                    <button onClick={() => remove(d.id)} className="text-gray-300 hover:text-red-600 p-1 ml-1"><Trash2 size={14} /></button>
+                    <button onClick={() => remove(d)} className="text-gray-300 hover:text-red-600 p-1 ml-1"><Trash2 size={14} /></button>
                   </td>
                 </tr>
               ))}
@@ -114,12 +117,31 @@ function NewDocForm({ regattaId, docTypes, onClose, onSaved }: { regattaId: stri
     file_url: '',
     visibility: 'members',
   })
+  const [meta, setMeta] = useState<{ mime?: string; size?: number }>({})
+  const [uploading, setUploading] = useState(false)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const fileRef = useRef<HTMLInputElement | null>(null)
+
+  async function handleFile(file: File | null) {
+    if (!file) return
+    setUploading(true)
+    setError(null)
+    try {
+      const up = await uploadSsytFile(file, { context: 'regatta_document', admin: true, regattaId })
+      setForm((f) => ({ ...f, file_url: up.url, name: f.name || up.filename }))
+      setMeta({ mime: up.content_type, size: up.size_bytes })
+    } catch (e: any) {
+      setError(e.message || 'Upload eșuat.')
+    } finally {
+      setUploading(false)
+      if (fileRef.current) fileRef.current.value = ''
+    }
+  }
 
   async function save() {
     if (!form.name.trim() || !form.file_url.trim()) {
-      setError('Nume și URL obligatorii.')
+      setError('Nume și fișier/URL obligatorii.')
       return
     }
     setSaving(true)
@@ -130,6 +152,8 @@ function NewDocForm({ regattaId, docTypes, onClose, onSaved }: { regattaId: stri
       custom_type_name: form.custom_type_name || null,
       name: form.name,
       file_url: form.file_url,
+      mime_type: meta.mime || null,
+      file_size_bytes: meta.size || null,
       visibility: form.visibility,
       status: 'uploaded',
     })
@@ -162,8 +186,19 @@ function NewDocForm({ regattaId, docTypes, onClose, onSaved }: { regattaId: stri
         </div>
       </div>
       <input placeholder="Nume *" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} className="w-full px-3 py-2 border rounded-md text-sm mb-3" />
-      <input placeholder="URL fișier *" value={form.file_url} onChange={(e) => setForm({ ...form, file_url: e.target.value })} className="w-full px-3 py-2 border rounded-md text-sm mb-3 font-mono" />
-      <button onClick={save} disabled={saving} className="px-4 py-2 rounded-md text-sm text-white font-medium disabled:opacity-50" style={{ background: '#FF6B35' }}>
+
+      <div className="flex items-center gap-2 mb-2">
+        <input ref={fileRef} type="file" accept="application/pdf,image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => handleFile(e.target.files?.[0] || null)} />
+        <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium disabled:opacity-50" style={{ background: '#fff', border: '1px solid #FF6B35', color: '#FF6B35' }}>
+          {uploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+          {uploading ? 'Se încarcă...' : 'Încarcă fișier (PDF/imagine)'}
+        </button>
+        {form.file_url && !uploading && <span className="text-xs text-emerald-600 truncate">✓ încărcat</span>}
+      </div>
+
+      <input placeholder="sau link extern (URL)" value={form.file_url} onChange={(e) => { setForm({ ...form, file_url: e.target.value }); setMeta({}) }} className="w-full px-3 py-2 border rounded-md text-sm mb-3 font-mono" />
+      <button onClick={save} disabled={saving || uploading} className="px-4 py-2 rounded-md text-sm text-white font-medium disabled:opacity-50" style={{ background: '#FF6B35' }}>
         {saving ? '...' : 'Salvează'}
       </button>
       {error && <span className="ml-3 text-xs text-red-600">{error}</span>}

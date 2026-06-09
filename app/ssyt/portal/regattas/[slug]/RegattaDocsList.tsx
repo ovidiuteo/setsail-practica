@@ -1,7 +1,8 @@
 'use client'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Edit2, ExternalLink, X, Save, FileText } from 'lucide-react'
+import { Plus, Edit2, ExternalLink, X, Save, FileText, Upload, Loader2 } from 'lucide-react'
+import { uploadSsytFile } from '@/lib/ssyt/upload-client'
 
 type Doc = {
   id: string
@@ -66,7 +67,7 @@ export default function RegattaDocsList({
       )}
 
       {addOpen && (
-        <DocForm docTypes={docTypes} onCancel={() => setAddOpen(false)} onSave={(d) => save(d)} busy={busy} />
+        <DocForm regattaId={regattaId} docTypes={docTypes} onCancel={() => setAddOpen(false)} onSave={(d) => save(d)} busy={busy} />
       )}
 
       <div className="space-y-2">
@@ -79,6 +80,7 @@ export default function RegattaDocsList({
             editingId === d.id ? (
               <DocForm
                 key={d.id}
+                regattaId={regattaId}
                 initial={{ name: d.name, description: d.description || '', url: d.file_url || '', document_type_id: d.document_type_id || '' }}
                 docTypes={docTypes}
                 onCancel={() => setEditingId(null)}
@@ -121,12 +123,14 @@ export default function RegattaDocsList({
 }
 
 function DocForm({
+  regattaId,
   initial,
   docTypes,
   onCancel,
   onSave,
   busy,
 }: {
+  regattaId: string
   initial?: { name?: string; description?: string; url?: string; document_type_id?: string }
   docTypes: DocType[]
   onCancel: () => void
@@ -139,6 +143,24 @@ function DocForm({
     url: initial?.url || '',
     document_type_id: initial?.document_type_id || '',
   })
+  const [uploading, setUploading] = useState(false)
+  const [uploadErr, setUploadErr] = useState<string | null>(null)
+  const fileRef = useRef<HTMLInputElement | null>(null)
+
+  async function handleFile(file: File | null) {
+    if (!file) return
+    setUploading(true)
+    setUploadErr(null)
+    try {
+      const up = await uploadSsytFile(file, { context: 'regatta_document', regattaId })
+      setForm((f) => ({ ...f, url: up.url, name: f.name || up.filename }))
+    } catch (e: any) {
+      setUploadErr(e.message || 'Upload eșuat.')
+    } finally {
+      setUploading(false)
+      if (fileRef.current) fileRef.current.value = ''
+    }
+  }
 
   return (
     <div className="rounded-lg p-4 mb-3" style={{ background: '#fff', border: '2px solid #FF6B35' }}>
@@ -150,9 +172,19 @@ function DocForm({
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label className="block text-[10px] uppercase tracking-wider text-gray-500 font-medium mb-1">URL (PDF, JPG, link...)</label>
-            <input value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} placeholder="https://..."
+            <label className="block text-[10px] uppercase tracking-wider text-gray-500 font-medium mb-1">Fișier (PDF/imagine) sau link</label>
+            <div className="flex items-center gap-2 mb-1.5">
+              <input ref={fileRef} type="file" accept="application/pdf,image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => handleFile(e.target.files?.[0] || null)} />
+              <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium disabled:opacity-50" style={{ background: '#fff', border: '1px solid #FF6B35', color: '#FF6B35' }}>
+                {uploading ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                {uploading ? 'Se încarcă...' : 'Încarcă fișier'}
+              </button>
+              {form.url && !uploading && <span className="text-xs text-emerald-600">✓</span>}
+            </div>
+            <input value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} placeholder="sau link extern https://..."
               className="w-full px-3 py-1.5 border rounded-md text-sm" style={{ borderColor: '#d1d5db' }} />
+            {uploadErr && <p className="text-[11px] text-red-600 mt-1">{uploadErr}</p>}
           </div>
           <div>
             <label className="block text-[10px] uppercase tracking-wider text-gray-500 font-medium mb-1">Tip document</label>
