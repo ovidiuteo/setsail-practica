@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { getAllLeads, isDashboardEditor, updateLeadRow, deleteLeadRow } from '@/lib/leads-dashboard/server'
+import { getAllLeads, getVisits, isDashboardEditor, updateLeadRow, deleteLeadRow } from '@/lib/leads-dashboard/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,7 +9,8 @@ export async function GET(req: NextRequest) {
   if (!(await isDashboardEditor(token))) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   }
-  return NextResponse.json(await getAllLeads())
+  const [leads, visits] = await Promise.all([getAllLeads(), getVisits()])
+  return NextResponse.json({ ...leads, visits })
 }
 
 // Update a lead's status/notes (cds | radio).

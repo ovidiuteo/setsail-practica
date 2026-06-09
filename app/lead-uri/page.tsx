@@ -1,9 +1,10 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Loader2, RefreshCw, ShieldAlert, Download, GraduationCap, Radio, Mail, Trash2, Pin } from 'lucide-react'
+import { Loader2, RefreshCw, ShieldAlert, Download, GraduationCap, Radio, Mail, Trash2, Pin, Eye, CalendarDays, TrendingUp } from 'lucide-react'
 
-type Data = { cds: any[]; radio: any[]; newsletter: any[] }
+type Visit = { total: number; today: number; last7: number }
+type Data = { cds: any[]; radio: any[]; newsletter: any[]; visits?: { cds: Visit; radio: Visit } }
 type Kind = 'cds' | 'radio' | 'newsletter'
 
 const STATUSES = ['nou', 'contactat', 'inscris', 'respins'] as const
@@ -124,8 +125,8 @@ export default function LeadsDashboardPage() {
       </header>
 
       <main className="max-w-6xl mx-auto px-5 py-6">
-        {tab === 'cds' && <LeadTable rows={d.cds} kind="cds" onPatch={patchRow} onDelete={removeRow} />}
-        {tab === 'radio' && <LeadTable rows={d.radio} kind="radio" onPatch={patchRow} onDelete={removeRow} />}
+        {tab === 'cds' && <><VisitCards stats={d.visits?.cds} /><LeadTable rows={d.cds} kind="cds" onPatch={patchRow} onDelete={removeRow} /></>}
+        {tab === 'radio' && <><VisitCards stats={d.visits?.radio} /><LeadTable rows={d.radio} kind="radio" onPatch={patchRow} onDelete={removeRow} /></>}
         {tab === 'newsletter' && <NewsletterTable rows={d.newsletter} onDelete={(id) => removeRow('newsletter', id)} />}
       </main>
     </div>
@@ -134,6 +135,27 @@ export default function LeadsDashboardPage() {
 
 function ExportBtn({ onClick }: { onClick: () => void }) {
   return <button onClick={onClick} className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-slate-200 hover:bg-slate-50 transition"><Download size={13} /> Export CSV</button>
+}
+
+function VisitCards({ stats }: { stats?: Visit }) {
+  const cards = [
+    { icon: Eye, label: 'Total accesări', value: stats?.total },
+    { icon: CalendarDays, label: 'Azi', value: stats?.today },
+    { icon: TrendingUp, label: 'Ultimele 7 zile', value: stats?.last7 },
+  ]
+  return (
+    <div className="grid grid-cols-3 gap-3 mb-5">
+      {cards.map(({ icon: Icon, label, value }) => (
+        <div key={label} className="bg-white rounded-xl border border-slate-200 p-4 flex items-center gap-3">
+          <span className="w-10 h-10 rounded-lg bg-[#eef4fb] text-[#2ea8d8] flex items-center justify-center shrink-0"><Icon size={18} /></span>
+          <div className="min-w-0">
+            <p className="text-2xl font-extrabold text-[#0a2a4e] leading-none">{value ?? '—'}</p>
+            <p className="text-xs text-slate-500 mt-1 truncate">{label}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  )
 }
 
 function LeadTable({ rows, kind, onPatch, onDelete }: { rows: any[]; kind: 'cds' | 'radio'; onPatch: (k: Kind, id: string, p: { status?: string }) => void; onDelete: (k: Kind, id: string) => void }) {

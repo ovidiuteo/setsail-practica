@@ -89,6 +89,23 @@ export async function deleteLeadRow(kind: string, id: string) {
   return { ok: !error, error: error?.message }
 }
 
+// --- visit stats (per landing) -------------------------------------------
+async function statsFor(table: string) {
+  const { data } = await sb().from(table).select('day, count').order('day', { ascending: false })
+  const rows = (data || []) as { day: string; count: number }[]
+  const total = rows.reduce((a, r) => a + (r.count || 0), 0)
+  const todayStr = new Date().toISOString().slice(0, 10)
+  const today = rows.find((r) => r.day === todayStr)?.count || 0
+  const weekAgo = new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10)
+  const last7 = rows.filter((r) => r.day >= weekAgo).reduce((a, r) => a + (r.count || 0), 0)
+  return { total, today, last7 }
+}
+
+export async function getVisits() {
+  const [cds, radio] = await Promise.all([statsFor('cds_visit_stats'), statsFor('radio_visit_stats')])
+  return { cds, radio }
+}
+
 export async function insertNewsletter(email: string, source?: string) {
   const e = (email || '').trim().toLowerCase()
   if (!e || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return { ok: false, error: 'Email invalid.' }
