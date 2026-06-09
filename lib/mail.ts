@@ -1,41 +1,31 @@
 // ============================================================================
-// Transactional email via Google Workspace SMTP (office@setsail.ro).
+// Transactional email via Resend (no Google account / no 2FA needed).
 // Best-effort: never throws to the caller; silently skips if not configured.
-// Env (set in Vercel): SMTP_USER, SMTP_PASS (app password). Optional:
-// SMTP_HOST (smtp.gmail.com), SMTP_PORT (465), LEADS_NOTIFY_TO, SMTP_FROM.
+// Env (set in Vercel): RESEND_API_KEY. Optional: LEADS_NOTIFY_TO, RESEND_FROM.
+// Resend free tier (no verified domain) sends only to your Resend account
+// email — create the Resend account with office@setsail.ro.
 // ============================================================================
 import 'server-only'
-import nodemailer from 'nodemailer'
 
-const HOST = process.env.SMTP_HOST || 'smtp.gmail.com'
-const PORT = Number(process.env.SMTP_PORT || 465)
-const USER = process.env.SMTP_USER
-const PASS = process.env.SMTP_PASS
-const TO = process.env.LEADS_NOTIFY_TO || USER || 'office@setsail.ro'
-const FROM = process.env.SMTP_FROM || USER
+const KEY = process.env.RESEND_API_KEY
+const TO = process.env.LEADS_NOTIFY_TO || 'office@setsail.ro'
+const FROM = process.env.RESEND_FROM || 'SetSail Lead-uri <onboarding@resend.dev>'
 
 export function mailConfigured(): boolean {
-  return Boolean(USER && PASS)
+  return Boolean(KEY)
 }
 
 async function sendMail(subject: string, html: string) {
   if (!mailConfigured()) return
-  const transporter = nodemailer.createTransport({
-    host: HOST,
-    port: PORT,
-    secure: PORT === 465,
-    auth: { user: USER!, pass: PASS! },
-    connectionTimeout: 8000,
-    greetingTimeout: 8000,
-    socketTimeout: 8000,
+  const res = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ from: FROM, to: [TO], subject, html }),
   })
-  await transporter.sendMail({
-    from: FROM,
-    to: TO,
-    subject,
-    html,
-    text: html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim(),
-  })
+  if (!res.ok) {
+    const t = await res.text().catch(() => '')
+    throw new Error(`Resend ${res.status}: ${t.slice(0, 200)}`)
+  }
 }
 
 type Lead = { name?: string; email?: string; phone?: string; message?: string; leadType?: string; voucher?: string }
