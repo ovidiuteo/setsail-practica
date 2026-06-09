@@ -1,0 +1,175 @@
+'use client'
+
+import { useEffect, useState, useCallback } from 'react'
+import { Loader2, RefreshCw, ShieldAlert, Download, GraduationCap, Radio, Mail } from 'lucide-react'
+
+type Data = { cds: any[]; radio: any[]; newsletter: any[] }
+
+const STATUS_STYLE: Record<string, string> = {
+  nou: 'bg-blue-50 text-blue-700',
+  contactat: 'bg-amber-50 text-amber-700',
+  inscris: 'bg-emerald-50 text-emerald-700',
+  respins: 'bg-slate-100 text-slate-500',
+}
+
+function fmtDate(s: string) {
+  const d = new Date(s)
+  return d.toLocaleDateString('ro-RO') + ' ' + d.toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' })
+}
+
+function toCsv(rows: any[], cols: string[]): string {
+  const esc = (v: any) => `"${String(v ?? '').replace(/"/g, '""')}"`
+  return [cols.join(','), ...rows.map((r) => cols.map((c) => esc(r[c])).join(','))].join('\n')
+}
+function downloadCsv(name: string, rows: any[], cols: string[]) {
+  const blob = new Blob(['﻿' + toCsv(rows, cols)], { type: 'text/csv;charset=utf-8;' })
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = name
+  a.click()
+  URL.revokeObjectURL(a.href)
+}
+
+export default function LeadsDashboardPage() {
+  const [token, setToken] = useState<string | null>(null)
+  const [phase, setPhase] = useState<'checking' | 'denied' | 'ready'>('checking')
+  const [data, setData] = useState<Data | null>(null)
+  const [tab, setTab] = useState<'cds' | 'radio' | 'newsletter'>('cds')
+
+  const load = useCallback(async (t: string) => {
+    const res = await fetch(`/api/leads-dashboard?token=${encodeURIComponent(t)}`)
+    if (res.status === 401) { setPhase('denied'); return }
+    const json = await res.json().catch(() => null)
+    setData(json || { cds: [], radio: [], newsletter: [] })
+    setPhase('ready')
+  }, [])
+
+  useEffect(() => {
+    const t = new URLSearchParams(window.location.search).get('token')
+    setToken(t)
+    if (!t) { setPhase('denied'); return }
+    load(t)
+  }, [load])
+
+  if (phase === 'checking') {
+    return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-400"><Loader2 className="w-6 h-6 animate-spin mr-2" /> Se verifică accesul…</div>
+  }
+  if (phase === 'denied') {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
+        <div className="bg-white rounded-2xl shadow-sm border border-slate-100 p-10 max-w-md text-center">
+          <div className="w-14 h-14 rounded-full bg-red-50 text-red-500 flex items-center justify-center mx-auto mb-5"><ShieldAlert className="w-8 h-8" /></div>
+          <h1 className="text-2xl font-bold text-[#0a2a4e] mb-2">Acces refuzat</h1>
+          <p className="text-slate-500 text-sm">Token invalid sau lipsă. Găsești link-ul în panoul de administrare → <span className="font-medium">Configurare</span>.</p>
+        </div>
+      </div>
+    )
+  }
+
+  const d = data as Data
+  const TABS = [
+    { k: 'cds' as const, label: 'CDS', icon: GraduationCap, n: d.cds.length },
+    { k: 'radio' as const, label: 'Radio GMDSS', icon: Radio, n: d.radio.length },
+    { k: 'newsletter' as const, label: 'Newsletter', icon: Mail, n: d.newsletter.length },
+  ]
+
+  return (
+    <div className="min-h-screen bg-slate-50 text-slate-800">
+      <header className="bg-white border-b border-slate-200">
+        <div className="max-w-6xl mx-auto px-5 py-4 flex items-center justify-between gap-3">
+          <div>
+            <h1 className="font-bold text-[#0a2a4e] text-lg">Lead-uri SetSail</h1>
+            <p className="text-xs text-slate-400">CDS · Radio GMDSS · Newsletter</p>
+          </div>
+          <button onClick={() => token && load(token)} className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg border border-slate-200 hover:bg-slate-50 transition"><RefreshCw size={15} /> Reîncarcă</button>
+        </div>
+        <div className="max-w-6xl mx-auto px-5 flex gap-1">
+          {TABS.map(({ k, label, icon: Icon, n }) => (
+            <button key={k} onClick={() => setTab(k)} className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition ${tab === k ? 'border-[#2ea8d8] text-[#0a2a4e]' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>
+              <Icon size={15} /> {label} <span className="text-xs bg-slate-100 text-slate-500 rounded-full px-2 py-0.5">{n}</span>
+            </button>
+          ))}
+        </div>
+      </header>
+
+      <main className="max-w-6xl mx-auto px-5 py-6">
+        {tab === 'cds' && <LeadTable rows={d.cds} kind="cds" />}
+        {tab === 'radio' && <LeadTable rows={d.radio} kind="radio" />}
+        {tab === 'newsletter' && <NewsletterTable rows={d.newsletter} />}
+      </main>
+    </div>
+  )
+}
+
+function ExportBtn({ onClick }: { onClick: () => void }) {
+  return <button onClick={onClick} className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-slate-200 hover:bg-slate-50 transition"><Download size={13} /> Export CSV</button>
+}
+
+function LeadTable({ rows, kind }: { rows: any[]; kind: 'cds' | 'radio' }) {
+  if (!rows.length) return <Empty label="Niciun lead încă." />
+  const cols = kind === 'radio'
+    ? ['created_at', 'name', 'lead_type', 'phone', 'email', 'message', 'status']
+    : ['created_at', 'name', 'phone', 'email', 'message', 'status']
+  return (
+    <div>
+      <div className="flex justify-end mb-3"><ExportBtn onClick={() => downloadCsv(`leaduri-${kind}.csv`, rows, cols)} /></div>
+      <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-slate-50 text-xs text-slate-400 text-left">
+              <th className="px-4 py-3">Data</th><th className="px-4 py-3">Nume</th>
+              {kind === 'radio' && <th className="px-4 py-3">Tip</th>}
+              <th className="px-4 py-3">Contact</th><th className="px-4 py-3">Mesaj</th><th className="px-4 py-3">Status</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-50">
+            {rows.map((l) => (
+              <tr key={l.id} className="hover:bg-slate-50 align-top">
+                <td className="px-4 py-3 text-slate-400 text-xs whitespace-nowrap">{fmtDate(l.created_at)}</td>
+                <td className="px-4 py-3 font-medium text-[#0a2a4e]">{l.name || '—'}</td>
+                {kind === 'radio' && <td className="px-4 py-3">{l.lead_type ? <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-full whitespace-nowrap ${/re[iî]n/i.test(l.lead_type) ? 'bg-amber-50 text-amber-700' : 'bg-emerald-50 text-emerald-700'}`}>{l.lead_type}</span> : <span className="text-slate-300">—</span>}</td>}
+                <td className="px-4 py-3 text-slate-600 text-xs">
+                  {l.phone && <div><a href={`tel:${l.phone}`} className="hover:text-[#2ea8d8]">{l.phone}</a></div>}
+                  {l.email && <div><a href={`mailto:${l.email}`} className="hover:text-[#2ea8d8]">{l.email}</a></div>}
+                </td>
+                <td className="px-4 py-3 text-slate-500 text-xs max-w-[220px]">{l.message || '—'}</td>
+                <td className="px-4 py-3"><span className={`text-[11px] font-medium rounded-full px-2.5 py-1 ${STATUS_STYLE[l.status] || 'bg-slate-100 text-slate-500'}`}>{l.status || '—'}</span></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+function NewsletterTable({ rows }: { rows: any[] }) {
+  if (!rows.length) return <Empty label="Niciun abonat încă." />
+  return (
+    <div>
+      <div className="flex justify-end mb-3"><ExportBtn onClick={() => downloadCsv('newsletter.csv', rows, ['created_at', 'email', 'source'])} /></div>
+      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-slate-50 text-xs text-slate-400 text-left">
+              <th className="px-4 py-3">Data</th><th className="px-4 py-3">Email</th><th className="px-4 py-3">Sursă</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-50">
+            {rows.map((s) => (
+              <tr key={s.id} className="hover:bg-slate-50">
+                <td className="px-4 py-3 text-slate-400 text-xs whitespace-nowrap">{fmtDate(s.created_at)}</td>
+                <td className="px-4 py-3 font-medium text-[#0a2a4e]"><a href={`mailto:${s.email}`} className="hover:text-[#2ea8d8]">{s.email}</a></td>
+                <td className="px-4 py-3"><span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 capitalize">{s.source || '—'}</span></td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+function Empty({ label }: { label: string }) {
+  return <div className="text-center text-slate-400 py-16 bg-white rounded-xl border border-slate-200">{label}</div>
+}

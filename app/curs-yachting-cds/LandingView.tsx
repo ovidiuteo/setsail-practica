@@ -4,9 +4,10 @@ import { useEffect, useState } from 'react'
 import {
   Globe, Sailboat, CalendarDays, ArrowRight, Menu, Ship, GraduationCap,
   BookOpen, Anchor, Navigation, Flag, Check, Waves, Users, Award,
-  Compass, MapPin, Gift, Star, Phone, Mail, Send, ChevronDown, X, Loader2,
+  Compass, MapPin, Gift, Star, Phone, Mail, ChevronDown, X, Loader2,
 } from 'lucide-react'
 import type { LandingContent } from '@/lib/cds-landing/content'
+import NewsletterForm from '@/components/NewsletterForm'
 
 const display = 'font-[family-name:var(--font-playfair)]'
 
@@ -393,10 +394,7 @@ export default function LandingView({ content: c }: { content: LandingContent })
             <div>
               <h4 className="text-white font-bold text-sm tracking-wide mb-5">{c.footer.newsletterTitle}</h4>
               <p className="text-sm mb-4">{c.footer.newsletterText}</p>
-              <form className="flex" onSubmit={(e) => e.preventDefault()}>
-                <input type="email" placeholder="Emailul tău" className="flex-1 min-w-0 bg-white/10 border border-white/15 rounded-l-lg px-4 py-3 text-sm text-white placeholder-white/40 focus:outline-none focus:border-[#2ea8d8]" />
-                <button className="bg-[#2ea8d8] hover:bg-[#5cc2ea] text-white px-4 rounded-r-lg transition" aria-label="Abonează-te"><Send className="w-5 h-5" strokeWidth={1.8} /></button>
-              </form>
+              <NewsletterForm source="cds" />
             </div>
           </div>
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-8 text-xs text-white/50">

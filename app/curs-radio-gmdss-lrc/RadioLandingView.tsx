@@ -389,10 +389,10 @@ function NewsletterForm() {
     if (!em || em.indexOf('@') === -1) { setState('error'); return }
     setState('sending')
     try {
-      const res = await fetch('/api/radio-landing/leads', {
+      const res = await fetch('/api/newsletter', {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ email: em, leadType: 'Newsletter' }),
+        body: JSON.stringify({ email: em, source: 'radio' }),
       })
       const json = await res.json()
       if (!res.ok || !json.ok) { setState('error'); return }

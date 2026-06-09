@@ -192,6 +192,7 @@ export default function ConfigurarePage() {
       </div>
       <LandingTokenSection />
       <RadioTokenSection />
+      <LeadsDashboardTokenSection />
       <ActeContabileSection />
 
       <div className="grid grid-cols-2 gap-6">
@@ -461,6 +462,62 @@ function RadioTokenSection() {
             <button onClick={() => copy('link')} disabled={!token} className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-sm text-gray-600 transition-colors disabled:opacity-50">{copied === 'link' ? <Check size={15} className="text-green-600" /> : <Copy size={15} />} {copied === 'link' ? 'Copiat' : 'Copiază'}</button>
           </div>
           <p className="text-xs text-gray-400 mt-2">Oricine are acest link poate edita pagina radio. Regenerează token-ul pentru a revoca accesul.</p>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function LeadsDashboardTokenSection() {
+  const [token, setToken] = useState<string>('')
+  const [loading, setLoading] = useState(true)
+  const [regenerating, setRegenerating] = useState(false)
+  const [copied, setCopied] = useState<'token' | 'link' | null>(null)
+  const pageUrl = token ? `${typeof window !== 'undefined' ? window.location.origin : ''}/lead-uri?token=${token}` : ''
+
+  async function load() {
+    setLoading(true)
+    const json = await fetch('/api/leads-dashboard/token').then(r => r.json()).catch(() => null)
+    setToken(json?.token || '')
+    setLoading(false)
+  }
+  useEffect(() => { load() }, [])
+
+  async function regenerate() {
+    if (!confirm('Regenerezi token-ul? Link-urile vechi nu vor mai funcționa.')) return
+    setRegenerating(true)
+    const json = await fetch('/api/leads-dashboard/token', { method: 'POST' }).then(r => r.json()).catch(() => null)
+    if (json?.token) setToken(json.token)
+    setRegenerating(false)
+  }
+  function copy(what: 'token' | 'link') {
+    navigator.clipboard.writeText(what === 'token' ? token : pageUrl)
+    setCopied(what); setTimeout(() => setCopied(null), 1500)
+  }
+
+  return (
+    <div className="mb-8 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="px-6 py-4 border-b border-gray-100 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <KeyRound size={18} className="text-[#2ea8d8]" />
+          <div>
+            <h2 className="font-semibold text-gray-900">Dashboard lead-uri — token</h2>
+            <p className="text-xs text-gray-400 mt-0.5">Pagină publică cu toate lead-urile: <code className="text-gray-500">/lead-uri</code> — CDS · Radio · Newsletter</p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <a href={pageUrl || '#'} target="_blank" rel="noreferrer" className={`flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium border transition-colors ${token ? 'border-[#2ea8d8] text-[#103a66] hover:bg-blue-50' : 'border-gray-200 text-gray-300 pointer-events-none'}`}><ExternalLink size={15} /> Deschide dashboard-ul</a>
+          <button onClick={regenerate} disabled={regenerating || loading} className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium border border-amber-200 text-amber-700 hover:bg-amber-50 transition-colors disabled:opacity-50">{regenerating ? <Loader2 size={15} className="animate-spin" /> : <RefreshCw size={15} />} Regenerează token</button>
+        </div>
+      </div>
+      <div className="p-6 space-y-4">
+        <div>
+          <label className="text-xs font-medium text-gray-500">Link direct către dashboard</label>
+          <div className="flex gap-2 mt-1">
+            <input readOnly value={loading ? '' : pageUrl} className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-600 bg-gray-50 truncate" />
+            <button onClick={() => copy('link')} disabled={!token} className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-sm text-gray-600 transition-colors disabled:opacity-50">{copied === 'link' ? <Check size={15} className="text-green-600" /> : <Copy size={15} />} {copied === 'link' ? 'Copiat' : 'Copiază'}</button>
+          </div>
+          <p className="text-xs text-gray-400 mt-2">Oricine are acest link vede toate lead-urile. Regenerează token-ul pentru a revoca accesul.</p>
         </div>
       </div>
     </div>
