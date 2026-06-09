@@ -7,6 +7,8 @@ import { uploadSsytFile, deleteSsytFile } from '@/lib/ssyt/upload-client'
 
 export default function FilesTab({ boatId, files, onChange }: { boatId: string; files: any[]; onChange: () => void }) {
   const [showNew, setShowNew] = useState(false)
+  const adminFiles = files.filter((f: any) => f.source !== 'portal')
+  const portalFiles = files.filter((f: any) => f.source === 'portal')
 
   async function updateField(id: string, field: string, value: string) {
     const cleanValue = value === '' ? null : value
@@ -26,7 +28,7 @@ export default function FilesTab({ boatId, files, onChange }: { boatId: string; 
   return (
     <div>
       <div className="flex items-center justify-between mb-4">
-        <p className="text-sm text-gray-500">{files.length} fișiere</p>
+        <p className="text-sm text-gray-500">{adminFiles.length} fișiere</p>
         <button onClick={() => setShowNew(true)} className="inline-flex items-center gap-2 px-4 py-2 rounded-md font-medium text-sm text-white" style={{ background: '#FF6B35' }}>
           <Plus size={14} /> Adaugă fișier
         </button>
@@ -41,7 +43,7 @@ export default function FilesTab({ boatId, files, onChange }: { boatId: string; 
         <span>Poți încărca fișierul direct (PDF/JPG/PNG/WebP — găzduit pe Cloudflare R2) sau adăuga un link extern.</span>
       </div>
 
-      {files.length === 0 ? (
+      {adminFiles.length === 0 ? (
         <div className="rounded-lg p-12 text-center text-gray-500" style={{ background: '#fff', border: '1px dashed #e5e7eb' }}>
           <FileText size={28} className="mx-auto mb-3 opacity-30" />
           <p className="text-sm">Niciun fișier adăugat.</p>
@@ -60,7 +62,7 @@ export default function FilesTab({ boatId, files, onChange }: { boatId: string; 
               </tr>
             </thead>
             <tbody>
-              {files.map((f) => (
+              {adminFiles.map((f) => (
                 <tr key={f.id} style={{ borderTop: '1px solid #e5e7eb' }}>
                   <td className="px-4 py-3 font-medium" style={{ color: '#0a1628' }}>
                     <span className="inline-flex items-center gap-2">
@@ -89,6 +91,48 @@ export default function FilesTab({ boatId, files, onChange }: { boatId: string; 
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* Fișiere de pe portal (încărcate de echipe) */}
+      {portalFiles.length > 0 && (
+        <div className="mt-8">
+          <h3 className="text-sm font-medium uppercase tracking-wider text-gray-500 mb-3">
+            Fișiere de pe portal <span className="text-gray-400 normal-case">({portalFiles.length})</span>
+          </h3>
+          <div className="rounded-lg overflow-hidden" style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
+            <table className="w-full text-sm">
+              <thead style={{ background: '#f8f9fa', borderBottom: '1px solid #e5e7eb' }}>
+                <tr>
+                  <th className="text-left px-4 py-3 text-xs font-medium uppercase tracking-wider text-gray-500">Nume</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium uppercase tracking-wider text-gray-500">Echipă</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium uppercase tracking-wider text-gray-500">Categorie</th>
+                  <th className="text-right px-4 py-3 w-20"></th>
+                </tr>
+              </thead>
+              <tbody>
+                {portalFiles.map((f) => (
+                  <tr key={f.id} style={{ borderTop: '1px solid #e5e7eb' }}>
+                    <td className="px-4 py-3 font-medium" style={{ color: '#0a1628' }}>
+                      <span className="inline-flex items-center gap-2"><FileText size={14} className="text-gray-400" />{f.name}</span>
+                    </td>
+                    <td className="px-4 py-3">
+                      {f.team ? (
+                        <span className="text-[10px] uppercase tracking-wider px-1.5 py-0.5 rounded text-white" style={{ background: f.team.color_primary || '#4A5568' }}>{f.team.name}</span>
+                      ) : <span className="text-gray-400 text-xs">—</span>}
+                    </td>
+                    <td className="px-4 py-3 text-gray-600 text-xs">{f.category || '—'}</td>
+                    <td className="px-4 py-3 text-right">
+                      {f.file_url && (
+                        <a href={f.file_url} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-700 p-1 inline-block" title="Deschide"><Download size={14} /></a>
+                      )}
+                      <button onClick={() => remove(f)} className="text-gray-300 hover:text-red-600 p-1 ml-1"><Trash2 size={14} /></button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>
@@ -124,6 +168,7 @@ function NewFileForm({ boatId, onClose, onSaved }: { boatId: string; onClose: ()
     setSaving(true)
     const { error: err } = await supabase.from('ssyt_boat_files').insert({
       boat_id: boatId,
+      source: 'admin',
       name: form.name,
       category: form.category || null,
       file_url: form.file_url,

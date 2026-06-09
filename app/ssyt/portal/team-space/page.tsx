@@ -79,6 +79,22 @@ export default async function PortalTeamSpacePage() {
     .order('display_order')
     .order('created_at', { ascending: false })
 
+  // Fișiere barcă: de la admin (read-only) + ale echipei (portal)
+  let adminBoatFiles: any[] = []
+  let teamBoatFiles: any[] = []
+  if (team?.boat_id) {
+    const { data: bf } = await supabase
+      .from('ssyt_boat_files')
+      .select('id, name, category, file_url, mime_type, source, team_id')
+      .eq('boat_id', team.boat_id)
+      .order('display_order')
+      .order('uploaded_at', { ascending: false })
+    for (const f of bf || []) {
+      if (f.source === 'portal' && f.team_id === teamId) teamBoatFiles.push(f)
+      else if (f.source !== 'portal') adminBoatFiles.push(f)
+    }
+  }
+
   return (
     <div className="max-w-5xl mx-auto px-6 py-8">
       <div className="mb-6">
@@ -105,6 +121,8 @@ export default async function PortalTeamSpacePage() {
         initialTodos={(todos || []) as any}
         initialResources={(boatResources || []) as any}
         boatResourcesAdmin={boatResourcesAdmin}
+        adminBoatFiles={adminBoatFiles}
+        teamBoatFiles={teamBoatFiles}
       />
     </div>
   )

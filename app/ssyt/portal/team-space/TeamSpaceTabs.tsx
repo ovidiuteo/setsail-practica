@@ -1,11 +1,12 @@
 'use client'
 import { useState } from 'react'
-import { FileText, CheckSquare, Anchor, Wrench, BookMarked } from 'lucide-react'
+import { FileText, CheckSquare, Anchor, Wrench, BookMarked, FolderOpen } from 'lucide-react'
 import NotesEditor from '@/components/ssyt/portal/NotesEditor'
 import TodoList, { Todo, TeamMember } from '@/components/ssyt/portal/TodoList'
 import ResourceList, { Resource } from '@/components/ssyt/portal/ResourceList'
+import BoatFilesPanel, { BoatFile } from '@/components/ssyt/portal/BoatFilesPanel'
 
-type Tab = 'notes' | 'team-todo' | 'boat-resources' | 'boat-misc' | 'boat-todo'
+type Tab = 'notes' | 'team-todo' | 'boat-resources' | 'boat-misc' | 'boat-files' | 'boat-todo'
 
 export default function TeamSpaceTabs({
   teamId,
@@ -16,6 +17,8 @@ export default function TeamSpaceTabs({
   initialTodos,
   initialResources,
   boatResourcesAdmin = [],
+  adminBoatFiles = [],
+  teamBoatFiles = [],
 }: {
   teamId: string
   canEdit: boolean
@@ -25,6 +28,8 @@ export default function TeamSpaceTabs({
   initialTodos: (Todo & { scope: 'team' | 'boat' })[]
   initialResources: Resource[]
   boatResourcesAdmin?: Resource[]
+  adminBoatFiles?: BoatFile[]
+  teamBoatFiles?: BoatFile[]
 }) {
   const [tab, setTab] = useState<Tab>('notes')
 
@@ -36,6 +41,7 @@ export default function TeamSpaceTabs({
     { id: 'team-todo', label: 'To-do echipă', icon: CheckSquare, count: teamTodos.filter((t) => !t.is_done).length },
     { id: 'boat-resources', label: 'Resurse barcă', icon: Anchor, count: initialResources.length },
     { id: 'boat-misc', label: 'Resurse diverse', icon: BookMarked, count: boatResourcesAdmin.length },
+    { id: 'boat-files', label: 'Fișiere', icon: FolderOpen, count: adminBoatFiles.length + teamBoatFiles.length },
     { id: 'boat-todo', label: 'To-do barcă', icon: Wrench, count: boatTodos.filter((t) => !t.is_done).length },
   ]
 
@@ -114,6 +120,10 @@ export default function TeamSpaceTabs({
             emptyText="Nicio resursă diversă încă."
           />
         </div>
+      )}
+
+      {tab === 'boat-files' && (
+        <BoatFilesPanel adminFiles={adminBoatFiles} teamFiles={teamBoatFiles} teamId={teamId} canEdit={canEdit} />
       )}
 
       {tab === 'boat-todo' && (

@@ -22,7 +22,7 @@ export default async function AdminBoatDetailPage({ params }: { params: { id: st
     supabase.from('ssyt_boat_specs').select('*').eq('boat_id', boat.id).maybeSingle(),
     supabase.from('ssyt_boat_equipment').select('*').eq('boat_id', boat.id).order('display_order'),
     supabase.from('ssyt_boat_tasks').select('*, assigned:assigned_to(id, full_name)').eq('boat_id', boat.id).order('display_order').order('due_date'),
-    supabase.from('ssyt_boat_files').select('*').eq('boat_id', boat.id).order('display_order'),
+    supabase.from('ssyt_boat_files').select('*, team:ssyt_teams(id, name, color_primary)').eq('boat_id', boat.id).order('display_order'),
     supabase.from('ssyt_boat_resources').select('*').eq('boat_id', boat.id).order('display_order'),
     supabase.from('ssyt_boat_photos').select('*').eq('boat_id', boat.id).order('display_order'),
     supabase.from('ssyt_teams').select(`
