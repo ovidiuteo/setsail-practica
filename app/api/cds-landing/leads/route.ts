@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { listLeads, insertLead, updateLead, deleteLead, isEditor } from '@/lib/cds-landing/server'
+import { notifyNewLead } from '@/lib/mail'
 
 export const dynamic = 'force-dynamic'
 
@@ -17,6 +18,7 @@ export async function POST(req: NextRequest) {
   }
   const res = await insertLead({ name, email, phone, message: body?.message })
   if (!res.ok) return NextResponse.json({ ok: false, error: res.error }, { status: 500 })
+  await notifyNewLead('CDS', { name, email, phone, message: body?.message })
   return NextResponse.json({ ok: true })
 }
 

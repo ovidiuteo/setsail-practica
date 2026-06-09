@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { listLeads, insertLead, updateLead, deleteLead, isEditor } from '@/lib/radio-landing/server'
+import { notifyNewLead } from '@/lib/mail'
 
 export const dynamic = 'force-dynamic'
 
@@ -14,6 +15,7 @@ export async function POST(req: NextRequest) {
   }
   const res = await insertLead({ name, email, phone, message: body?.message, leadType: body?.leadType, voucherCode: body?.voucherCode })
   if (!res.ok) return NextResponse.json({ ok: false, error: res.error }, { status: 500 })
+  await notifyNewLead('Radio GMDSS', { name, email, phone, message: body?.message, leadType: body?.leadType, voucher: body?.voucherCode })
   return NextResponse.json({ ok: true })
 }
 
