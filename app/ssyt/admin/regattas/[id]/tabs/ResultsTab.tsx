@@ -9,6 +9,30 @@ function escapeRegex(s: string) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 }
 
+// Punctaj SetSail intern: locul între bărcile noastre → puncte (low-point, mai puține = mai bine)
+const SETSAIL_POINTS = [1, 3, 5, 8]
+function setSailFor(rank: number): number {
+  return SETSAIL_POINTS[rank - 1] ?? (8 + (rank - 4) * 3)
+}
+
+// Adaugă rang (după Net, cu egalități) + puncte SetSail pe rândurile bărcilor noastre
+function annotateRanks<T extends { net: number }>(rows: T[]): (T & { rank: number; setsail: number })[] {
+  const sorted = [...rows].sort((a, b) => a.net - b.net)
+  const rankMap = new Map<T, number>()
+  let rank = 0
+  let prevNet: number | null = null
+  let seen = 0
+  for (const r of sorted) {
+    seen++
+    if (prevNet === null || r.net !== prevNet) { rank = seen; prevNet = r.net }
+    rankMap.set(r, rank)
+  }
+  return rows.map((r) => {
+    const rk = rankMap.get(r) ?? 0
+    return { ...r, rank: rk, setsail: setSailFor(rk) }
+  })
+}
+
 type ParsedRow = {
   place: number | null
   raceScores: number[]
@@ -184,12 +208,13 @@ function ImportSection({ regattaId, teams, onChange }: { regattaId: string; team
 
   const parsed = useMemo(() => (text.trim() ? parseClassification(text, teams) : null), [text, teams])
   const matched = parsed ? parsed.rows.filter((r) => r.teamId) : []
+  const annotated = annotateRanks(matched)
 
   async function doImport() {
-    if (matched.length === 0) return
+    if (annotated.length === 0) return
     setSaving(true)
     setError(null)
-    const payload = matched.map((r) => ({
+    const payload = annotated.map((r) => ({
       regatta_id: regattaId,
       team_id: r.teamId,
       race_scores: r.raceScores,
@@ -197,6 +222,8 @@ function ImportSection({ regattaId, teams, onChange }: { regattaId: string; team
       net_points: r.net,
       official_place: r.place,
       official_total_boats: parsed!.fleetSize,
+      ssyt_internal_place: r.rank,
+      ssyt_internal_points: r.setsail,
       published_at: new Date().toISOString(),
     }))
     const { error: err } = await supabase
@@ -252,11 +279,13 @@ function ImportSection({ regattaId, teams, onChange }: { regattaId: string; team
                           <th key={i} className="text-center px-2 py-2 text-[10px] uppercase text-gray-400">R{i + 1}</th>
                         ))}
                         <th className="text-center px-2 py-2 text-[10px] uppercase text-gray-400">Total</th>
-                        <th className="text-center px-2 py-2 text-[10px] uppercase font-semibold" style={{ color: '#FF6B35' }}>Net</th>
+                        <th className="text-center px-2 py-2 text-[10px] uppercase text-gray-400">Net</th>
+                        <th className="text-center px-2 py-2 text-[10px] uppercase text-gray-400">Loc SS</th>
+                        <th className="text-center px-2 py-2 text-[10px] uppercase font-semibold" style={{ color: '#FF6B35' }}>Pct SetSail</th>
                       </tr>
                     </thead>
                     <tbody>
-                      {matched.map((r, idx) => (
+                      {[...annotated].sort((a, b) => a.rank - b.rank).map((r, idx) => (
                         <tr key={idx} style={{ borderTop: '1px solid #f3f4f6' }}>
                           <td className="px-3 py-2 font-medium" style={{ color: '#0a1628' }}>{r.teamName}</td>
                           <td className="px-2 py-2 text-center text-gray-600">{r.place ?? '—'}</td>
@@ -264,7 +293,9 @@ function ImportSection({ regattaId, teams, onChange }: { regattaId: string; team
                             <td key={i} className="px-2 py-2 text-center text-gray-600">{r.raceScores[i] ?? '—'}</td>
                           ))}
                           <td className="px-2 py-2 text-center text-gray-600">{r.total}</td>
-                          <td className="px-2 py-2 text-center font-semibold" style={{ color: '#FF6B35' }}>{r.net}</td>
+                          <td className="px-2 py-2 text-center text-gray-600">{r.net}</td>
+                          <td className="px-2 py-2 text-center text-gray-600">{r.rank}</td>
+                          <td className="px-2 py-2 text-center font-semibold" style={{ color: '#FF6B35' }}>{r.setsail}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -297,9 +328,9 @@ function OurBoatsClassification({ results }: { results: any[] }) {
 
   const raceCount = withScores.reduce((mx: number, r: any) => Math.max(mx, r.race_scores.length), 0)
   const ranked = [...withScores].sort((a: any, b: any) => {
-    const na = a.net_points ?? Infinity
-    const nb = b.net_points ?? Infinity
-    return na - nb
+    const pa = a.ssyt_internal_points ?? a.net_points ?? Infinity
+    const pb = b.ssyt_internal_points ?? b.net_points ?? Infinity
+    return pa - pb
   })
 
   return (
@@ -320,7 +351,8 @@ function OurBoatsClassification({ results }: { results: any[] }) {
                 <th key={i} className="text-center px-2 py-2 text-[10px] uppercase text-gray-400">R{i + 1}</th>
               ))}
               <th className="text-center px-2 py-2 text-[10px] uppercase text-gray-400">Total</th>
-              <th className="text-center px-2 py-2 text-[10px] uppercase font-semibold" style={{ color: '#FF6B35' }}>Net</th>
+              <th className="text-center px-2 py-2 text-[10px] uppercase text-gray-400">Net</th>
+              <th className="text-center px-2 py-2 text-[10px] uppercase font-semibold" style={{ color: '#FF6B35' }}>Pct SetSail</th>
             </tr>
           </thead>
           <tbody>
@@ -338,14 +370,16 @@ function OurBoatsClassification({ results }: { results: any[] }) {
                   <td key={i} className="px-2 py-2.5 text-center text-gray-600">{r.race_scores[i] ?? '—'}</td>
                 ))}
                 <td className="px-2 py-2.5 text-center text-gray-600">{r.total_points ?? '—'}</td>
-                <td className="px-2 py-2.5 text-center font-bold" style={{ color: '#FF6B35' }}>{r.net_points ?? '—'}</td>
+                <td className="px-2 py-2.5 text-center text-gray-600">{r.net_points ?? '—'}</td>
+                <td className="px-2 py-2.5 text-center font-bold" style={{ color: '#FF6B35' }}>{r.ssyt_internal_points ?? '—'}</td>
               </tr>
             ))}
           </tbody>
         </table>
       </div>
       <div className="px-5 py-2 text-[11px] text-gray-400" style={{ borderTop: '1px solid #f3f4f6' }}>
-        Rang după Net (mai mic = mai bine). „Loc flotă" = poziția în clasamentul general complet.
+        Rang după <strong>puncte SetSail</strong> (locul între bărcile noastre → 1, 3, 5, 8; mai puține = mai bine).
+        Net = scorul din curse. „Loc flotă" = poziția în clasamentul general complet.
       </div>
     </div>
   )
