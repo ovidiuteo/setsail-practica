@@ -4,6 +4,7 @@ import { Plus, FileText, Trash2, X, Download, Upload, Loader2 } from 'lucide-rea
 import { supabase } from '@/lib/ssyt/supabase'
 import EditableField from '@/components/ssyt/EditableField'
 import { uploadSsytFile, deleteSsytFile } from '@/lib/ssyt/upload-client'
+import PreviewButton from '@/components/ssyt/FilePreview'
 
 export default function FilesTab({ boatId, files, onChange }: { boatId: string; files: any[]; onChange: () => void }) {
   const [showNew, setShowNew] = useState(false)
@@ -79,9 +80,10 @@ export default function FilesTab({ boatId, files, onChange }: { boatId: string; 
                   <td className="px-4 py-3 text-xs">
                     <EditableField value={f.file_url} onSave={(v) => updateField(f.id, 'file_url', v)} placeholder="URL" type="url" displayClassName="font-mono" />
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-4 py-3 text-right whitespace-nowrap">
+                    <PreviewButton url={f.file_url} title={f.name} contentType={f.mime_type} className="text-gray-400 hover:text-gray-700 p-1 inline-block" />
                     {f.file_url && (
-                      <a href={f.file_url} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-700 p-1 inline-block" title="Deschide">
+                      <a href={f.file_url} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-700 p-1 inline-block ml-1" title="Deschide">
                         <Download size={14} />
                       </a>
                     )}
@@ -122,9 +124,10 @@ export default function FilesTab({ boatId, files, onChange }: { boatId: string; 
                       ) : <span className="text-gray-400 text-xs">—</span>}
                     </td>
                     <td className="px-4 py-3 text-gray-600 text-xs">{f.category || '—'}</td>
-                    <td className="px-4 py-3 text-right">
+                    <td className="px-4 py-3 text-right whitespace-nowrap">
+                      <PreviewButton url={f.file_url} title={f.name} contentType={f.mime_type} className="text-gray-400 hover:text-gray-700 p-1 inline-block" />
                       {f.file_url && (
-                        <a href={f.file_url} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-700 p-1 inline-block" title="Deschide"><Download size={14} /></a>
+                        <a href={f.file_url} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-700 p-1 inline-block ml-1" title="Deschide"><Download size={14} /></a>
                       )}
                       <button onClick={() => remove(f)} className="text-gray-300 hover:text-red-600 p-1 ml-1"><Trash2 size={14} /></button>
                     </td>

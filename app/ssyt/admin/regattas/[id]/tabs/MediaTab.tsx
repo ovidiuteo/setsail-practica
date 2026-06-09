@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { Plus, Image as ImageIcon, Trash2, X, Star } from 'lucide-react'
 import { supabase } from '@/lib/ssyt/supabase'
 import EditableField from '@/components/ssyt/EditableField'
+import PreviewButton from '@/components/ssyt/FilePreview'
 
 export default function MediaTab({ regattaId, media, onChange }: { regattaId: string; media: any[]; onChange: () => void }) {
   const [showNew, setShowNew] = useState(false)
@@ -92,7 +93,10 @@ export default function MediaTab({ regattaId, media, onChange }: { regattaId: st
                   ) : (
                     <span className="text-gray-400">★ featured</span>
                   )}
-                  <button onClick={() => remove(m.id)} className="text-gray-300 hover:text-red-600 p-1"><Trash2 size={12} /></button>
+                  <div className="inline-flex items-center gap-1">
+                    <PreviewButton url={m.url} title={m.caption} contentType={m.media_type === 'photo' ? 'image/*' : null} className="text-gray-400 hover:text-gray-700 p-1" />
+                    <button onClick={() => remove(m.id)} className="text-gray-300 hover:text-red-600 p-1"><Trash2 size={12} /></button>
+                  </div>
                 </div>
               </div>
             </div>

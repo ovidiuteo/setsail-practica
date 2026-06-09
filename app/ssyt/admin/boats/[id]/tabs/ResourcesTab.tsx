@@ -4,6 +4,7 @@ import { Plus, Link as LinkIcon, ExternalLink, Trash2, X, Upload, Loader2 } from
 import { supabase } from '@/lib/ssyt/supabase'
 import EditableField from '@/components/ssyt/EditableField'
 import { uploadSsytFile, deleteSsytFile } from '@/lib/ssyt/upload-client'
+import PreviewButton from '@/components/ssyt/FilePreview'
 
 export default function ResourcesTab({ boatId, resources, onChange }: { boatId: string; resources: any[]; onChange: () => void }) {
   const [showNew, setShowNew] = useState(false)
@@ -54,6 +55,7 @@ export default function ResourcesTab({ boatId, resources, onChange }: { boatId: 
                   </div>
                 </div>
                 <div className="flex gap-1 flex-shrink-0">
+                  <PreviewButton url={r.url} title={r.title} />
                   {r.url && (
                     <a href={r.url} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-700 p-1" title="Deschide">
                       <ExternalLink size={14} />

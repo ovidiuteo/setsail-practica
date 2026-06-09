@@ -3,6 +3,7 @@ import { useRef, useState } from 'react'
 import { ExternalLink, Trash2, Edit2, X, Save, FolderInput, FileText, Upload, Loader2 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/ssyt/supabase-browser'
 import { uploadSsytFile, deleteSsytFile } from '@/lib/ssyt/upload-client'
+import PreviewButton from '@/components/ssyt/FilePreview'
 
 type Resource = {
   id: string
@@ -98,6 +99,7 @@ export default function TeamResourcesTab({ resources, onChange }: { resources: R
                 )}
               </div>
               <div className="flex items-center gap-1 flex-shrink-0">
+                <PreviewButton url={r.url} title={r.title} />
                 <button onClick={() => setEditingId(r.id)} className="text-gray-400 hover:text-gray-700 p-1"><Edit2 size={14} /></button>
                 <button onClick={() => remove(r)} disabled={busy} className="text-gray-300 hover:text-red-600 p-1"><Trash2 size={14} /></button>
               </div>

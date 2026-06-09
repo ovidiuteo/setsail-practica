@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { Image as ImageIcon, Camera } from 'lucide-react'
 import { supabase, getActiveSeason } from '@/lib/ssyt/supabase'
+import PreviewButton from '@/components/ssyt/FilePreview'
 
 export const revalidate = 60
 
@@ -112,7 +113,12 @@ function MediaCard({ item }: { item: any }) {
     <div className="rounded-lg overflow-hidden group" style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
       <div className="aspect-square bg-gray-100 relative overflow-hidden">
         {item.url && item.media_type === 'photo' ? (
-          <img src={item.url} alt={item.caption || ''} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+          <>
+            <img src={item.url} alt={item.caption || ''} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" />
+            <span className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition">
+              <PreviewButton url={item.url} title={item.caption} contentType="image/*" className="inline-flex items-center justify-center w-8 h-8 rounded-full text-white bg-black/50 hover:bg-black/70 transition" />
+            </span>
+          </>
         ) : item.media_type === 'video' || item.media_type === 'reel' ? (
           <a href={item.url} target="_blank" rel="noopener noreferrer" className="w-full h-full flex items-center justify-center bg-black/80 text-white">
             <Camera size={32} />

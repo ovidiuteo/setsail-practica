@@ -4,6 +4,7 @@ import { Plus, FileText, Trash2, X, Download, Upload, Loader2 } from 'lucide-rea
 import { supabase } from '@/lib/ssyt/supabase'
 import EditableField from '@/components/ssyt/EditableField'
 import { uploadSsytFile, deleteSsytFile } from '@/lib/ssyt/upload-client'
+import PreviewButton from '@/components/ssyt/FilePreview'
 
 export default function DocumentsTab({
   regattaId, documents, docTypes, onChange,
@@ -91,9 +92,10 @@ export default function DocumentsTab({
                       ]}
                     />
                   </td>
-                  <td className="px-4 py-3 text-right">
+                  <td className="px-4 py-3 text-right whitespace-nowrap">
+                    <PreviewButton url={d.file_url} title={d.name} contentType={d.mime_type} className="text-gray-400 hover:text-gray-700 p-1 inline-block" />
                     {d.file_url && (
-                      <a href={d.file_url} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-700 p-1 inline-block" title="Deschide">
+                      <a href={d.file_url} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-700 p-1 inline-block ml-1" title="Deschide">
                         <Download size={14} />
                       </a>
                     )}

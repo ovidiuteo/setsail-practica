@@ -2,6 +2,7 @@
 import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { FileText, Download, Upload, Loader2, Trash2 } from 'lucide-react'
+import PreviewButton from '@/components/ssyt/FilePreview'
 
 export type BoatFile = {
   id: string
@@ -121,6 +122,7 @@ function FileRows({ files, onDelete, deletingId }: { files: BoatFile[]; onDelete
             <div className="font-medium text-sm truncate" style={{ color: '#0a1628' }}>{f.name}</div>
             {f.category && <div className="text-xs text-gray-400">{f.category}</div>}
           </div>
+          <PreviewButton url={f.file_url} title={f.name} contentType={f.mime_type} />
           {f.file_url && (
             <a href={f.file_url} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-700 p-1" title="Deschide / descarcă">
               <Download size={15} />

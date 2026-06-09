@@ -1,6 +1,6 @@
 'use client'
 import { useEffect, useState, type ReactNode } from 'react'
-import { X, ChevronLeft, ChevronRight } from 'lucide-react'
+import { X, ChevronLeft, ChevronRight, Eye } from 'lucide-react'
 
 export type LightboxPhoto = { id: string; url: string; caption?: string | null; badge?: string | null }
 
@@ -36,6 +36,9 @@ export default function PhotoLightbox({
           <div key={p.id} className="group relative rounded-lg overflow-hidden" style={{ background: '#f3f4f6' }}>
             <button onClick={() => setOpenIndex(i)} className="block w-full aspect-square cursor-zoom-in">
               <img src={p.url} alt={p.caption || ''} className="w-full h-full object-cover group-hover:scale-105 transition duration-300" loading="lazy" />
+              <span className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition" style={{ background: 'rgba(0,0,0,0.25)' }}>
+                <Eye size={22} className="text-white drop-shadow" />
+              </span>
             </button>
             {p.badge && (
               <div className="pointer-events-none absolute bottom-0 inset-x-0 px-2 py-1 text-[11px] text-white bg-gradient-to-t from-black/70 to-transparent truncate">

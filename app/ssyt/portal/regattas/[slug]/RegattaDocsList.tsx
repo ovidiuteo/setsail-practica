@@ -3,6 +3,7 @@ import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, Edit2, ExternalLink, X, Save, FileText, Upload, Loader2 } from 'lucide-react'
 import { uploadSsytFile } from '@/lib/ssyt/upload-client'
+import PreviewButton from '@/components/ssyt/FilePreview'
 
 type Doc = {
   id: string
@@ -108,11 +109,14 @@ export default function RegattaDocsList({
                     </a>
                   )}
                 </div>
-                {canEdit && (
-                  <button onClick={() => setEditingId(d.id)} className="text-gray-400 hover:text-gray-700 flex-shrink-0">
-                    <Edit2 size={14} />
-                  </button>
-                )}
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <PreviewButton url={d.file_url} title={d.name} />
+                  {canEdit && (
+                    <button onClick={() => setEditingId(d.id)} className="text-gray-400 hover:text-gray-700">
+                      <Edit2 size={14} />
+                    </button>
+                  )}
+                </div>
               </div>
             )
           )

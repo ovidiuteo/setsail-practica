@@ -3,6 +3,7 @@ import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { Plus, Edit2, ExternalLink, X, Save, Link as LinkIcon, FileText, Upload, Loader2 } from 'lucide-react'
 import { uploadSsytFile, type UploadContext } from '@/lib/ssyt/upload-client'
+import PreviewButton from '@/components/ssyt/FilePreview'
 
 export type Resource = {
   id: string
@@ -104,11 +105,14 @@ export default function ResourceList({
                     </a>
                   )}
                 </div>
-                {canEdit && (
-                  <button onClick={() => setEditingId(r.id)} className="text-gray-400 hover:text-gray-700 flex-shrink-0">
-                    <Edit2 size={14} />
-                  </button>
-                )}
+                <div className="flex items-center gap-1 flex-shrink-0">
+                  <PreviewButton url={r.url} title={r.title} />
+                  {canEdit && (
+                    <button onClick={() => setEditingId(r.id)} className="text-gray-400 hover:text-gray-700">
+                      <Edit2 size={14} />
+                    </button>
+                  )}
+                </div>
               </div>
             )
           )
