@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getAllLeads, isDashboardEditor } from '@/lib/leads-dashboard/server'
-import { sendLeadEmail, mailConfigured } from '@/lib/mail'
+import { sendLeadEmail, mailConfigured, mailEnvDebug } from '@/lib/mail'
 
 export const dynamic = 'force-dynamic'
 
@@ -15,6 +15,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ ok: false, error: 'RESEND_API_KEY nu e setat (sau deploy-ul nu l-a preluat încă).' })
   }
 
+  const toOverride = req.nextUrl.searchParams.get('to') || undefined
   const { cds, radio } = await getAllLeads()
   const all = [
     ...cds.map((l: any) => ({ kind: 'CDS' as const, l })),
@@ -22,15 +23,14 @@ export async function GET(req: NextRequest) {
   ].sort((a, b) => new Date(b.l.created_at).getTime() - new Date(a.l.created_at).getTime())
 
   if (!all.length) {
-    // no real lead yet — send a synthetic one
-    const res = await sendLeadEmail('CDS', { name: 'TEST notificare', phone: '0700000000', message: 'Email de test (nu există încă lead-uri reale).' })
-    return NextResponse.json({ ...res, used: 'synthetic' })
+    const res = await sendLeadEmail('CDS', { name: 'TEST notificare', phone: '0700000000', message: 'Email de test (nu există încă lead-uri reale).' }, toOverride)
+    return NextResponse.json({ ...res, used: 'synthetic', env: mailEnvDebug() })
   }
 
   const { kind, l } = all[0]
   const res = await sendLeadEmail(kind, {
     name: l.name, email: l.email, phone: l.phone, message: l.message,
     leadType: l.lead_type, voucher: l.voucher_code,
-  })
-  return NextResponse.json({ ...res, used: `ultimul lead (${kind})`, lead_name: l.name, created_at: l.created_at })
+  }, toOverride)
+  return NextResponse.json({ ...res, used: `ultimul lead (${kind})`, lead_name: l.name, env: mailEnvDebug() })
 }

@@ -17,19 +17,28 @@ export function mailConfigured(): boolean {
 
 type SendResult = { ok: boolean; skipped?: boolean; error?: string; id?: string; to?: string }
 
-async function sendMail(subject: string, html: string): Promise<SendResult> {
+async function sendMail(subject: string, html: string, toOverride?: string): Promise<SendResult> {
   if (!mailConfigured()) return { ok: false, skipped: true, error: 'RESEND_API_KEY lipsește (nu e setat în Vercel).' }
+  const to = toOverride || TO
   try {
     const res = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { Authorization: `Bearer ${KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: FROM, to: [TO], subject, html }),
+      body: JSON.stringify({ from: FROM, to: [to], subject, html }),
     })
     const j: any = await res.json().catch(() => ({}))
-    if (!res.ok) return { ok: false, error: `Resend ${res.status}: ${j?.message || JSON.stringify(j).slice(0, 200)}`, to: TO }
-    return { ok: true, id: j?.id, to: TO }
+    if (!res.ok) return { ok: false, error: `Resend ${res.status}: ${j?.message || JSON.stringify(j).slice(0, 200)}`, to }
+    return { ok: true, id: j?.id, to }
   } catch (e: any) {
-    return { ok: false, error: e?.message || 'fetch failed', to: TO }
+    return { ok: false, error: e?.message || 'fetch failed', to }
+  }
+}
+
+export function mailEnvDebug() {
+  return {
+    hasKey: Boolean(process.env.RESEND_API_KEY),
+    notifyTo: process.env.LEADS_NOTIFY_TO || '(unset → default office@setsail.ro)',
+    from: process.env.RESEND_FROM || '(default onboarding@resend.dev)',
   }
 }
 
@@ -55,9 +64,9 @@ function leadHtml(kind: string, lead: Lead) {
 }
 
 // Returns the send result — used by the diagnostic test endpoint.
-export async function sendLeadEmail(kind: 'CDS' | 'Radio GMDSS', lead: Lead): Promise<SendResult> {
+export async function sendLeadEmail(kind: 'CDS' | 'Radio GMDSS', lead: Lead, toOverride?: string): Promise<SendResult> {
   const who = lead.name || lead.phone || lead.email || 'fără nume'
-  return sendMail(`Lead nou ${kind}: ${who}`, leadHtml(kind, lead))
+  return sendMail(`Lead nou ${kind}: ${who}`, leadHtml(kind, lead), toOverride)
 }
 
 // Fire-and-forget from lead routes — never blocks/fails lead capture.
