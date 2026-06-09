@@ -1,10 +1,12 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Loader2, RefreshCw, ShieldAlert, Download, GraduationCap, Radio, Mail } from 'lucide-react'
+import { Loader2, RefreshCw, ShieldAlert, Download, GraduationCap, Radio, Mail, Trash2 } from 'lucide-react'
 
 type Data = { cds: any[]; radio: any[]; newsletter: any[] }
+type Kind = 'cds' | 'radio' | 'newsletter'
 
+const STATUSES = ['nou', 'contactat', 'inscris', 'respins'] as const
 const STATUS_STYLE: Record<string, string> = {
   nou: 'bg-blue-50 text-blue-700',
   contactat: 'bg-amber-50 text-amber-700',
@@ -66,6 +68,16 @@ export default function LeadsDashboardPage() {
     )
   }
 
+  async function patchRow(kind: Kind, id: string, patch: { status?: string }) {
+    setData((prev) => (prev ? { ...prev, [kind]: prev[kind].map((r) => (r.id === id ? { ...r, ...patch } : r)) } : prev))
+    await fetch('/api/leads-dashboard', { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token, kind, id, ...patch }) }).catch(() => {})
+  }
+  async function removeRow(kind: Kind, id: string) {
+    if (!confirm('Ștergi această înregistrare definitiv?')) return
+    setData((prev) => (prev ? { ...prev, [kind]: prev[kind].filter((r) => r.id !== id) } : prev))
+    await fetch(`/api/leads-dashboard?token=${encodeURIComponent(token || '')}&kind=${kind}&id=${id}`, { method: 'DELETE' }).catch(() => {})
+  }
+
   const d = data as Data
   const TABS = [
     { k: 'cds' as const, label: 'CDS', icon: GraduationCap, n: d.cds.length },
@@ -93,9 +105,9 @@ export default function LeadsDashboardPage() {
       </header>
 
       <main className="max-w-6xl mx-auto px-5 py-6">
-        {tab === 'cds' && <LeadTable rows={d.cds} kind="cds" />}
-        {tab === 'radio' && <LeadTable rows={d.radio} kind="radio" />}
-        {tab === 'newsletter' && <NewsletterTable rows={d.newsletter} />}
+        {tab === 'cds' && <LeadTable rows={d.cds} kind="cds" onPatch={patchRow} onDelete={removeRow} />}
+        {tab === 'radio' && <LeadTable rows={d.radio} kind="radio" onPatch={patchRow} onDelete={removeRow} />}
+        {tab === 'newsletter' && <NewsletterTable rows={d.newsletter} onDelete={(id) => removeRow('newsletter', id)} />}
       </main>
     </div>
   )
@@ -105,7 +117,7 @@ function ExportBtn({ onClick }: { onClick: () => void }) {
   return <button onClick={onClick} className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-slate-200 hover:bg-slate-50 transition"><Download size={13} /> Export CSV</button>
 }
 
-function LeadTable({ rows, kind }: { rows: any[]; kind: 'cds' | 'radio' }) {
+function LeadTable({ rows, kind, onPatch, onDelete }: { rows: any[]; kind: 'cds' | 'radio'; onPatch: (k: Kind, id: string, p: { status?: string }) => void; onDelete: (k: Kind, id: string) => void }) {
   if (!rows.length) return <Empty label="Niciun lead încă." />
   const cols = kind === 'radio'
     ? ['created_at', 'name', 'lead_type', 'phone', 'email', 'message', 'status']
@@ -119,7 +131,7 @@ function LeadTable({ rows, kind }: { rows: any[]; kind: 'cds' | 'radio' }) {
             <tr className="bg-slate-50 text-xs text-slate-400 text-left">
               <th className="px-4 py-3">Data</th><th className="px-4 py-3">Nume</th>
               {kind === 'radio' && <th className="px-4 py-3">Tip</th>}
-              <th className="px-4 py-3">Contact</th><th className="px-4 py-3">Mesaj</th><th className="px-4 py-3">Status</th>
+              <th className="px-4 py-3">Contact</th><th className="px-4 py-3">Mesaj</th><th className="px-4 py-3">Status</th><th className="px-4 py-3"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
@@ -133,7 +145,12 @@ function LeadTable({ rows, kind }: { rows: any[]; kind: 'cds' | 'radio' }) {
                   {l.email && <div><a href={`mailto:${l.email}`} className="hover:text-[#2ea8d8]">{l.email}</a></div>}
                 </td>
                 <td className="px-4 py-3 text-slate-500 text-xs max-w-[220px]">{l.message || '—'}</td>
-                <td className="px-4 py-3"><span className={`text-[11px] font-medium rounded-full px-2.5 py-1 ${STATUS_STYLE[l.status] || 'bg-slate-100 text-slate-500'}`}>{l.status || '—'}</span></td>
+                <td className="px-4 py-3">
+                  <select value={l.status || 'nou'} onChange={(e) => onPatch(kind, l.id, { status: e.target.value })} className={`text-[11px] font-medium rounded-full px-2.5 py-1 border-0 cursor-pointer ${STATUS_STYLE[l.status] || 'bg-slate-100 text-slate-500'}`}>
+                    {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
+                  </select>
+                </td>
+                <td className="px-4 py-3 text-right"><button onClick={() => onDelete(kind, l.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-slate-300 hover:text-red-500 transition" title="Șterge"><Trash2 size={14} /></button></td>
               </tr>
             ))}
           </tbody>
@@ -143,7 +160,7 @@ function LeadTable({ rows, kind }: { rows: any[]; kind: 'cds' | 'radio' }) {
   )
 }
 
-function NewsletterTable({ rows }: { rows: any[] }) {
+function NewsletterTable({ rows, onDelete }: { rows: any[]; onDelete: (id: string) => void }) {
   if (!rows.length) return <Empty label="Niciun abonat încă." />
   return (
     <div>
@@ -152,7 +169,7 @@ function NewsletterTable({ rows }: { rows: any[] }) {
         <table className="w-full text-sm">
           <thead>
             <tr className="bg-slate-50 text-xs text-slate-400 text-left">
-              <th className="px-4 py-3">Data</th><th className="px-4 py-3">Email</th><th className="px-4 py-3">Sursă</th>
+              <th className="px-4 py-3">Data</th><th className="px-4 py-3">Email</th><th className="px-4 py-3">Sursă</th><th className="px-4 py-3"></th>
             </tr>
           </thead>
           <tbody className="divide-y divide-slate-50">
@@ -161,6 +178,7 @@ function NewsletterTable({ rows }: { rows: any[] }) {
                 <td className="px-4 py-3 text-slate-400 text-xs whitespace-nowrap">{fmtDate(s.created_at)}</td>
                 <td className="px-4 py-3 font-medium text-[#0a2a4e]"><a href={`mailto:${s.email}`} className="hover:text-[#2ea8d8]">{s.email}</a></td>
                 <td className="px-4 py-3"><span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 capitalize">{s.source || '—'}</span></td>
+                <td className="px-4 py-3 text-right"><button onClick={() => onDelete(s.id)} className="p-1.5 rounded-lg hover:bg-red-50 text-slate-300 hover:text-red-500 transition" title="Șterge"><Trash2 size={14} /></button></td>
               </tr>
             ))}
           </tbody>

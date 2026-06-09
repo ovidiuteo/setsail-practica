@@ -63,6 +63,32 @@ export async function getAllLeads() {
   }
 }
 
+const TABLE: Record<string, string> = {
+  cds: 'cds_leads',
+  radio: 'radio_leads',
+  newsletter: 'newsletter_subscribers',
+}
+
+export async function updateLeadRow(kind: string, id: string, patch: { status?: string; notes?: string }) {
+  const table = TABLE[kind]
+  if (!table || table === 'newsletter_subscribers') return { ok: false, error: 'Operație invalidă.' }
+  if (!id) return { ok: false, error: 'id lipsă' }
+  const upd: any = {}
+  if (patch.status) upd.status = patch.status
+  if (patch.notes !== undefined) upd.notes = patch.notes
+  if (!Object.keys(upd).length) return { ok: true }
+  const { error } = await sb().from(table).update(upd).eq('id', id)
+  return { ok: !error, error: error?.message }
+}
+
+export async function deleteLeadRow(kind: string, id: string) {
+  const table = TABLE[kind]
+  if (!table) return { ok: false, error: 'kind invalid' }
+  if (!id) return { ok: false, error: 'id lipsă' }
+  const { error } = await sb().from(table).delete().eq('id', id)
+  return { ok: !error, error: error?.message }
+}
+
 export async function insertNewsletter(email: string, source?: string) {
   const e = (email || '').trim().toLowerCase()
   if (!e || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e)) return { ok: false, error: 'Email invalid.' }
