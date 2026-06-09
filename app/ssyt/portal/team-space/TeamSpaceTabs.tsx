@@ -1,11 +1,11 @@
 'use client'
 import { useState } from 'react'
-import { FileText, CheckSquare, Anchor, Wrench } from 'lucide-react'
+import { FileText, CheckSquare, Anchor, Wrench, BookMarked } from 'lucide-react'
 import NotesEditor from '@/components/ssyt/portal/NotesEditor'
 import TodoList, { Todo, TeamMember } from '@/components/ssyt/portal/TodoList'
 import ResourceList, { Resource } from '@/components/ssyt/portal/ResourceList'
 
-type Tab = 'notes' | 'team-todo' | 'boat-resources' | 'boat-todo'
+type Tab = 'notes' | 'team-todo' | 'boat-resources' | 'boat-misc' | 'boat-todo'
 
 export default function TeamSpaceTabs({
   teamId,
@@ -15,6 +15,7 @@ export default function TeamSpaceTabs({
   initialNotes,
   initialTodos,
   initialResources,
+  boatResourcesAdmin = [],
 }: {
   teamId: string
   canEdit: boolean
@@ -23,6 +24,7 @@ export default function TeamSpaceTabs({
   initialNotes: string
   initialTodos: (Todo & { scope: 'team' | 'boat' })[]
   initialResources: Resource[]
+  boatResourcesAdmin?: Resource[]
 }) {
   const [tab, setTab] = useState<Tab>('notes')
 
@@ -33,6 +35,7 @@ export default function TeamSpaceTabs({
     { id: 'notes', label: 'Note', icon: FileText },
     { id: 'team-todo', label: 'To-do echipă', icon: CheckSquare, count: teamTodos.filter((t) => !t.is_done).length },
     { id: 'boat-resources', label: 'Resurse barcă', icon: Anchor, count: initialResources.length },
+    { id: 'boat-misc', label: 'Resurse diverse', icon: BookMarked, count: boatResourcesAdmin.length },
     { id: 'boat-todo', label: 'To-do barcă', icon: Wrench, count: boatTodos.filter((t) => !t.is_done).length },
   ]
 
@@ -96,6 +99,19 @@ export default function TeamSpaceTabs({
             apiEndpoint="/api/ssyt/portal/team-boat-resources"
             teamId={teamId}
             emptyText="Nicio resursă încă pentru barca echipei."
+          />
+        </div>
+      )}
+
+      {tab === 'boat-misc' && (
+        <div className="rounded-lg p-5" style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
+          <h2 className="text-sm font-medium uppercase tracking-wider text-gray-500 mb-1">Resurse diverse (de la organizatori)</h2>
+          <p className="text-xs text-gray-400 mb-4">Resurse/link-uri/fișiere adăugate de admin pe barca voastră — doar citire.</p>
+          <ResourceList
+            resources={boatResourcesAdmin}
+            canEdit={false}
+            apiEndpoint=""
+            emptyText="Nicio resursă diversă încă."
           />
         </div>
       )}

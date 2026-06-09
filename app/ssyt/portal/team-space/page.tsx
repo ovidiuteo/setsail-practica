@@ -26,9 +26,28 @@ export default async function PortalTeamSpacePage() {
   // Date echipa
   const { data: team } = await supabase
     .from('ssyt_teams')
-    .select('id, name, short_name, color_primary, slug')
+    .select('id, name, short_name, color_primary, slug, boat_id')
     .eq('id', teamId)
     .maybeSingle()
+
+  // Resurse diverse (gestionate de admin pe barca echipei) — read-only pentru echipă
+  let boatResourcesAdmin: any[] = []
+  if (team?.boat_id) {
+    const { data: br } = await supabase
+      .from('ssyt_boat_resources')
+      .select('id, title, description, url, category')
+      .eq('boat_id', team.boat_id)
+      .order('display_order')
+      .order('created_at', { ascending: false })
+    boatResourcesAdmin = (br || []).map((r: any) => ({
+      id: r.id,
+      title: r.title,
+      description: r.description,
+      url: r.url,
+      resource_type: r.category,
+      text_content: null,
+    }))
+  }
 
   // Membri echipa cu nume
   const { data: memberships } = await supabase
@@ -85,6 +104,7 @@ export default async function PortalTeamSpacePage() {
         initialNotes={notes?.content || ''}
         initialTodos={(todos || []) as any}
         initialResources={(boatResources || []) as any}
+        boatResourcesAdmin={boatResourcesAdmin}
       />
     </div>
   )
