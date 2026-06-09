@@ -2,7 +2,7 @@
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
-  Users, Wrench, ListChecks, FileText, Link as LinkIcon, Image as ImageIcon, Gauge,
+  Users, Wrench, ListChecks, FileText, Link as LinkIcon, Image as ImageIcon, Gauge, FolderInput,
 } from 'lucide-react'
 import SpecsTab from './tabs/SpecsTab'
 import TeamTab from './tabs/TeamTab'
@@ -10,9 +10,10 @@ import EquipmentTab from './tabs/EquipmentTab'
 import TasksTab from './tabs/TasksTab'
 import FilesTab from './tabs/FilesTab'
 import ResourcesTab from './tabs/ResourcesTab'
+import TeamResourcesTab from './tabs/TeamResourcesTab'
 import PhotosTab from './tabs/PhotosTab'
 
-type TabKey = 'team' | 'specs' | 'equipment' | 'tasks' | 'files' | 'resources' | 'photos'
+type TabKey = 'team' | 'specs' | 'equipment' | 'tasks' | 'files' | 'resources' | 'team_resources' | 'photos'
 
 const TABS: { key: TabKey; label: string; icon: any }[] = [
   { key: 'team', label: 'Echipă', icon: Users },
@@ -21,6 +22,7 @@ const TABS: { key: TabKey; label: string; icon: any }[] = [
   { key: 'tasks', label: 'To-do', icon: ListChecks },
   { key: 'files', label: 'Fișiere', icon: FileText },
   { key: 'resources', label: 'Resurse', icon: LinkIcon },
+  { key: 'team_resources', label: 'Resurse echipă (portal)', icon: FolderInput },
   { key: 'photos', label: 'Poze', icon: ImageIcon },
 ]
 
@@ -31,6 +33,7 @@ export default function BoatDetailTabs(props: {
   tasks: any[]
   files: any[]
   resources: any[]
+  teamResources: any[]
   photos: any[]
   teams: any[]
   allParticipants: any[]
@@ -73,6 +76,9 @@ export default function BoatDetailTabs(props: {
               {t.key === 'photos' && props.photos.length > 0 && (
                 <span className="ml-1 text-xs text-gray-400">({props.photos.length})</span>
               )}
+              {t.key === 'team_resources' && props.teamResources.length > 0 && (
+                <span className="ml-1 text-xs text-gray-400">({props.teamResources.length})</span>
+              )}
             </button>
           )
         })}
@@ -86,6 +92,7 @@ export default function BoatDetailTabs(props: {
         {tab === 'tasks' && <TasksTab boatId={props.boat.id} tasks={props.tasks} allParticipants={props.allParticipants} equipment={props.equipment} onChange={refresh} />}
         {tab === 'files' && <FilesTab boatId={props.boat.id} files={props.files} onChange={refresh} />}
         {tab === 'resources' && <ResourcesTab boatId={props.boat.id} resources={props.resources} onChange={refresh} />}
+        {tab === 'team_resources' && <TeamResourcesTab resources={props.teamResources} onChange={refresh} />}
         {tab === 'photos' && <PhotosTab boatId={props.boat.id} photos={props.photos} onChange={refresh} />}
       </div>
     </div>

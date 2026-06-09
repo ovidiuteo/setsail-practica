@@ -1,10 +1,12 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Sailboat } from 'lucide-react'
+import { createClient } from '@supabase/supabase-js'
 import { supabase } from '@/lib/ssyt/supabase'
 import BoatDetailTabs from './BoatDetailTabs'
 
 export const revalidate = 0
+export const dynamic = 'force-dynamic'
 
 export default async function AdminBoatDetailPage({ params }: { params: { id: string } }) {
   const { data: boat } = await supabase
@@ -33,6 +35,27 @@ export default async function AdminBoatDetailPage({ params }: { params: { id: st
     `).eq('boat_id', boat.id),
     supabase.from('ssyt_participants').select('id, full_name').in('status', ['active', 'accepted']).order('full_name'),
   ])
+
+  // Resurse de echipă (adăugate de echipe în portal) — tabel cu RLS doar service-role.
+  const teamIds = (teamsRes.data || []).map((t: any) => t.id)
+  let teamResources: any[] = []
+  if (teamIds.length > 0) {
+    const admin = createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    })
+    const { data: trData } = await admin
+      .from('ssyt_team_boat_resources')
+      .select('id, team_id, title, description, resource_type, url, text_content, created_at')
+      .in('team_id', teamIds)
+      .order('created_at', { ascending: false })
+    const teamById: Record<string, any> = {}
+    for (const t of teamsRes.data || []) teamById[t.id] = t
+    teamResources = (trData || []).map((r: any) => ({
+      ...r,
+      team_name: teamById[r.team_id]?.name || null,
+      team_color: teamById[r.team_id]?.color_primary || null,
+    }))
+  }
 
   return (
     <div className="px-8 py-8 max-w-6xl">
@@ -69,6 +92,7 @@ export default async function AdminBoatDetailPage({ params }: { params: { id: st
         resources={resourcesRes.data || []}
         photos={photosRes.data || []}
         teams={teamsRes.data || []}
+        teamResources={teamResources}
         allParticipants={participantsRes.data || []}
       />
     </div>
