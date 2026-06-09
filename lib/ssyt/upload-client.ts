@@ -1,7 +1,7 @@
 'use client'
 import { createSupabaseBrowserClient } from './supabase-browser'
 
-export type UploadContext = 'regatta_document' | 'boat_file' | 'team_photo'
+export type UploadContext = 'regatta_document' | 'boat_file' | 'team_photo' | 'boat_resource' | 'team_resource'
 
 export type UploadOpts = {
   context: UploadContext

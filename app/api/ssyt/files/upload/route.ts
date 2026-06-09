@@ -10,7 +10,7 @@ export const dynamic = 'force-dynamic'
 const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
 const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY!
 
-const ALLOWED_CONTEXTS = ['regatta_document', 'boat_file', 'team_photo']
+const ALLOWED_CONTEXTS = ['regatta_document', 'boat_file', 'team_photo', 'boat_resource', 'team_resource']
 const PDF = 'application/pdf'
 const IMAGE_MIMES = ['image/jpeg', 'image/png', 'image/webp']
 const MAX_PDF = 25 * 1024 * 1024

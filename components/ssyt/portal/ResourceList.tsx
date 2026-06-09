@@ -1,7 +1,8 @@
 'use client'
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { Plus, Edit2, ExternalLink, X, Save, Link as LinkIcon, FileText } from 'lucide-react'
+import { Plus, Edit2, ExternalLink, X, Save, Link as LinkIcon, FileText, Upload, Loader2 } from 'lucide-react'
+import { uploadSsytFile, type UploadContext } from '@/lib/ssyt/upload-client'
 
 export type Resource = {
   id: string
@@ -29,6 +30,7 @@ export default function ResourceList({
   const [addOpen, setAddOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const uploadContext: UploadContext = teamId ? 'team_resource' : 'boat_resource'
 
   async function handleSave(formData: any, id?: string) {
     setBusy(true)
@@ -67,7 +69,7 @@ export default function ResourceList({
       )}
 
       {addOpen && (
-        <ResourceForm onCancel={() => setAddOpen(false)} onSave={(d) => handleSave(d)} busy={busy} />
+        <ResourceForm uploadContext={uploadContext} uploadTeamId={teamId} onCancel={() => setAddOpen(false)} onSave={(d) => handleSave(d)} busy={busy} />
       )}
 
       <div className="space-y-2">
@@ -78,7 +80,7 @@ export default function ResourceList({
         ) : (
           resources.map((r) =>
             editingId === r.id ? (
-              <ResourceForm key={r.id} initial={r} onCancel={() => setEditingId(null)} onSave={(d) => handleSave(d, r.id)} busy={busy} />
+              <ResourceForm key={r.id} initial={r} uploadContext={uploadContext} uploadTeamId={teamId} onCancel={() => setEditingId(null)} onSave={(d) => handleSave(d, r.id)} busy={busy} />
             ) : (
               <div key={r.id} className="rounded-lg p-4 flex items-start gap-3" style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
                 <div className="w-8 h-8 rounded flex items-center justify-center flex-shrink-0" style={{ background: '#f3f4f6' }}>
@@ -118,11 +120,15 @@ export default function ResourceList({
 
 function ResourceForm({
   initial,
+  uploadContext,
+  uploadTeamId,
   onCancel,
   onSave,
   busy,
 }: {
   initial?: Partial<Resource>
+  uploadContext: UploadContext
+  uploadTeamId?: string
   onCancel: () => void
   onSave: (data: any) => void
   busy: boolean
@@ -134,6 +140,24 @@ function ResourceForm({
     resource_type: initial?.resource_type || 'other',
     text_content: initial?.text_content || '',
   })
+  const [uploading, setUploading] = useState(false)
+  const [uploadErr, setUploadErr] = useState<string | null>(null)
+  const fileRef = useRef<HTMLInputElement | null>(null)
+
+  async function handleFile(file: File | null) {
+    if (!file) return
+    setUploading(true)
+    setUploadErr(null)
+    try {
+      const up = await uploadSsytFile(file, { context: uploadContext, teamId: uploadTeamId })
+      setForm((f) => ({ ...f, url: up.url, title: f.title || up.filename }))
+    } catch (e: any) {
+      setUploadErr(e.message || 'Upload eșuat.')
+    } finally {
+      setUploading(false)
+      if (fileRef.current) fileRef.current.value = ''
+    }
+  }
 
   return (
     <div className="rounded-lg p-4 mb-3" style={{ background: '#fff', border: '2px solid #FF6B35' }}>
@@ -145,9 +169,19 @@ function ResourceForm({
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <div>
-            <label className="block text-[10px] uppercase tracking-wider text-gray-500 font-medium mb-1">URL (Google Doc, Sheet, PDF, etc.)</label>
-            <input value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} placeholder="https://..."
+            <label className="block text-[10px] uppercase tracking-wider text-gray-500 font-medium mb-1">Fișier (PDF/imagine) sau URL</label>
+            <div className="flex items-center gap-2 mb-1.5">
+              <input ref={fileRef} type="file" accept="application/pdf,image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => handleFile(e.target.files?.[0] || null)} />
+              <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium disabled:opacity-50" style={{ background: '#fff', border: '1px solid #FF6B35', color: '#FF6B35' }}>
+                {uploading ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+                {uploading ? 'Se încarcă...' : 'Încarcă fișier'}
+              </button>
+              {form.url && !uploading && <span className="text-xs text-emerald-600">✓</span>}
+            </div>
+            <input value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} placeholder="sau URL https://..."
               className="w-full px-3 py-1.5 border rounded-md text-sm" style={{ borderColor: '#d1d5db' }} />
+            {uploadErr && <p className="text-[11px] text-red-600 mt-1">{uploadErr}</p>}
           </div>
           <div>
             <label className="block text-[10px] uppercase tracking-wider text-gray-500 font-medium mb-1">Tip</label>

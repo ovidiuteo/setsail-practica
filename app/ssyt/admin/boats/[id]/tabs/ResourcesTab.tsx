@@ -1,8 +1,9 @@
 'use client'
-import { useState } from 'react'
-import { Plus, Link as LinkIcon, ExternalLink, Trash2, X } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { Plus, Link as LinkIcon, ExternalLink, Trash2, X, Upload, Loader2 } from 'lucide-react'
 import { supabase } from '@/lib/ssyt/supabase'
 import EditableField from '@/components/ssyt/EditableField'
+import { uploadSsytFile, deleteSsytFile } from '@/lib/ssyt/upload-client'
 
 export default function ResourcesTab({ boatId, resources, onChange }: { boatId: string; resources: any[]; onChange: () => void }) {
   const [showNew, setShowNew] = useState(false)
@@ -14,10 +15,11 @@ export default function ResourcesTab({ boatId, resources, onChange }: { boatId: 
     onChange()
   }
 
-  async function remove(id: string) {
+  async function remove(r: any) {
     if (!confirm('Ștergi această resursă?')) return
-    const { error } = await supabase.from('ssyt_boat_resources').delete().eq('id', id)
+    const { error } = await supabase.from('ssyt_boat_resources').delete().eq('id', r.id)
     if (error) { alert(error.message); return }
+    if (r.url) await deleteSsytFile({ url: r.url, admin: true })
     onChange()
   }
 
@@ -57,7 +59,7 @@ export default function ResourcesTab({ boatId, resources, onChange }: { boatId: 
                       <ExternalLink size={14} />
                     </a>
                   )}
-                  <button onClick={() => remove(r.id)} className="text-gray-300 hover:text-red-600 p-1"><Trash2 size={14} /></button>
+                  <button onClick={() => remove(r)} className="text-gray-300 hover:text-red-600 p-1"><Trash2 size={14} /></button>
                 </div>
               </div>
 
@@ -78,12 +80,30 @@ export default function ResourcesTab({ boatId, resources, onChange }: { boatId: 
 
 function NewResourceForm({ boatId, onClose, onSaved }: { boatId: string; onClose: () => void; onSaved: () => void }) {
   const [form, setForm] = useState({ title: '', url: '', description: '', category: '' })
+  const [uploading, setUploading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
+  const fileRef = useRef<HTMLInputElement | null>(null)
+
+  async function handleFile(file: File | null) {
+    if (!file) return
+    setUploading(true)
+    setError(null)
+    try {
+      const up = await uploadSsytFile(file, { context: 'boat_resource', admin: true, boatId })
+      setForm((f) => ({ ...f, url: up.url, title: f.title || up.filename }))
+    } catch (e: any) {
+      setError(e.message || 'Upload eșuat.')
+    } finally {
+      setUploading(false)
+      if (fileRef.current) fileRef.current.value = ''
+    }
+  }
 
   async function save() {
     if (!form.title.trim() || !form.url.trim()) return
     setSaving(true)
-    const { error } = await supabase.from('ssyt_boat_resources').insert({
+    const { error: err } = await supabase.from('ssyt_boat_resources').insert({
       boat_id: boatId,
       title: form.title,
       url: form.url,
@@ -91,7 +111,7 @@ function NewResourceForm({ boatId, onClose, onSaved }: { boatId: string; onClose
       category: form.category || null,
     })
     setSaving(false)
-    if (error) { alert(error.message); return }
+    if (err) { setError(err.message); return }
     onSaved()
   }
 
@@ -105,9 +125,19 @@ function NewResourceForm({ boatId, onClose, onSaved }: { boatId: string; onClose
         <input placeholder="Titlu *" value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} className="px-3 py-2 border rounded-md text-sm" />
         <input placeholder="Categorie" value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} className="px-3 py-2 border rounded-md text-sm" />
       </div>
-      <input placeholder="URL *" value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} className="w-full px-3 py-2 border rounded-md text-sm mb-3 font-mono" />
+      <div className="flex items-center gap-2 mb-2">
+        <input ref={fileRef} type="file" accept="application/pdf,image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => handleFile(e.target.files?.[0] || null)} />
+        <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
+          className="inline-flex items-center gap-1.5 px-3 py-2 rounded-md text-sm font-medium disabled:opacity-50" style={{ background: '#fff', border: '1px solid #FF6B35', color: '#FF6B35' }}>
+          {uploading ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />}
+          {uploading ? 'Se încarcă...' : 'Încarcă fișier (PDF/imagine)'}
+        </button>
+        {form.url && !uploading && <span className="text-xs text-emerald-600">✓ încărcat</span>}
+      </div>
+      <input placeholder="sau URL extern *" value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} className="w-full px-3 py-2 border rounded-md text-sm mb-3 font-mono" />
       <textarea placeholder="Descriere" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={2} className="w-full px-3 py-2 border rounded-md text-sm mb-3" />
-      <button onClick={save} disabled={saving || !form.title.trim() || !form.url.trim()} className="px-4 py-2 rounded-md text-sm text-white font-medium disabled:opacity-50" style={{ background: '#FF6B35' }}>
+      {error && <p className="text-xs text-red-600 mb-2">{error}</p>}
+      <button onClick={save} disabled={saving || uploading || !form.title.trim() || !form.url.trim()} className="px-4 py-2 rounded-md text-sm text-white font-medium disabled:opacity-50" style={{ background: '#FF6B35' }}>
         {saving ? '...' : 'Salvează'}
       </button>
     </div>

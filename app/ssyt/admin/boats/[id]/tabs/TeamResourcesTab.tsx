@@ -1,7 +1,8 @@
 'use client'
-import { useState } from 'react'
-import { ExternalLink, Trash2, Edit2, X, Save, FolderInput, FileText } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { ExternalLink, Trash2, Edit2, X, Save, FolderInput, FileText, Upload, Loader2 } from 'lucide-react'
 import { createSupabaseBrowserClient } from '@/lib/ssyt/supabase-browser'
+import { uploadSsytFile, deleteSsytFile } from '@/lib/ssyt/upload-client'
 
 type Resource = {
   id: string
@@ -26,13 +27,14 @@ export default function TeamResourcesTab({ resources, onChange }: { resources: R
   const [editingId, setEditingId] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
 
-  async function remove(id: string) {
+  async function remove(r: Resource) {
     if (!confirm('Ștergi această resursă adăugată de echipă?')) return
     setBusy(true)
     try {
       const headers = await adminHeaders()
-      const res = await fetch('/api/ssyt/admin/team-resources', { method: 'DELETE', headers, body: JSON.stringify({ id }) })
+      const res = await fetch('/api/ssyt/admin/team-resources', { method: 'DELETE', headers, body: JSON.stringify({ id: r.id }) })
       if (!res.ok) { const d = await res.json().catch(() => ({})); alert(d.error || 'Eroare'); return }
+      if (r.url) await deleteSsytFile({ url: r.url, admin: true })
       onChange()
     } catch (e: any) { alert(e.message) } finally { setBusy(false) }
   }
@@ -97,7 +99,7 @@ export default function TeamResourcesTab({ resources, onChange }: { resources: R
               </div>
               <div className="flex items-center gap-1 flex-shrink-0">
                 <button onClick={() => setEditingId(r.id)} className="text-gray-400 hover:text-gray-700 p-1"><Edit2 size={14} /></button>
-                <button onClick={() => remove(r.id)} disabled={busy} className="text-gray-300 hover:text-red-600 p-1"><Trash2 size={14} /></button>
+                <button onClick={() => remove(r)} disabled={busy} className="text-gray-300 hover:text-red-600 p-1"><Trash2 size={14} /></button>
               </div>
             </div>
           )
@@ -115,6 +117,22 @@ function EditForm({ resource, busy, onCancel, onSave }: { resource: Resource; bu
     description: resource.description || '',
     text_content: resource.text_content || '',
   })
+  const [uploading, setUploading] = useState(false)
+  const fileRef = useRef<HTMLInputElement | null>(null)
+
+  async function handleFile(file: File | null) {
+    if (!file) return
+    setUploading(true)
+    try {
+      const up = await uploadSsytFile(file, { context: 'team_resource', admin: true, teamId: resource.team_id })
+      setForm((f) => ({ ...f, url: up.url, title: f.title || up.filename }))
+    } catch (e: any) {
+      alert(e.message || 'Upload eșuat.')
+    } finally {
+      setUploading(false)
+      if (fileRef.current) fileRef.current.value = ''
+    }
+  }
 
   return (
     <div className="rounded-lg p-4" style={{ background: '#fff', border: '2px solid #FF6B35' }}>
@@ -123,6 +141,15 @@ function EditForm({ resource, busy, onCancel, onSave }: { resource: Resource; bu
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <input value={form.resource_type} onChange={(e) => setForm({ ...form, resource_type: e.target.value })} placeholder="Tip (ex: polara, other)" className="w-full px-3 py-1.5 border rounded-md text-sm" style={{ borderColor: '#d1d5db' }} />
           <input value={form.url} onChange={(e) => setForm({ ...form, url: e.target.value })} placeholder="URL" className="w-full px-3 py-1.5 border rounded-md text-sm font-mono" style={{ borderColor: '#d1d5db' }} />
+        </div>
+        <div className="flex items-center gap-2">
+          <input ref={fileRef} type="file" accept="application/pdf,image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => handleFile(e.target.files?.[0] || null)} />
+          <button type="button" onClick={() => fileRef.current?.click()} disabled={uploading}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium disabled:opacity-50" style={{ background: '#fff', border: '1px solid #FF6B35', color: '#FF6B35' }}>
+            {uploading ? <Loader2 size={12} className="animate-spin" /> : <Upload size={12} />}
+            {uploading ? 'Se încarcă...' : 'Înlocuiește cu fișier (R2)'}
+          </button>
+          {form.url && !uploading && <span className="text-xs text-emerald-600">✓</span>}
         </div>
         <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="Descriere" className="w-full px-3 py-1.5 border rounded-md text-sm" style={{ borderColor: '#d1d5db' }} />
         <textarea value={form.text_content} onChange={(e) => setForm({ ...form, text_content: e.target.value })} placeholder="Conținut text (opțional)" rows={2} className="w-full px-3 py-1.5 border rounded-md text-sm" style={{ borderColor: '#d1d5db' }} />
