@@ -504,8 +504,7 @@ function LeadModal({ content: c, onClose, initial }: { content: RadioContent; on
                 <textarea className={input} rows={3} value={form.message} onChange={(e) => setForm({ ...form, message: e.target.value })} />
               </div>
               <div>
-                <label className="block text-xs font-medium text-slate-500 mb-1">{c.leadForm.voucherLabel}</label>
-                <input className={`${input} font-mono uppercase tracking-wider`} value={form.voucher} onChange={(e) => setForm({ ...form, voucher: e.target.value.toUpperCase() })} placeholder="SS-XXXX-XXXX" />
+                <input className={`${input} font-mono uppercase tracking-wider w-full max-w-[80%]`} value={form.voucher} onChange={(e) => setForm({ ...form, voucher: e.target.value.toUpperCase() })} placeholder="SS-XXXX-XXXX" />
               </div>
               {state === 'error' && <p className="text-sm text-red-600">{err}</p>}
               <button type="submit" disabled={state === 'sending'} className="w-full flex items-center justify-center gap-2 bg-[#f5b528] hover:brightness-95 text-[#0a2a4e] font-bold py-3.5 rounded-xl transition disabled:opacity-60">
