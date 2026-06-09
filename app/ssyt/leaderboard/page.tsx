@@ -58,7 +58,7 @@ export default async function LeaderboardPage() {
                   <th className="text-center px-5 py-3 text-xs font-medium uppercase tracking-wider text-gray-500">Regatte</th>
                   <th className="text-center px-5 py-3 text-xs font-medium uppercase tracking-wider text-gray-500">Victorii</th>
                   <th className="text-center px-5 py-3 text-xs font-medium uppercase tracking-wider text-gray-500">Podium</th>
-                  <th className="text-right px-5 py-3 text-xs font-medium uppercase tracking-wider" style={{ color: '#FF6B35' }}>Puncte SSYT</th>
+                  <th className="text-right px-5 py-3 text-xs font-medium uppercase tracking-wider" style={{ color: '#FF6B35' }}>Net (sezon)</th>
                 </tr>
               </thead>
               <tbody>
@@ -96,8 +96,8 @@ export default async function LeaderboardPage() {
           </div>
 
           <p className="mt-6 text-xs text-gray-500 leading-relaxed">
-            <strong>Notă</strong>: Punctajul SSYT este calculat intern, separat de clasamentul oficial al fiecărei regate.
-            Sistemul de punctaj urmează să fie comunicat oficial înainte de prima regatta.
+            <strong>Notă</strong>: Scor în sistem low-point — <strong>mai puține puncte = mai bine</strong> (Net-ul fiecărei
+            regate, însumat pe sezon). Clasamentul intern e separat de cel oficial al fiecărei regate.
           </p>
         </>
       )}
