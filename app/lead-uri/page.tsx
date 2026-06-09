@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Loader2, RefreshCw, ShieldAlert, Download, GraduationCap, Radio, Mail, Trash2 } from 'lucide-react'
+import { Loader2, RefreshCw, ShieldAlert, Download, GraduationCap, Radio, Mail, Trash2, Pin } from 'lucide-react'
 
 type Data = { cds: any[]; radio: any[]; newsletter: any[] }
 type Kind = 'cds' | 'radio' | 'newsletter'
@@ -37,6 +37,14 @@ export default function LeadsDashboardPage() {
   const [phase, setPhase] = useState<'checking' | 'denied' | 'ready'>('checking')
   const [data, setData] = useState<Data | null>(null)
   const [tab, setTab] = useState<'cds' | 'radio' | 'newsletter'>('cds')
+  const [focusKind, setFocusKind] = useState<'cds' | 'radio' | null>(null)
+
+  function toggleFocus(k: 'cds' | 'radio') {
+    const next = focusKind === k ? null : k
+    setFocusKind(next)
+    try { next ? localStorage.setItem('leads_focus', next) : localStorage.removeItem('leads_focus') } catch {}
+    if (next) setTab(next)
+  }
 
   const load = useCallback(async (t: string) => {
     const res = await fetch(`/api/leads-dashboard?token=${encodeURIComponent(t)}`)
@@ -47,6 +55,9 @@ export default function LeadsDashboardPage() {
   }, [])
 
   useEffect(() => {
+    let f: string | null = null
+    try { f = localStorage.getItem('leads_focus') } catch {}
+    if (f === 'cds' || f === 'radio') { setFocusKind(f); setTab(f) }
     const t = new URLSearchParams(window.location.search).get('token')
     setToken(t)
     if (!t) { setPhase('denied'); return }
@@ -84,6 +95,7 @@ export default function LeadsDashboardPage() {
     { k: 'radio' as const, label: 'Radio GMDSS', icon: Radio, n: d.radio.length },
     { k: 'newsletter' as const, label: 'Newsletter', icon: Mail, n: d.newsletter.length },
   ]
+  const ordered = focusKind ? [TABS.find((t) => t.k === focusKind)!, ...TABS.filter((t) => t.k !== focusKind)] : TABS
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800">
@@ -95,11 +107,18 @@ export default function LeadsDashboardPage() {
           </div>
           <button onClick={() => token && load(token)} className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg border border-slate-200 hover:bg-slate-50 transition"><RefreshCw size={15} /> Reîncarcă</button>
         </div>
-        <div className="max-w-6xl mx-auto px-5 flex gap-1">
-          {TABS.map(({ k, label, icon: Icon, n }) => (
-            <button key={k} onClick={() => setTab(k)} className={`flex items-center gap-1.5 px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition ${tab === k ? 'border-[#2ea8d8] text-[#0a2a4e]' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>
-              <Icon size={15} /> {label} <span className="text-xs bg-slate-100 text-slate-500 rounded-full px-2 py-0.5">{n}</span>
-            </button>
+        <div className="max-w-6xl mx-auto px-5 flex gap-1 items-center">
+          {ordered.map(({ k, label, icon: Icon, n }) => (
+            <div key={k} className={`flex items-center border-b-2 -mb-px ${tab === k ? 'border-[#2ea8d8]' : 'border-transparent'}`}>
+              <button onClick={() => setTab(k)} className={`flex items-center gap-1.5 pl-4 pr-2 py-2.5 text-sm font-medium transition ${tab === k ? 'text-[#0a2a4e]' : 'text-slate-400 hover:text-slate-600'}`}>
+                <Icon size={15} /> {label} <span className="text-xs bg-slate-100 text-slate-500 rounded-full px-2 py-0.5">{n}</span>
+              </button>
+              {(k === 'cds' || k === 'radio') && (
+                <button onClick={() => toggleFocus(k)} title={focusKind === k ? 'Anulează focus' : 'Focus — afișează primul'} className={`mr-1.5 p-1 rounded-md transition ${focusKind === k ? 'text-[#f5b528]' : 'text-slate-300 hover:text-slate-500'}`}>
+                  <Pin size={14} className={focusKind === k ? 'fill-current' : ''} />
+                </button>
+              )}
+            </div>
           ))}
         </div>
       </header>
