@@ -595,24 +595,37 @@ function CheltuieliPanel({ entity, token, month, items, setItems, analyzing, has
 function ContabilLinkButton({ entity, token, month }: { entity: string; token: string | null; month: string }) {
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [regenerating, setRegenerating] = useState(false)
   const [url, setUrl] = useState('')
   const [copied, setCopied] = useState(false)
+
+  async function fetchToken(regenerate: boolean): Promise<string | null> {
+    const j = await fetch('/api/acte-contabile/contabil-token', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ entity, token, luna: month, regenerate }),
+    }).then(r => r.json()).catch(() => null)
+    if (j?.ok && j.token) {
+      const origin = typeof window !== 'undefined' ? window.location.origin : ''
+      return `${origin}/acte-contabile/contabil/${j.token}`
+    }
+    alert(j?.error || 'Nu am putut genera link-ul.')
+    return null
+  }
 
   async function ensureLink() {
     if (url) { setOpen(o => !o); return }
     setBusy(true)
-    try {
-      const j = await fetch('/api/acte-contabile/contabil-token', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ entity, token, luna: month }),
-      }).then(r => r.json())
-      if (j.ok && j.token) {
-        const origin = typeof window !== 'undefined' ? window.location.origin : ''
-        setUrl(`${origin}/acte-contabile/contabil/${j.token}`)
-        setOpen(true)
-      } else alert(j.error || 'Nu am putut genera link-ul.')
-    } catch { alert('Conexiune eșuată.') }
-    finally { setBusy(false) }
+    const u = await fetchToken(false)
+    if (u) { setUrl(u); setOpen(true) }
+    setBusy(false)
+  }
+
+  async function regenerate() {
+    if (!confirm('Regenerezi link-ul? Link-ul vechi trimis contabilului nu va mai funcționa.')) return
+    setRegenerating(true)
+    const u = await fetchToken(true)
+    if (u) { setUrl(u); setCopied(false) }
+    setRegenerating(false)
   }
 
   function copy() {
@@ -641,6 +654,11 @@ function ContabilLinkButton({ entity, token, month }: { entity: string; token: s
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[#0a1628]" style={{ background: '#f5c842' }}>
               <ExternalLink size={14} /> Deschide
             </a>
+            <button onClick={regenerate} disabled={regenerating}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-amber-200 text-amber-700 hover:bg-amber-50 disabled:opacity-60"
+              title="Generează un link nou și invalidează-l pe cel vechi">
+              {regenerating ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} Regenerează
+            </button>
             <button onClick={() => setOpen(false)} className="ml-auto p-1.5 rounded-lg text-slate-400 hover:bg-slate-50"><X size={14} /></button>
           </div>
         </div>

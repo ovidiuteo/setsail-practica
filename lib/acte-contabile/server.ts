@@ -39,7 +39,11 @@ export function isLuna(v: unknown): v is Luna {
 }
 
 export function acteServiceClient(): SupabaseClient {
-  return createClient(URL, SERVICE, { auth: { persistSession: false, autoRefreshToken: false } })
+  return createClient(URL, SERVICE, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    // Dezactivează cache-ul de fetch Next pe supabase-js (altfel token-uri/date stale în route handlers)
+    global: { fetch: (input: any, init?: any) => fetch(input, { ...init, cache: 'no-store' }) },
+  })
 }
 
 // --- token ---------------------------------------------------------------
@@ -125,6 +129,14 @@ export async function getOrCreateContabilToken(entity: Entity, luna: string): Pr
   const { data: row } = await sb.from('acte_contabile_contabil_tokens')
     .select('token').eq('entity', entity).eq('luna', luna).maybeSingle()
   return (row?.token as string) || token
+}
+
+export async function regenerateContabilToken(entity: Entity, luna: string): Promise<string> {
+  const token = randomBytes(32).toString('hex')
+  const sb = acteServiceClient()
+  await sb.from('acte_contabile_contabil_tokens')
+    .upsert({ entity, luna, token }, { onConflict: 'entity,luna' })
+  return token
 }
 
 export async function resolveContabilToken(token: string | null | undefined): Promise<{ entity: Entity; luna: string } | null> {
