@@ -234,8 +234,8 @@ export default function ActeContabilePage({ params }: { params: { entity: string
         {docs === null ? (
           <div className="text-center text-slate-400 py-16"><Loader2 className="w-6 h-6 animate-spin mx-auto" /></div>
         ) : (() => {
-          // Secțiuni: lunile vizibile care au documente SAU luna curentă (mereu prezentă)
-          const sectionMonths = visibleMonths.filter(m => shown.some(d => lunaOf(d) === m) || m === currentLuna())
+          // O secțiune pentru fiecare lună selectată (cu panoul de extrase/facturi), chiar dacă nu are documente
+          const sectionMonths = visibleMonths.length ? visibleMonths : [currentLuna()]
           if (sectionMonths.length === 0) {
             return (
               <div className="text-center text-slate-400 py-16 bg-white rounded-xl border border-slate-200">
