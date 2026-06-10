@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getHeaderImage } from '@/lib/antete'
-import { fillDocTemplate, fragmentDefault } from '@/lib/doc-templates'
+import { fillDocTemplate, fragmentDefault, fragmentDefaultAlign, type DocAlign } from '@/lib/doc-templates'
 
 export async function POST(req: NextRequest) {
   const { session_id } = await req.json()
@@ -115,9 +115,11 @@ export async function POST(req: NextRequest) {
 
   // Template-uri editabile (admin → Template-uri Documente); fallback la default-urile din lib
   const { data: tplRows } = await supabase
-    .from('doc_templates').select('key, content').eq('doc_type', 'pv_practica')
+    .from('doc_templates').select('key, content, align').eq('doc_type', 'pv_practica')
   const tplOverrides: Record<string, string> = Object.fromEntries((tplRows || []).map((r: any) => [r.key, r.content]))
+  const tplAlignOverrides: Record<string, string> = Object.fromEntries((tplRows || []).filter((r: any) => r.align).map((r: any) => [r.key, r.align]))
   const tpl = (key: string) => tplOverrides[key] ?? fragmentDefault('pv_practica', key)
+  const tplAlign = (key: string): DocAlign => (tplAlignOverrides[key] as DocAlign) || fragmentDefaultAlign('pv_practica', key)
   const tplVars: Record<string, string> = {
     data_practica: sessionDate,
     evaluator: evaluatorNume,
@@ -132,6 +134,10 @@ export async function POST(req: NextRequest) {
     fraza_instructori: multiInstr ? 'în prezența instructorilor' : 'în prezența instructorului',
     instructori: instructor,
   }
+  const docxAlign = (a: DocAlign) =>
+    a === 'center' ? AlignmentType.CENTER : a === 'right' ? AlignmentType.RIGHT : a === 'left' ? AlignmentType.LEFT : AlignmentType.BOTH
+  // Indentul de prim rand are sens doar la stanga/justify; la center/right l-am scoate din asezare
+  const tplIndent = (key: string) => (tplAlign(key) === 'justify' || tplAlign(key) === 'left') ? { firstLine: 720 } : undefined
 
   // Footer locatie
   const fl1 = session.locations?.footer_line1 || ''
@@ -355,45 +361,44 @@ export async function POST(req: NextRequest) {
       children: [new TextRun({ text: 'Nr. ........... / .....................', size: 20 })]
     }),
 
-    // Titlu
+    // Titlu (spatiu redus ~40% inainte de "Incheiat astazi" la Limanu)
     new Paragraph({
-      alignment: AlignmentType.CENTER,
-      spacing: { before: 200, after: 300 },
+      alignment: docxAlign(tplAlign('titlu')),
+      spacing: { before: 200, after: locName.includes('limanu') ? 180 : 300 },
       children: fillDocTemplate(tpl('titlu'), tplVars).map(s => new TextRun({ text: s.text, bold: true, italics: s.italics, size: 26 }))
     }),
 
-    // Limanu: "Incheiat astazi [data probei practice]" + un paragraf gol, inainte de Subsemnatul
+    // Limanu: "Incheiat astazi [data probei practice]" inainte de Subsemnatul (spatiu dupa redus ~40%)
     ...(locName.includes('limanu') ? [
       new Paragraph({
-        spacing: { after: 0 },
-        indent: { firstLine: 720 },
-        alignment: AlignmentType.BOTH,
+        spacing: { before: 0, after: 170 },
+        indent: tplIndent('incheiat_limanu'),
+        alignment: docxAlign(tplAlign('incheiat_limanu')),
         children: fillDocTemplate(tpl('incheiat_limanu'), tplVars).map(s => new TextRun({ text: s.text, bold: s.bold, italics: s.italics, size: 22 }))
       }),
-      new Paragraph({ spacing: { after: 0 }, children: [new TextRun({ text: '', size: 22 })] }),
     ] : []),
 
     // Paragraful 1 - Subsemnatul
     new Paragraph({
       spacing: { after: 0 },
-      indent: { firstLine: 720 },
-      alignment: AlignmentType.BOTH,
+      indent: tplIndent('p1_subsemnatul'),
+      alignment: docxAlign(tplAlign('p1_subsemnatul')),
       children: fillDocTemplate(tpl('p1_subsemnatul'), tplVars).map(s => new TextRun({ text: s.text, bold: s.bold, italics: s.italics, size: 22 }))
     }),
 
     // Paragraful 2 - Avand in vedere
     new Paragraph({
       spacing: { after: 0 },
-      indent: { firstLine: 720 },
-      alignment: AlignmentType.BOTH,
+      indent: tplIndent('p2_regulament'),
+      alignment: docxAlign(tplAlign('p2_regulament')),
       children: fillDocTemplate(tpl('p2_regulament'), tplVars).map(s => new TextRun({ text: s.text, bold: s.bold, italics: s.italics, size: 22 }))
     }),
 
     // Paragraful 3 - In baza solicitarii
     new Paragraph({
       spacing: { after: 0 },
-      indent: { firstLine: 720 },
-      alignment: AlignmentType.BOTH,
+      indent: tplIndent('p3_solicitare'),
+      alignment: docxAlign(tplAlign('p3_solicitare')),
       children: fillDocTemplate(tpl('p3_solicitare'), tplVars).map(s => new TextRun({ text: s.text, bold: s.bold, italics: s.italics, size: 22 }))
     }),
 
@@ -403,7 +408,7 @@ export async function POST(req: NextRequest) {
     // Paragraf final
     new Paragraph({
       spacing: { before: 0, after: 0 },
-      alignment: AlignmentType.BOTH,
+      alignment: docxAlign(tplAlign('final')),
       children: fillDocTemplate(tpl('final'), tplVars).map(s => new TextRun({ text: s.text, bold: s.bold, italics: s.italics, size: 22 }))
     }),
 

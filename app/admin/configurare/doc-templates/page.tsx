@@ -2,23 +2,32 @@
 import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
-import { ArrowLeft, RotateCcw, Check, Loader2, FileText } from 'lucide-react'
-import { DOC_TEMPLATE_TYPES, fillDocTemplate } from '@/lib/doc-templates'
+import { ArrowLeft, RotateCcw, Check, Loader2, FileText, AlignLeft, AlignCenter, AlignRight, AlignJustify } from 'lucide-react'
+import { DOC_TEMPLATE_TYPES, fillDocTemplate, type DocAlign } from '@/lib/doc-templates'
 
-type Row = { doc_type: string; key: string; content: string }
+type Row = { doc_type: string; key: string; content: string; align: string | null }
+type Override = { content: string; align: string | null }
+
+const ALIGN_OPTIONS: Array<{ value: DocAlign; label: string; Icon: any }> = [
+  { value: 'left',    label: 'Stânga',   Icon: AlignLeft },
+  { value: 'center',  label: 'Centrat',  Icon: AlignCenter },
+  { value: 'right',   label: 'Dreapta',  Icon: AlignRight },
+  { value: 'justify', label: 'Justify',  Icon: AlignJustify },
+]
 
 export default function DocTemplatesPage() {
   const [docType, setDocType] = useState(DOC_TEMPLATE_TYPES[0].value)
-  const [overrides, setOverrides] = useState<Record<string, string>>({}) // `${doc_type}:${key}` -> content
-  const [drafts, setDrafts] = useState<Record<string, string>>({})       // editari nesalvate
+  const [overrides, setOverrides] = useState<Record<string, Override>>({})   // `${doc_type}:${key}` -> {content, align}
+  const [drafts, setDrafts] = useState<Record<string, string>>({})           // editari text nesalvate
+  const [draftsAlign, setDraftsAlign] = useState<Record<string, DocAlign>>({}) // editari aliniere nesalvate
   const [savingKey, setSavingKey] = useState<string | null>(null)
   const [savedKey, setSavedKey] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    supabase.from('doc_templates').select('doc_type, key, content').then(({ data }) => {
-      const map: Record<string, string> = {}
-      for (const r of (data || []) as Row[]) map[`${r.doc_type}:${r.key}`] = r.content
+    supabase.from('doc_templates').select('doc_type, key, content, align').then(({ data }) => {
+      const map: Record<string, Override> = {}
+      for (const r of (data || []) as Row[]) map[`${r.doc_type}:${r.key}`] = { content: r.content, align: r.align }
       setOverrides(map)
       setLoading(false)
     })
@@ -29,44 +38,55 @@ export default function DocTemplatesPage() {
   const valueFor = (key: string, dflt: string) => {
     const id = `${docType}:${key}`
     if (id in drafts) return drafts[id]
-    if (id in overrides) return overrides[id]
+    if (id in overrides) return overrides[id].content
     return dflt
   }
+  const alignFor = (key: string, dfltAlign: DocAlign): DocAlign => {
+    const id = `${docType}:${key}`
+    if (id in draftsAlign) return draftsAlign[id]
+    const ov = overrides[id]?.align
+    return (ov as DocAlign) || dfltAlign
+  }
 
-  async function save(key: string, dflt: string) {
+  async function save(key: string, dflt: string, dfltAlign: DocAlign) {
     const id = `${docType}:${key}`
     const content = valueFor(key, dflt)
+    const align = alignFor(key, dfltAlign)
     setSavingKey(id)
-    if (content.trim() === dflt.trim()) {
+    const isDefault = content.trim() === dflt.trim() && align === dfltAlign
+    if (isDefault) {
       // identic cu default -> stergem override-ul (revine la default)
       await supabase.from('doc_templates').delete().eq('doc_type', docType).eq('key', key)
       setOverrides(o => { const n = { ...o }; delete n[id]; return n })
     } else {
       const { error } = await supabase.from('doc_templates')
-        .upsert({ doc_type: docType, key, content, updated_at: new Date().toISOString() }, { onConflict: 'doc_type,key' })
+        .upsert({ doc_type: docType, key, content, align: align === dfltAlign ? null : align, updated_at: new Date().toISOString() }, { onConflict: 'doc_type,key' })
       if (error) { alert('Eroare la salvare: ' + error.message); setSavingKey(null); return }
-      setOverrides(o => ({ ...o, [id]: content }))
+      setOverrides(o => ({ ...o, [id]: { content, align: align === dfltAlign ? null : align } }))
     }
     setDrafts(d => { const n = { ...d }; delete n[id]; return n })
+    setDraftsAlign(d => { const n = { ...d }; delete n[id]; return n })
     setSavingKey(null)
     setSavedKey(id); setTimeout(() => setSavedKey(k => k === id ? null : k), 2000)
   }
 
   async function resetToDefault(key: string) {
     const id = `${docType}:${key}`
-    if (!confirm('Revii la textul default? Override-ul salvat se șterge.')) return
+    if (!confirm('Revii la textul și alinierea default? Override-ul salvat se șterge.')) return
     await supabase.from('doc_templates').delete().eq('doc_type', docType).eq('key', key)
     setOverrides(o => { const n = { ...o }; delete n[id]; return n })
     setDrafts(d => { const n = { ...d }; delete n[id]; return n })
+    setDraftsAlign(d => { const n = { ...d }; delete n[id]; return n })
   }
 
-  // Preview simplu: variabilele apar ca {{nume}} bold, *italic* respectat
-  function Preview({ content }: { content: string }) {
+  // Preview simplu: variabilele apar ca [nume] bold, *italic* respectat, aliniere aplicata
+  function Preview({ content, align }: { content: string; align: DocAlign }) {
     const vars: Record<string, string> = {}
     for (const p of def.placeholders) vars[p.name] = `[${p.name}]`
     const segs = fillDocTemplate(content, vars)
     return (
-      <p className="text-xs text-gray-600 leading-relaxed bg-gray-50 border border-gray-100 rounded-lg p-3">
+      <p className="text-xs text-gray-600 leading-relaxed bg-gray-50 border border-gray-100 rounded-lg p-3"
+        style={{ textAlign: align === 'justify' ? 'justify' : align }}>
         {segs.map((s, i) => (
           <span key={i} className={(s.bold ? 'font-semibold text-blue-700 ' : '') + (s.italics ? 'italic ' : '')}>{s.text}</span>
         ))}
@@ -124,7 +144,8 @@ export default function DocTemplatesPage() {
         {def.fragments.map(f => {
           const id = `${docType}:${f.key}`
           const isOverridden = id in overrides
-          const isDirty = id in drafts
+          const isDirty = id in drafts || id in draftsAlign
+          const curAlign = alignFor(f.key, f.defaultAlign)
           return (
             <div key={f.key} className="bg-white rounded-xl border border-gray-100 shadow-sm p-5">
               <div className="flex items-center justify-between mb-1">
@@ -133,13 +154,23 @@ export default function DocTemplatesPage() {
                   {isOverridden && <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-amber-100 text-amber-700">modificat</span>}
                 </div>
                 <div className="flex items-center gap-2">
+                  {/* Aliniere fata de foaie */}
+                  <div className="flex rounded-lg border border-gray-200 overflow-hidden" title="Aliniere paragraf">
+                    {ALIGN_OPTIONS.map(o => (
+                      <button key={o.value} onClick={() => setDraftsAlign(d => ({ ...d, [id]: o.value }))}
+                        title={o.label}
+                        className={`px-2 py-1.5 ${curAlign === o.value ? 'bg-purple-100 text-purple-700' : 'text-gray-400 hover:bg-gray-50'}`}>
+                        <o.Icon size={13}/>
+                      </button>
+                    ))}
+                  </div>
                   {isOverridden && (
                     <button onClick={() => resetToDefault(f.key)}
                       className="flex items-center gap-1 text-xs text-gray-400 hover:text-red-500">
                       <RotateCcw size={11}/> Reset la default
                     </button>
                   )}
-                  <button onClick={() => save(f.key, f.default)} disabled={savingKey === id || !isDirty}
+                  <button onClick={() => save(f.key, f.default, f.defaultAlign)} disabled={savingKey === id || !isDirty}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white disabled:opacity-40"
                     style={{ background: '#059669' }}>
                     {savingKey === id ? <Loader2 size={11} className="animate-spin"/> : savedKey === id ? <Check size={11}/> : null}
@@ -155,7 +186,7 @@ export default function DocTemplatesPage() {
                 spellCheck={false}
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-purple-400 mb-2"
               />
-              <Preview content={valueFor(f.key, f.default)} />
+              <Preview content={valueFor(f.key, f.default)} align={curAlign} />
             </div>
           )
         })}
