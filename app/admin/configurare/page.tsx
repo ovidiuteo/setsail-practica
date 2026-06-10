@@ -4,7 +4,24 @@ import { supabase } from '@/lib/supabase'
 import { Plus, Trash2, Check, X, Pencil, Copy, RefreshCw, ExternalLink, KeyRound, Loader2, FileText, Eye } from 'lucide-react'
 
 type Entity = { id: string; [key: string]: string }
-type Field = { key: string; label: string; placeholder?: string }
+type Field = { key: string; label: string; placeholder?: string; type?: 'image' }
+
+// Control upload imagine (semnatura) — citeste fisierul ca data URL base64
+function ImageUpload({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="flex items-center gap-2">
+      {value
+        ? <img src={value} alt="semnătură" className="h-10 max-w-[120px] object-contain border border-gray-200 rounded bg-white" />
+        : <span className="text-xs text-gray-300">fără</span>}
+      <label className="cursor-pointer text-xs px-2 py-1 rounded border border-gray-200 hover:bg-gray-50 whitespace-nowrap">
+        {value ? 'Schimbă' : 'Încarcă'}
+        <input type="file" accept="image/*" className="hidden"
+          onChange={e => { const f = e.target.files?.[0]; if (!f) return; const r = new FileReader(); r.onload = () => onChange(String(r.result)); r.readAsDataURL(f) }} />
+      </label>
+      {value && <button type="button" onClick={() => onChange('')} className="text-xs text-red-400 hover:text-red-600" title="Elimină">✕</button>}
+    </div>
+  )
+}
 
 function Section({ title, table, fields }: {
   title: string
@@ -79,10 +96,14 @@ function Section({ title, table, fields }: {
             {fields.map(f => (
               <div key={f.key} className="flex-1 min-w-28">
                 <div className="text-xs text-gray-500 mb-1">{f.label}</div>
-                <input className={inputCls} placeholder={f.placeholder || f.label}
-                  value={newItem[f.key] || ''}
-                  onChange={e => setNewItem(n => ({ ...n, [f.key]: e.target.value }))}
-                  onKeyDown={e => e.key === 'Enter' && add()} />
+                {f.type === 'image' ? (
+                  <ImageUpload value={newItem[f.key] || ''} onChange={v => setNewItem(n => ({ ...n, [f.key]: v }))} />
+                ) : (
+                  <input className={inputCls} placeholder={f.placeholder || f.label}
+                    value={newItem[f.key] || ''}
+                    onChange={e => setNewItem(n => ({ ...n, [f.key]: e.target.value }))}
+                    onKeyDown={e => e.key === 'Enter' && add()} />
+                )}
               </div>
             ))}
             <div className="flex gap-1.5 shrink-0">
@@ -109,11 +130,15 @@ function Section({ title, table, fields }: {
                 {fields.map((f, fi) => (
                   <div key={f.key} className="flex-1 min-w-28">
                     <div className="text-xs text-gray-400 mb-1">{f.label}</div>
-                    <input className={editInputCls}
-                      value={editValues[f.key] || ''}
-                      onChange={e => setEditValues(v => ({ ...v, [f.key]: e.target.value }))}
-                      onKeyDown={e => { if (e.key === 'Enter') saveEdit(item.id); if (e.key === 'Escape') cancelEdit() }}
-                      autoFocus={fi === 0} />
+                    {f.type === 'image' ? (
+                      <ImageUpload value={editValues[f.key] || ''} onChange={v => setEditValues(vv => ({ ...vv, [f.key]: v }))} />
+                    ) : (
+                      <input className={editInputCls}
+                        value={editValues[f.key] || ''}
+                        onChange={e => setEditValues(v => ({ ...v, [f.key]: e.target.value }))}
+                        onKeyDown={e => { if (e.key === 'Enter') saveEdit(item.id); if (e.key === 'Escape') cancelEdit() }}
+                        autoFocus={fi === 0} />
+                    )}
                   </div>
                 ))}
                 <div className="flex gap-1.5 shrink-0">
@@ -131,9 +156,15 @@ function Section({ title, table, fields }: {
               <div className="flex items-center justify-between gap-3">
                 <div className="flex gap-4 flex-wrap flex-1 min-w-0">
                   {fields.map(f => (
-                    <span key={f.key} className="text-sm min-w-0">
+                    <span key={f.key} className="text-sm min-w-0 flex items-center">
                       <span className="text-gray-400 text-xs mr-1">{f.label}:</span>
-                      <span className="text-gray-900 font-medium">{item[f.key] || '—'}</span>
+                      {f.type === 'image' ? (
+                        item[f.key]
+                          ? <img src={item[f.key]} alt="semnătură" className="h-8 max-w-[100px] object-contain border border-gray-200 rounded bg-white" />
+                          : <span className="text-gray-300">—</span>
+                      ) : (
+                        <span className="text-gray-900 font-medium">{item[f.key] || '—'}</span>
+                      )}
                     </span>
                   ))}
                 </div>
@@ -223,6 +254,7 @@ export default function ConfigurarePage() {
           fields={[
             { key: 'full_name', label: 'Nume complet', placeholder: 'POPESCU ION' },
             { key: 'email', label: 'Email', placeholder: 'email@setsail.ro' },
+            { key: 'signature_data', label: 'Semnătură', type: 'image' },
           ]} />
         <Section title="📞 Persoane de contact" table="contact_persons"
           fields={[
