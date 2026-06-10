@@ -76,6 +76,15 @@ export default function CursantAdminPage() {
     load()
   }, [id])
 
+  // Titlul tabului de browser: numele cursantului + data practicii
+  useEffect(() => {
+    if (!student) return
+    const date = session?.session_date
+      ? new Date(session.session_date).toLocaleDateString('ro-RO', { day: '2-digit', month: 'long', year: 'numeric' })
+      : ''
+    document.title = date ? `${student.full_name} — ${date}` : student.full_name
+  }, [student, session])
+
   async function save() {
     if (!student) return
     setSaving(true)
