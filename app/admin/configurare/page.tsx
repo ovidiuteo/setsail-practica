@@ -212,6 +212,11 @@ export default function ConfigurarePage() {
           </svg>
           Timeline sesiuni
         </a>
+        <a href="/admin/configurare/doc-templates"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors">
+          <FileText size={15}/>
+          Template-uri Documente
+        </a>
         <a href="/admin/configurare/mail-templates"
           className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors">
           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

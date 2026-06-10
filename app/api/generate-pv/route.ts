@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getHeaderImage } from '@/lib/antete'
+import { fillDocTemplate, fragmentDefault } from '@/lib/doc-templates'
 
 export async function POST(req: NextRequest) {
   const { session_id } = await req.json()
@@ -111,6 +112,26 @@ export async function POST(req: NextRequest) {
   }
   const firstSignature = dataUrlToImage(orderedInstr[0]?.signature_data)
   const clasaCAA = session.class_caa || 'C/D'
+
+  // Template-uri editabile (admin → Template-uri Documente); fallback la default-urile din lib
+  const { data: tplRows } = await supabase
+    .from('doc_templates').select('key, content').eq('doc_type', 'pv_practica')
+  const tplOverrides: Record<string, string> = Object.fromEntries((tplRows || []).map((r: any) => [r.key, r.content]))
+  const tpl = (key: string) => tplOverrides[key] ?? fragmentDefault('pv_practica', key)
+  const tplVars: Record<string, string> = {
+    data_practica: sessionDate,
+    evaluator: evaluatorNume,
+    functie_evaluator: evaluatorFunctie,
+    capitania,
+    decizie_anr: decizieANR,
+    furnizor: 'S.C. Set Sail Advertising S.R.L.',
+    nr_solicitare: nrSolicitare,
+    locatie: locatieDetaliata,
+    fraza_ambarcatiuni: multiBoats ? 'cu ambarcațiunile' : 'cu ambarcațiunea',
+    ambarcatiuni: barcaText,
+    fraza_instructori: multiInstr ? 'în prezența instructorilor' : 'în prezența instructorului',
+    instructori: instructor,
+  }
 
   // Footer locatie
   const fl1 = session.locations?.footer_line1 || ''
@@ -338,7 +359,7 @@ export async function POST(req: NextRequest) {
     new Paragraph({
       alignment: AlignmentType.CENTER,
       spacing: { before: 200, after: 300 },
-      children: [new TextRun({ text: 'Proces – Verbal  Examen Practic', bold: true, size: 26 })]
+      children: fillDocTemplate(tpl('titlu'), tplVars).map(s => new TextRun({ text: s.text, bold: true, italics: s.italics, size: 26 }))
     }),
 
     // Limanu: "Incheiat astazi [data probei practice]" + un paragraf gol, inainte de Subsemnatul
@@ -347,10 +368,7 @@ export async function POST(req: NextRequest) {
         spacing: { after: 0 },
         indent: { firstLine: 720 },
         alignment: AlignmentType.BOTH,
-        children: [
-          new TextRun({ text: 'Încheiat astăzi ', size: 22 }),
-          new TextRun({ text: sessionDate, bold: true, size: 22 }),
-        ]
+        children: fillDocTemplate(tpl('incheiat_limanu'), tplVars).map(s => new TextRun({ text: s.text, bold: s.bold, italics: s.italics, size: 22 }))
       }),
       new Paragraph({ spacing: { after: 0 }, children: [new TextRun({ text: '', size: 22 })] }),
     ] : []),
@@ -360,17 +378,7 @@ export async function POST(req: NextRequest) {
       spacing: { after: 0 },
       indent: { firstLine: 720 },
       alignment: AlignmentType.BOTH,
-      children: [
-        new TextRun({ text: 'Subsemnatul ', size: 22 }),
-        new TextRun({ text: evaluatorNume, bold: true, size: 22 }),
-        new TextRun({ text: ', cu funcția ', size: 22 }),
-        new TextRun({ text: evaluatorFunctie, bold: true, size: 22 }),
-        new TextRun({ text: ', din cadrul ', size: 22 }),
-        new TextRun({ text: capitania, bold: true, size: 22 }),
-        new TextRun({ text: ', desemnat prin Decizia Directorului General al Autorității Navale Române nr. ', size: 22 }),
-        new TextRun({ text: decizieANR, bold: true, size: 22 }),
-        new TextRun({ text: ', în calitate de evaluator la examenele practice ale cursurilor aprobate, organizate de furnizorii de educație, formare profesională sau de perfecționare, pentru obținerea certificatelor internaționale de conducător de ambarcațiune de agrement,', size: 22 }),
-      ]
+      children: fillDocTemplate(tpl('p1_subsemnatul'), tplVars).map(s => new TextRun({ text: s.text, bold: s.bold, italics: s.italics, size: 22 }))
     }),
 
     // Paragraful 2 - Avand in vedere
@@ -378,11 +386,7 @@ export async function POST(req: NextRequest) {
       spacing: { after: 0 },
       indent: { firstLine: 720 },
       alignment: AlignmentType.BOTH,
-      children: [
-        new TextRun({ text: 'Având în vedere prevederile „', size: 22 }),
-        new TextRun({ text: 'Regulamentului privind cerințele minime de pregătire, precum și condițiile de obținere a certificatelor internaționale de conducător de ambarcațiune de agrement', italics: true, size: 22 }),
-        new TextRun({ text: '”, aprobat prin Ordinul M.T. nr. 527/2016, cu modificările și completările în vigoare și,', size: 22 }),
-      ]
+      children: fillDocTemplate(tpl('p2_regulament'), tplVars).map(s => new TextRun({ text: s.text, bold: s.bold, italics: s.italics, size: 22 }))
     }),
 
     // Paragraful 3 - In baza solicitarii
@@ -390,19 +394,7 @@ export async function POST(req: NextRequest) {
       spacing: { after: 0 },
       indent: { firstLine: 720 },
       alignment: AlignmentType.BOTH,
-      children: [
-        new TextRun({ text: 'În baza solicitării furnizorului ', size: 22 }),
-        new TextRun({ text: 'S.C. Set Sail Advertising S.R.L.', bold: true, size: 22 }),
-        new TextRun({ text: ', nr. ', size: 22 }),
-        new TextRun({ text: nrSolicitare, bold: true, size: 22 }),
-        new TextRun({ text: ', s-a desfășurat în locația ', size: 22 }),
-        new TextRun({ text: locatieDetaliata, bold: true, size: 22 }),
-        new TextRun({ text: multiBoats ? ', cu ambarcațiunile ' : ', cu ambarcațiunea ', size: 22 }),
-        new TextRun({ text: barcaText, bold: true, size: 22 }),
-        new TextRun({ text: multiInstr ? ', în prezența instructorilor ' : ', în prezența instructorului ', size: 22 }),
-        new TextRun({ text: instructor, bold: true, size: 22 }),
-        new TextRun({ text: ', evaluarea/examinarea cunoștințelor practice ale candidaților enumerați mai jos și, în baza fișei individuale de verificare a aptitudinilor, am constatat următoarele:', size: 22 }),
-      ]
+      children: fillDocTemplate(tpl('p3_solicitare'), tplVars).map(s => new TextRun({ text: s.text, bold: s.bold, italics: s.italics, size: 22 }))
     }),
 
     // Tabel cursanti
@@ -412,9 +404,7 @@ export async function POST(req: NextRequest) {
     new Paragraph({
       spacing: { before: 0, after: 0 },
       alignment: AlignmentType.BOTH,
-      children: [
-        new TextRun({ text: 'Drept pentru care am încheiat prezentul proces-verbal în două exemplare; un exemplar a fost înaintat furnizorului de educație, formare profesională sau de perfecționare, în vederea emiterii certificatelor de absolvire a cursului, după caz.', size: 22 }),
-      ]
+      children: fillDocTemplate(tpl('final'), tplVars).map(s => new TextRun({ text: s.text, bold: s.bold, italics: s.italics, size: 22 }))
     }),
 
     // Tabel semnaturi
