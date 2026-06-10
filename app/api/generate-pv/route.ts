@@ -27,6 +27,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
+  // Instructori si ambarcatiuni secundare (pana la 3) — coloane fara FK, le luam dupa id si pastram ordinea
+  const instructorIds = [session.instructor_id, session.instructor_id_2, session.instructor_id_3].filter(Boolean)
+  const boatIds = [session.boat_id, session.boat_id_2, session.boat_id_3].filter(Boolean)
+  const [{ data: instrRows }, { data: boatRows }] = await Promise.all([
+    instructorIds.length ? supabase.from('instructors').select('id, full_name').in('id', instructorIds) : Promise.resolve({ data: [] as any[] }),
+    boatIds.length ? supabase.from('boats').select('id, name, registration').in('id', boatIds) : Promise.resolve({ data: [] as any[] }),
+  ])
+  const instrById: Record<string, any> = Object.fromEntries((instrRows || []).map((r: any) => [r.id, r]))
+  const boatById: Record<string, any> = Object.fromEntries((boatRows || []).map((r: any) => [r.id, r]))
+  const orderedInstr = instructorIds.map((id: string) => instrById[id]).filter(Boolean)
+  const orderedBoats = boatIds.map((id: string) => boatById[id]).filter(Boolean)
+
   const headerImageBuffer = getHeaderImage(session.locations?.header_image || null)
   const sessionDate = new Date(session.session_date).toLocaleDateString('ro-RO', {
     day: '2-digit', month: 'long', year: 'numeric'
@@ -79,9 +91,16 @@ export async function POST(req: NextRequest) {
   const locatieDetaliata = session.location_detail ||
     session.locations?.location_detail ||
     `${session.locations?.name || ''}, jud. ${session.locations?.county || ''}`
-  const barcaInmatriculare = session.boats?.registration || ''
-  const barcaNume = session.boats?.name || '................................'
-  const instructor = session.instructors?.full_name || '................................'
+  // Mai multe ambarcatiuni: "Nume Inmatriculare" pe fiecare, separate cu virgula
+  const barcaText = orderedBoats.length
+    ? orderedBoats.map((b: any) => `${b.name || ''}${b.registration ? ' ' + b.registration : ''}`.trim()).join(', ')
+    : '................................'
+  // Mai multi instructori: nume separate cu virgula
+  const instructor = orderedInstr.length
+    ? orderedInstr.map((i: any) => i.full_name).join(', ')
+    : '................................'
+  const multiBoats = orderedBoats.length > 1
+  const multiInstr = orderedInstr.length > 1
   const clasaCAA = session.class_caa || 'C/D'
 
   // Footer locatie
@@ -353,11 +372,9 @@ export async function POST(req: NextRequest) {
         new TextRun({ text: nrSolicitare, bold: true, size: 22 }),
         new TextRun({ text: ', s-a desfășurat în locația ', size: 22 }),
         new TextRun({ text: locatieDetaliata, bold: true, size: 22 }),
-        new TextRun({ text: ', cu ambarcațiunea ', size: 22 }),
-        new TextRun({ text: barcaNume, bold: true, size: 22 }),
-        new TextRun({ text: ', ', size: 22 }),
-        new TextRun({ text: barcaInmatriculare, bold: true, size: 22 }),
-        new TextRun({ text: ', în prezența instructorului ', size: 22 }),
+        new TextRun({ text: multiBoats ? ', cu ambarcațiunile ' : ', cu ambarcațiunea ', size: 22 }),
+        new TextRun({ text: barcaText, bold: true, size: 22 }),
+        new TextRun({ text: multiInstr ? ', în prezența instructorilor ' : ', în prezența instructorului ', size: 22 }),
         new TextRun({ text: instructor, bold: true, size: 22 }),
         new TextRun({ text: ', evaluarea/examinarea cunoștințelor practice ale candidaților enumerați mai jos și, în baza fișei individuale de verificare a aptitudinilor, am constatat următoarele:', size: 22 }),
       ]

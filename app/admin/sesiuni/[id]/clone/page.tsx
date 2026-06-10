@@ -15,8 +15,12 @@ export default function CloneSessionPage() {
     session_date: '',
     location_id: '',
     boat_id: '',
+    boat_id_2: '',
+    boat_id_3: '',
     evaluator_id: '',
     instructor_id: '',
+    instructor_id_2: '',
+    instructor_id_3: '',
     class_caa: 'C,D',
     status: 'draft',
     notes: '',
@@ -53,8 +57,12 @@ export default function CloneSessionPage() {
           session_date: s.session_date,
           location_id: s.location_id || '',
           boat_id: s.boat_id || '',
+          boat_id_2: s.boat_id_2 || '',
+          boat_id_3: s.boat_id_3 || '',
           evaluator_id: s.evaluator_id || '',
           instructor_id: s.instructor_id || '',
+          instructor_id_2: s.instructor_id_2 || '',
+          instructor_id_3: s.instructor_id_3 || '',
           class_caa: s.class_caa || 'C,D',
           status: 'draft',
           notes: s.notes || '',
@@ -93,8 +101,13 @@ export default function CloneSessionPage() {
     const { data: principalSess } = await supabase
       .from('sessions').select('access_code').eq('id', id).single()
 
+    // Postgres respinge '' pentru coloane date/uuid — convertim la null.
+    const cleanForm: any = { ...form }
+    for (const col of ['session_date','location_id','boat_id','boat_id_2','boat_id_3','evaluator_id','instructor_id','instructor_id_2','instructor_id_3']) {
+      if (cleanForm[col] === '') cleanForm[col] = null
+    }
     const { data: newSession, error } = await supabase.from('sessions').insert({
-      ...form,
+      ...cleanForm,
       session_type: 'clone',
       parent_session_id: id,
       is_clone: true,

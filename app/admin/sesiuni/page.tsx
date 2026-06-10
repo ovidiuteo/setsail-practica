@@ -196,8 +196,12 @@ export default function SesiuniPage() {
       session_date: s.session_date,
       location_id: s.location_id,
       boat_id: s.boat_id || '',
+      boat_id_2: s.boat_id_2 || '',
+      boat_id_3: s.boat_id_3 || '',
       evaluator_id: s.evaluator_id,
       instructor_id: s.instructor_id,
+      instructor_id_2: s.instructor_id_2 || '',
+      instructor_id_3: s.instructor_id_3 || '',
       class_caa: s.class_caa,
       status: s.status,
       timeline_scope: s.timeline_scope || '',
@@ -220,7 +224,8 @@ export default function SesiuniPage() {
     // Postgres respinge '' pentru coloane date/uuid — convertim la null.
     const nullableEmpty = [
       'course_start_date', 'session_date', 'practice_start_date',
-      'location_id', 'boat_id', 'evaluator_id', 'instructor_id', 'timeline_scope',
+      'location_id', 'boat_id', 'boat_id_2', 'boat_id_3',
+      'evaluator_id', 'instructor_id', 'instructor_id_2', 'instructor_id_3', 'timeline_scope',
     ]
     const payload: any = { ...editValues }
     for (const col of nullableEmpty) if (payload[col] === '') payload[col] = null
@@ -365,6 +370,22 @@ export default function SesiuniPage() {
                         </select>
                       </div>
                       <div>
+                        <div className="text-xs text-gray-400 mb-1">Ambarcațiune 2</div>
+                        <select className={selectCls + ' w-full'} value={editValues.boat_id_2||''}
+                          onChange={e => setEditValues((v: any) => ({ ...v, boat_id_2: e.target.value }))}>
+                          <option value="">— niciuna —</option>
+                          {refs.boats.map((b: any) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-400 mb-1">Ambarcațiune 3</div>
+                        <select className={selectCls + ' w-full'} value={editValues.boat_id_3||''}
+                          onChange={e => setEditValues((v: any) => ({ ...v, boat_id_3: e.target.value }))}>
+                          <option value="">— niciuna —</option>
+                          {refs.boats.map((b: any) => <option key={b.id} value={b.id}>{b.name}</option>)}
+                        </select>
+                      </div>
+                      <div>
                         <div className="text-xs text-gray-400 mb-1">Evaluator ANR</div>
                         <select className={selectCls + ' w-full'} value={editValues.evaluator_id}
                           onChange={e => setEditValues((v: any) => ({ ...v, evaluator_id: e.target.value }))}>
@@ -372,11 +393,27 @@ export default function SesiuniPage() {
                           {refs.evaluators.map((e: any) => <option key={e.id} value={e.id}>{e.full_name}</option>)}
                         </select>
                       </div>
-                      <div className="col-span-2">
+                      <div>
                         <div className="text-xs text-gray-400 mb-1">Instructor SetSail</div>
                         <select className={selectCls + ' w-full'} value={editValues.instructor_id}
                           onChange={e => setEditValues((v: any) => ({ ...v, instructor_id: e.target.value }))}>
                           <option value="">— Selectează —</option>
+                          {refs.instructors.map((i: any) => <option key={i.id} value={i.id}>{i.full_name}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-400 mb-1">Instructor 2</div>
+                        <select className={selectCls + ' w-full'} value={editValues.instructor_id_2||''}
+                          onChange={e => setEditValues((v: any) => ({ ...v, instructor_id_2: e.target.value }))}>
+                          <option value="">— niciunul —</option>
+                          {refs.instructors.map((i: any) => <option key={i.id} value={i.id}>{i.full_name}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <div className="text-xs text-gray-400 mb-1">Instructor 3</div>
+                        <select className={selectCls + ' w-full'} value={editValues.instructor_id_3||''}
+                          onChange={e => setEditValues((v: any) => ({ ...v, instructor_id_3: e.target.value }))}>
+                          <option value="">— niciunul —</option>
                           {refs.instructors.map((i: any) => <option key={i.id} value={i.id}>{i.full_name}</option>)}
                         </select>
                       </div>

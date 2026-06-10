@@ -2441,8 +2441,12 @@ export default function SessionDetailPage() {
       practice_start_time: (sess as any).practice_start_time || '9:30',
       location_id: (sess as any).location_id || '',
       boat_id: (sess as any).boat_id || '',
+      boat_id_2: (sess as any).boat_id_2 || '',
+      boat_id_3: (sess as any).boat_id_3 || '',
       evaluator_id: (sess as any).evaluator_id || '',
       instructor_id: (sess as any).instructor_id || '',
+      instructor_id_2: (sess as any).instructor_id_2 || '',
+      instructor_id_3: (sess as any).instructor_id_3 || '',
       class_caa: sess.class_caa || 'C,D',
       nr_instiintare_anr: (sess as any).nr_instiintare_anr || '',
       request_number: sess.request_number || '',
@@ -2458,7 +2462,8 @@ export default function SessionDetailPage() {
     // Postgres respinge '' pentru coloane date/uuid — convertim la null.
     const nullableEmpty = [
       'course_start_date', 'session_date', 'practice_start_date',
-      'location_id', 'boat_id', 'evaluator_id', 'instructor_id', 'timeline_scope',
+      'location_id', 'boat_id', 'boat_id_2', 'boat_id_3',
+      'evaluator_id', 'instructor_id', 'instructor_id_2', 'instructor_id_3', 'timeline_scope',
     ]
     const payload: any = { ...editSessionValues }
     for (const col of nullableEmpty) {
@@ -2916,8 +2921,12 @@ export default function SessionDetailPage() {
               {[
                 ['Locație', 'location_id', refs.locations, 'name', 'county'],
                 ['Ambarcațiune', 'boat_id', refs.boats, 'name', null],
+                ['Ambarcațiune 2', 'boat_id_2', refs.boats, 'name', null],
+                ['Ambarcațiune 3', 'boat_id_3', refs.boats, 'name', null],
                 ['Evaluator ANR', 'evaluator_id', refs.evaluators, 'full_name', null],
                 ['Instructor', 'instructor_id', refs.instructors, 'full_name', null],
+                ['Instructor 2', 'instructor_id_2', refs.instructors, 'full_name', null],
+                ['Instructor 3', 'instructor_id_3', refs.instructors, 'full_name', null],
               ].map(([label, key, options, nameField, extraField]: any) => (
                 <div key={key}>
                   <div className="text-xs text-gray-400 mb-1">{label}</div>

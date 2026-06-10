@@ -11,10 +11,27 @@ export default function NouaSesiunePage() {
   const [form, setForm] = useState({
     session_date: new Date().toISOString().split('T')[0],
     course_start_date: '',
-    location_id: '', boat_id: '', evaluator_id: '', instructor_id: '',
+    location_id: '', boat_id: '', boat_id_2: '', boat_id_3: '',
+    evaluator_id: '', instructor_id: '', instructor_id_2: '', instructor_id_3: '',
     class_caa: 'C,D', status: 'draft', notes: '', request_number: '',
     location_detail: ''
   })
+
+  // Default-uri pentru Limanu, practica/intensiv (clasa C/D): 2 instructori + 2 ambarcatiuni
+  function limanuDefaults(locId: string, cls: string) {
+    const loc = refs.locations.find((l: any) => l.id === locId)
+    const isLimanu = (loc?.name || '').toLowerCase().includes('limanu')
+    const isPractica = /c|d/i.test(cls || '') && !/radio/i.test(cls || '')
+    if (!isLimanu || !isPractica) return {}
+    const instrId = (n: string) => refs.instructors.find((i: any) => (i.full_name || '').toUpperCase().includes(n))?.id || ''
+    const boatId = (n: string) => refs.boats.find((b: any) => b.name === n)?.id || ''
+    return {
+      instructor_id: instrId('DRUGAN SORIN'),
+      instructor_id_2: instrId('DRUGAN OVIDIU'),
+      boat_id: boatId('SetSail'),
+      boat_id_2: boatId('Trainer 1'),
+    }
+  }
   const [csvText, setCsvText] = useState('')
   const [students, setStudents] = useState<{ full_name: string; cnp: string; email: string; id_document: string; class_caa: string }[]>([])
   const [saving, setSaving] = useState(false)
@@ -63,7 +80,12 @@ export default function NouaSesiunePage() {
       return
     }
     setSaving(true)
-    const { data, error: err } = await supabase.from('sessions').insert(form).select().single()
+    // Postgres respinge '' pentru coloane date/uuid — convertim la null.
+    const payload: any = { ...form }
+    for (const col of ['course_start_date','session_date','location_id','boat_id','boat_id_2','boat_id_3','evaluator_id','instructor_id','instructor_id_2','instructor_id_3']) {
+      if (payload[col] === '') payload[col] = null
+    }
+    const { data, error: err } = await supabase.from('sessions').insert(payload).select().single()
     if (err || !data) { setError(err?.message || 'Eroare la salvare.'); setSaving(false); return }
 
     if (students.length > 0) {
@@ -103,7 +125,7 @@ export default function NouaSesiunePage() {
           <div>
             <label className={labelClass}>Clasa CAA *</label>
             <select className={inputClass} value={form.class_caa}
-              onChange={e => setForm(f => ({ ...f, class_caa: e.target.value }))}>
+              onChange={e => setForm(f => ({ ...f, class_caa: e.target.value, ...limanuDefaults(f.location_id, e.target.value) }))}>
               <option value="A">A</option>
               <option value="B">B</option>
               <option value="C">C</option>
@@ -119,7 +141,7 @@ export default function NouaSesiunePage() {
                 const locId = e.target.value
                 const loc = refs.locations.find((l: any) => l.id === locId)
                 const defaultDetail = loc ? (loc.county ? loc.name + ', jud. ' + loc.county : loc.name) : ''
-                setForm(f => ({ ...f, location_id: locId, location_detail: defaultDetail }))
+                setForm(f => ({ ...f, location_id: locId, location_detail: defaultDetail, ...limanuDefaults(locId, f.class_caa) }))
               }}>
               <option value="">— Selectează —</option>
               {refs.locations.map((l: any) => <option key={l.id} value={l.id}>{l.name}, {l.county}</option>)}
@@ -140,6 +162,22 @@ export default function NouaSesiunePage() {
             </select>
           </div>
           <div>
+            <label className={labelClass}>Ambarcațiune 2</label>
+            <select className={inputClass} value={form.boat_id_2}
+              onChange={e => setForm(f => ({ ...f, boat_id_2: e.target.value }))}>
+              <option value="">— niciuna —</option>
+              {refs.boats.map((b: any) => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className={labelClass}>Ambarcațiune 3</label>
+            <select className={inputClass} value={form.boat_id_3}
+              onChange={e => setForm(f => ({ ...f, boat_id_3: e.target.value }))}>
+              <option value="">— niciuna —</option>
+              {refs.boats.map((b: any) => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </select>
+          </div>
+          <div>
             <label className={labelClass}>Evaluator ANR *</label>
             <select className={inputClass} value={form.evaluator_id}
               onChange={e => setForm(f => ({ ...f, evaluator_id: e.target.value }))}>
@@ -152,6 +190,22 @@ export default function NouaSesiunePage() {
             <select className={inputClass} value={form.instructor_id}
               onChange={e => setForm(f => ({ ...f, instructor_id: e.target.value }))}>
               <option value="">— Selectează —</option>
+              {refs.instructors.map((i: any) => <option key={i.id} value={i.id}>{i.full_name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className={labelClass}>Instructor 2</label>
+            <select className={inputClass} value={form.instructor_id_2}
+              onChange={e => setForm(f => ({ ...f, instructor_id_2: e.target.value }))}>
+              <option value="">— niciunul —</option>
+              {refs.instructors.map((i: any) => <option key={i.id} value={i.id}>{i.full_name}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className={labelClass}>Instructor 3</label>
+            <select className={inputClass} value={form.instructor_id_3}
+              onChange={e => setForm(f => ({ ...f, instructor_id_3: e.target.value }))}>
+              <option value="">— niciunul —</option>
               {refs.instructors.map((i: any) => <option key={i.id} value={i.id}>{i.full_name}</option>)}
             </select>
           </div>
