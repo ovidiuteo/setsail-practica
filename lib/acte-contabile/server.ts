@@ -156,3 +156,73 @@ export async function deleteDoc(entity: Entity, id: string): Promise<{ ok: boole
   const { error } = await sb.from('acte_contabile_documente').delete().eq('id', id).eq('entity', entity)
   return { ok: !error, error: error?.message }
 }
+
+// --- cheltuieli (din extras de cont) ------------------------------------
+export type Cheltuiala = {
+  id: string
+  entity: Entity
+  luna: string
+  data: string | null
+  descriere: string
+  suma: number
+  acoperit: boolean
+  sursa: 'extras' | 'manual'
+  source_doc_id: string | null
+  created_at: string
+}
+
+export async function listCheltuieli(entity: Entity, luna: string): Promise<Cheltuiala[]> {
+  const sb = acteServiceClient()
+  const { data } = await sb.from('acte_contabile_cheltuieli')
+    .select('*')
+    .eq('entity', entity).eq('luna', luna)
+    .order('data', { ascending: true, nullsFirst: false })
+    .order('created_at', { ascending: true })
+  return (data ?? []) as Cheltuiala[]
+}
+
+export async function insertCheltuiala(c: {
+  entity: Entity; luna: string; data: string | null; descriere: string; suma: number
+  sursa: 'extras' | 'manual'; source_doc_id?: string | null
+}): Promise<Cheltuiala | null> {
+  const sb = acteServiceClient()
+  const { data } = await sb.from('acte_contabile_cheltuieli').insert({
+    entity: c.entity, luna: c.luna, data: c.data, descriere: c.descriere, suma: c.suma,
+    sursa: c.sursa, source_doc_id: c.source_doc_id ?? null,
+  }).select().single()
+  return (data as Cheltuiala) ?? null
+}
+
+export async function updateCheltuiala(entity: Entity, id: string, patch: {
+  acoperit?: boolean; data?: string | null; descriere?: string; suma?: number
+}): Promise<{ ok: boolean; row?: Cheltuiala; error?: string }> {
+  const upd: Record<string, unknown> = {}
+  if (patch.acoperit !== undefined) upd.acoperit = patch.acoperit
+  if (patch.data !== undefined) upd.data = patch.data
+  if (patch.descriere !== undefined) upd.descriere = patch.descriere
+  if (patch.suma !== undefined) upd.suma = patch.suma
+  const sb = acteServiceClient()
+  const { data, error } = await sb.from('acte_contabile_cheltuieli')
+    .update(upd).eq('id', id).eq('entity', entity).select().single()
+  if (error) return { ok: false, error: error.message }
+  return { ok: true, row: (data as Cheltuiala) ?? undefined }
+}
+
+export async function deleteCheltuiala(entity: Entity, id: string): Promise<{ ok: boolean; error?: string }> {
+  const sb = acteServiceClient()
+  const { error } = await sb.from('acte_contabile_cheltuieli').delete().eq('id', id).eq('entity', entity)
+  return { ok: !error, error: error?.message }
+}
+
+// Înlocuiește cheltuielile auto-extrase (sursa='extras') pentru o lună; păstrează cele manuale
+export async function replaceCheltuieliExtras(entity: Entity, luna: string, sourceDocId: string | null, rows: { data: string | null; descriere: string; suma: number }[]): Promise<Cheltuiala[]> {
+  const sb = acteServiceClient()
+  await sb.from('acte_contabile_cheltuieli').delete().eq('entity', entity).eq('luna', luna).eq('sursa', 'extras')
+  if (rows.length === 0) return []
+  const payload = rows.map(r => ({
+    entity, luna, data: r.data, descriere: r.descriere, suma: r.suma,
+    acoperit: false, sursa: 'extras' as const, source_doc_id: sourceDocId,
+  }))
+  const { data } = await sb.from('acte_contabile_cheltuieli').insert(payload).select()
+  return (data ?? []) as Cheltuiala[]
+}

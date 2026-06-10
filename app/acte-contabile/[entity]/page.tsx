@@ -23,6 +23,19 @@ type Doc = {
   url: string | null
 }
 
+type Cheltuiala = {
+  id: string
+  entity: string
+  luna: string
+  data: string | null
+  descriere: string
+  suma: number
+  acoperit: boolean
+  sursa: 'extras' | 'manual'
+  source_doc_id: string | null
+  created_at: string
+}
+
 // Lunile calendaristice (RO)
 const LUNI = [
   'ianuarie', 'februarie', 'martie', 'aprilie', 'mai', 'iunie',
@@ -245,61 +258,14 @@ export default function ActeContabilePage({ params }: { params: { entity: string
           }
           return (
             <div className="space-y-7">
-              {sectionMonths.map(m => {
-                const groupDocs = shown.filter(d => lunaOf(d) === m)
-                const monthSlotDocs = slotDocs.filter(d => lunaOf(d) === m)
-                const monthHasFiles = normalDocs.some(d => lunaOf(d) === m) || monthSlotDocs.length > 0
-                return (
-                  <section key={m}>
-                    <div className="flex items-center justify-between gap-3 mb-2.5">
-                      <div className="flex items-baseline gap-2">
-                        <h2 className="text-xl font-extrabold tracking-wide text-[#0a1628]">{m.toUpperCase()}</h2>
-                        <span className="text-xs text-slate-400">{groupDocs.length} document{groupDocs.length === 1 ? '' : 'e'}</span>
-                      </div>
-                      {monthHasFiles && <DownloadMonthButton entity={entity} token={token} month={m} />}
-                    </div>
-
-                    <MonthChecklist month={m} entity={entity} token={token} slotDocs={monthSlotDocs}
-                      onPreview={d => setPreview(d)}
-                      onAdd={d => setDocs(prev => [d, ...(prev || [])])}
-                      onRemove={id => setDocs(prev => (prev || []).filter(x => x.id !== id))}
-                    />
-
-                    <SectionAddDoc entity={entity} token={token} month={m}
-                      onAdd={d => setDocs(prev => [d, ...(prev || [])])} />
-
-                    {groupDocs.length === 0 ? (
-                      <div className="text-center text-slate-400 py-8 bg-white rounded-xl border border-slate-200 text-sm">
-                        Niciun document în această lună.
-                      </div>
-                    ) : (
-                      <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="bg-slate-50 text-xs text-slate-400 text-left">
-                              <th className="px-4 py-3">Document</th>
-                              <th className="px-4 py-3">Categorie</th>
-                              <th className="px-4 py-3 whitespace-nowrap">Lună</th>
-                              <th className="px-4 py-3 whitespace-nowrap">Data act</th>
-                              <th className="px-4 py-3 whitespace-nowrap">Încărcat</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-50">
-                            {groupDocs.map(d => (
-                              <DocRow key={d.id} d={d} entity={entity} token={token}
-                                onPreview={() => setPreview(d)}
-                                onDeleted={() => setDocs(prev => (prev || []).filter(x => x.id !== d.id))}
-                                onMonthChanged={(luna) => setDocs(prev => (prev || []).map(x => x.id === d.id ? { ...x, luna, luna_manuala: true } : x))}
-                                onReplaced={(updated) => setDocs(prev => (prev || []).map(x => x.id === d.id ? { ...x, ...updated } : x))}
-                              />
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    )}
-                  </section>
-                )
-              })}
+              {sectionMonths.map(m => (
+                <MonthSection key={m} m={m} entity={entity} token={token}
+                  groupDocs={shown.filter(d => lunaOf(d) === m)}
+                  monthSlotDocs={slotDocs.filter(d => lunaOf(d) === m)}
+                  monthHasFiles={normalDocs.some(d => lunaOf(d) === m) || slotDocs.some(d => lunaOf(d) === m)}
+                  setDocs={setDocs} setPreview={setPreview}
+                />
+              ))}
             </div>
           )
         })()}
@@ -377,6 +343,251 @@ function PreviewModal({ doc, onClose }: { doc: Doc; onClose: () => void }) {
   )
 }
 
+function MonthSection({ m, entity, token, groupDocs, monthSlotDocs, monthHasFiles, setDocs, setPreview }: {
+  m: string; entity: string; token: string | null
+  groupDocs: Doc[]; monthSlotDocs: Doc[]; monthHasFiles: boolean
+  setDocs: (u: (prev: Doc[] | null) => Doc[] | null) => void
+  setPreview: (d: Doc) => void
+}) {
+  const [chelt, setChelt] = useState<Cheltuiala[] | null>(null)
+  const [analyzing, setAnalyzing] = useState(false)
+  const hasExtras = monthSlotDocs.some(d => d.categorie === 'extras_cont')
+
+  const loadChelt = useCallback(async () => {
+    const j = await fetch(`/api/acte-contabile/cheltuieli?entity=${entity}&luna=${m}&token=${encodeURIComponent(token || '')}`)
+      .then(r => r.json()).catch(() => null)
+    setChelt(j?.items || [])
+  }, [entity, m, token])
+  useEffect(() => { loadChelt() }, [loadChelt])
+
+  const analyzeExtras = useCallback(async () => {
+    setAnalyzing(true)
+    try {
+      const j = await fetch('/api/acte-contabile/cheltuieli/analiza', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ entity, token, luna: m }),
+      }).then(r => r.json())
+      if (j.ok) setChelt(prev => {
+        const manual = (prev || []).filter(x => x.sursa === 'manual')
+        return [...j.items, ...manual]
+      })
+      else alert(j.error || 'Analiza extrasului a eșuat.')
+    } catch { alert('Conexiune eșuată la analiză.') }
+    finally { setAnalyzing(false) }
+  }, [entity, token, m])
+
+  return (
+    <section>
+      <div className="flex items-center justify-between gap-3 mb-2.5">
+        <div className="flex items-baseline gap-2">
+          <h2 className="text-xl font-extrabold tracking-wide text-[#0a1628]">{m.toUpperCase()}</h2>
+          <span className="text-xs text-slate-400">{groupDocs.length} document{groupDocs.length === 1 ? '' : 'e'}</span>
+        </div>
+        {monthHasFiles && <DownloadMonthButton entity={entity} token={token} month={m} />}
+      </div>
+
+      <MonthChecklist month={m} entity={entity} token={token} slotDocs={monthSlotDocs}
+        onPreview={d => setPreview(d)}
+        onAdd={d => setDocs(prev => [d, ...(prev || [])])}
+        onRemove={id => setDocs(prev => (prev || []).filter(x => x.id !== id))}
+        onExtrasUploaded={analyzeExtras}
+      />
+
+      {(hasExtras || (chelt && chelt.length > 0)) && (
+        <CheltuieliPanel entity={entity} token={token} month={m} items={chelt} setItems={setChelt}
+          analyzing={analyzing} hasExtras={hasExtras} onReanalyze={analyzeExtras} />
+      )}
+
+      <SectionAddDoc entity={entity} token={token} month={m}
+        onAdd={d => setDocs(prev => [d, ...(prev || [])])} />
+
+      {groupDocs.length === 0 ? (
+        <div className="text-center text-slate-400 py-8 bg-white rounded-xl border border-slate-200 text-sm">
+          Niciun document în această lună.
+        </div>
+      ) : (
+        <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-slate-50 text-xs text-slate-400 text-left">
+                <th className="px-4 py-3">Document</th>
+                <th className="px-4 py-3">Categorie</th>
+                <th className="px-4 py-3 whitespace-nowrap">Lună</th>
+                <th className="px-4 py-3 whitespace-nowrap">Data act</th>
+                <th className="px-4 py-3 whitespace-nowrap">Încărcat</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {groupDocs.map(d => (
+                <DocRow key={d.id} d={d} entity={entity} token={token}
+                  onPreview={() => setPreview(d)}
+                  onDeleted={() => setDocs(prev => (prev || []).filter(x => x.id !== d.id))}
+                  onMonthChanged={(luna) => setDocs(prev => (prev || []).map(x => x.id === d.id ? { ...x, luna, luna_manuala: true } : x))}
+                  onReplaced={(updated) => setDocs(prev => (prev || []).map(x => x.id === d.id ? { ...x, ...updated } : x))}
+                />
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </section>
+  )
+}
+
+function CheltuieliPanel({ entity, token, month, items, setItems, analyzing, hasExtras, onReanalyze }: {
+  entity: string; token: string | null; month: string
+  items: Cheltuiala[] | null; setItems: (u: (prev: Cheltuiala[] | null) => Cheltuiala[] | null) => void
+  analyzing: boolean; hasExtras: boolean; onReanalyze: () => void
+}) {
+  const [doarNeacoperite, setDoarNeacoperite] = useState(true)
+  const [adding, setAdding] = useState(false)
+  const [nd, setNd] = useState({ data: '', descriere: '', suma: '' })
+
+  const fmtRon = (n: number) => n.toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
+  async function patch(id: string, body: any) {
+    const res = await fetch('/api/acte-contabile/cheltuieli', {
+      method: 'PATCH', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ entity, token, id, ...body }),
+    }).then(r => r.json()).catch(() => null)
+    return res?.ok
+  }
+
+  async function toggle(c: Cheltuiala) {
+    setItems(prev => (prev || []).map(x => x.id === c.id ? { ...x, acoperit: !c.acoperit } : x))
+    const ok = await patch(c.id, { acoperit: !c.acoperit })
+    if (!ok) setItems(prev => (prev || []).map(x => x.id === c.id ? { ...x, acoperit: c.acoperit } : x))
+  }
+
+  async function remove(c: Cheltuiala) {
+    if (!confirm('Ștergi această cheltuială?')) return
+    setItems(prev => (prev || []).filter(x => x.id !== c.id))
+    await fetch(`/api/acte-contabile/cheltuieli?entity=${entity}&id=${c.id}&token=${encodeURIComponent(token || '')}`, { method: 'DELETE' }).catch(() => {})
+  }
+
+  async function saveField(c: Cheltuiala, field: 'descriere' | 'suma' | 'data', value: string) {
+    const val = field === 'suma' ? (Number(value.replace(',', '.')) || 0) : value
+    if ((c as any)[field] === val) return
+    setItems(prev => (prev || []).map(x => x.id === c.id ? { ...x, [field]: val } : x))
+    await patch(c.id, { [field]: val })
+  }
+
+  async function addManual() {
+    const descriere = nd.descriere.trim()
+    if (!descriere) return
+    const res = await fetch('/api/acte-contabile/cheltuieli', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ entity, token, luna: month, data: nd.data || null, descriere, suma: Number(nd.suma.replace(',', '.')) || 0 }),
+    }).then(r => r.json()).catch(() => null)
+    if (res?.ok && res.item) {
+      setItems(prev => [...(prev || []), res.item])
+      setNd({ data: '', descriere: '', suma: '' })
+      setAdding(false)
+    } else alert(res?.error || 'Adăugarea a eșuat.')
+  }
+
+  const all = items || []
+  const neacoperite = all.filter(c => !c.acoperit)
+  const totalSuma = all.reduce((s, c) => s + Number(c.suma), 0)
+  const neacoperitaSuma = neacoperite.reduce((s, c) => s + Number(c.suma), 0)
+  const shown = doarNeacoperite ? neacoperite : all
+
+  return (
+    <div className="mb-3 rounded-xl border border-sky-200 bg-sky-50/60 overflow-hidden">
+      <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-sky-100 flex-wrap">
+        <div className="flex items-center gap-2 font-semibold text-sky-900">
+          <Wallet size={16} /> Cheltuieli din extras
+          {analyzing && <span className="flex items-center gap-1 text-xs font-normal text-sky-600"><Loader2 size={12} className="animate-spin" /> se analizează…</span>}
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-slate-500">
+            {all.length} chelt. · neacoperite <b className="text-red-600">{neacoperite.length}</b> ({fmtRon(neacoperitaSuma)} lei) · total {fmtRon(totalSuma)} lei
+          </span>
+          {hasExtras && (
+            <button onClick={onReanalyze} disabled={analyzing}
+              className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-sky-200 text-sky-700 bg-white hover:bg-sky-50 disabled:opacity-60">
+              {analyzing ? <Loader2 size={13} className="animate-spin" /> : <RefreshCw size={13} />} Re-analizează
+            </button>
+          )}
+        </div>
+      </div>
+
+      <div className="px-4 py-2 flex items-center justify-between gap-3 flex-wrap">
+        <label className="flex items-center gap-1.5 text-xs font-medium text-slate-600 cursor-pointer">
+          <input type="checkbox" checked={doarNeacoperite} onChange={e => setDoarNeacoperite(e.target.checked)} />
+          Doar neacoperite
+        </label>
+        <button onClick={() => setAdding(v => !v)}
+          className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border border-slate-200 text-slate-600 bg-white hover:bg-slate-50">
+          {adding ? <X size={13} /> : <Plus size={13} />} {adding ? 'Renunță' : 'Adaugă cheltuială'}
+        </button>
+      </div>
+
+      {adding && (
+        <div className="px-4 pb-3 flex items-end gap-2 flex-wrap">
+          <input type="date" value={nd.data} onChange={e => setNd(s => ({ ...s, data: e.target.value }))}
+            className="border border-slate-200 rounded-lg px-2 py-1.5 text-sm bg-white" />
+          <input placeholder="Descriere" value={nd.descriere} onChange={e => setNd(s => ({ ...s, descriere: e.target.value }))}
+            className="border border-slate-200 rounded-lg px-2 py-1.5 text-sm bg-white flex-1 min-w-40" />
+          <input placeholder="Sumă" value={nd.suma} onChange={e => setNd(s => ({ ...s, suma: e.target.value }))}
+            className="border border-slate-200 rounded-lg px-2 py-1.5 text-sm bg-white w-24" />
+          <button onClick={addManual} className="px-3 py-1.5 rounded-lg text-sm font-medium text-[#0a1628]" style={{ background: '#f5c842' }}>Adaugă</button>
+        </div>
+      )}
+
+      {shown.length === 0 ? (
+        <div className="px-4 py-5 text-center text-sm text-slate-400">
+          {all.length === 0
+            ? (hasExtras ? (analyzing ? 'Se extrag cheltuielile…' : 'Nicio cheltuială extrasă. Apasă „Re-analizează”.') : 'Încarcă extrasul de cont pentru a extrage cheltuielile.')
+            : 'Toate cheltuielile sunt acoperite. 🎉'}
+        </div>
+      ) : (
+        <div className="bg-white border-t border-sky-100">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-slate-50 text-xs text-slate-400 text-left">
+                <th className="px-3 py-2 w-10 text-center">Bon/<br />factură</th>
+                <th className="px-3 py-2">Operațiune</th>
+                <th className="px-3 py-2 whitespace-nowrap">Data</th>
+                <th className="px-3 py-2 text-right whitespace-nowrap">Sumă (lei)</th>
+                <th className="px-3 py-2"></th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-50">
+              {shown.map(c => (
+                <tr key={c.id} className={c.acoperit ? 'bg-green-50/50' : ''}>
+                  <td className="px-3 py-2 text-center">
+                    <input type="checkbox" checked={c.acoperit} onChange={() => toggle(c)}
+                      className="w-4 h-4 cursor-pointer accent-green-600" title="Bifează dacă există bon/factură" />
+                  </td>
+                  <td className="px-3 py-2">
+                    <input defaultValue={c.descriere} onBlur={e => saveField(c, 'descriere', e.target.value)}
+                      className={`w-full bg-transparent border border-transparent hover:border-slate-200 focus:border-sky-300 rounded px-1.5 py-1 text-sm focus:outline-none ${c.acoperit ? 'line-through text-slate-400' : 'text-[#0a1628]'}`} />
+                    {c.sursa === 'manual' && <span className="text-[10px] text-slate-400 ml-1">(manual)</span>}
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap">
+                    <input type="date" defaultValue={c.data || ''} onBlur={e => saveField(c, 'data', e.target.value)}
+                      className="bg-transparent border border-transparent hover:border-slate-200 focus:border-sky-300 rounded px-1 py-1 text-xs text-slate-500 focus:outline-none" />
+                  </td>
+                  <td className="px-3 py-2 text-right whitespace-nowrap">
+                    <input defaultValue={fmtRon(Number(c.suma))} onBlur={e => saveField(c, 'suma', e.target.value)}
+                      className="w-24 text-right bg-transparent border border-transparent hover:border-slate-200 focus:border-sky-300 rounded px-1 py-1 text-sm font-medium text-[#0a1628] focus:outline-none" />
+                  </td>
+                  <td className="px-3 py-2 text-right">
+                    <button onClick={() => remove(c)} className="p-1 rounded text-slate-300 hover:text-red-500 hover:bg-red-50" title="Șterge">
+                      <Trash2 size={13} />
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
 function DownloadMonthButton({ entity, token, month }: { entity: string; token: string | null; month: string }) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
@@ -416,9 +627,10 @@ function DownloadMonthButton({ entity, token, month }: { entity: string; token: 
   )
 }
 
-function MonthChecklist({ month, entity, token, slotDocs, onPreview, onAdd, onRemove }: {
+function MonthChecklist({ month, entity, token, slotDocs, onPreview, onAdd, onRemove, onExtrasUploaded }: {
   month: string; entity: string; token: string | null; slotDocs: Doc[]
   onPreview: (d: Doc) => void; onAdd: (d: Doc) => void; onRemove: (id: string) => void
+  onExtrasUploaded?: () => void
 }) {
   const { past27, past30 } = monthDateInfo(month)
   const [open, setOpen] = useState(past27)
@@ -440,7 +652,8 @@ function MonthChecklist({ month, entity, token, slotDocs, onPreview, onAdd, onRe
             <SlotCard key={slot.key} slot={slot} month={month} entity={entity} token={token}
               doc={slotDocs.find(d => d.categorie === slot.key) || null}
               past30={past30}
-              onPreview={onPreview} onAdd={onAdd} onRemove={onRemove} />
+              onPreview={onPreview} onAdd={onAdd} onRemove={onRemove}
+              onAfterUpload={slot.key === 'extras_cont' ? onExtrasUploaded : undefined} />
           ))}
         </div>
       )}
@@ -448,10 +661,11 @@ function MonthChecklist({ month, entity, token, slotDocs, onPreview, onAdd, onRe
   )
 }
 
-function SlotCard({ slot, month, entity, token, doc, past30, onPreview, onAdd, onRemove }: {
+function SlotCard({ slot, month, entity, token, doc, past30, onPreview, onAdd, onRemove, onAfterUpload }: {
   slot: { key: string; label: string; icon: any }; month: string; entity: string; token: string | null
   doc: Doc | null; past30: boolean
   onPreview: (d: Doc) => void; onAdd: (d: Doc) => void; onRemove: (id: string) => void
+  onAfterUpload?: () => void
 }) {
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
@@ -483,6 +697,7 @@ function SlotCard({ slot, month, entity, token, doc, past30, onPreview, onAdd, o
         onRemove(doc.id)
       }
       onAdd(json.doc)
+      onAfterUpload?.()
     } catch { setErr('Conexiune eșuată.') }
     finally { setBusy(false); if (fileRef.current) fileRef.current.value = '' }
   }
