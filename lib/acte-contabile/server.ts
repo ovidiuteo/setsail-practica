@@ -98,6 +98,44 @@ export type ActDoc = {
 
 export type ActDocWithUrl = ActDoc & { url: string | null }
 
+// Documentele unei singure luni (cu URL-uri semnate) — folosit de pagina contabilului
+export async function listDocsForMonth(entity: Entity, luna: string): Promise<ActDocWithUrl[]> {
+  const sb = acteServiceClient()
+  const { data } = await sb.from('acte_contabile_documente')
+    .select('*').eq('entity', entity).eq('luna', luna)
+    .order('categorie', { ascending: true }).order('created_at', { ascending: false })
+  const docs = (data ?? []) as ActDoc[]
+  if (docs.length === 0) return []
+  const paths = docs.map(d => d.file_path)
+  const { data: signed } = await sb.storage.from(ACTE_BUCKET).createSignedUrls(paths, SIGNED_URL_TTL)
+  const urlByPath = new Map<string, string>()
+  signed?.forEach(s => { if (s.path && s.signedUrl) urlByPath.set(s.path, s.signedUrl) })
+  return docs.map(d => ({ ...d, url: urlByPath.get(d.file_path) ?? null }))
+}
+
+// --- token contabil (read-only, per lună) -------------------------------
+export async function getOrCreateContabilToken(entity: Entity, luna: string): Promise<string> {
+  const sb = acteServiceClient()
+  const { data } = await sb.from('acte_contabile_contabil_tokens')
+    .select('token').eq('entity', entity).eq('luna', luna).maybeSingle()
+  if (data?.token) return data.token as string
+  const token = randomBytes(32).toString('hex')
+  await sb.from('acte_contabile_contabil_tokens')
+    .upsert({ entity, luna, token }, { onConflict: 'entity,luna' })
+  const { data: row } = await sb.from('acte_contabile_contabil_tokens')
+    .select('token').eq('entity', entity).eq('luna', luna).maybeSingle()
+  return (row?.token as string) || token
+}
+
+export async function resolveContabilToken(token: string | null | undefined): Promise<{ entity: Entity; luna: string } | null> {
+  if (!token || typeof token !== 'string' || token.length < 32) return null
+  const sb = acteServiceClient()
+  const { data } = await sb.from('acte_contabile_contabil_tokens')
+    .select('entity, luna').eq('token', token).maybeSingle()
+  if (!data || !isEntity(data.entity)) return null
+  return { entity: data.entity as Entity, luna: data.luna as string }
+}
+
 export async function listDocs(entity: Entity): Promise<ActDocWithUrl[]> {
   const sb = acteServiceClient()
   const { data } = await sb.from('acte_contabile_documente')

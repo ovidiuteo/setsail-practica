@@ -5,6 +5,7 @@ import {
   Loader2, Upload, Trash2, RefreshCw, ShieldAlert, FileText, Download,
   Receipt, Landmark, FileSignature, ScrollText, Files, Search, Eye, X, FileSpreadsheet, CalendarDays,
   ChevronDown, ChevronUp, Wallet, ReceiptText, Check, AlertCircle, FolderArchive, Plus,
+  Copy, ExternalLink, Link2,
 } from 'lucide-react'
 
 type Doc = {
@@ -383,7 +384,10 @@ function MonthSection({ m, entity, token, groupDocs, monthSlotDocs, monthHasFile
           <h2 className="text-xl font-extrabold tracking-wide text-[#0a1628]">{m.toUpperCase()}</h2>
           <span className="text-xs text-slate-400">{groupDocs.length} document{groupDocs.length === 1 ? '' : 'e'}</span>
         </div>
-        {monthHasFiles && <DownloadMonthButton entity={entity} token={token} month={m} />}
+        <div className="flex items-center gap-2">
+          <ContabilLinkButton entity={entity} token={token} month={m} />
+          {monthHasFiles && <DownloadMonthButton entity={entity} token={token} month={m} />}
+        </div>
       </div>
 
       <MonthChecklist month={m} entity={entity} token={token} slotDocs={monthSlotDocs}
@@ -582,6 +586,63 @@ function CheltuieliPanel({ entity, token, month, items, setItems, analyzing, has
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function ContabilLinkButton({ entity, token, month }: { entity: string; token: string | null; month: string }) {
+  const [open, setOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [url, setUrl] = useState('')
+  const [copied, setCopied] = useState(false)
+
+  async function ensureLink() {
+    if (url) { setOpen(o => !o); return }
+    setBusy(true)
+    try {
+      const j = await fetch('/api/acte-contabile/contabil-token', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ entity, token, luna: month }),
+      }).then(r => r.json())
+      if (j.ok && j.token) {
+        const origin = typeof window !== 'undefined' ? window.location.origin : ''
+        setUrl(`${origin}/acte-contabile/contabil/${j.token}`)
+        setOpen(true)
+      } else alert(j.error || 'Nu am putut genera link-ul.')
+    } catch { alert('Conexiune eșuată.') }
+    finally { setBusy(false) }
+  }
+
+  function copy() {
+    navigator.clipboard.writeText(url)
+    setCopied(true); setTimeout(() => setCopied(false), 1500)
+  }
+
+  return (
+    <div className="relative">
+      <button onClick={ensureLink} disabled={busy}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-violet-200 text-violet-700 bg-white hover:bg-violet-50 transition disabled:opacity-60"
+        title="Link read-only pentru contabil (doar această lună)">
+        {busy ? <Loader2 size={14} className="animate-spin" /> : <Link2 size={14} />} Link pt contabil
+      </button>
+      {open && url && (
+        <div className="absolute left-0 top-full mt-2 z-40 w-[min(92vw,420px)] bg-white border border-slate-200 rounded-xl shadow-lg p-3">
+          <div className="text-xs font-medium text-slate-500 mb-1.5">Link read-only — {LUNA_LABEL(month)} (doar vizualizare + descărcare)</div>
+          <input readOnly value={url} onFocus={e => e.currentTarget.select()}
+            className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-xs text-slate-600 bg-slate-50 mb-2" />
+          <div className="flex items-center gap-2">
+            <button onClick={copy}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-200 text-slate-600 hover:bg-slate-50">
+              {copied ? <Check size={14} className="text-green-600" /> : <Copy size={14} />} {copied ? 'Copiat' : 'Copiază'}
+            </button>
+            <a href={url} target="_blank" rel="noreferrer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[#0a1628]" style={{ background: '#f5c842' }}>
+              <ExternalLink size={14} /> Deschide
+            </a>
+            <button onClick={() => setOpen(false)} className="ml-auto p-1.5 rounded-lg text-slate-400 hover:bg-slate-50"><X size={14} /></button>
+          </div>
         </div>
       )}
     </div>

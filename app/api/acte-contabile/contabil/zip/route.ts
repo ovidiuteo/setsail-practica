@@ -1,20 +1,16 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { canAccess, isEntity, isLuna } from '@/lib/acte-contabile/server'
+import { resolveContabilToken } from '@/lib/acte-contabile/server'
 import { buildMonthZip } from '@/lib/acte-contabile/zip'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-// GET /api/acte-contabile/zip?entity=ssa&luna=iunie&token=...
+// ZIP cu toate fișierele lunii, via token de contabil
 export async function GET(req: NextRequest) {
-  const entity = req.nextUrl.searchParams.get('entity')
-  const luna = req.nextUrl.searchParams.get('luna')
   const token = req.nextUrl.searchParams.get('token')
-  if (!isEntity(entity)) return NextResponse.json({ ok: false, error: 'invalid entity' }, { status: 400 })
-  if (!isLuna(luna)) return NextResponse.json({ ok: false, error: 'invalid luna' }, { status: 400 })
-  if (!(await canAccess(entity, token))) {
-    return NextResponse.json({ ok: false, error: 'Acces refuzat.' }, { status: 401 })
-  }
+  const resolved = await resolveContabilToken(token)
+  if (!resolved) return NextResponse.json({ ok: false, error: 'Token invalid.' }, { status: 401 })
+  const { entity, luna } = resolved
 
   const content = await buildMonthZip(entity, luna)
   if (!content) return NextResponse.json({ ok: false, error: 'Nicio înregistrare pentru această lună.' }, { status: 404 })
