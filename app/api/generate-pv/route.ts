@@ -263,7 +263,7 @@ export async function POST(req: NextRequest) {
       return new TableRow({
         height: { value: 200, rule: 'atLeast' as any },
         children: [
-          new TableCell({ borders, width: { size: colW[0], type: WidthType.DXA }, margins: cellM, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: String(s.order_in_session || idx + 1), size: 22 })] })] }),
+          new TableCell({ borders, width: { size: colW[0], type: WidthType.DXA }, margins: cellM, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: String(idx + 1), size: 22 })] })] }),
           new TableCell({ borders, width: { size: colW[1], type: WidthType.DXA }, margins: cellM, children: [new Paragraph({ children: [new TextRun({ text: nume, size: 22 })] })] }),
           new TableCell({ borders, width: { size: colW[2], type: WidthType.DXA }, margins: cellM, children: [new Paragraph({ children: [new TextRun({ text: prenume, size: 22 })] })] }),
           new TableCell({ borders, width: { size: colW[3], type: WidthType.DXA }, margins: cellM, children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: s.cnp || '', size: 22 })] })] }),

@@ -183,11 +183,20 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
   }
 
   async function recount() {
-    const sorted = getSorted(students)
+    // Numerotam doar cursantii vizibili (non-sailing); cei de la sailing trec la coada,
+    // ca sa nu ocupe numere din lista/PV.
+    const sorted = getSorted(students.filter(s => !s.only_sailing))
+    const sailing = students.filter(s => s.only_sailing)
     for (let i = 0; i < sorted.length; i++) {
       await supabase.from('students').update({ order_in_session: i + 1 }).eq('id', sorted[i].id)
     }
-    setStudents(sorted.map((s, i) => ({ ...s, order_in_session: i + 1 })))
+    for (let j = 0; j < sailing.length; j++) {
+      await supabase.from('students').update({ order_in_session: sorted.length + j + 1 }).eq('id', sailing[j].id)
+    }
+    setStudents([
+      ...sorted.map((s, i) => ({ ...s, order_in_session: i + 1 })),
+      ...sailing.map((s, j) => ({ ...s, order_in_session: sorted.length + j + 1 })),
+    ])
     setSortCol(null)
   }
 
