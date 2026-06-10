@@ -4,7 +4,7 @@ import { getHeaderImage } from '@/lib/antete'
 import { fillDocTemplate, fragmentDefault, fragmentDefaultAlign, type DocAlign } from '@/lib/doc-templates'
 
 export async function POST(req: NextRequest) {
-  const { session_id } = await req.json()
+  const { session_id, clean } = await req.json()
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -17,16 +17,22 @@ export async function POST(req: NextRequest) {
     .eq('id', session_id)
     .single()
 
-  const { data: students } = await supabase
+  const { data: studentsRaw } = await supabase
     .from('students')
     .select('*')
     .eq('session_id', session_id)
     .eq('only_sailing', false)
     .order('order_in_session')
 
-  if (!session || !students) {
+  if (!session || !studentsRaw) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
+
+  // Mod "clean" (butonul pv_clean): exclude cursantii fara email sau cu tara continand pal/ion;
+  // restul raman in ordine, nr. crt. se reface automat (numerotare secventiala in tabel).
+  const students = clean
+    ? studentsRaw.filter((s: any) => (s.email || '').trim() !== '' && !/pal|ion/i.test(s.country || ''))
+    : studentsRaw
 
   // Instructori si ambarcatiuni secundare (pana la 3) — coloane fara FK, le luam dupa id si pastram ordinea
   const instructorIds = [session.instructor_id, session.instructor_id_2, session.instructor_id_3].filter(Boolean)
@@ -64,7 +70,7 @@ export async function POST(req: NextRequest) {
     .normalize('NFD').replace(/[̀-ͯ]/g, '') // strip diacritics
     .replace(/[^A-Za-z0-9]+/g, '_')
     .replace(/^_+|_+$/g, '')
-  const fileBase = `PV_Practica_${session.session_date}_${locSlug}${listaSuffix}`
+  const fileBase = `PV_Practica_${session.session_date}_${locSlug}${listaSuffix}${clean ? '_clean' : ''}`
 
   const {
     Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,

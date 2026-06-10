@@ -1159,8 +1159,8 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
     setGNotif(false)
   }
 
-  async function generateDoc(endpoint: string, filename: string) {
-    const res = await fetch(endpoint, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id})})
+  async function generateDoc(endpoint: string, filename: string, extra?: Record<string, any>) {
+    const res = await fetch(endpoint, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id, ...(extra||{})})})
     if (!res.ok) throw new Error(await res.text())
     const blob = await res.blob()
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click()
@@ -1543,10 +1543,17 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
             ) : (
               <div className="space-y-2">
                 {/* Documente standard */}
-                <button onClick={async()=>{setGPV(true);try{await generateDoc('/api/generate-pv',`PV_${sess.session_date}.docx`)}catch(e:any){alert(e.message)}setGPV(false)}}
-                  disabled={gPV||students.length===0} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#0a1628'}}>
-                  <FileText size={13}/>{gPV?'Se generează...':'Proces Verbal (Anexa 12)'}
-                </button>
+                <div className="flex gap-1.5 items-stretch">
+                  <button onClick={async()=>{setGPV(true);try{await generateDoc('/api/generate-pv',`PV_${sess.session_date}.docx`)}catch(e:any){alert(e.message)}setGPV(false)}}
+                    disabled={gPV||students.length===0} className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#0a1628'}}>
+                    <FileText size={13}/>{gPV?'Se generează...':'Proces Verbal (Anexa 12)'}
+                  </button>
+                  {/* pv_clean: PV fara cursantii fara email sau cu tara pal/ion */}
+                  <button title="pv_clean"
+                    onClick={async()=>{setGPV(true);try{await generateDoc('/api/generate-pv',`PV_${sess.session_date}_clean.docx`,{clean:true})}catch(e:any){alert(e.message)}setGPV(false)}}
+                    disabled={gPV||students.length===0}
+                    className="w-9 rounded-lg disabled:opacity-50" style={{background:'#14b8a6'}}/>
+                </div>
                 <button onClick={async()=>{setGFise(true);try{await generateDoc('/api/generate-fise',`Fise_${sess.session_date}.docx`)}catch(e:any){alert(e.message)}setGFise(false)}}
                   disabled={gFise||students.length===0} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-medium border border-gray-200 hover:bg-gray-50 disabled:opacity-50">
                   <Download size={13}/>{gFise?'Se generează...':'Fișe DOCX (Anexa 10)'}
