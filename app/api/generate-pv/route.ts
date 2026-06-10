@@ -341,6 +341,20 @@ export async function POST(req: NextRequest) {
       children: [new TextRun({ text: 'Proces – Verbal  Examen Practic', bold: true, size: 26 })]
     }),
 
+    // Limanu: "Incheiat astazi [data probei practice]" + un paragraf gol, inainte de Subsemnatul
+    ...(locName.includes('limanu') ? [
+      new Paragraph({
+        spacing: { after: 0 },
+        indent: { firstLine: 720 },
+        alignment: AlignmentType.BOTH,
+        children: [
+          new TextRun({ text: 'Încheiat astăzi ', size: 22 }),
+          new TextRun({ text: sessionDate, bold: true, size: 22 }),
+        ]
+      }),
+      new Paragraph({ spacing: { after: 0 }, children: [new TextRun({ text: '', size: 22 })] }),
+    ] : []),
+
     // Paragraful 1 - Subsemnatul
     new Paragraph({
       spacing: { after: 0 },
