@@ -23,6 +23,19 @@ export function timelineScopeLabel(scope: string | null | undefined): string {
   return TIMELINE_SCOPES.find(s => s.value === scope)?.label || (scope || '—')
 }
 
+// Eticheta scurta a categoriei, pentru dashboard/TO DO (ex. "RADIO 17 iun · Bucuresti")
+const SCOPE_SHORT: Record<TimelineScope, string> = {
+  practica_cds_limanu: 'PRACTICA',
+  curs_cd_snagov: 'SNAGOV',
+  intensiv_cds_limanu: 'INTENSIV',
+  practica_ba: 'B/A',
+  radio_lrc: 'RADIO',
+}
+
+export function timelineScopeShort(scope: string | null | undefined): string {
+  return SCOPE_SHORT[scope as TimelineScope] || ''
+}
+
 // Derivare best-guess cand timeline_scope nu e setat (fallback pentru sesiuni noi).
 function deriveScope(session: any): TimelineScope {
   const clsU = String(session?.class_caa || '').toUpperCase()

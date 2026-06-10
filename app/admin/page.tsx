@@ -5,7 +5,7 @@ import { supabase } from '@/lib/supabase'
 import { Calendar, Users, CheckCircle, Clock, Plus, ExternalLink, GitBranch, UserX, ArrowRight, Bell } from 'lucide-react'
 import Link from 'next/link'
 import { resolveColor, DEFAULT_GLOBAL_DAY, DEFAULT_GLOBAL_WEEKEND } from '@/lib/timeline-colors'
-import { scopeForSession } from '@/lib/timeline-scope'
+import { scopeForSession, timelineScopeShort } from '@/lib/timeline-scope'
 
 // ---------- Helper timeline TO DO ----------
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -183,7 +183,7 @@ export default function AdminDashboard() {
     if (dated.length === 0) continue
     dated.sort((a, b) => a.date.getTime() - b.date.getTime())
 
-    const sessLabel = `${shortDate(sess.session_date ? startOfDay(new Date(sess.session_date)) : null)} · ${sess.locations?.name || sess.class_caa || ''}`
+    const sessLabel = `${timelineScopeShort(scope)} ${shortDate(sess.session_date ? startOfDay(new Date(sess.session_date)) : null)} · ${sess.locations?.name || sess.class_caa || ''}`.trim()
 
     // Milestone-uri în ±2 zile
     for (const { m, date } of dated) {
