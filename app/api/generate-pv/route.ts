@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
   const instructorIds = [session.instructor_id, session.instructor_id_2, session.instructor_id_3].filter(Boolean)
   const boatIds = [session.boat_id, session.boat_id_2, session.boat_id_3].filter(Boolean)
   const [{ data: instrRows }, { data: boatRows }] = await Promise.all([
-    instructorIds.length ? supabase.from('instructors').select('id, full_name').in('id', instructorIds) : Promise.resolve({ data: [] as any[] }),
+    instructorIds.length ? supabase.from('instructors').select('id, full_name, signature_data').in('id', instructorIds) : Promise.resolve({ data: [] as any[] }),
     boatIds.length ? supabase.from('boats').select('id, name, registration').in('id', boatIds) : Promise.resolve({ data: [] as any[] }),
   ])
   const instrById: Record<string, any> = Object.fromEntries((instrRows || []).map((r: any) => [r.id, r]))
@@ -101,6 +101,15 @@ export async function POST(req: NextRequest) {
     : '................................'
   const multiBoats = orderedBoats.length > 1
   const multiInstr = orderedInstr.length > 1
+  // La campul de semnatura din PV: doar PRIMUL instructor + semnatura lui
+  const firstInstructorName = orderedInstr[0]?.full_name || '................................'
+  function dataUrlToImage(dataUrl: string | null | undefined): { data: Buffer; type: 'png' | 'jpg' | 'gif' } | null {
+    const m = /^data:image\/(png|jpe?g|gif);base64,(.+)$/i.exec(dataUrl || '')
+    if (!m) return null
+    const t = m[1].toLowerCase()
+    return { data: Buffer.from(m[2], 'base64'), type: t === 'jpeg' || t === 'jpg' ? 'jpg' : (t as 'png' | 'gif') }
+  }
+  const firstSignature = dataUrlToImage(orderedInstr[0]?.signature_data)
   const clasaCAA = session.class_caa || 'C/D'
 
   // Footer locatie
@@ -287,7 +296,7 @@ export async function POST(req: NextRequest) {
             children: [new Paragraph({ children: [] })] }),
           new TableCell({ borders: noBorders, width: { size: 4500, type: WidthType.DXA }, margins: cellM,
             children: [
-              new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: instructor, bold: true, size: 20 })] }),
+              new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: firstInstructorName, bold: true, size: 20 })] }),
               new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: '(Nume, prenume)', size: 16 })] }),
             ] }),
         ]}),
@@ -296,7 +305,9 @@ export async function POST(req: NextRequest) {
             children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: '............................  ...........................', size: 20 })] })] }),
           new TableCell({ borders: noBorders, width: { size: 1106, type: WidthType.DXA }, margins: cellM, children: [new Paragraph({ children: [] })] }),
           new TableCell({ borders: noBorders, width: { size: 4500, type: WidthType.DXA }, margins: { top: 240, bottom: 80, left: 100, right: 100 },
-            children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: '............................  ...........................', size: 20 })] })] }),
+            children: [ firstSignature
+              ? new Paragraph({ alignment: AlignmentType.CENTER, children: [new ImageRun({ data: firstSignature.data, type: firstSignature.type, transformation: { width: 130, height: 55 } })] })
+              : new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: '............................  ...........................', size: 20 })] }) ] }),
         ]}),
         ...(locName.includes('snagov') ? [new TableRow({ children: [
           new TableCell({ borders: noBorders, width: { size: 4500, type: WidthType.DXA }, margins: cellM,
