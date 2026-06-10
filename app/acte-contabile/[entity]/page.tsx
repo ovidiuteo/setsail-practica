@@ -287,6 +287,7 @@ export default function ActeContabilePage({ params }: { params: { entity: string
                                 onPreview={() => setPreview(d)}
                                 onDeleted={() => setDocs(prev => (prev || []).filter(x => x.id !== d.id))}
                                 onMonthChanged={(luna) => setDocs(prev => (prev || []).map(x => x.id === d.id ? { ...x, luna, luna_manuala: true } : x))}
+                                onReplaced={(updated) => setDocs(prev => (prev || []).map(x => x.id === d.id ? { ...x, ...updated } : x))}
                               />
                             ))}
                           </tbody>
@@ -544,11 +545,14 @@ function SlotCard({ slot, month, entity, token, doc, past30, onPreview, onAdd, o
   )
 }
 
-function DocRow({ d, entity, token, onPreview, onDeleted, onMonthChanged }: {
+function DocRow({ d, entity, token, onPreview, onDeleted, onMonthChanged, onReplaced }: {
   d: Doc; entity: string; token: string | null
   onPreview: () => void; onDeleted: () => void; onMonthChanged: (luna: string) => void
+  onReplaced: (doc: Doc) => void
 }) {
   const [saving, setSaving] = useState(false)
+  const [replacing, setReplacing] = useState(false)
+  const fileRef = useRef<HTMLInputElement | null>(null)
   const luna = d.luna || currentLuna()
 
   async function changeMonth(next: string) {
@@ -563,6 +567,22 @@ function DocRow({ d, entity, token, onPreview, onDeleted, onMonthChanged }: {
       if (json.ok) onMonthChanged(next)
       else alert(json.error || 'Schimbarea lunii a eșuat.')
     } finally { setSaving(false) }
+  }
+
+  async function replaceFile(file: File) {
+    setReplacing(true)
+    const fd = new FormData()
+    fd.append('file', file)
+    fd.append('entity', entity)
+    fd.append('token', token || '')
+    fd.append('id', d.id)
+    try {
+      const res = await fetch('/api/acte-contabile/replace', { method: 'POST', body: fd })
+      const json = await res.json()
+      if (json.ok) onReplaced(json.doc)
+      else alert(json.error || 'Înlocuirea fișierului a eșuat.')
+    } catch { alert('Conexiune eșuată.') }
+    finally { setReplacing(false); if (fileRef.current) fileRef.current.value = '' }
   }
 
   return (
@@ -587,6 +607,13 @@ function DocRow({ d, entity, token, onPreview, onDeleted, onMonthChanged }: {
               <Download size={14} /> Descarcă
             </a>
           )}
+          <input ref={fileRef} type="file" className="hidden"
+            accept=".pdf,.jpg,.jpeg,.png,.webp,.avif,.heic,.xls,.xlsx,.csv,application/pdf,image/*"
+            onChange={e => { const f = e.target.files?.[0]; if (f) replaceFile(f) }} />
+          <button onClick={() => fileRef.current?.click()} disabled={replacing}
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 transition disabled:opacity-60" title="Înlocuiește fișierul (păstrează denumirea și luna)">
+            {replacing ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />} Înlocuiește
+          </button>
           <DeleteButton entity={entity} token={token} id={d.id} onDeleted={onDeleted} />
         </div>
       </td>
