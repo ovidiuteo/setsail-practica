@@ -29,6 +29,7 @@ Dacă nu găsești nicio cheltuială, returnează [].`
 function autoAcoperit(descriere: string): boolean {
   const d = descriere.toLowerCase()
   if (d.includes('comision')) return true
+  if (d.includes('abonament')) return true            // ex: Abonament Pachet OPTIM
   if (d.includes('escu')) return true
   if (d.includes('trezor') || d.includes('contribut')) return true
   if (d.includes('buget') && d.includes('stat')) return true
