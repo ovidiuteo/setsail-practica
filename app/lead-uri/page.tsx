@@ -65,6 +65,11 @@ export default function LeadsDashboardPage() {
     load(t)
   }, [load])
 
+  // Browser tab title reflects which landing is focused (first) — Radio first when pinned.
+  useEffect(() => {
+    document.title = focusKind === 'radio' ? 'Lead-uri Radio / CDS' : 'Lead-uri CDS / Radio'
+  }, [focusKind])
+
   if (phase === 'checking') {
     return <div className="min-h-screen flex items-center justify-center bg-slate-50 text-slate-400"><Loader2 className="w-6 h-6 animate-spin mr-2" /> Se verifică accesul…</div>
   }
