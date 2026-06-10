@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import {
   Loader2, Upload, Trash2, RefreshCw, ShieldAlert, FileText, Download,
   Receipt, Landmark, FileSignature, ScrollText, Files, Search, Eye, X, FileSpreadsheet, CalendarDays,
-  ChevronDown, ChevronUp, Wallet, ReceiptText, Check, AlertCircle, FolderArchive,
+  ChevronDown, ChevronUp, Wallet, ReceiptText, Check, AlertCircle, FolderArchive, Plus,
 } from 'lucide-react'
 
 type Doc = {
@@ -264,6 +264,9 @@ export default function ActeContabilePage({ params }: { params: { entity: string
                       onAdd={d => setDocs(prev => [d, ...(prev || [])])}
                       onRemove={id => setDocs(prev => (prev || []).filter(x => x.id !== id))}
                     />
+
+                    <SectionAddDoc entity={entity} token={token} month={m}
+                      onAdd={d => setDocs(prev => [d, ...(prev || [])])} />
 
                     {groupDocs.length === 0 ? (
                       <div className="text-center text-slate-400 py-8 bg-white rounded-xl border border-slate-200 text-sm">
@@ -640,9 +643,12 @@ function DocRow({ d, entity, token, onPreview, onDeleted, onMonthChanged, onRepl
   )
 }
 
-function UploadBox({ entity, token, onUploaded }: { entity: string; token: string | null; onUploaded: (d: Doc) => void }) {
+function UploadBox({ entity, token, onUploaded, fixedLuna, compact }: {
+  entity: string; token: string | null; onUploaded: (d: Doc) => void
+  fixedLuna?: string; compact?: boolean
+}) {
   const [categorie, setCategorie] = useState('factura')
-  const [luna, setLuna] = useState(currentLuna())
+  const [luna, setLuna] = useState(fixedLuna || currentLuna())
   const [nume, setNume] = useState('')
   const [dataDoc, setDataDoc] = useState('')
   const [note, setNote] = useState('')
@@ -677,23 +683,27 @@ function UploadBox({ entity, token, onUploaded }: { entity: string; token: strin
   const inp = 'w-full border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#f5c842] bg-white'
 
   return (
-    <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
-      <h2 className="font-semibold text-[#0a1628] mb-4 flex items-center gap-2">
-        <Upload size={16} className="text-amber-500" /> Încarcă document nou
-      </h2>
-      <div className="grid sm:grid-cols-5 gap-3 mb-3">
+    <div className={compact ? 'bg-white rounded-xl border border-slate-200 p-4' : 'bg-white rounded-2xl border border-slate-200 shadow-sm p-5'}>
+      {!compact && (
+        <h2 className="font-semibold text-[#0a1628] mb-4 flex items-center gap-2">
+          <Upload size={16} className="text-amber-500" /> Încarcă document nou
+        </h2>
+      )}
+      <div className={`grid ${fixedLuna ? 'sm:grid-cols-4' : 'sm:grid-cols-5'} gap-3 mb-3`}>
         <div>
           <label className="block text-xs font-medium text-slate-500 mb-1">Categorie</label>
           <select value={categorie} onChange={e => setCategorie(e.target.value)} className={inp}>
             {CATEGORII.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
           </select>
         </div>
-        <div>
-          <label className="block text-xs font-medium text-slate-500 mb-1">Lună</label>
-          <select value={luna} onChange={e => setLuna(e.target.value)} className={inp}>
-            {LUNI.map(m => <option key={m} value={m}>{LUNA_LABEL(m)}</option>)}
-          </select>
-        </div>
+        {!fixedLuna && (
+          <div>
+            <label className="block text-xs font-medium text-slate-500 mb-1">Lună</label>
+            <select value={luna} onChange={e => setLuna(e.target.value)} className={inp}>
+              {LUNI.map(m => <option key={m} value={m}>{LUNA_LABEL(m)}</option>)}
+            </select>
+          </div>
+        )}
         <div className="sm:col-span-2">
           <label className="block text-xs font-medium text-slate-500 mb-1">Denumire (opțional)</label>
           <input value={nume} onChange={e => setNume(e.target.value)} placeholder="ex: Factura furnizor X" className={inp} />
@@ -715,10 +725,30 @@ function UploadBox({ entity, token, onUploaded }: { entity: string; token: strin
         className="flex items-center justify-center gap-2 w-full py-3 rounded-xl font-semibold text-[#0a1628] transition disabled:opacity-60"
         style={{ background: '#f5c842' }}>
         {busy ? <Loader2 size={17} className="animate-spin" /> : <Upload size={17} />}
-        {busy ? 'Se încarcă…' : 'Alege fișier (PDF, imagine, Excel) — max 20 MB'}
+        {busy ? 'Se încarcă…' : (fixedLuna ? `Alege fișier pentru ${LUNA_LABEL(fixedLuna)} — max 20 MB` : 'Alege fișier (PDF, imagine, Excel) — max 20 MB')}
       </button>
       {err && <p className="text-sm text-red-600 mt-2">{err}</p>}
       {ok && <p className="text-sm text-emerald-600 mt-2">{ok}</p>}
+    </div>
+  )
+}
+
+function SectionAddDoc({ entity, token, month, onAdd }: {
+  entity: string; token: string | null; month: string; onAdd: (d: Doc) => void
+}) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div className="mb-3">
+      <button onClick={() => setOpen(v => !v)}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 transition">
+        {open ? <X size={14} /> : <Plus size={14} />} {open ? 'Renunță' : `Adaugă document în ${LUNA_LABEL(month)}`}
+      </button>
+      {open && (
+        <div className="mt-2">
+          <UploadBox entity={entity} token={token} fixedLuna={month} compact
+            onUploaded={d => onAdd(d)} />
+        </div>
+      )}
     </div>
   )
 }
