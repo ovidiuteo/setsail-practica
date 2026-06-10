@@ -25,6 +25,7 @@ export default function CloneSessionPage() {
     status: 'draft',
     notes: '',
     location_detail: '',
+    nr_instiintare_anr: '',
   })
 
   // Cursanți din sesiunea originală
@@ -67,6 +68,7 @@ export default function CloneSessionPage() {
           status: 'draft',
           notes: s.notes || '',
           location_detail: s.location_detail || '',
+          nr_instiintare_anr: s.nr_instiintare_anr || '',
         })
       }
       setLoading(false)
@@ -103,7 +105,7 @@ export default function CloneSessionPage() {
 
     // Postgres respinge '' pentru coloane date/uuid — convertim la null.
     const cleanForm: any = { ...form }
-    for (const col of ['session_date','location_id','boat_id','boat_id_2','boat_id_3','evaluator_id','instructor_id','instructor_id_2','instructor_id_3']) {
+    for (const col of ['session_date','location_id','boat_id','boat_id_2','boat_id_3','evaluator_id','instructor_id','instructor_id_2','instructor_id_3','nr_instiintare_anr']) {
       if (cleanForm[col] === '') cleanForm[col] = null
     }
     const { data: newSession, error } = await supabase.from('sessions').insert({

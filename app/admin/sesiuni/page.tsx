@@ -235,6 +235,16 @@ export default function SesiuniPage() {
       .select('*, locations(name, county), evaluators(full_name), instructors(full_name), boats(name)')
       .single()
     if (data) setSessions(ss => ss.map(s => s.id === id ? data : s))
+    // Nr. instiintare ANR setat pe principala se propaga la clone
+    const editedSess = sessions.find((s: any) => s.id === id)
+    if (editedSess?.session_type === 'principal' && payload.nr_instiintare_anr) {
+      await supabase.from('sessions')
+        .update({ nr_instiintare_anr: payload.nr_instiintare_anr })
+        .eq('parent_session_id', id).eq('session_type', 'clone')
+      setSessions(ss => ss.map((s: any) =>
+        (s.parent_session_id === id && s.session_type === 'clone')
+          ? { ...s, nr_instiintare_anr: payload.nr_instiintare_anr } : s))
+    }
     setEditingId(null)
     setEditValues({})
     setSaving(false)

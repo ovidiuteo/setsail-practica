@@ -2484,6 +2484,16 @@ export default function SessionDetailPage() {
       setSavingSession(false)
       return
     }
+    // Nr. instiintare ANR setat pe principala se propaga la clone
+    const editedSess = sessions.find(s => s.id === sid)
+    if (editedSess?.session_type === 'principal' && payload.nr_instiintare_anr) {
+      await supabase.from('sessions')
+        .update({ nr_instiintare_anr: payload.nr_instiintare_anr })
+        .eq('parent_session_id', sid).eq('session_type', 'clone')
+      setSessions(prev => prev.map(s =>
+        (s.parent_session_id === sid && s.session_type === 'clone')
+          ? { ...s, nr_instiintare_anr: payload.nr_instiintare_anr } as Session : s))
+    }
     // Reload session data
     const { data: updated } = await supabase.from('sessions').select('*, locations(*), boats(*), evaluators(*), instructors(*)').eq('id', sid).single()
     if (updated) {
