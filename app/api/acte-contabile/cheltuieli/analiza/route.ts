@@ -24,6 +24,17 @@ Returnează DOAR JSON (fără markdown, fără explicații), un array:
 ]
 Dacă nu găsești nicio cheltuială, returnează [].`
 
+// Categorii care nu necesită bon/factură → bifate ca acoperite din start:
+// comisioane (OPIB) bancare, plăți la bugetul de stat / trezorerie / contribuții, firma ESCU
+function autoAcoperit(descriere: string): boolean {
+  const d = descriere.toLowerCase()
+  if (d.includes('comision')) return true
+  if (d.includes('escu')) return true
+  if (d.includes('trezor') || d.includes('contribut')) return true
+  if (d.includes('buget') && d.includes('stat')) return true
+  return false
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null)
   if (!body) return NextResponse.json({ ok: false, error: 'Cerere invalidă.' }, { status: 400 })
@@ -92,11 +103,15 @@ export async function POST(req: NextRequest) {
   if (!Array.isArray(parsed)) parsed = []
 
   const rows = parsed
-    .map((r: any) => ({
-      data: typeof r?.data === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(r.data) ? r.data : null,
-      descriere: String(r?.descriere || '').slice(0, 300).trim(),
-      suma: Math.abs(Number(r?.suma) || 0),
-    }))
+    .map((r: any) => {
+      const descriere = String(r?.descriere || '').slice(0, 300).trim()
+      return {
+        data: typeof r?.data === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(r.data) ? r.data : null,
+        descriere,
+        suma: Math.abs(Number(r?.suma) || 0),
+        acoperit: autoAcoperit(descriere),
+      }
+    })
     .filter((r: { descriere: string; suma: number }) => r.descriere && r.suma > 0)
 
   const items = await replaceCheltuieliExtras(entity, luna, d.id, rows)

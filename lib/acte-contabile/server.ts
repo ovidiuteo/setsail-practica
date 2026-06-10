@@ -215,13 +215,13 @@ export async function deleteCheltuiala(entity: Entity, id: string): Promise<{ ok
 }
 
 // Înlocuiește cheltuielile auto-extrase (sursa='extras') pentru o lună; păstrează cele manuale
-export async function replaceCheltuieliExtras(entity: Entity, luna: string, sourceDocId: string | null, rows: { data: string | null; descriere: string; suma: number }[]): Promise<Cheltuiala[]> {
+export async function replaceCheltuieliExtras(entity: Entity, luna: string, sourceDocId: string | null, rows: { data: string | null; descriere: string; suma: number; acoperit?: boolean }[]): Promise<Cheltuiala[]> {
   const sb = acteServiceClient()
   await sb.from('acte_contabile_cheltuieli').delete().eq('entity', entity).eq('luna', luna).eq('sursa', 'extras')
   if (rows.length === 0) return []
   const payload = rows.map(r => ({
     entity, luna, data: r.data, descriere: r.descriere, suma: r.suma,
-    acoperit: false, sursa: 'extras' as const, source_doc_id: sourceDocId,
+    acoperit: r.acoperit ?? false, sursa: 'extras' as const, source_doc_id: sourceDocId,
   }))
   const { data } = await sb.from('acte_contabile_cheltuieli').insert(payload).select()
   return (data ?? []) as Cheltuiala[]
