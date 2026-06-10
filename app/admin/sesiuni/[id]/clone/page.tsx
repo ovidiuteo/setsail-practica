@@ -41,9 +41,11 @@ export default function CloneSessionPage() {
         supabase.from('instructors').select('*').order('full_name'),
       ])
       setOriginal(s)
-      setAllStudents(sts || [])
-      // Pre-selectează toți cursanții
-      setSelectedIds(new Set((sts || []).map((st: any) => st.id)))
+      // Exclude cursanții only_sailing — ca și absenții, nu intră în clonare
+      const eligible = (sts || []).filter((st: any) => !st.only_sailing)
+      setAllStudents(eligible)
+      // Pre-selectează toți cursanții eligibili
+      setSelectedIds(new Set(eligible.map((st: any) => st.id)))
       setRefs({ locations: loc.data || [], boats: boat.data || [], evaluators: ev.data || [], instructors: instr.data || [] })
       // Pre-completează formularul cu datele originale
       if (s) {

@@ -2538,7 +2538,9 @@ export default function SessionDetailPage() {
           .update({ session_id: sess.id, order_in_session: bi + 1 })
           .eq('id', batch[bi].id)
       }
-      setSessionStudents(sess.id, batch.map((s, i) => ({...s, session_id: sess.id, order_in_session: i+1})))
+      // Pastram cursantii only_sailing ai sesiunii (nu intra in randomizare, dar raman atasati)
+      const sailingHere = (studentsMap[sess.id] || []).filter((s: Student) => s.only_sailing)
+      setSessionStudents(sess.id, [...sailingHere, ...batch.map((s, i) => ({...s, session_id: sess.id, order_in_session: i+1}))])
     }
     setShowRandomizer(false)
     setRandomizing(false)
