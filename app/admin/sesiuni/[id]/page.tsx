@@ -2211,12 +2211,19 @@ function ClonePortalOption({ sess }: { sess: Session }) {
   )
 }
 
-function OnlySailingSection({ sessions, studentsMap, setStudentsMap }: {
-  sessions: Session[], studentsMap: Record<string,Student[]>, setStudentsMap: (fn: any) => void
+function OnlySailingSection({ sessions, studentsMap, setStudentsMap, onCiPreview }: {
+  sessions: Session[], studentsMap: Record<string,Student[]>, setStudentsMap: (fn: any) => void,
+  onCiPreview?: (name: string, img: string) => void
 }) {
   const allSailors = sessions
     .filter(s => s.session_type !== 'absent')
     .flatMap(s => (studentsMap[s.id]||[]).filter((st:Student) => st.only_sailing))
+
+  function trunc(val: string|null|undefined): React.ReactNode {
+    if (!val) return <span className="text-gray-300">—</span>
+    if (val.length <= 5) return <>{val}</>
+    return <span title={val} className="cursor-help border-b border-dotted border-gray-300">{val.slice(0,5)}…</span>
+  }
 
   async function revoke(s: Student) {
     await supabase.from('students').update({ only_sailing: false }).eq('id', s.id)
@@ -2265,13 +2272,20 @@ function OnlySailingSection({ sessions, studentsMap, setStudentsMap }: {
             <table className="w-full">
               <thead>
                 <tr className="bg-orange-50 border-b border-orange-100 text-xs font-medium text-orange-600">
-                  <th className="px-3 py-2 text-center w-8">✉</th>
-                  <th className="px-3 py-2 text-left w-8">#</th>
-                  <th className="px-3 py-2 text-left">Nume</th>
-                  <th className="px-3 py-2 text-left">Email</th>
-                  <th className="px-3 py-2 text-left">CNP</th>
-                  <th className="px-3 py-2 text-left">Portal</th>
-                  <th className="px-3 py-2 w-20"/>
+                  <th className="px-2 py-2 text-center w-8">✉</th>
+                  <th className="px-2 py-2 text-right w-6">#</th>
+                  <th className="px-2 py-2 text-left">Nume</th>
+                  <th className="px-2 py-2 text-left">Email</th>
+                  <th className="px-2 py-2 text-left">Tel</th>
+                  <th className="px-2 py-2 text-left">CNP</th>
+                  <th className="px-2 py-2 text-left">Naștere</th>
+                  <th className="px-2 py-2 text-left">Adresă</th>
+                  <th className="px-2 py-2 text-left">Exp. CI</th>
+                  <th className="px-2 py-2 text-left">Cls</th>
+                  <th className="px-2 py-2 text-left">Portal</th>
+                  <th className="px-2 py-2 text-center">CI</th>
+                  <th className="px-2 py-2 text-center">Sem.</th>
+                  <th className="px-2 py-2 w-20"/>
                 </tr>
               </thead>
               <tbody>
@@ -2294,10 +2308,44 @@ function OnlySailingSection({ sessions, studentsMap, setStudentsMap }: {
                       <td className="px-3 py-2 text-xs font-medium text-orange-900">
                         <Link href={`/admin/cursanti/${s.id}`} target="_blank" className="hover:underline">{s.full_name}</Link>
                       </td>
-                      <td className="px-3 py-2 text-xs text-gray-500">{s.email||'—'}</td>
-                      <td className="px-3 py-2 text-xs font-mono text-gray-400">{s.cnp||'—'}</td>
-                      <td className="px-3 py-2 text-xs font-medium" style={{color:pst.color}}>{pst.label}</td>
-                      <td className="px-3 py-2 text-right">
+                      <td className="px-2 py-2 text-xs text-gray-500">{s.email||'—'}</td>
+                      <td className="px-2 py-2 text-xs text-gray-500">{trunc(s.phone)}</td>
+                      <td className="px-2 py-2 text-xs font-mono text-gray-400">{trunc(s.cnp)}</td>
+                      <td className="px-2 py-2 text-xs text-gray-400">{trunc(s.birth_date)}</td>
+                      <td className="px-2 py-2 text-xs text-gray-400">{trunc(s.address)}</td>
+                      <td className="px-2 py-2 text-xs text-gray-400">{trunc(s.expiry_date)}</td>
+                      <td className="px-2 py-2 text-xs text-gray-500">{(s.class_caa||'').replace(',','+')}</td>
+                      <td className="px-2 py-2 text-xs font-medium" style={{color:pst.color}}>{pst.label}</td>
+                      {/* CI imagine */}
+                      <td className="px-2 py-2 text-center">
+                        {s.ci_image_data ? (
+                          <button onClick={()=>onCiPreview?.(s.full_name, s.ci_image_data)} title="CI scanat — click pentru previzualizare" className="p-1 rounded hover:bg-gray-100 transition-colors">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><circle cx="12" cy="10" r="3"/></svg>
+                          </button>
+                        ) : (
+                          <span title="CI lipsă" className="inline-flex items-center justify-center w-6 h-6 rounded border-2 border-red-300 text-red-400">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><circle cx="12" cy="10" r="3"/></svg>
+                          </span>
+                        )}
+                        {s.ci_series && s.ci_number && (<div className="text-xs font-mono text-gray-400 mt-0.5">{s.ci_series} {s.ci_number}</div>)}
+                      </td>
+                      {/* Semnatura */}
+                      <td className="px-2 py-2 text-center">
+                        {s.signature_data ? (
+                          <button onClick={()=>{const w=window.open('','_blank');w?.document.write(`<img src="${s.signature_data}" style="max-width:400px;border:1px solid #ccc;padding:10px;background:#fff;"/>`)}} title="Semnătură — click pentru previzualizare" className="p-1 rounded hover:bg-gray-100 transition-colors">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 17c3-3 6 3 9 0s6-3 9 0"/><line x1="3" y1="12" x2="21" y2="12" strokeDasharray="2 2"/></svg>
+                          </button>
+                        ) : (s as any).signature_random ? (
+                          <button onClick={()=>{const w=window.open('','_blank');w?.document.write(`<img src="${(s as any).signature_random}" style="max-width:400px;border:1px solid #ccc;padding:10px;background:#fff;"/>`)}} title="Semnătură random alocată" className="p-1 rounded hover:bg-purple-100 transition-colors">
+                            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="#9333ea" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 17c3-3 6 3 9 0s6-3 9 0"/><line x1="3" y1="12" x2="21" y2="12" strokeDasharray="2 2"/></svg>
+                          </button>
+                        ) : (
+                          <span title="Semnătură lipsă" className="inline-flex items-center justify-center w-6 h-6 rounded border-2 border-red-300 text-red-400">
+                            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 17c3-3 6 3 9 0s6-3 9 0"/><line x1="3" y1="12" x2="21" y2="12" strokeDasharray="2 2"/></svg>
+                          </span>
+                        )}
+                      </td>
+                      <td className="px-2 py-2 text-right">
                         <button onClick={()=>revoke(s)} className="text-xs text-orange-400 hover:text-red-500 hover:bg-red-50 px-2 py-1 rounded transition-colors">✕ Revocă</button>
                       </td>
                     </tr>
@@ -2934,6 +2982,7 @@ export default function SessionDetailPage() {
         sessions={sessions}
         studentsMap={studentsMap}
         setStudentsMap={setStudentsMap}
+        onCiPreview={(name,img)=>setCiPreview({name,img})}
       />
 
       {/* Absenti */}
