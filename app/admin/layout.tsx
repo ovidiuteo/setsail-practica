@@ -2,7 +2,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect } from 'react'
-import { Ship, Calendar, Users, Settings, Anchor, Building2, Mail, PenTool, LogOut, Ticket } from 'lucide-react'
+import { Ship, Calendar, Users, Settings, Anchor, Building2, Mail, PenTool, LogOut, Ticket, Award } from 'lucide-react'
 import GoogleGIcon from '@/components/GoogleGIcon'
 
 const nav = [
@@ -10,6 +10,7 @@ const nav = [
   { href: '/admin/sesiuni',     label: 'Sesiuni Practică',  icon: Calendar },
   { href: '/admin/cursanti',    label: 'Cursanți',          icon: Users },
   { href: '/admin/vouchere',    label: 'Vouchere',          icon: Ticket },
+  { href: '/admin/diplome',     label: 'Diplome',           icon: Award },
   { href: '/admin/emailuri',    label: 'Emailuri',          icon: Mail },
   { href: '/admin/gmail',       label: 'Gmail Templates',   icon: GoogleGIcon },
   { href: '/admin/semnaturi',   label: 'Semnături',         icon: PenTool },
@@ -28,6 +29,12 @@ const ADMIN_TAB_TITLES: Record<string, string> = {
   '/admin/cursanti':                   'Cursanți',
   '/admin/cursanti/import':            'Import cursanți',
   '/admin/vouchere':                   'Vouchere',
+  '/admin/diplome':                    'Diplome',
+  '/admin/diplome/genereaza':          'Generează diplome',
+  '/admin/diplome/nou':                'Diplomă nouă',
+  '/admin/diplome/coada':              'Tipărire listă diplome',
+  '/admin/diplome/sabloane':           'Șabloane diplome',
+  '/admin/diplome/print':              'Print diplome',
   '/admin/emailuri':                   'Emailuri',
   '/admin/emailuri/reguli':            'Reguli email',
   '/admin/gmail':                      'Gmail Templates',
@@ -42,6 +49,8 @@ const ADMIN_TAB_TITLES: Record<string, string> = {
 
 function adminTabTitle(path: string): string {
   if (ADMIN_TAB_TITLES[path]) return ADMIN_TAB_TITLES[path]
+  if (/^\/admin\/diplome\/sabloane\/[^/]+$/.test(path)) return 'Calibrare șablon'
+  if (/^\/admin\/diplome\/[^/]+$/.test(path))         return 'Diplomă'
   if (/^\/admin\/sesiuni\/[^/]+\/clone$/.test(path))  return 'Clonează sesiune'
   if (/^\/admin\/sesiuni\/[^/]+\/examen$/.test(path)) return 'Examen sesiune'
   if (/^\/admin\/sesiuni\/[^/]+$/.test(path))         return 'Sesiune'       // pagina suprascrie cu data
@@ -58,6 +67,8 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
   // Login page: fără sidebar
   if (path === '/admin/login') return <>{children}</>
+  // Pagina de print diplome: fără sidebar (sidebar-ul ar apărea pe hârtie)
+  if (path.startsWith('/admin/diplome/print')) return <>{children}</>
 
   async function logout() {
     await fetch('/api/admin-auth/logout', { method: 'POST' })

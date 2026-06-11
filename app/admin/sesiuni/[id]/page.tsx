@@ -3,6 +3,7 @@ import React, { useEffect, useState, useRef, useCallback } from 'react'
 import CIImageEditor from '@/components/CIImageEditor'
 import { supabase } from '@/lib/supabase'
 import { TIMELINE_SCOPES, timelineScopeLabel, scopeForSession } from '@/lib/timeline-scope'
+import { computeAddressChanges, AddressChange } from '@/lib/normalize-address'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Download, FileText, Users, Copy, Plus, Trash2, Check, X, Pencil, GitBranch, ArrowRight, UserX, Mail, ChevronDown, Database } from 'lucide-react'
@@ -167,6 +168,8 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
   const [showMovePrincipal, setShowMovePrincipal] = useState<string|null>(null)
   const [sortCol, setSortCol] = useState<string|null>(null)
   const [sortDir, setSortDir] = useState<'asc'|'desc'>('asc')
+  const [normChanges, setNormChanges] = useState<AddressChange[]|null>(null)
+  const [normBusy, setNormBusy] = useState(false)
 
   function toggleSort(col: string) {
     if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -351,6 +354,27 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
     setEditingId(null); setEditValues({}); setSaving(false)
   }
 
+  // Normalizare adrese: județ → "jud. X" / "Sector N", adresa fără oraș/județ duplicat
+  function startNormalize() {
+    const changes = computeAddressChanges(students)
+    if (changes.length === 0) { alert('Toate adresele sunt deja normalizate.'); return }
+    setNormChanges(changes)
+  }
+
+  async function applyNormalize() {
+    if (!normChanges) return
+    setNormBusy(true)
+    for (const ch of normChanges) {
+      await supabase.from('students').update({ address: ch.address_after, county: ch.county_after }).eq('id', ch.id)
+    }
+    setStudents(students.map(s => {
+      const ch = normChanges.find(c => c.id === s.id)
+      return ch ? { ...s, address: ch.address_after, county: ch.county_after } : s
+    }))
+    setNormBusy(false)
+    setNormChanges(null)
+  }
+
   async function addStudent() {
     if (!newSt.full_name) return
     setAdding(true)
@@ -380,6 +404,10 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
           <span className="font-semibold text-sm text-gray-900">Cursanți ({students.filter((s:Student)=>!s.only_sailing).length})</span>
         </div>
         <div className="flex items-center gap-2">
+          <button onClick={startNormalize} title="Județ → jud. X / Sector N; scoate orașul/județul duplicat din adresă"
+            className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border border-gray-200 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors">
+            ⌂ Normalizare adrese
+          </button>
           <button onClick={recount} title="Re-numerotează conform ordinii curente"
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border border-gray-200 text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors">
             ↺ Nr. crt.
@@ -390,6 +418,62 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
           </button>
         </div>
       </div>
+
+      {/* Modal normalizare adrese: previzualizare înainte de aplicare */}
+      {normChanges && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => !normBusy && setNormChanges(null)}>
+          <div className="bg-white rounded-xl shadow-xl max-w-3xl w-full max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="px-5 py-4 border-b border-gray-100">
+              <h3 className="font-semibold text-sm text-gray-900">Normalizare adrese — {normChanges.length} cursanți de modificat</h3>
+              <p className="text-xs text-gray-500">Județ → „jud. X" / „Sector N"; orașul/județul duplicat e scos din adresă. Verifică și aplică.</p>
+            </div>
+            <div className="overflow-auto px-5 py-3 flex-1">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-left text-[10px] uppercase text-gray-400 border-b border-gray-100">
+                    <th className="py-2 pr-3">Cursant</th>
+                    <th className="py-2 pr-3">Adresă</th>
+                    <th className="py-2">Județ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {normChanges.map(ch => (
+                    <tr key={ch.id} className="border-b border-gray-50 align-top">
+                      <td className="py-2 pr-3 font-medium text-gray-900 whitespace-nowrap">{ch.full_name}</td>
+                      <td className="py-2 pr-3">
+                        {ch.address_before !== ch.address_after ? (
+                          <>
+                            <div className="text-red-500 line-through">{ch.address_before || '—'}</div>
+                            <div className="text-emerald-700">{ch.address_after || '—'}</div>
+                          </>
+                        ) : <span className="text-gray-400">{ch.address_before || '—'}</span>}
+                      </td>
+                      <td className="py-2">
+                        {ch.county_before !== ch.county_after ? (
+                          <>
+                            <div className="text-red-500 line-through">{ch.county_before || '—'}</div>
+                            <div className="text-emerald-700">{ch.county_after || '—'}</div>
+                          </>
+                        ) : <span className="text-gray-400">{ch.county_before || '—'}</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-2">
+              <button onClick={() => setNormChanges(null)} disabled={normBusy}
+                className="px-3 py-1.5 rounded-lg text-xs border border-gray-200 text-gray-500 hover:bg-gray-50">
+                Anulează
+              </button>
+              <button onClick={applyNormalize} disabled={normBusy}
+                className="px-4 py-1.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#059669'}}>
+                {normBusy ? 'Se aplică...' : `Aplică ${normChanges.length} modificări`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showAdd && (
         <div className="p-4 border-b border-blue-50 bg-blue-50/40">
