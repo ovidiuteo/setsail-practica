@@ -1,7 +1,12 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Loader2, RefreshCw, ShieldAlert, Download, GraduationCap, Radio, Mail, Trash2, Pin, Eye, CalendarDays, TrendingUp } from 'lucide-react'
+import { Loader2, RefreshCw, ShieldAlert, Download, GraduationCap, Radio, Mail, Trash2, Pin, Eye, CalendarDays, TrendingUp, ExternalLink, Copy, Check } from 'lucide-react'
+
+const LANDING_PATH: Record<'cds' | 'radio', string> = {
+  cds: '/curs-yachting-cds',
+  radio: '/curs-radio-gmdss-lrc',
+}
 
 type Visit = { total: number; today: number; last7: number }
 type Data = { cds: any[]; radio: any[]; newsletter: any[]; visits?: { cds: Visit; radio: Visit } }
@@ -163,14 +168,35 @@ function VisitCards({ stats }: { stats?: Visit }) {
   )
 }
 
+function LandingButtons({ kind }: { kind: 'cds' | 'radio' }) {
+  const [copied, setCopied] = useState(false)
+  const path = LANDING_PATH[kind]
+  const btn = 'flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-lg bg-orange-500 text-white hover:bg-orange-600 transition'
+  function copy() {
+    navigator.clipboard.writeText(`${typeof window !== 'undefined' ? window.location.origin : ''}${path}`)
+    setCopied(true); setTimeout(() => setCopied(false), 1500)
+  }
+  return (
+    <>
+      <a href={path} target="_blank" rel="noreferrer" className={btn}><ExternalLink size={13} /> Deschide landing page</a>
+      <button onClick={copy} className={btn}>{copied ? <Check size={13} /> : <Copy size={13} />} {copied ? 'Copiat' : 'Copiază link'}</button>
+    </>
+  )
+}
+
 function LeadTable({ rows, kind, onPatch, onDelete }: { rows: any[]; kind: 'cds' | 'radio'; onPatch: (k: Kind, id: string, p: { status?: string }) => void; onDelete: (k: Kind, id: string) => void }) {
-  if (!rows.length) return <Empty label="Niciun lead încă." />
   const cols = kind === 'radio'
     ? ['created_at', 'name', 'lead_type', 'phone', 'email', 'message', 'status']
     : ['created_at', 'name', 'phone', 'email', 'message', 'status']
   return (
     <div>
-      <div className="flex justify-end mb-3"><ExportBtn onClick={() => downloadCsv(`leaduri-${kind}.csv`, rows, cols)} /></div>
+      <div className="flex justify-end items-center gap-2 mb-3">
+        <LandingButtons kind={kind} />
+        <ExportBtn onClick={() => downloadCsv(`leaduri-${kind}.csv`, rows, cols)} />
+      </div>
+      {rows.length === 0 ? (
+        <Empty label="Niciun lead încă." />
+      ) : (
       <div className="bg-white rounded-xl border border-slate-200 overflow-x-auto">
         <table className="w-full text-sm">
           <thead>
@@ -202,6 +228,7 @@ function LeadTable({ rows, kind, onPatch, onDelete }: { rows: any[]; kind: 'cds'
           </tbody>
         </table>
       </div>
+      )}
     </div>
   )
 }
