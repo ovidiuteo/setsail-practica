@@ -113,16 +113,29 @@ export default function PortalPage() {
     if (s.status === 'draft') { setLoginError('Sesiunea nu este activă încă. Contactați instructorul.'); return }
     if (s.status === 'completed') { setLoginError('Această sesiune a fost finalizată și nu mai acceptă conexiuni.'); return }
 
-    // Cauta cursantul in TOATE sesiunile cu acest cod
+    // Cauta cursantul in TOATE sesiunile cu acest cod, plus sesiunea de absenti
+    // a principalei (poate avea alt access_code). Au acces si cei de la sailing
+    // (only_sailing) si absentii — isi pot completa/actualiza datele.
     const sessionIds = sessions.map((s:any) => s.id)
-    const { data: st } = await supabase
+    const { data: absentSessions } = await supabase
+      .from('sessions')
+      .select('id')
+      .eq('parent_session_id', s.id)
+      .eq('session_type', 'absent')
+    for (const a of absentSessions || []) {
+      if (!sessionIds.includes(a.id)) sessionIds.push(a.id)
+    }
+
+    const { data: matches } = await supabase
       .from('students')
       .select('*')
       .in('session_id', sessionIds)
       .ilike('email', emailInput.trim())
-      .eq('only_sailing', false)
-      .neq('portal_status', 'absent')
-      .single()
+
+    // La email duplicat preferam profilul activ, apoi sailing, apoi absent
+    const rank = (x: any) =>
+      x.portal_status === 'absent' ? 2 : x.only_sailing ? 1 : 0
+    const st = (matches || []).sort((a: any, b: any) => rank(a) - rank(b))[0]
 
     if (!st) { setLoginError('Email-ul nu a fost găsit în această sesiune. Verificați adresa sau contactați instructorul.'); return }
     // Cursantii care au semnat pot reveni oricand sa modifice datele
