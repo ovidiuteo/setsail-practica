@@ -150,6 +150,125 @@ function CIAdminScan({ studentId, students, setStudents }: {
   )
 }
 
+// Sesiunile-depozit din martie: 08.03 (pal) si 09.03 (ion, clona principalei din 08.03).
+// Cursantii cu marcaj pal/ion in campul tara sunt parcati acolo la finalizarea seriei.
+function isHoldingSession(sess: { session_date?: string } | null | undefined): boolean {
+  const md = (sess?.session_date || '').slice(5)
+  return md === '03-08' || md === '03-09'
+}
+
+async function moveSpecialToMarch(students: Student[]) {
+  const year = new Date().getFullYear()
+  const pal = students.filter(s => /pal/i.test(s.country || ''))
+  const ion = students.filter(s => /ion/i.test(s.country || '') && !pal.includes(s))
+  if (!pal.length && !ion.length) {
+    alert('Niciun cursant cu marcaj pal/ion în câmpul țară.')
+    return
+  }
+  const { data: march } = await supabase
+    .from('sessions')
+    .select('id, session_date, session_type, locations(name)')
+    .in('session_date', [`${year}-03-08`, `${year}-03-09`])
+  const pick = (date: string) => {
+    const list = (march || []).filter((s: any) => s.session_date === date)
+    return list.find((s: any) => s.session_type === 'principal') || list[0] || null
+  }
+  const target8 = pick(`${year}-03-08`)
+  const target9 = pick(`${year}-03-09`)
+  if (pal.length && !target8) { alert(`Nu există sesiune cu practica pe 08.03.${year}.`); return }
+  if (ion.length && !target9) { alert(`Nu există sesiune cu practica pe 09.03.${year}.`); return }
+  const parts = []
+  if (pal.length) parts.push(`${pal.length} cursanți (pal) → 08.03.${year}`)
+  if (ion.length) parts.push(`${ion.length} cursanți (ion) → 09.03.${year}`)
+  if (!window.confirm(`Muți cursanții marcați la sesiunile din martie?\n\n${parts.join('\n')}`)) return
+
+  async function moveAll(list: Student[], target: any) {
+    if (!list.length || !target) return
+    const movable = list.filter(s => s.session_id !== target.id)
+    const { data: m } = await supabase.from('students').select('order_in_session')
+      .eq('session_id', target.id).order('order_in_session', { ascending: false }).limit(1)
+    let nr = m?.[0]?.order_in_session || 0
+    for (const st of movable) {
+      nr++
+      await supabase.from('students').update({
+        session_id: target.id,
+        order_in_session: nr,
+        // pastram seria de origine pentru butonul de retur; o setam acum daca lipseste
+        original_session_id: st.original_session_id || st.session_id,
+      }).eq('id', st.id)
+    }
+  }
+  await moveAll(pal, target8)
+  await moveAll(ion, target9)
+  window.location.reload()
+}
+
+// Vederea grupata pe serii de origine, folosita pe sesiunile-depozit din martie.
+function HoldingGroups({ students, onReturn }: { students: Student[]; onReturn: (s: Student) => void }) {
+  const [origins, setOrigins] = useState<Record<string, string>>({})
+
+  useEffect(() => {
+    const ids = Array.from(new Set(students.map(s => s.original_session_id).filter(Boolean)))
+    if (!ids.length) { setOrigins({}); return }
+    supabase.from('sessions').select('id, session_date, locations(name)').in('id', ids).then(({ data }) => {
+      const map: Record<string, string> = {}
+      for (const s of (data || []) as any[]) {
+        map[s.id] = `${new Date(s.session_date).toLocaleDateString('ro-RO', { day: '2-digit', month: 'long', year: 'numeric' })} · ${s.locations?.name || ''}`
+      }
+      setOrigins(map)
+    })
+  }, [students])
+
+  const groups: { key: string; label: string; list: Student[] }[] = []
+  for (const s of students) {
+    const key = s.original_session_id || 'necunoscut'
+    let g = groups.find(x => x.key === key)
+    if (!g) {
+      g = { key, label: key === 'necunoscut' ? 'Serie de origine necunoscută' : (origins[key] || '...'), list: [] }
+      groups.push(g)
+    }
+    g.label = key === 'necunoscut' ? 'Serie de origine necunoscută' : (origins[key] || '...')
+    g.list.push(s)
+  }
+  groups.sort((a, b) => a.label.localeCompare(b.label, 'ro'))
+
+  return (
+    <div>
+      {groups.map(g => (
+        <div key={g.key} className="border-b border-gray-100 last:border-0">
+          <div className="px-4 py-2.5 bg-purple-50/60 text-xs font-semibold text-purple-800 flex items-center gap-2">
+            {g.label}
+            <span className="font-normal text-purple-400">· {g.list.length} cursanți</span>
+          </div>
+          <table className="w-full text-xs">
+            <tbody>
+              {g.list.map((s, i) => (
+                <tr key={s.id} className="border-b border-gray-50 last:border-0">
+                  <td className="px-4 py-2 w-10 text-gray-400">{i + 1}</td>
+                  <td className="px-4 py-2 font-medium text-gray-900">{s.full_name}</td>
+                  <td className="px-4 py-2 text-gray-500 font-mono">{s.cnp || '—'}</td>
+                  <td className="px-4 py-2 text-gray-500">{s.email || '—'}</td>
+                  <td className="px-4 py-2 text-gray-500">{s.country || '—'}</td>
+                  <td className="px-4 py-2 text-right">
+                    <button
+                      onClick={() => onReturn(s)}
+                      disabled={!s.original_session_id}
+                      title={s.original_session_id ? `Înapoi la seria: ${g.label}` : 'Fără serie de origine'}
+                      className="px-2.5 py-1.5 rounded-lg text-[11px] font-medium text-white disabled:opacity-30 hover:opacity-90"
+                      style={{ background: '#7c3aed' }}>
+                      ↩ Înapoi la serie
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ))}
+    </div>
+  )
+}
+
 function StudentsTable({ sess, students, setStudents, allSessions, allStudents, setAllStudents, isAbsent, onSelectionChange, selectedIds, setSelectedIds, onCiPreview }:
   { sess: Session, students: Student[], setStudents:(s:Student[])=>void,
     allSessions: Session[], allStudents: Record<string,Student[]>, setAllStudents:(sid:string,s:Student[])=>void,
@@ -375,6 +494,22 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
     setNormChanges(null)
   }
 
+  // Sesiune-depozit (8/9 martie): retur la seria unde a fost introdus prima oara
+  const isHolding = isHoldingSession(sess)
+
+  async function returnToOrigin(s: Student) {
+    const target = s.original_session_id
+    if (!target) return
+    if (!window.confirm(`Îl întorci pe ${s.full_name} la seria unde a fost introdus prima oară?`)) return
+    const { data: m } = await supabase.from('students').select('order_in_session')
+      .eq('session_id', target).order('order_in_session', { ascending: false }).limit(1)
+    await supabase.from('students').update({
+      session_id: target,
+      order_in_session: (m?.[0]?.order_in_session || 0) + 1,
+    }).eq('id', s.id)
+    setStudents(students.filter(x => x.id !== s.id))
+  }
+
   async function addStudent() {
     if (!newSt.full_name) return
     setAdding(true)
@@ -497,7 +632,9 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
         </div>
       )}
 
-      {students.length === 0 ? (
+      {isHolding && students.length > 0 ? (
+        <HoldingGroups students={students} onReturn={returnToOrigin} />
+      ) : students.length === 0 ? (
         <div className="p-10 text-center text-gray-400 text-sm">Niciun cursant.</div>
       ) : (
         <div className="overflow-auto">
@@ -1429,6 +1566,12 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                   🗑 Șterge clona
                 </button>
               )}
+              {/* Discret: muta cursantii cu pal/ion (campul tara) la sesiunile-depozit din martie */}
+              <button onClick={() => moveSpecialToMarch(students)}
+                title="Mută cursanții marcați (pal → 08.03, ion → 09.03)"
+                className="px-2.5 py-1.5 rounded-lg text-sm font-bold border-2 border-transparent text-gray-300 hover:text-purple-600 hover:bg-purple-50 transition-all">
+                *
+              </button>
             </div>
           </div>
         )}
