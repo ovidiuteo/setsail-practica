@@ -245,6 +245,16 @@ export default function SesiuniPage() {
         (s.parent_session_id === id && s.session_type === 'clone')
           ? { ...s, nr_instiintare_anr: payload.nr_instiintare_anr } : s))
     }
+    // Statusul principalei se propaga la clone (focus ramane doar pe principala)
+    if (editedSess?.session_type === 'principal' && payload.status && payload.status !== editedSess.status) {
+      const cloneStatus = payload.status === 'focus' ? 'active' : payload.status
+      await supabase.from('sessions')
+        .update({ status: cloneStatus })
+        .eq('parent_session_id', id).eq('session_type', 'clone')
+      setSessions(ss => ss.map((s: any) =>
+        (s.parent_session_id === id && s.session_type === 'clone')
+          ? { ...s, status: cloneStatus } : s))
+    }
     setEditingId(null)
     setEditValues({})
     setSaving(false)

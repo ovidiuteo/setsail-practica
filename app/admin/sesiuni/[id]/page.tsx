@@ -2606,7 +2606,18 @@ export default function SessionDetailPage() {
       if (!confirmed) return
     }
     await supabase.from('sessions').update({status}).eq('id', sid)
-    setSessions(prev => prev.map(s => s.id===sid ? {...s, status} : s))
+    // Clonele urmeaza statusul principalei (focus ramane doar pe principala)
+    const target = sessions.find(s => s.id === sid)
+    const isPrincipal = target ? target.session_type === 'principal' : sid === id
+    const cloneStatus = status === 'focus' ? 'active' : status
+    if (isPrincipal) {
+      await supabase.from('sessions').update({status: cloneStatus}).eq('parent_session_id', sid).eq('session_type', 'clone')
+    }
+    setSessions(prev => prev.map(s => {
+      if (s.id === sid) return {...s, status}
+      if (isPrincipal && s.parent_session_id === sid && s.session_type === 'clone') return {...s, status: cloneStatus}
+      return s
+    }))
     if (sid === id) setMainSession(prev => prev ? {...prev, status} : prev)
   }
 
