@@ -295,12 +295,20 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
     else { setSortCol(col); setSortDir('asc') }
   }
 
+  // Rang pentru coloanele non-text: CI (0=lipsa, 1=incarcat), Semnatura (0=nesemnat, 1=random, 2=semnat)
+  function sortRank(s: Student, col: string): number | null {
+    if (col === 'ci') return s.ci_image_data ? 1 : 0
+    if (col === 'signature') return s.signature_data ? 2 : ((s as any).signature_random ? 1 : 0)
+    return null
+  }
   function getSorted(list: Student[]) {
     if (!sortCol) return list
     return [...list].sort((a, b) => {
-      const av = (a as any)[sortCol] || ''
-      const bv = (b as any)[sortCol] || ''
-      return sortDir === 'asc' ? av.localeCompare(bv, 'ro') : bv.localeCompare(av, 'ro')
+      const ra = sortRank(a, sortCol)
+      let cmp: number
+      if (ra !== null) cmp = ra - (sortRank(b, sortCol) as number)
+      else cmp = String((a as any)[sortCol] || '').localeCompare(String((b as any)[sortCol] || ''), 'ro')
+      return sortDir === 'asc' ? cmp : -cmp
     })
   }
 
@@ -671,8 +679,12 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
                     </span>
                   </th>
                 ))}
-                <th className="px-2 py-2.5 text-gray-400 text-xs font-medium text-center">CI</th>
-                <th className="px-2 py-2.5 text-gray-400 text-xs font-medium text-center">Sem.</th>
+                <th className="px-2 py-2.5 text-gray-500 text-xs font-medium text-center cursor-pointer select-none hover:text-blue-600" onClick={()=>toggleSort('ci')}>
+                  <span className="inline-flex items-center gap-0.5">CI{sortCol==='ci' ? (sortDir==='asc'?'↑':'↓') : <span className="text-gray-200">↕</span>}</span>
+                </th>
+                <th className="px-2 py-2.5 text-gray-500 text-xs font-medium text-center cursor-pointer select-none hover:text-blue-600" onClick={()=>toggleSort('signature')}>
+                  <span className="inline-flex items-center gap-0.5">Sem.{sortCol==='signature' ? (sortDir==='asc'?'↑':'↓') : <span className="text-gray-200">↕</span>}</span>
+                </th>
                 <th className="w-24 px-2 py-2.5"></th>
               </tr>
             </thead>
