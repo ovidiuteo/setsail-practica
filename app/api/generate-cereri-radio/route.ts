@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
     // PDF
     if (format === 'pdf') {
       const pagesHtml = students.map(s => {
-        const F = (val: string | null | undefined, width = '120px', center = false) =>
+        const F = (val: string | null | undefined, width = '120px', center = true) =>
           `<span style="border-bottom:1px solid #000;display:inline-block;min-width:${width};padding:0 2px;${center ? 'text-align:center;' : ''}">${val || ''}</span>`
 
         const body = isPrelungire
