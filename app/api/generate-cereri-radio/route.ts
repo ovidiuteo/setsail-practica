@@ -31,6 +31,9 @@ export async function POST(req: NextRequest) {
     const sessionDate = new Date(session.session_date).toLocaleDateString('ro-RO', {
       day: '2-digit', month: '2-digit', year: 'numeric'
     })
+    // Data de pe cerere = data practicii minus 2 zile
+    const _cd = new Date(session.session_date); _cd.setDate(_cd.getDate() - 2)
+    const cerereDate = _cd.toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric' })
     const dateStr = session.session_date.replace(/-/g, '_')
     const gdprText = 'Autoritatea Națională pentru Administrare și Reglementare în Comunicații prelucrează datele dumneavoastră personale în conformitate cu dispozițiile Regulamentului (UE) 2016/679. Scopul prelucrarii îl constituie îndeplinirea obligațiilor legale privind aplicarea politicii naționale în domeniul comunicațiilor electronice, comunicațiilor audiovizuale și al serviciilor poștale, inclusiv prin reglementarea pieței și reglementarea tehnică în aceste domenii, respectând dispozițiile legale, normele și procedurile interne existente în acest sens. În situația în care ANCOM va prelucra ulterior datele cu caracter personal într-un alt scop decât cel pentru care acestea au fost colectate, veți fi informat despre acest lucru înainte de inițierea prelucrării, primind toate detaliile necesare. Datele pot fi dezvăluite de ANCOM unor terți doar în baza unui temei legal. Persoanele vizate de prelucrare își pot exercita toate drepturile prevăzute de Regulamentul 2016/679/UE printr-o cerere scrisă, semnată și datată, trimisă pe adresa autorității. Toate informațiile necesare privind protecția persoanelor fizice în ceea ce priveste prelucrarea datelor cu caracter personal și libera circulație a acestor date sunt disponibile pe pagina de internet http://www.ancom.org.ro/, la secțiunea "GDPR".'
 
@@ -40,12 +43,12 @@ export async function POST(req: NextRequest) {
     // PDF
     if (format === 'pdf') {
       const pagesHtml = students.map(s => {
-        const F = (val: string | null | undefined, width = '120px') =>
-          `<span style="border-bottom:1px solid #000;display:inline-block;min-width:${width};padding:0 2px;">${val || ''}</span>`
+        const F = (val: string | null | undefined, width = '120px', center = false) =>
+          `<span style="border-bottom:1px solid #000;display:inline-block;min-width:${width};padding:0 2px;${center ? 'text-align:center;' : ''}">${val || ''}</span>`
 
         const body = isPrelungire
           ? `Subsemnatul/a ${F(s.full_name, '160px')}, domiciliat/ă în
-             ${F(s.city)}, adresa ${F(s.address, '100%')},
+             ${F(s.city)}, adresa&nbsp;&nbsp; ${F(s.address, '70%', true)},
              sectorul/județul ${F(s.county)}, telefon ${F(s.phone)},
              e-mail: ${F(s.email, '160px')}, posesor al B.I./C.I. seria ${F(s.ci_series,'30px')} nr.
              ${F(s.ci_number,'60px')}, CNP ${F(s.cnp,'120px')}
@@ -53,7 +56,7 @@ export async function POST(req: NextRequest) {
              <strong>GMDSS-LRC</strong>¹ de operator radiotelefonist în serviciul
              <strong>SMMS</strong>², cu nr. ${F(null,'60px')} din data ${F(null,'80px')}.`
           : `Subsemnatul/a ${F(s.full_name, '160px')}, domiciliat/ă în
-             ${F(s.city)}, adresa ${F(s.address, '100%')},
+             ${F(s.city)}, adresa&nbsp;&nbsp; ${F(s.address, '70%', true)},
              sectorul/județul ${F(s.county)}, telefon ${F(s.phone)},
              e-mail: ${F(s.email, '160px')}, vă rog a-mi aproba susținerea examenului pentru
              obținerea certificatului <strong>GMDSS-LRC</strong>¹ de operator radio în serviciul
@@ -69,8 +72,8 @@ export async function POST(req: NextRequest) {
           <p class="body">Anexez la această cerere documentele prevăzute în Decizia Președintelui ANCOM nr. 543/2017 privind certificarea personalului operator al stațiilor de radiocomunicații.</p>
           <p class="gdpr">${gdprText}</p>
           <div class="footer-row">
-            <div>Data ${F(sessionDate,'80px')}</div>
-            <div class="semn">Semnătura,<br><br>${F(s.full_name,'120px')}</div>
+            <div>Data ${F(cerereDate,'80px')}</div>
+            <div class="semn">Semnătura,<br>${(s.signature_data || s.signature_random) ? `<img src="${s.signature_data || s.signature_random}" style="height:50px;max-width:170px;object-fit:contain;"/>` : `<br>${F(null,'140px')}`}</div>
           </div>
           <hr class="fn-line">
           <p class="fn">¹ ${fn1.substring(2)}</p>
@@ -102,7 +105,7 @@ export async function POST(req: NextRequest) {
 
     // DOCX
     const {
-      Document, Packer, Paragraph, TextRun, AlignmentType,
+      Document, Packer, Paragraph, TextRun, AlignmentType, ImageRun,
       convertMillimetersToTwip, PageBreak, UnderlineType, TabStopType, TabStopPosition
     } = await import('docx')
 
@@ -203,6 +206,19 @@ export async function POST(req: NextRequest) {
         )
       }
 
+      // Semnatura din platforma (pattern Anexa 10): imagine daca exista, altfel linie
+      const sigSrc = s.signature_data || s.signature_random
+      let sigPara: any = null
+      if (sigSrc) {
+        try {
+          const b64 = sigSrc.includes(',') ? sigSrc.split(',')[1] : sigSrc
+          sigPara = new Paragraph({ alignment: AlignmentType.RIGHT as any, spacing: { before: 120, after: 0 }, children: [
+            new ImageRun({ data: Buffer.from(b64, 'base64'), type: 'png', transformation: { width: 150, height: 52 } })
+          ]})
+        } catch { /* fallback la linie */ }
+      }
+      if (!sigPara) sigPara = new Paragraph({ alignment: AlignmentType.RIGHT as any, spacing: { before: 120, after: 0 }, children: [t('..................................')] })
+
       allChildren.push(
         new Paragraph({ alignment: AlignmentType.JUSTIFIED as any, spacing: { before: 80, after: 80 }, indent: { firstLine: 720 }, children: [
           t('Anexez la această cerere documentele prevăzute în Decizia Președintelui ANCOM nr. 543/2017 privind certificarea personalului operator al stațiilor de radiocomunicații.')
@@ -210,11 +226,10 @@ export async function POST(req: NextRequest) {
         GDPR,
         // Data si semnatura
         new Paragraph({ spacing: { before: 200, after: 0 }, indent: { firstLine: 720 }, children: [
-          tb('Data '), tb(sessionDate)
+          tb('Data '), tb(cerereDate)
         ]}),
         new Paragraph({ alignment: AlignmentType.RIGHT as any, spacing: { before: 0, after: 0 }, children: [t('Semnătura,')] }),
-        new Paragraph({ alignment: AlignmentType.RIGHT as any, spacing: { before: 120, after: 0 }, children: [tb(nome)] }),
-        new Paragraph({ alignment: AlignmentType.RIGHT as any, spacing: { before: 60, after: 400 }, children: [t('..................................')] }),
+        sigPara,
         // Note subsol
         HR, FN1, FN2
       )
