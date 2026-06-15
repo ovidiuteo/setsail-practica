@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { Trophy, Settings, Anchor } from 'lucide-react'
 import { supabase, getActiveSeason, getSeasonLeaderboard } from '@/lib/ssyt/supabase'
+import { effectiveRegattaStatus, regattaStatusColor } from '@/lib/ssyt/regatta-status'
 
 export const revalidate = 0
 
@@ -16,7 +17,7 @@ export default async function AdminLeaderboardPage() {
   const { data: regattas } = await supabase
     .from('ssyt_regattas')
     .select(`
-      id, name, slug, status, start_date,
+      id, name, slug, status, start_date, end_date,
       results:ssyt_results(team_id, ssyt_internal_place, ssyt_internal_points, official_place)
     `)
     .eq('season_id', season.id)
@@ -124,7 +125,7 @@ export default async function AdminLeaderboardPage() {
                     <div className="text-xs text-gray-500">{new Date(r.start_date).toLocaleDateString('ro-RO', { day: 'numeric', month: 'short' })}</div>
                   </td>
                   <td className="px-3 py-3 text-center">
-                    <StatusBadge status={r.status} />
+                    <StatusBadge status={effectiveRegattaStatus(r)} />
                   </td>
                   {leaderboard.map((t: any) => {
                     const result = (r.results || []).find((res: any) => res.team_id === t.team_id)
@@ -163,14 +164,7 @@ export default async function AdminLeaderboardPage() {
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const colors: Record<string, string> = {
-    upcoming: '#3B82F6',
-    live: '#EF4444',
-    completed: '#10B981',
-    cancelled: '#6B7280',
-    draft: '#9CA3AF',
-  }
-  const c = colors[status] || '#6B7280'
+  const c = regattaStatusColor(status)
   return (
     <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: `${c}15`, color: c }}>
       {status}

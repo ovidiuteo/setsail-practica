@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { ArrowLeft, Anchor, MapPin, Calendar } from 'lucide-react'
 import { supabase } from '@/lib/ssyt/supabase'
 import RegattaDetailTabs from './RegattaDetailTabs'
+import { effectiveRegattaStatus, regattaStatusColor } from '@/lib/ssyt/regatta-status'
 
 export const revalidate = 0
 
@@ -58,7 +59,7 @@ export default async function AdminRegattaDetailPage({ params }: { params: { id:
             <h1 className="text-3xl font-semibold tracking-tight" style={{ color: '#0a1628', letterSpacing: '-0.02em' }}>
               {regatta.name}
             </h1>
-            <StatusBadge status={regatta.status} />
+            <StatusBadge status={effectiveRegattaStatus(regatta)} />
           </div>
           <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500">
             <span className="inline-flex items-center gap-1.5">
@@ -96,14 +97,7 @@ export default async function AdminRegattaDetailPage({ params }: { params: { id:
 }
 
 function StatusBadge({ status }: { status: string }) {
-  const colors: Record<string, string> = {
-    upcoming: '#3B82F6',
-    live: '#EF4444',
-    completed: '#10B981',
-    cancelled: '#6B7280',
-    draft: '#9CA3AF',
-  }
-  const c = colors[status] || '#6B7280'
+  const c = regattaStatusColor(status)
   return (
     <span className="text-xs font-medium px-2 py-1 rounded-full" style={{ background: `${c}15`, color: c }}>
       {status}
