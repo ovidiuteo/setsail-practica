@@ -1,50 +1,33 @@
 'use client'
+import { useEffect, useState } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import {
-  LayoutDashboard,
-  Users,
-  UserPlus,
-  Sailboat,
-  Anchor,
-  Trophy,
-  FileText,
-  Settings,
-  Award,
-  Image as ImageIcon,
-  ClipboardList,
-  CheckSquare,
-  Shuffle,
-  Wallet,
-  UserCog,
-  Shield,
-  BarChart3,
-  ChevronLeft,
-} from 'lucide-react'
-
-const NAV = [
-  { href: '/ssyt/admin', label: 'Overview sezon', icon: LayoutDashboard },
-  { href: '/ssyt/admin/teams', label: 'Echipe', icon: Users },
-  { href: '/ssyt/admin/roster', label: 'Roster (drag-drop)', icon: Shuffle },
-  { href: '/ssyt/admin/participants', label: 'Participanți', icon: UserPlus },
-  { href: '/ssyt/admin/users', label: 'Useri și conturi', icon: UserCog },
-  { href: '/ssyt/admin/applications', label: 'Aplicări', icon: ClipboardList },
-  { href: '/ssyt/admin/boats', label: 'Ambarcațiuni', icon: Sailboat },
-  { href: '/ssyt/admin/regattas', label: 'Regatte', icon: Anchor },
-  { href: '/ssyt/admin/availability', label: 'Disponibilități', icon: CheckSquare },
-  { href: '/ssyt/admin/stats', label: 'Statistici portal', icon: BarChart3 },
-  { href: '/ssyt/admin/financial', label: 'Situație financiară', icon: Wallet },
-  { href: '/ssyt/admin/results', label: 'Rezultate', icon: Trophy },
-  { href: '/ssyt/admin/leaderboard', label: 'Leaderboard', icon: Trophy },
-  { href: '/ssyt/admin/badges', label: 'Badge-uri', icon: Award },
-  { href: '/ssyt/admin/media', label: 'Media', icon: ImageIcon },
-  { href: '/ssyt/admin/documents', label: 'Documente', icon: FileText },
-  { href: '/ssyt/admin/cluburi', label: 'Cluburi sportive', icon: Shield },
-  { href: '/ssyt/admin/settings', label: 'Setări SSYT', icon: Settings },
-]
+import { ChevronLeft } from 'lucide-react'
+import { createSupabaseBrowserClient } from '@/lib/ssyt/supabase-browser'
+import { ADMIN_NAV, orderNav, type NavItem } from '@/lib/ssyt/admin-nav'
 
 export default function AdminSidebar() {
   const pathname = usePathname()
+  const [nav, setNav] = useState<NavItem[]>(ADMIN_NAV)
+
+  useEffect(() => {
+    let active = true
+    async function loadOrder() {
+      const supabase = createSupabaseBrowserClient()
+      const { data } = await supabase
+        .from('ssyt_seasons')
+        .select('admin_sidebar_order')
+        .in('status', ['planning', 'active'])
+        .order('year', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (active && data?.admin_sidebar_order) {
+        setNav(orderNav(data.admin_sidebar_order as string[]))
+      }
+    }
+    loadOrder()
+    return () => { active = false }
+  }, [])
 
   return (
     <aside
@@ -63,7 +46,7 @@ export default function AdminSidebar() {
       <div className="w-8 h-px mb-4" style={{ background: 'rgba(255,255,255,0.1)' }}></div>
 
       <nav className="flex flex-col gap-1 flex-1 overflow-y-auto">
-        {NAV.map((item) => {
+        {nav.map((item) => {
           const active =
             pathname === item.href ||
             (item.href !== '/ssyt/admin' && pathname?.startsWith(item.href))

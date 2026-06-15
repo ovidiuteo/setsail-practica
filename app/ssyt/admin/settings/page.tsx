@@ -1,7 +1,8 @@
 import Link from 'next/link'
-import { Settings, ExternalLink } from 'lucide-react'
+import { Settings, ExternalLink, PanelLeft } from 'lucide-react'
 import { supabase, getActiveSeason } from '@/lib/ssyt/supabase'
 import ProgramContentForm from './ProgramContentForm'
+import SidebarOrderForm from './SidebarOrderForm'
 
 export const revalidate = 0
 
@@ -39,6 +40,13 @@ export default async function AdminSettingsPage() {
           Vezi pagina publică
           <ExternalLink size={12} />
         </Link>
+      </div>
+
+      <div className="rounded-lg p-6 mb-6" style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
+        <h2 className="text-sm font-medium uppercase tracking-wider text-gray-500 mb-4 inline-flex items-center gap-1.5">
+          <PanelLeft size={14} /> Ordine sidebar admin
+        </h2>
+        <SidebarOrderForm seasonId={season.id} initialOrder={(season as any).admin_sidebar_order} />
       </div>
 
       <div className="rounded-lg p-6" style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
