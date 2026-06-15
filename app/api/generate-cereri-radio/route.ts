@@ -45,8 +45,7 @@ export async function POST(req: NextRequest) {
 
         const body = isPrelungire
           ? `Subsemnatul/a ${F(s.full_name, '160px')}, domiciliat/ă în
-             ${F(s.city)}, str. ${F(s.address, '200px')} nr. ${F(null, '40px')},
-             bl. ${F(null,'30px')}, sc. ${F(null,'25px')}, et. ${F(null,'25px')}, ap. ${F(null,'25px')},
+             ${F(s.city)}, adresa ${F(s.address, '100%')},
              sectorul/județul ${F(s.county)}, telefon ${F(s.phone)},
              e-mail: ${F(s.email, '160px')}, posesor al B.I./C.I. seria ${F(s.ci_series,'30px')} nr.
              ${F(s.ci_number,'60px')}, CNP ${F(s.cnp,'120px')}
@@ -54,8 +53,7 @@ export async function POST(req: NextRequest) {
              <strong>GMDSS-LRC</strong>¹ de operator radiotelefonist în serviciul
              <strong>SMMS</strong>², cu nr. ${F(null,'60px')} din data ${F(null,'80px')}.`
           : `Subsemnatul/a ${F(s.full_name, '160px')}, domiciliat/ă în
-             ${F(s.city)}, str. ${F(s.address, '200px')} nr. ${F(null,'40px')},
-             bl. ${F(null,'30px')}, sc. ${F(null,'25px')}, et. ${F(null,'25px')}, ap. ${F(null,'25px')},
+             ${F(s.city)}, adresa ${F(s.address, '100%')},
              sectorul/județul ${F(s.county)}, telefon ${F(s.phone)},
              e-mail: ${F(s.email, '160px')}, vă rog a-mi aproba susținerea examenului pentru
              obținerea certificatului <strong>GMDSS-LRC</strong>¹ de operator radio în serviciul
@@ -145,7 +143,7 @@ export async function POST(req: NextRequest) {
 
       const nome = s.full_name || '.....................................'
       const oras = s.city || '...................'
-      const addr = s.address || '.....................................'
+      const addr = s.address || '.'.repeat(70)
       const jud  = s.county || '...................'
       const tel  = s.phone || '...................'
       const mail = s.email || '.........................................'
@@ -171,8 +169,7 @@ export async function POST(req: NextRequest) {
         allChildren.push(
           new Paragraph({ alignment: AlignmentType.JUSTIFIED as any, spacing: { before: 0, after: 120 }, indent: { firstLine: 720 }, children: [
             t('Subsemnatul/a '), tb(nome), t(', domiciliat/ă în '),
-            tb(oras), t(', str. '), tb(addr), t(' nr. '), dots(8), t(', bl. '), dots(6),
-            t(', sc. '), dots(5), t(', et. '), dots(5), t(', ap. '), dots(5),
+            tb(oras), t(', adresa '), tb(addr),
             t(', sectorul/județul '), tb(jud), t(', telefon '), tb(tel),
             t(', e-mail: '), tb(mail), t(', posesor al B.I./C.I. seria '), tb(ci_s),
             t(' nr. '), tb(ci_n), t(', CNP '), tb(cnp),
@@ -190,8 +187,7 @@ export async function POST(req: NextRequest) {
         allChildren.push(
           new Paragraph({ alignment: AlignmentType.JUSTIFIED as any, spacing: { before: 0, after: 120 }, indent: { firstLine: 720 }, children: [
             t('Subsemnatul/a '), tb(nome), t(', domiciliat/ă în '),
-            tb(oras), t(', str. '), tb(addr), t(' nr. '), dots(8), t(', bl. '), dots(6),
-            t(', sc. '), dots(5), t(', et. '), dots(5), t(', ap. '), dots(5),
+            tb(oras), t(', adresa '), tb(addr),
             t(', sectorul/județul '), tb(jud), t(', telefon '), tb(tel),
             t(', e-mail: '), tb(mail),
             t(', vă rog a-mi aproba susținerea examenului pentru obținerea certificatului '),
