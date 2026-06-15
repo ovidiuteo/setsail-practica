@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getHeaderImage } from '@/lib/antete'
 import { fillDocTemplate, fragmentDefault, fragmentDefaultAlign, type DocAlign } from '@/lib/doc-templates'
+import { tintSignatureToBlue } from '@/lib/sign-tint'
 
 export async function POST(req: NextRequest) {
   const { session_id, clean } = await req.json()
@@ -116,7 +117,9 @@ export async function POST(req: NextRequest) {
     const t = m[1].toLowerCase()
     return { data: Buffer.from(m[2], 'base64'), type: t === 'jpeg' || t === 'jpg' ? 'jpg' : (t as 'png' | 'gif') }
   }
-  const firstSignature = dataUrlToImage(orderedInstr[0]?.signature_data)
+  const _instrSig = orderedInstr[0]?.signature_data
+  const _instrSigBlue = _instrSig ? await tintSignatureToBlue(_instrSig) : null
+  const firstSignature = _instrSigBlue ? { data: _instrSigBlue, type: 'png' as const } : dataUrlToImage(_instrSig)
   const clasaCAA = session.class_caa || 'C/D'
 
   // Template-uri editabile (admin → Template-uri Documente); fallback la default-urile din lib

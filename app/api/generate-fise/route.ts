@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getHeaderImage } from '@/lib/antete'
+import { tintSignatureToBlue } from '@/lib/sign-tint'
 
 export async function POST(req: NextRequest) {
   const { session_id } = await req.json()
@@ -76,7 +77,7 @@ export async function POST(req: NextRequest) {
     return text || '___________________________________'
   }
 
-  function makeStudentSection(s: any, isLast: boolean): any[] {
+  async function makeStudentSection(s: any, isLast: boolean): Promise<any[]> {
     const ciDoc = s.ci_series && s.ci_number
       ? `${s.ci_series} ${s.ci_number}`
       : (s.id_document || '___________________________')
@@ -267,7 +268,7 @@ export async function POST(req: NextRequest) {
         const sigBase64 = sigSource.includes(',')
           ? sigSource.split(',')[1]
           : sigSource
-        const sigBuffer = Buffer.from(sigBase64, 'base64')
+        const sigBuffer = (await tintSignatureToBlue(sigSource)) || Buffer.from(sigBase64, 'base64')
         children.push(
           new Paragraph({
             spacing: { after: 40 },
@@ -299,9 +300,10 @@ export async function POST(req: NextRequest) {
   }
 
   const allChildren: any[] = []
-  students.forEach((s: any, i: number) => {
-    makeStudentSection(s, i === students.length - 1).forEach(c => allChildren.push(c))
-  })
+  for (let i = 0; i < students.length; i++) {
+    const section = await makeStudentSection(students[i], i === students.length - 1)
+    for (const c of section) allChildren.push(c)
+  }
 
   const doc = new Document({
     sections: [{
