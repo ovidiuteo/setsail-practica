@@ -73,7 +73,7 @@ export async function POST(req: NextRequest) {
           <p class="gdpr">${gdprText}</p>
           <div class="footer-row">
             <div>Data ${F(cerereDate,'80px')}</div>
-            <div class="semn">Semnătura,<br>${(s.signature_data || s.signature_random) ? `<img src="${s.signature_data || s.signature_random}" style="height:50px;max-width:170px;object-fit:contain;"/>` : `<br>${F(null,'140px')}`}</div>
+            <div class="semn">Semnătura,<br>${(s.signature_data || s.signature_random) ? `<img src="${s.signature_data || s.signature_random}" style="height:45px;max-width:160px;object-fit:contain;vertical-align:bottom;"/><br>` : '<br><br>'}${F(null,'140px')}</div>
           </div>
           <hr class="fn-line">
           <p class="fn">¹ ${fn1.substring(2)}</p>
@@ -217,7 +217,7 @@ export async function POST(req: NextRequest) {
           ]})
         } catch { /* fallback la linie */ }
       }
-      if (!sigPara) sigPara = new Paragraph({ alignment: AlignmentType.RIGHT as any, spacing: { before: 120, after: 0 }, children: [t('..................................')] })
+      if (!sigPara) sigPara = new Paragraph({ alignment: AlignmentType.RIGHT as any, spacing: { before: 120, after: 0 }, children: [t(' ')] })
 
       allChildren.push(
         new Paragraph({ alignment: AlignmentType.JUSTIFIED as any, spacing: { before: 80, after: 80 }, indent: { firstLine: 720 }, children: [
@@ -230,6 +230,7 @@ export async function POST(req: NextRequest) {
         ]}),
         new Paragraph({ alignment: AlignmentType.RIGHT as any, spacing: { before: 0, after: 0 }, children: [t('Semnătura,')] }),
         sigPara,
+        new Paragraph({ alignment: AlignmentType.RIGHT as any, spacing: { before: 0, after: 400 }, children: [t('..................................')] }),
         // Note subsol
         HR, FN1, FN2
       )
