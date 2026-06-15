@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { tintSignatureToBlue, tintSignatureToBlueDataUrl } from '@/lib/sign-tint'
 
 // Genereaza cereri oficiale ANCOM per cursant
 // tip: 'obtinere' | 'prelungire'
@@ -42,9 +43,12 @@ export async function POST(req: NextRequest) {
 
     // PDF
     if (format === 'pdf') {
-      const pagesHtml = students.map(s => {
+      const pagesArr = await Promise.all(students.map(async s => {
         const F = (val: string | null | undefined, width = '120px', center = true) =>
           `<span style="border-bottom:1px solid #000;display:inline-block;min-width:${width};padding:0 2px;${center ? 'text-align:center;' : ''}">${val || ''}</span>`
+        // semnatura recolorata albastru „de pix"
+        const _sigRaw = s.signature_data || s.signature_random
+        const sigBlue = _sigRaw ? await tintSignatureToBlueDataUrl(_sigRaw) : null
 
         const body = isPrelungire
           ? `Subsemnatul/a ${F(s.full_name, '160px')}, domiciliat/ă în
@@ -73,13 +77,14 @@ export async function POST(req: NextRequest) {
           <p class="gdpr">${gdprText}</p>
           <div class="footer-row">
             <div>Data ${F(cerereDate,'80px')}</div>
-            <div class="semn">Semnătura,<br>${(s.signature_data || s.signature_random) ? `<img src="${s.signature_data || s.signature_random}" style="height:45px;max-width:160px;object-fit:contain;vertical-align:bottom;"/><br>` : '<br><br>'}${F(null,'140px')}</div>
+            <div class="semn">Semnătura,<br>${sigBlue ? `<img src="${sigBlue}" style="height:45px;max-width:160px;object-fit:contain;vertical-align:bottom;"/><br>` : '<br><br>'}${F(null,'140px')}</div>
           </div>
           <hr class="fn-line">
           <p class="fn">¹ ${fn1.substring(2)}</p>
           <p class="fn">² ${fn2.substring(2)}</p>
         </div>`
-      }).join('<div class="page-break"></div>')
+      }))
+      const pagesHtml = pagesArr.join('<div class="page-break"></div>')
 
       const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
 <style>
@@ -211,9 +216,10 @@ export async function POST(req: NextRequest) {
       let sigPara: any = null
       if (sigSrc) {
         try {
-          const b64 = sigSrc.includes(',') ? sigSrc.split(',')[1] : sigSrc
+          const tinted = await tintSignatureToBlue(sigSrc)
+          const data = tinted || Buffer.from(sigSrc.includes(',') ? sigSrc.split(',')[1] : sigSrc, 'base64')
           sigPara = new Paragraph({ alignment: AlignmentType.RIGHT as any, spacing: { before: 120, after: 0 }, children: [
-            new ImageRun({ data: Buffer.from(b64, 'base64'), type: 'png', transformation: { width: 150, height: 52 } })
+            new ImageRun({ data, type: 'png', transformation: { width: 150, height: 52 } })
           ]})
         } catch { /* fallback la linie */ }
       }
