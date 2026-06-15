@@ -25,6 +25,13 @@ const EMPTY_ROW: StudentRow = {
   address: '', city: '', county: '', class_caa: 'C,D'
 }
 
+// Sesiunile radio/LRC folosesc clasele LRC (Obtinere/Prelungire), nu C/D
+const CLASS_OPTIONS_PRACTICA = ['C', 'D', 'C,D']
+const CLASS_OPTIONS_LRC = ['Obtinere LRC', 'Prelungire LRC']
+function isRadioClass(classCaa?: string | null) { return /radio|lrc/i.test(classCaa || '') }
+function classOptionsFor(classCaa?: string | null) { return isRadioClass(classCaa) ? CLASS_OPTIONS_LRC : CLASS_OPTIONS_PRACTICA }
+function defaultClassFor(classCaa?: string | null) { return isRadioClass(classCaa) ? 'Obtinere LRC' : (classCaa || 'C,D') }
+
 export default function ImportCursantiPage() {
   const router = useRouter()
   const fileRef = useRef<HTMLInputElement>(null)
@@ -59,7 +66,7 @@ export default function ImportCursantiPage() {
         const defaultSess = focusSess || activeSess || data?.[0]
         if (defaultSess) {
           setSelectedSession(defaultSess.id)
-          setDefaultClass(defaultSess.class_caa || 'C,D')
+          setDefaultClass(defaultClassFor(defaultSess.class_caa))
         }
       })
   }, [])
@@ -472,6 +479,9 @@ export default function ImportCursantiPage() {
     )
   }
 
+  const selectedSess = sessions.find((s: any) => s.id === selectedSession)
+  const classOptions = classOptionsFor(selectedSess?.class_caa)
+
   return (
     <div className="p-8">
       <div className="flex items-center gap-3 mb-6">
@@ -490,7 +500,16 @@ export default function ImportCursantiPage() {
               <>
                 <select className="w-full border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white mb-3"
                   value={selectedSession}
-                  onChange={e => { setSelectedSession(e.target.value); const s = sessions.find(s => s.id === e.target.value); if (s) setDefaultClass(s.class_caa || 'C,D') }}>
+                  onChange={e => {
+                    setSelectedSession(e.target.value)
+                    const s = sessions.find(s => s.id === e.target.value)
+                    if (!s) return
+                    const dc = defaultClassFor(s.class_caa)
+                    setDefaultClass(dc)
+                    // remapeaza randurile a caror clasa nu mai e valida pentru noul tip de sesiune
+                    const valid = classOptionsFor(s.class_caa)
+                    setRows(rs => rs.map(r => valid.includes(r.class_caa) ? r : { ...r, class_caa: dc }))
+                  }}>
                   {sessions.map((s: any) => (
                     <option key={s.id} value={s.id}>
                       {new Date(s.session_date).toLocaleDateString('ro-RO', { day: '2-digit', month: 'long', year: 'numeric' })} — {s.locations?.name}
@@ -501,7 +520,7 @@ export default function ImportCursantiPage() {
                   <div className="text-xs text-gray-400 mb-1">Clasa implicită</div>
                   <select className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
                     value={defaultClass} onChange={e => setDefaultClass(e.target.value)}>
-                    <option value="C">C</option><option value="D">D</option><option value="C,D">C și D</option>
+                    {classOptions.map(c => <option key={c} value={c}>{c === 'C,D' ? 'C și D' : c}</option>)}
                   </select>
                 </div>
               </>
@@ -603,7 +622,7 @@ export default function ImportCursantiPage() {
                           <td className="px-1 py-1.5"><input className={inCls + ' w-20'} value={r.county} onChange={e => updateRow(i, 'county', e.target.value)} /></td>
                           <td className="px-1 py-1.5">
                             <select className={inCls} value={r.class_caa} onChange={e => updateRow(i, 'class_caa', e.target.value)}>
-                              <option value="C">C</option><option value="D">D</option><option value="C,D">C,D</option>
+                              {classOptions.map(c => <option key={c} value={c}>{c}</option>)}
                             </select>
                           </td>
                           <td className="px-1 py-1.5"><button onClick={() => removeRow(i)} className="text-red-300 hover:text-red-500"><Trash2 size={12} /></button></td>
