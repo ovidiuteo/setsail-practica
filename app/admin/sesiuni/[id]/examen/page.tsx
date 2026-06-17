@@ -263,6 +263,9 @@ export default function ExamenPage() {
   const [resolveSimScore, setResolveSimScore] = useState<string>('')
   const [resolveExistingAnswerId, setResolveExistingAnswerId] = useState<string | null>(null)
   const [resolveBusy, setResolveBusy] = useState(false)
+  // Editare punctuala a unui raspuns grila al unui cursant
+  const [editQ, setEditQ] = useState<{ answer: Answer; question: Question; selected: string } | null>(null)
+  const [savingEditQ, setSavingEditQ] = useState(false)
   const [solutionCopied, setSolutionCopied] = useState(false)
   const [generatingPdf, setGeneratingPdf] = useState(false)
   const [showImport, setShowImport] = useState(false)
@@ -756,6 +759,27 @@ export default function ExamenPage() {
     setResolveSimScore('')
     setResolveExistingAnswerId(null)
     setShowResolve(true)
+  }
+
+  async function saveEditQ() {
+    if (!editQ) return
+    setSavingEditQ(true)
+    try {
+      const key = String(editQ.question.order_no)
+      const newGrila = { ...(editQ.answer.grila_answers || {}), [key]: editQ.selected }
+      let score = 0
+      for (const qq of questions) { if (newGrila[String(qq.order_no)] === qq.correct_option) score++ }
+      const { error } = await supabase.from('radio_exam_answers')
+        .update({ grila_answers: newGrila, grila_score: score, updated_at: new Date().toISOString() })
+        .eq('id', editQ.answer.id)
+      if (error) throw error
+      setEditQ(null)
+      await loadAll()
+    } catch (e: any) {
+      alert('Eroare: ' + (e.message || String(e)))
+    } finally {
+      setSavingEditQ(false)
+    }
   }
 
   function openResolveForStudent(studentId: string) {
@@ -1543,14 +1567,18 @@ export default function ExamenPage() {
                                 const studentAnswer = a.grila_answers?.[String(q.order_no)] || '—'
                                 const correct = studentAnswer === q.correct_option
                                 return (
-                                  <div key={q.order_no} className="text-xs flex items-center gap-2 py-1">
+                                  <button key={q.order_no} type="button"
+                                    onClick={() => setEditQ({ answer: a, question: q, selected: studentAnswer === '—' ? '' : studentAnswer })}
+                                    title="Click pentru a modifica răspunsul"
+                                    className="text-xs flex items-center gap-2 py-1 px-1 rounded hover:bg-purple-50 text-left w-full">
                                     <span className="w-6 text-gray-400">{q.order_no}.</span>
                                     <span className={`font-mono font-bold ${correct ? 'text-green-600' : 'text-red-600'}`}>
                                       {studentAnswer}
                                     </span>
                                     <span className="text-gray-300">/</span>
                                     <span className="font-mono text-gray-500">{q.correct_option}</span>
-                                  </div>
+                                    <span className="ml-auto text-gray-300">✎</span>
+                                  </button>
                                 )
                               })}
                             </div>
@@ -1735,6 +1763,50 @@ export default function ExamenPage() {
                     {randomizing ? 'Se randomizează...' : '🎲 Aplică'}
                   </button>
                 )}
+              </div>
+            </div>
+          </div>
+        )
+      })()}
+
+      {/* Modal editare raspuns grila */}
+      {editQ && (() => {
+        const q = editQ.question
+        const opts: Array<['A'|'B'|'C'|'D', string]> = [['A', q.option_a], ['B', q.option_b], ['C', q.option_c], ['D', q.option_d]]
+        const studentName = students.find(s => s.id === editQ.answer.student_id)?.full_name || ''
+        return (
+          <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={() => !savingEditQ && setEditQ(null)}>
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center justify-between mb-1">
+                <h3 className="font-semibold text-gray-900">Întrebarea {q.order_no}</h3>
+                <button onClick={() => setEditQ(null)} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><X size={16}/></button>
+              </div>
+              <p className="text-xs text-gray-400 mb-3">{studentName} · alege răspunsul corect pentru a corecta punctual</p>
+              <p className="text-sm font-medium text-gray-900 mb-3 whitespace-pre-wrap">{q.question_text}</p>
+              <div className="space-y-2 mb-5">
+                {opts.map(([letter, text]) => {
+                  const isCorrect = q.correct_option === letter
+                  const isSelected = editQ.selected === letter
+                  return (
+                    <button key={letter} type="button"
+                      onClick={() => setEditQ(prev => prev ? { ...prev, selected: letter } : prev)}
+                      className={`w-full flex items-start gap-2 text-left px-3 py-2 rounded-lg border transition-colors ${isSelected ? 'border-purple-500 ring-1 ring-purple-300' : 'border-gray-200 hover:bg-gray-50'}`}
+                      style={isCorrect ? { background: '#dcfce7' } : {}}>
+                      <span className={`font-mono font-bold ${isCorrect ? 'text-green-700' : 'text-gray-500'}`}>{letter}.</span>
+                      <span className="text-sm text-gray-800 flex-1">{text}</span>
+                      {isCorrect && <span className="text-[10px] font-semibold text-green-700 mt-0.5">corect</span>}
+                      {isSelected && <span className="text-[10px] font-semibold text-purple-600 mt-0.5">ales</span>}
+                    </button>
+                  )
+                })}
+              </div>
+              <div className="flex justify-end gap-2">
+                <button onClick={() => setEditQ(null)} disabled={savingEditQ}
+                  className="px-4 py-2 rounded-lg text-xs border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-50">Anulează</button>
+                <button onClick={saveEditQ} disabled={savingEditQ || !editQ.selected}
+                  className="flex items-center gap-1.5 px-5 py-2 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{ background: '#7c3aed' }}>
+                  {savingEditQ ? <Loader2 size={12} className="animate-spin"/> : <Check size={12}/>} Salvează
+                </button>
               </div>
             </div>
           </div>
