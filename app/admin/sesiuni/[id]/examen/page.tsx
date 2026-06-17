@@ -781,24 +781,21 @@ export default function ExamenPage() {
         }
       })
 
-      // Dacă vine din „Șterge și rezolvă", ștergem rândul vechi
-      if (resolveExistingAnswerId) {
-        const { error: delErr } = await supabase
-          .from('radio_exam_answers')
-          .delete()
-          .eq('id', resolveExistingAnswerId)
-        if (delErr) throw delErr
-      } else {
-        // Verifică să nu existe deja un rând pentru acest student
+      // Rand existent: din „Șterge și rezolvă" SAU daca studentul ales din dropdown are deja rezultat.
+      // Resetam ce a scris cursantul (grila/traduceri), dar PASTRAM feedback-ul (review) daca e completat.
+      let existingId: string | null = resolveExistingAnswerId
+      if (!existingId) {
         const { data: existing } = await supabase
-          .from('radio_exam_answers')
-          .select('id')
-          .eq('exam_id', exam.id)
-          .eq('student_id', resolveStudentId)
-          .maybeSingle()
-        if (existing) {
-          throw new Error('Acest cursant are deja un rând în rezultate. Folosește „Șterge și rezolvă" pe el.')
-        }
+          .from('radio_exam_answers').select('id')
+          .eq('exam_id', exam.id).eq('student_id', resolveStudentId).maybeSingle()
+        existingId = existing?.id || null
+      }
+      let keepFeedback = ''
+      if (existingId) {
+        const { data: old } = await supabase.from('radio_exam_answers').select('feedback').eq('id', existingId).maybeSingle()
+        keepFeedback = (old?.feedback || '').trim() ? (old!.feedback as string) : ''
+        const { error: delErr } = await supabase.from('radio_exam_answers').delete().eq('id', existingId)
+        if (delErr) throw delErr
       }
 
       // Status: 'graded' dacă AMBELE note sunt completate; altfel 'submitted' (ca să fie eligibil la random)
@@ -812,7 +809,7 @@ export default function ExamenPage() {
           student_id: resolveStudentId,
           grila_answers: grilaAns,
           translation_answers: {},
-          feedback: '',
+          feedback: keepFeedback,
           obtinere_prelungire: '',
           grila_score: resolveGrilaScore,
           translation_score: tradN ?? 0,
@@ -1669,9 +1666,7 @@ export default function ExamenPage() {
 
       {/* Modal Rezolvă cursant */}
       {showResolve && (() => {
-        const studentsWithoutAnswer = students.filter(s =>
-          !answers.find(a => a.student_id === s.id)
-        )
+        const answeredIds = new Set(answers.map(a => a.student_id))
         const isReResolve = !!resolveExistingAnswerId
         const fixedStudent = isReResolve
           ? students.find(s => s.id === resolveStudentId)
@@ -1704,13 +1699,13 @@ export default function ExamenPage() {
                       onChange={e => setResolveStudentId(e.target.value)}
                       className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white focus:outline-none focus:ring-2 focus:ring-purple-400">
                       <option value="">— alege —</option>
-                      {studentsWithoutAnswer.map(s => (
-                        <option key={s.id} value={s.id}>{s.full_name} · {s.class_caa}</option>
+                      {students.map(s => (
+                        <option key={s.id} value={s.id}>{s.full_name} · {s.class_caa}{answeredIds.has(s.id) ? ' · ✓ are rezultat (se rescrie)' : ''}</option>
                       ))}
                     </select>
-                    {studentsWithoutAnswer.length === 0 && (
+                    {resolveStudentId && answeredIds.has(resolveStudentId) && (
                       <p className="text-xs text-amber-600 mt-1">
-                        Toți cursanții din sesiune au deja rezultate.
+                        Acest cursant are deja rezultat — răspunsurile vor fi rescrise, dar feedback-ul rămâne.
                       </p>
                     )}
                   </div>
@@ -1761,7 +1756,7 @@ export default function ExamenPage() {
                   Anulează
                 </button>
                 <button onClick={doResolve}
-                  disabled={resolveBusy || !resolveStudentId || (!isReResolve && studentsWithoutAnswer.length === 0)}
+                  disabled={resolveBusy || !resolveStudentId}
                   className="px-5 py-2 rounded-lg text-xs font-medium text-white disabled:opacity-50"
                   style={{ background: '#7c3aed' }}>
                   {resolveBusy ? 'Se rezolvă...' : (isReResolve ? '✨ Șterge și rezolvă' : '➕ Rezolvă')}
