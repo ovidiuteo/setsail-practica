@@ -54,9 +54,15 @@ REGULI COMUNE:
 - issued_by: emitentul CI/pașaportului (ex: "SPCEP Sector 1", "SPCJEP Constanța", "MAI"). NU confunda cu "valabilitate"
 - issued_date: data emiterii (NU expirării) — la CI românească e pe față jos, lângă "Eliberată la"; la pașaport câmpul "Data emiterii"
 
+DETECTAREA TIPULUI (doc_type) — foarte important:
+- "ci_vechi" = Carte de Identitate model VECHI: are ADRESA tipărită pe față, numărul are 6 cifre, emitentul ("issued_by") e vizibil pe față
+- "ci_nou"   = Carte de Identitate model NOU (CEI, cu cip): pe FAȚĂ NU apare adresa, NU apare emitentul și NU apare banda MRZ de jos (toate sunt pe verso); numărul are 7 cifre
+- "pasaport" = pașaport românesc
+Deci dacă e CI și pe față LIPSESC adresa + issued_by + banda MRZ de jos → doc_type = "ci_nou". Dacă e CI și adresa e prezentă pe față → doc_type = "ci_vechi".
+
 Returnează DOAR JSON (fără markdown):
 {
-  "doc_type": "CI" sau "PASAPORT",
+  "doc_type": "ci_vechi" sau "ci_nou" sau "pasaport",
   "ci_series": "2 litere pentru CI, sau PP pentru pașaport",
   "ci_number": "6-7 cifre pentru CI, sau numărul pașaportului",
   "cnp": "exact 13 cifre",

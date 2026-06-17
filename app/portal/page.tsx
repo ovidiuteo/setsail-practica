@@ -1,8 +1,9 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Ship, RotateCcw, Check, Upload, Loader2, CheckCircle, AlertCircle, Camera } from 'lucide-react'
+import { Ship, RotateCcw, Check, Upload, Loader2, CheckCircle, AlertCircle, Camera, ChevronDown, ChevronUp } from 'lucide-react'
 import CIImageEditor from '@/components/CIImageEditor'
+import { scopeForSession } from '@/lib/timeline-scope'
 
 type Step = 'login' | 'confirm' | 'done'
 
@@ -21,6 +22,12 @@ export default function PortalPage() {
   const [existingSignature, setExistingSignature] = useState<string | null>(null)
   const [scannedFields, setScannedFields] = useState<Set<string>>(new Set())
   const [examSubmitted, setExamSubmitted] = useState(false)
+  // Tip act detectat din OCR: ci_vechi | ci_nou | pasaport
+  const [docType, setDocType] = useState<'' | 'ci_vechi' | 'ci_nou' | 'pasaport'>('')
+  const [showDetails, setShowDetails] = useState(false)   // dropdown "Date completate"
+  const [classCaa, setClassCaa] = useState('')            // Clasa CAA editabila
+  const [versoStatus, setVersoStatus] = useState<'idle' | 'saving' | 'done'>('idle')
+  const [adevStatus, setAdevStatus] = useState<'idle' | 'saving' | 'done'>('idle')
 
   // Verifica daca acest cursant a finalizat deja examenul (status submitted/graded)
   useEffect(() => {
@@ -66,6 +73,18 @@ export default function PortalPage() {
   const ciSeriesValid = /^[A-Z]{2}$/.test(form.ci_series.trim()) // PP pentru pasaport, sau serie CI
   const ciNumberValid = /^\d{6,9}$/.test(form.ci_number.trim()) // 6-7 pentru CI, 9 pentru pasaport
   const canSave = ciSeriesValid && ciNumberValid
+
+  // Optiuni pentru Clasa CAA, in functie de tipul practicii sesiunii.
+  // value = exact ce salvam in DB (convenția existentă), label = ce vede cursantul.
+  const examScope = session ? scopeForSession(session) : null
+  const classOptions: Array<{ value: string; label: string }> =
+    examScope === 'radio_lrc'
+      ? [{ value: 'Obtinere LRC', label: 'Obținere LRC' }, { value: 'Prelungire LRC', label: 'Prelungire LRC' }]
+    : examScope === 'practica_ba'
+      ? [{ value: 'B', label: 'B' }, { value: 'A', label: 'A' }]
+      : [{ value: 'C', label: 'C' }, { value: 'D', label: 'D' }, { value: 'B', label: 'B' }, { value: 'C,D', label: 'C+D' }]
+  // Pentru CI nou / pasaport adresa nu vine din scan → o cerem explicit sus
+  const addressAbove = docType === 'ci_nou' || docType === 'pasaport'
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
@@ -170,6 +189,10 @@ export default function PortalPage() {
       country: st.country || 'Romania',
     })
     setExistingSignature(st.signature_data || null)
+    setDocType(st.doc_type || '')
+    setClassCaa(st.class_caa || '')
+    setVersoStatus(st.ci_verso_data ? 'done' : 'idle')
+    setAdevStatus(st.adeverinta_adresa_data ? 'done' : 'idle')
     try {
       localStorage.setItem(
         `setsail_portal_${code.toUpperCase().trim()}`,
@@ -276,6 +299,41 @@ export default function PortalPage() {
   }
 
 
+  // Salveaza clasa CAA aleasa de cursant
+  async function updateClass(value: string) {
+    setClassCaa(value)
+    if (!student?.id) return
+    await supabase.from('students').update({ class_caa: value }).eq('id', student.id)
+    setStudent((prev: any) => prev ? { ...prev, class_caa: value } : prev)
+  }
+
+  // Upload simplu (verso CI / adeverinta adresa) — comprima + salveaza in coloana data
+  async function handleExtraUpload(
+    e: React.ChangeEvent<HTMLInputElement>,
+    column: 'ci_verso_data' | 'adeverinta_adresa_data',
+    setStatus: (s: 'idle' | 'saving' | 'done') => void
+  ) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file || !student?.id) return
+    setStatus('saving')
+    try {
+      const dataUrl: string = await new Promise((resolve, reject) => {
+        const r = new FileReader()
+        r.onload = () => resolve(r.result as string)
+        r.onerror = reject
+        r.readAsDataURL(file)
+      })
+      const compressed = await compressImage(dataUrl)
+      await supabase.from('students').update({ [column]: compressed }).eq('id', student.id)
+      setStudent((prev: any) => prev ? { ...prev, [column]: compressed } : prev)
+      setStatus('done')
+    } catch (err) {
+      console.error('Upload error:', err)
+      setStatus('idle')
+    }
+  }
+
   // Comprima imaginea la max 800px lățime, sub 500KB base64
   // Reduce calitatea iterativ pana atinge target-ul
   function compressImage(dataUrl: string): Promise<string> {
@@ -339,6 +397,17 @@ export default function PortalPage() {
       const json = await res.json()
       if (!res.ok || !json.success) { setOcrStatus('error'); return }
       const d = json.data
+      // Detectam tipul actului: preferam ce zice OCR-ul, altfel heuristica
+      let detected: 'ci_vechi' | 'ci_nou' | 'pasaport'
+      if (d.doc_type === 'ci_vechi' || d.doc_type === 'ci_nou' || d.doc_type === 'pasaport') {
+        detected = d.doc_type
+      } else if (d.ci_series === 'PP' || /pasaport|passport/i.test(String(d.doc_type || ''))) {
+        detected = 'pasaport'
+      } else {
+        // CI fara adresa pe fata => model nou (adresa e pe verso)
+        detected = d.address ? 'ci_vechi' : 'ci_nou'
+      }
+      setDocType(detected)
       const fullNameFromCI = (d.last_name && d.first_name)
         ? d.last_name.toUpperCase() + ' ' + d.first_name.toUpperCase() : ''
       setForm(f => ({
@@ -358,6 +427,7 @@ export default function PortalPage() {
       // Salveaza datele OCR - ci_image_data e deja comprimat in DB, folosim compressedImg pentru state
       const ocrSave: any = {
         ci_image_data: compressedImg,  // imaginea comprimata pentru state local
+        doc_type: detected,
         ...(d.ci_series    ? { ci_series: d.ci_series }     : {}),
         ...(d.ci_number    ? { ci_number: d.ci_number }     : {}),
         ...(d.cnp          ? { cnp: d.cnp }                 : {}),
@@ -420,6 +490,8 @@ export default function PortalPage() {
       city: form.city.trim(),
       country: form.country.trim() || 'Romania',
       id_document: `${form.ci_series.trim().toUpperCase()} ${form.ci_number.trim()}`,
+      ...(classCaa.trim() ? { class_caa: classCaa.trim() } : {}),
+      ...(docType ? { doc_type: docType } : {}),
     }
     if (sigData) updateData.signature_data = sigData
     if (form.full_name.trim()) updateData.full_name = form.full_name.trim()
@@ -517,11 +589,7 @@ export default function PortalPage() {
             {/* Date personale */}
             <div className="bg-white rounded-2xl p-6 shadow-2xl">
               <h2 className="font-bold text-gray-900 mb-1">Date personale</h2>
-              <p className="text-xs text-gray-400 mb-2">Verificați și completați informațiile</p>
-            <div className="mb-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex gap-2">
-              <span className="text-base leading-none">⚠️</span>
-              <span><strong>Diacriticele și cratima din CI contează la nume</strong> — scrieți exact cum apare în cartea de identitate (ex: Răzvan-Andrei, Căpățână).</span>
-            </div>
+              <p className="text-xs text-gray-400 mb-3">Incarcati act identitate si semnati</p>
             {student?.portal_status === 'signed' && (
               <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-xl text-xs text-green-700 flex items-center gap-2">
                 <CheckCircle size={14} className="shrink-0" />
@@ -555,7 +623,13 @@ export default function PortalPage() {
                 )}
                 <div className="flex justify-between items-center">
                   <span className="text-xs text-gray-400">Clasa CAA</span>
-                  <span className="text-xs font-medium text-gray-700">{student.class_caa}</span>
+                  <select
+                    value={classOptions.some(o => o.value === classCaa) ? classCaa : ''}
+                    onChange={e => updateClass(e.target.value)}
+                    className="text-xs font-medium text-gray-800 bg-white border border-gray-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-400 cursor-pointer">
+                    <option value="" disabled>{classCaa || 'Alege…'}</option>
+                    {classOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                  </select>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-xs text-gray-400">Sesiune</span>
@@ -567,11 +641,11 @@ export default function PortalPage() {
 
               {/* Upload CI + OCR */}
               <div className="mb-5">
-                <label className={labelCls}>
+                <label className={labelCls + ' mb-0'}>
                   <Camera size={13} className="inline mr-1.5" />
                   Fotografiați / Scanați Cartea de Identitate
-                  <span className="ml-1 text-blue-500 font-normal">(completare automată)</span>
                 </label>
+                <p className="text-xs text-amber-600 font-medium mb-1.5">Atenție! Nu PDF. Recomandăm screenshot + upload.</p>
                 <label className={`
                   flex items-center justify-center gap-3 w-full px-4 py-4 rounded-xl border-2 border-dashed cursor-pointer transition-all
                   ${ocrStatus === 'loading' ? 'border-blue-300 bg-blue-50' :
@@ -601,7 +675,7 @@ export default function PortalPage() {
                   <input
                     ref={ciInputRef}
                     type="file"
-                    accept="image/*,application/pdf"
+                    accept="image/*"
                     capture="environment"
                     className="hidden"
                     onChange={handleCIUpload}
@@ -617,161 +691,180 @@ export default function PortalPage() {
                 )}
               </div>
 
-              {/* Câmpuri CI / Pașaport — cu validare */}
-              <div className="grid grid-cols-2 gap-3 mb-3">
-                <div>
-                  <label className={labelCls}>
-                    Serie CI / Tip doc *
-                    {form.ci_series.trim() && (
-                      ciSeriesValid
-                        ? <span className="ml-1 text-green-600 font-semibold">✓</span>
-                        : <span className="ml-1 text-red-500">✗</span>
-                    )}
+              {/* ── Verso CI + adeverință (doar pentru CI nou) ── */}
+              {docType === 'ci_nou' && (
+                <div className="space-y-3 mb-5">
+                  <p className="text-xs text-gray-500">
+                    Cartea de identitate nouă are adresa, emitentul și codul pe <strong>verso</strong>. Încărcați versoul și o adeverință de adresă.
+                  </p>
+                  <label className={`flex items-center justify-center gap-3 w-full px-4 py-3.5 rounded-xl border-2 border-dashed cursor-pointer transition-all ${
+                    versoStatus === 'done' ? 'border-green-400 bg-green-50' :
+                    versoStatus === 'saving' ? 'border-blue-300 bg-blue-50' :
+                    'border-gray-200 hover:border-blue-300 hover:bg-blue-50/50'}`}>
+                    {versoStatus === 'saving' ? <><Loader2 size={16} className="text-blue-500 animate-spin"/><span className="text-sm text-blue-600 font-medium">Se salvează...</span></>
+                     : versoStatus === 'done' ? <><CheckCircle size={16} className="text-green-600"/><span className="text-sm text-green-700 font-medium">Verso CI încărcat ✓ (apăsați pentru a înlocui)</span></>
+                     : <><Upload size={16} className="text-gray-400"/><span className="text-sm text-gray-600 font-medium">Apăsați pentru a încărca VERSO CI</span></>}
+                    <input type="file" accept="image/*" capture="environment" className="hidden"
+                      onChange={e => handleExtraUpload(e, 'ci_verso_data', setVersoStatus)} />
                   </label>
-                  <input
-                    className={ciFieldCls(form.ci_series, ciSeriesValid)}
-                    value={form.ci_series}
-                    placeholder="AB sau PP"
-                    maxLength={2}
-                    onChange={e => setForm(f => ({ ...f, ci_series: e.target.value.toUpperCase() }))}
-                  />
-                  {form.ci_series.trim() && !ciSeriesValid && (
-                    <p className="text-xs text-red-500 mt-1">2 litere (ex: AB, IF) sau PP pentru pașaport</p>
-                  )}
-                </div>
-                <div>
-                  <label className={labelCls}>
-                    Număr CI / Pașaport *
-                    {form.ci_number.trim() && (
-                      ciNumberValid
-                        ? <span className="ml-1 text-green-600 font-semibold">✓</span>
-                        : <span className="ml-1 text-red-500">✗</span>
-                    )}
+                  <label className={`flex items-center justify-center gap-3 w-full px-4 py-3.5 rounded-xl border-2 border-dashed cursor-pointer transition-all ${
+                    adevStatus === 'done' ? 'border-green-400 bg-green-50' :
+                    adevStatus === 'saving' ? 'border-blue-300 bg-blue-50' :
+                    'border-gray-200 hover:border-blue-300 hover:bg-blue-50/50'}`}>
+                    {adevStatus === 'saving' ? <><Loader2 size={16} className="text-blue-500 animate-spin"/><span className="text-sm text-blue-600 font-medium">Se salvează...</span></>
+                     : adevStatus === 'done' ? <><CheckCircle size={16} className="text-green-600"/><span className="text-sm text-green-700 font-medium">Adeverință adresă încărcată ✓ (apăsați pentru a înlocui)</span></>
+                     : <><Upload size={16} className="text-gray-400"/><span className="text-sm text-gray-600 font-medium">Apăsați pentru a încărca/poza adeverința adresă</span></>}
+                    <input type="file" accept="image/*" capture="environment" className="hidden"
+                      onChange={e => handleExtraUpload(e, 'adeverinta_adresa_data', setAdevStatus)} />
                   </label>
-                  <input
-                    className={ciFieldCls(form.ci_number, ciNumberValid)}
-                    value={form.ci_number}
-                    placeholder="123456 / 1234567 / 058339673"
-                    maxLength={7}
-                    onChange={e => setForm(f => ({ ...f, ci_number: e.target.value.replace(/\D/g, '') }))}
-                  />
-                  {form.ci_number.trim() && !ciNumberValid && (
-                    <p className="text-xs text-red-500 mt-1">6-7 cifre (CI) sau 9 cifre (pașaport)</p>
-                  )}
                 </div>
-              </div>
+              )}
 
-              {/* Helper: indicator camp */}
-              <div className="space-y-3">
-                {ocrStatus === 'done' && (
-                  <div className="flex items-center gap-3 text-xs">
-                    <span className="flex items-center gap-1"><span className="w-3 h-3 rounded border-2 border-green-500 bg-green-50 inline-block"/><span className="text-white/60">Din CI</span></span>
-                    <span className="flex items-center gap-1"><span className="w-3 h-3 rounded border-2 border-blue-400 bg-blue-50/30 inline-block"/><span className="text-white/60">Completat manual</span></span>
-                    <span className="flex items-center gap-1"><span className="w-3 h-3 rounded border-2 border-red-300 bg-red-50/40 inline-block"/><span className="text-white/60">Lipsă</span></span>
+              {/* Adresă domiciliu — manuală pentru CI nou / pașaport (nu vine din scan) */}
+              {addressAbove && (
+                <div className="space-y-3 mb-5">
+                  <div>
+                    <label className={labelCls}>Adresă domiciliu (stradă, număr, bloc, apartament)</label>
+                    <input className={fieldCls('address')} value={form.address} placeholder="Str. Exemplu nr. 1, Bl. X, Ap. Y"
+                      onChange={e => { setForm(f=>({...f,address:e.target.value})); setScannedFields(s=>{const n=new Set(s);n.delete('address');return n}) }} />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className={labelCls}>Localitate</label>
+                      <input className={fieldCls('city')} value={form.city} placeholder="ex: București"
+                        onChange={e => { setForm(f=>({...f,city:e.target.value})); setScannedFields(s=>{const n=new Set(s);n.delete('city');return n}) }} />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Județ / Sector</label>
+                      <input className={fieldCls('county')} value={form.county} placeholder="ex: Sector 3 / Ilfov"
+                        onChange={e => { setForm(f=>({...f,county:e.target.value})); setScannedFields(s=>{const n=new Set(s);n.delete('county');return n}) }} />
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* ── Dropdown "Date completate" ── */}
+              <div className="border border-gray-200 rounded-xl overflow-hidden">
+                <button type="button" onClick={() => setShowDetails(v => !v)}
+                  className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition-colors">
+                  <span>
+                    <span className="block text-sm font-semibold text-gray-800">Date completate</span>
+                    <span className="block text-xs text-gray-400">Verificați și completați informațiile</span>
+                  </span>
+                  {showDetails ? <ChevronUp size={18} className="text-gray-400 shrink-0"/> : <ChevronDown size={18} className="text-gray-400 shrink-0"/>}
+                </button>
+                {showDetails && (
+                  <div className="px-4 pb-4 pt-2 space-y-3 border-t border-gray-100">
+                    {ocrStatus === 'done' && (
+                      <div className="flex flex-wrap items-center gap-3 text-xs">
+                        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded border-2 border-green-500 bg-green-50 inline-block"/><span className="text-gray-500">Din CI</span></span>
+                        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded border-2 border-blue-400 bg-blue-50/30 inline-block"/><span className="text-gray-500">Completat manual</span></span>
+                        <span className="flex items-center gap-1"><span className="w-3 h-3 rounded border-2 border-red-300 bg-red-50/40 inline-block"/><span className="text-gray-500">Lipsă</span></span>
+                      </div>
+                    )}
+
+                    {/* Serie + Număr */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={labelCls}>
+                          Serie CI / Tip doc *
+                          {form.ci_series.trim() && (ciSeriesValid ? <span className="ml-1 text-green-600 font-semibold">✓</span> : <span className="ml-1 text-red-500">✗</span>)}
+                        </label>
+                        <input className={ciFieldCls(form.ci_series, ciSeriesValid)} value={form.ci_series} placeholder="AB sau PP" maxLength={2}
+                          onChange={e => setForm(f => ({ ...f, ci_series: e.target.value.toUpperCase() }))} />
+                        {form.ci_series.trim() && !ciSeriesValid && (<p className="text-xs text-red-500 mt-1">2 litere (ex: AB, IF) sau PP pentru pașaport</p>)}
+                      </div>
+                      <div>
+                        <label className={labelCls}>
+                          Număr CI / Pașaport *
+                          {form.ci_number.trim() && (ciNumberValid ? <span className="ml-1 text-green-600 font-semibold">✓</span> : <span className="ml-1 text-red-500">✗</span>)}
+                        </label>
+                        <input className={ciFieldCls(form.ci_number, ciNumberValid)} value={form.ci_number} placeholder="123456 / 1234567 / 058339673" maxLength={7}
+                          onChange={e => setForm(f => ({ ...f, ci_number: e.target.value.replace(/\D/g, '') }))} />
+                        {form.ci_number.trim() && !ciNumberValid && (<p className="text-xs text-red-500 mt-1">6-7 cifre (CI) sau 9 cifre (pașaport)</p>)}
+                      </div>
+                    </div>
+
+                    {/* Nume / Prenume */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={labelCls}>Nume (din CI)</label>
+                        <input className={fieldCls('full_name', form.full_name.split(' ')[0])} value={form.full_name.split(' ')[0] || ''} placeholder="POPESCU"
+                          onChange={e => { const parts = form.full_name.split(' '); parts[0] = e.target.value.toUpperCase(); setForm(f => ({ ...f, full_name: parts.join(' ') })); setScannedFields(s => { const n = new Set(s); n.delete('full_name'); return n }) }} />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Prenume (din CI)</label>
+                        <input className={fieldCls('full_name', form.full_name.split(' ').slice(1).join(' '))} value={form.full_name.split(' ').slice(1).join(' ') || ''} placeholder="ION GABRIEL"
+                          onChange={e => { const parts = form.full_name.split(' '); setForm(f => ({ ...f, full_name: ((parts[0]||'')+' '+e.target.value.toUpperCase()).trim() })); setScannedFields(s => { const n = new Set(s); n.delete('full_name'); return n }) }} />
+                      </div>
+                    </div>
+
+                    {/* CNP + Data nașterii */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={labelCls}>CNP</label>
+                        <input className={fieldCls('cnp')} value={form.cnp} placeholder="1234567890123" maxLength={13}
+                          onChange={e => { setForm(f=>({...f,cnp:e.target.value.replace(/\D/g,'')})); setScannedFields(s=>{const n=new Set(s);n.delete('cnp');return n}) }} />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Data nașterii</label>
+                        <input className={fieldCls('birth_date')} value={form.birth_date} placeholder="dd.mm.yyyy"
+                          onChange={e => { setForm(f=>({...f,birth_date:e.target.value})); setScannedFields(s=>{const n=new Set(s);n.delete('birth_date');return n}) }} />
+                      </div>
+                    </div>
+
+                    {/* Adresă (doar dacă nu e deja cerută sus) */}
+                    {!addressAbove && (
+                      <>
+                        <div>
+                          <label className={labelCls}>Adresă domiciliu (stradă, număr, bloc, apartament)</label>
+                          <input className={fieldCls('address')} value={form.address} placeholder="Str. Exemplu nr. 1, Bl. X, Ap. Y"
+                            onChange={e => { setForm(f=>({...f,address:e.target.value})); setScannedFields(s=>{const n=new Set(s);n.delete('address');return n}) }} />
+                        </div>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className={labelCls}>Localitate</label>
+                            <input className={fieldCls('city')} value={form.city} placeholder="ex: București"
+                              onChange={e => { setForm(f=>({...f,city:e.target.value})); setScannedFields(s=>{const n=new Set(s);n.delete('city');return n}) }} />
+                          </div>
+                          <div>
+                            <label className={labelCls}>Județ / Sector</label>
+                            <input className={fieldCls('county')} value={form.county} placeholder="ex: Sector 3 / Ilfov"
+                              onChange={e => { setForm(f=>({...f,county:e.target.value})); setScannedFields(s=>{const n=new Set(s);n.delete('county');return n}) }} />
+                          </div>
+                        </div>
+                      </>
+                    )}
+
+                    {/* Țară + Expirare CI */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={labelCls}>Țară</label>
+                        <input className={fieldCls('country')} value={form.country} placeholder="Romania"
+                          onChange={e => { setForm(f=>({...f,country:e.target.value})); setScannedFields(s=>{const n=new Set(s);n.delete('country');return n}) }} />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Data expirării CI</label>
+                        <input className={fieldCls('expiry_date')} value={form.expiry_date} placeholder="dd.mm.yyyy"
+                          onChange={e => { setForm(f=>({...f,expiry_date:e.target.value})); setScannedFields(s=>{const n=new Set(s);n.delete('expiry_date');return n}) }} />
+                      </div>
+                    </div>
+
+                    {/* Cetățenie */}
+                    <div>
+                      <label className={labelCls}>Cetățenie</label>
+                      <input className={fieldCls('nationality')} value={form.nationality} placeholder="ROU"
+                        onChange={e => { setForm(f=>({...f,nationality:e.target.value.toUpperCase()})); setScannedFields(s=>{const n=new Set(s);n.delete('nationality');return n}) }} />
+                    </div>
+
+                    <div className="flex justify-end">
+                      <button onClick={async () => { await autoSave(); }}
+                        className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-medium border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors">
+                        <Check size={12}/> Salvează date
+                      </button>
+                    </div>
                   </div>
                 )}
-
-                {/* Nume / Prenume */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className={labelCls}>Nume (din CI)</label>
-                    <input className={fieldCls('full_name', form.full_name.split(' ')[0])}
-                      value={form.full_name.split(' ')[0] || ''} placeholder="POPESCU"
-                      onChange={e => {
-                        const parts = form.full_name.split(' ')
-                        parts[0] = e.target.value.toUpperCase()
-                        setForm(f => ({ ...f, full_name: parts.join(' ') }))
-                        setScannedFields(s => { const n = new Set(s); n.delete('full_name'); return n })
-                      }} />
-                  </div>
-                  <div>
-                    <label className={labelCls}>Prenume (din CI)</label>
-                    <input className={fieldCls('full_name', form.full_name.split(' ').slice(1).join(' '))}
-                      value={form.full_name.split(' ').slice(1).join(' ') || ''} placeholder="ION GABRIEL"
-                      onChange={e => {
-                        const parts = form.full_name.split(' ')
-                        setForm(f => ({ ...f, full_name: ((parts[0]||'')+' '+e.target.value.toUpperCase()).trim() }))
-                        setScannedFields(s => { const n = new Set(s); n.delete('full_name'); return n })
-                      }} />
-                  </div>
-                </div>
-
-                {/* CNP + Data nasterii */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className={labelCls}>CNP</label>
-                    <input className={fieldCls('cnp')} value={form.cnp} placeholder="1234567890123" maxLength={13}
-                      onChange={e => { setForm(f=>({...f,cnp:e.target.value.replace(/\D/g,'')})); setScannedFields(s=>{const n=new Set(s);n.delete('cnp');return n}) }} />
-                  </div>
-                  <div>
-                    <label className={labelCls}>Data nașterii</label>
-                    <input className={fieldCls('birth_date')} value={form.birth_date} placeholder="dd.mm.yyyy"
-                      onChange={e => { setForm(f=>({...f,birth_date:e.target.value})); setScannedFields(s=>{const n=new Set(s);n.delete('birth_date');return n}) }} />
-                  </div>
-                </div>
-
-                {/* Adresa */}
-                <div>
-                  <label className={labelCls}>Adresă domiciliu (stradă, număr, bloc, apartament)</label>
-                  <input className={fieldCls('address')} value={form.address} placeholder="Str. Exemplu nr. 1, Bl. X, Ap. Y"
-                    onChange={e => { setForm(f=>({...f,address:e.target.value})); setScannedFields(s=>{const n=new Set(s);n.delete('address');return n}) }} />
-                </div>
-
-                {/* Localitate + Judet */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className={labelCls}>Localitate</label>
-                    <input className={fieldCls('city')} value={form.city} placeholder="ex: București"
-                      onChange={e => { setForm(f=>({...f,city:e.target.value})); setScannedFields(s=>{const n=new Set(s);n.delete('city');return n}) }} />
-                  </div>
-                  <div>
-                    <label className={labelCls}>Județ / Sector</label>
-                    <input className={fieldCls('county')} value={form.county} placeholder="ex: Sector 3 / Ilfov"
-                      onChange={e => { setForm(f=>({...f,county:e.target.value})); setScannedFields(s=>{const n=new Set(s);n.delete('county');return n}) }} />
-                  </div>
-                </div>
-
-                {/* Tara + Expirare CI */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className={labelCls}>Țară</label>
-                    <input className={fieldCls('country')} value={form.country} placeholder="Romania"
-                      onChange={e => { setForm(f=>({...f,country:e.target.value})); setScannedFields(s=>{const n=new Set(s);n.delete('country');return n}) }} />
-                  </div>
-                  <div>
-                    <label className={labelCls}>Data expirării CI</label>
-                    <input className={fieldCls('expiry_date')} value={form.expiry_date} placeholder="dd.mm.yyyy"
-                      onChange={e => { setForm(f=>({...f,expiry_date:e.target.value})); setScannedFields(s=>{const n=new Set(s);n.delete('expiry_date');return n}) }} />
-                  </div>
-                </div>
-
-                {/* Cetatenie */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className={labelCls}>Cetățenie</label>
-                    <input className={fieldCls('nationality')} value={form.nationality} placeholder="ROU"
-                      onChange={e => { setForm(f=>({...f,nationality:e.target.value.toUpperCase()})); setScannedFields(s=>{const n=new Set(s);n.delete('nationality');return n}) }} />
-                  </div>
-                  <div>
-                    <label className={labelCls}>Email</label>
-                    <input className={fieldCls('email')} type="email" value={form.email}
-                      onChange={e => { setForm(f=>({...f,email:e.target.value})); setScannedFields(s=>{const n=new Set(s);n.delete('email');return n}) }} />
-                  </div>
-                </div>
-
-                {/* Telefon */}
-                <div>
-                  <label className={labelCls}>Telefon</label>
-                  <input className={fieldCls('phone')} type="tel" value={form.phone} placeholder="07XX XXX XXX"
-                    onChange={e => { setForm(f=>({...f,phone:e.target.value})); setScannedFields(s=>{const n=new Set(s);n.delete('phone');return n}) }} />
-                </div>
-              </div>
-              {/* Buton Salvează date - compact, dreapta */}
-              <div className="flex justify-end mt-3">
-                <button onClick={async () => { await autoSave(); }}
-                  className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-medium border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors">
-                  <Check size={12}/> Salvează date
-                </button>
               </div>
             </div>
 
@@ -811,22 +904,31 @@ export default function PortalPage() {
                   <CheckCircle size={11} /> Semnătura a fost salvată în baza de date
                 </p>
               )}
+            </div>
 
-              {/* Buton final Salvează și finalizează */}
-              <div className="mt-4">
+            {/* Confirmă telefon / email + finalizare */}
+            <div className="bg-white rounded-2xl p-6 shadow-2xl">
+              <h2 className="font-bold text-gray-900 mb-1">Confirmă telefon și email</h2>
+              <p className="text-xs text-gray-400 mb-3">Folosim aceste date pentru a vă contacta legat de examen.</p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className={labelCls}>Telefon</label>
+                  <input className={fieldCls('phone')} type="tel" value={form.phone} placeholder="07XX XXX XXX"
+                    onChange={e => { setForm(f=>({...f,phone:e.target.value})); setScannedFields(s=>{const n=new Set(s);n.delete('phone');return n}) }} />
+                </div>
+                <div>
+                  <label className={labelCls}>Email</label>
+                  <input className={fieldCls('email')} type="email" value={form.email}
+                    onChange={e => { setForm(f=>({...f,email:e.target.value})); setScannedFields(s=>{const n=new Set(s);n.delete('email');return n}) }} />
+                </div>
+              </div>
+
+              <div className="mt-5">
                 <button onClick={saveAll} disabled={saving || !canSave}
-                  className={`w-full py-3.5 rounded-xl text-sm font-bold text-white shadow-lg transition-all ${
-                    canSave ? 'opacity-100 hover:opacity-90' : 'opacity-50 cursor-not-allowed'
-                  }`}
-                  style={{ background: canSave ? '#0a1628' : '#6b7280' }}>
+                  className={`w-full py-3.5 rounded-xl text-sm font-bold shadow-lg transition-all ${canSave ? 'hover:opacity-90' : 'opacity-60 cursor-not-allowed'}`}
+                  style={{ background: canSave ? '#86efac' : '#d1d5db', color: canSave ? '#14532d' : '#6b7280' }}>
                   {saving ? 'Se salvează...' : student?.portal_status === 'signed' ? '✓ Actualizează datele' : '✓ Salvează și finalizează'}
                 </button>
-                {!canSave && (
-                  <p className="text-amber-600 text-xs text-center mt-2 flex items-center justify-center gap-1.5">
-                    <AlertCircle size={12} />
-                    Seria și numărul CI sunt obligatorii
-                  </p>
-                )}
               </div>
             </div>
 
