@@ -71,6 +71,8 @@ export default function PortalPage() {
     const params = new URLSearchParams(window.location.search)
     const c = params.get('cod')
     if (c) setCode(c.toUpperCase())
+    const e = params.get('email')
+    if (e) setEmailInput(e)
   }, [])
 
   // Incarca semnatura existenta in canvas dupa ce step devine confirm

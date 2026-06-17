@@ -311,6 +311,15 @@ export default function CursantAdminPage() {
               )}
             </div>
 
+            {session?.access_code && (
+              <a href={`/portal?cod=${session.access_code}&email=${encodeURIComponent(student.email || '')}`}
+                target="_blank" rel="noopener noreferrer"
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-medium text-white mb-2"
+                style={{ background: '#0a1628' }}>
+                <ExternalLink size={13} /> Deschide portal cursant
+              </a>
+            )}
+
             {/* Communication target */}
             <div className="flex items-center justify-between py-3 border-t border-gray-50">
               <div>
