@@ -86,6 +86,16 @@ export default function PortalPage() {
   // Pentru CI nou / pasaport adresa nu vine din scan → o cerem explicit sus
   const addressAbove = docType === 'ci_nou' || docType === 'pasaport'
 
+  // Sunt toate datele din "Date completate" completate? (pt. culoarea dropdownului)
+  const detailVals = [
+    form.full_name, form.cnp, form.birth_date, form.address, form.city,
+    form.county, form.country, form.expiry_date, form.nationality, form.ci_series, form.ci_number,
+  ]
+  const detailsComplete = detailVals.every(v => String(v || '').trim() !== '')
+
+  // Avertisment cand cursantul schimba email-ul (afecteaza accesul la portal)
+  const emailChanged = !!student && form.email.trim().toLowerCase() !== String(student.email || '').trim().toLowerCase()
+
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
     const c = params.get('cod')
@@ -646,42 +656,51 @@ export default function PortalPage() {
                   Fotografiați / Scanați Cartea de Identitate
                 </label>
                 <p className="text-xs text-amber-600 font-medium mb-1.5">Atenție! Nu PDF. Recomandăm screenshot + upload.</p>
-                <label className={`
-                  flex items-center justify-center gap-3 w-full px-4 py-4 rounded-xl border-2 border-dashed cursor-pointer transition-all
-                  ${ocrStatus === 'loading' ? 'border-blue-300 bg-blue-50' :
-                    ocrStatus === 'done' ? 'border-green-400 bg-green-50' :
-                    ocrStatus === 'error' ? 'border-red-300 bg-red-50' :
-                    'border-gray-200 hover:border-blue-300 hover:bg-blue-50/50'}
-                `}>
-                  {ocrStatus === 'loading' && (
-                    <><Loader2 size={18} className="text-blue-500 animate-spin" />
-                    <span className="text-sm text-blue-600 font-medium">Se citește CI-ul, vă rugați așteptați...</span></>
-                  )}
-                  {ocrStatus === 'done' && (
-                    <><CheckCircle size={18} className="text-green-600" />
-                    <span className="text-sm text-green-700 font-medium">CI citit cu succes! Verificați câmpurile completate.</span></>
-                  )}
-                  {ocrStatus === 'error' && (
-                    <><AlertCircle size={18} className="text-red-500" />
-                    <span className="text-sm text-red-600">Eroare la citire. Încercați din nou sau completați manual.</span></>
-                  )}
-                  {ocrStatus === 'idle' && (
-                    <><Upload size={18} className="text-gray-400" />
-                    <div>
-                      <div className="text-sm text-gray-600 font-medium">Apăsați pentru a încărca foto CI</div>
-                      <div className="text-xs text-gray-400 mt-0.5">JPG, PNG, HEIC — față CI</div>
-                    </div></>
-                  )}
-                  <input
-                    ref={ciInputRef}
-                    type="file"
-                    accept="image/*"
-                    capture="environment"
-                    className="hidden"
-                    onChange={handleCIUpload}
-                    disabled={ocrStatus === 'loading'}
-                  />
-                </label>
+                <div className="flex gap-3">
+                  {/* Dropzone — formă de CI (landscape) */}
+                  <label className={`
+                    flex flex-col items-center justify-center text-center gap-2 flex-1 p-3 rounded-xl border-2 border-dashed cursor-pointer transition-all aspect-[856/540]
+                    ${ocrStatus === 'loading' ? 'border-blue-300 bg-blue-50' :
+                      ocrStatus === 'done' ? 'border-green-400 bg-green-50' :
+                      ocrStatus === 'error' ? 'border-red-300 bg-red-50' :
+                      'border-gray-200 hover:border-blue-300 hover:bg-blue-50/50'}
+                  `}>
+                    {ocrStatus === 'loading' && (
+                      <><Loader2 size={22} className="text-blue-500 animate-spin" />
+                      <span className="text-xs text-blue-600 font-medium">Se citește CI-ul, așteptați...</span></>
+                    )}
+                    {ocrStatus === 'done' && (
+                      <><CheckCircle size={22} className="text-green-600" />
+                      <span className="text-xs text-green-700 font-medium">CI citit! Verificați câmpurile.</span></>
+                    )}
+                    {ocrStatus === 'error' && (
+                      <><AlertCircle size={22} className="text-red-500" />
+                      <span className="text-xs text-red-600">Eroare la citire. Încercați din nou.</span></>
+                    )}
+                    {ocrStatus === 'idle' && (
+                      <><Upload size={24} className="text-gray-400" />
+                      <div>
+                        <div className="text-sm text-gray-600 font-medium">Apăsați pentru a încărca foto CI</div>
+                        <div className="text-xs text-gray-400 mt-0.5">JPG, PNG, HEIC — față CI</div>
+                      </div></>
+                    )}
+                    <input
+                      ref={ciInputRef}
+                      type="file"
+                      accept="image/*"
+                      capture="environment"
+                      className="hidden"
+                      onChange={handleCIUpload}
+                      disabled={ocrStatus === 'loading'}
+                    />
+                  </label>
+                  {/* Preview document încărcat */}
+                  <div className="flex-1 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 aspect-[856/540] overflow-hidden flex items-center justify-center">
+                    {student?.ci_image_data
+                      ? <img src={student.ci_image_data} alt="Document încărcat" className="w-full h-full object-contain" />
+                      : <span className="text-xs text-gray-300 px-2 text-center">Previzualizare document</span>}
+                  </div>
+                </div>
                 {ocrStatus === 'done' && (
                   <button
                     onClick={() => { setOcrStatus('idle'); if (ciInputRef.current) ciInputRef.current.click() }}
@@ -743,13 +762,13 @@ export default function PortalPage() {
                 </div>
               )}
 
-              {/* ── Dropdown "Date completate" ── */}
-              <div className="border border-gray-200 rounded-xl overflow-hidden">
+              {/* ── Dropdown "Date completate" (mai îngust; verde=complet / orange=lipsesc) ── */}
+              <div className={`w-3/5 border rounded-xl overflow-hidden transition-colors ${detailsComplete ? 'border-green-300 bg-green-50' : 'border-orange-300 bg-orange-50'}`}>
                 <button type="button" onClick={() => setShowDetails(v => !v)}
-                  className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 transition-colors">
+                  className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-black/5 transition-colors">
                   <span>
                     <span className="block text-sm font-semibold text-gray-800">Date completate</span>
-                    <span className="block text-xs text-gray-400">Verificați și completați informațiile</span>
+                    <span className="block text-xs text-gray-500">{detailsComplete ? 'Toate datele sunt completate' : 'Verificați și completați informațiile'}</span>
                   </span>
                   {showDetails ? <ChevronUp size={18} className="text-gray-400 shrink-0"/> : <ChevronDown size={18} className="text-gray-400 shrink-0"/>}
                 </button>
@@ -922,11 +941,17 @@ export default function PortalPage() {
                     onChange={e => { setForm(f=>({...f,email:e.target.value})); setScannedFields(s=>{const n=new Set(s);n.delete('email');return n}) }} />
                 </div>
               </div>
+              {emailChanged && (
+                <div className="mt-3 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex gap-2">
+                  <AlertCircle size={14} className="shrink-0 mt-0.5" />
+                  <span>Modificarea adresei de email <strong>va duce la modificarea datelor de accesare portal</strong> (veți folosi noul email la următoarea autentificare).</span>
+                </div>
+              )}
 
               <div className="mt-5">
-                <button onClick={saveAll} disabled={saving || !canSave}
-                  className={`w-full py-3.5 rounded-xl text-sm font-bold shadow-lg transition-all ${canSave ? 'hover:opacity-90' : 'opacity-60 cursor-not-allowed'}`}
-                  style={{ background: canSave ? '#86efac' : '#d1d5db', color: canSave ? '#14532d' : '#6b7280' }}>
+                <button onClick={saveAll} disabled={saving}
+                  className={`w-full py-3.5 rounded-xl text-sm font-bold shadow-lg transition-all ${saving ? 'opacity-60 cursor-not-allowed' : 'hover:opacity-90'}`}
+                  style={{ background: '#86efac', color: '#14532d' }}>
                   {saving ? 'Se salvează...' : student?.portal_status === 'signed' ? '✓ Actualizează datele' : '✓ Salvează și finalizează'}
                 </button>
               </div>
