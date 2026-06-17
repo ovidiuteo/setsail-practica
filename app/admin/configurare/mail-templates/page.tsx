@@ -140,6 +140,29 @@ export default function MailTemplatesPage() {
     setSaving(false)
   }
 
+  async function duplicateTemplate(t: Template) {
+    // cheie unica (key e folosit ca identificator); incrementeaza daca exista deja
+    let newKey = `${t.key}_duplicat`
+    const existing = new Set(templates.map(x => x.key))
+    if (existing.has(newKey)) { let n = 2; while (existing.has(`${newKey}_${n}`)) n++; newKey = `${newKey}_${n}` }
+    const payload = {
+      key: newKey,
+      label: `${t.label} _duplicat`,
+      categorie: t.categorie,
+      subject: t.subject,
+      body_text: t.body_text || '',
+      body_html: t.body_html || '',
+      to_emails: t.to_emails || '',
+      cc_emails: t.cc_emails || '',
+      bcc_emails: t.bcc_emails || '',
+      variables: t.variables || [],
+      activ: t.activ ?? true,
+    }
+    const { data, error } = await supabase.from('mail_templates').insert(payload).select().single()
+    if (error) { alert('Eroare la duplicare: ' + error.message); return }
+    if (data) setTemplates(prev => [...prev, data as Template].sort((a, b) => a.categorie.localeCompare(b.categorie) || a.label.localeCompare(b.label)))
+  }
+
   async function deleteTemplate(id: string) {
     if (!confirm('Ștergi definitiv acest template?')) return
     await supabase.from('mail_templates').delete().eq('id', id)
@@ -280,6 +303,10 @@ export default function MailTemplatesPage() {
                           <button onClick={() => startEdit(t)}
                             className="p-1.5 rounded-lg hover:bg-blue-50 text-gray-400 hover:text-blue-600 transition-colors">
                             <Pencil size={14} />
+                          </button>
+                          <button onClick={() => duplicateTemplate(t)} title="Duplică template-ul"
+                            className="p-1.5 rounded-lg hover:bg-purple-50 text-gray-400 hover:text-purple-600 transition-colors">
+                            <Copy size={14} />
                           </button>
                           <button onClick={() => deleteTemplate(t.id)}
                             className="p-1.5 rounded-lg hover:bg-red-50 text-gray-300 hover:text-red-500 transition-colors">
