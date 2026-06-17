@@ -17,7 +17,7 @@ type AnswerRow = {
   submitted_at: string | null
 }
 
-type SortCol = 'name' | 'grila' | 'trad' | 'pct' | 'stare'
+type SortCol = 'name' | 'grila' | 'gresite' | 'trad' | 'pct' | 'stare'
 
 const CONNECTED_MS = 35000 // conectat daca heartbeat / ultima salvare in ultimele 35s
 
@@ -31,6 +31,7 @@ export default function ExamStatusPage() {
   const sessionId = params.id as string
 
   const [exam, setExam] = useState<ExamRow | null>(null)
+  const [correctMap, setCorrectMap] = useState<Record<string, string>>({}) // order_no -> raspuns corect
   const [students, setStudents] = useState<StudentLite[]>([])
   const [answers, setAnswers] = useState<Record<string, AnswerRow>>({})
   const [loading, setLoading] = useState(true)
@@ -55,6 +56,13 @@ export default function ExamStatusPage() {
         .select('id, full_name, order_in_session, only_sailing')
         .eq('session_id', sessionId).eq('only_sailing', false)
         .order('order_in_session')
+      if (ex) {
+        const { data: qs } = await supabase.from('radio_exam_questions')
+          .select('order_no, correct_option').eq('exam_id', (ex as ExamRow).id)
+        const cm: Record<string, string> = {}
+        for (const q of (qs || []) as { order_no: number; correct_option: string }[]) cm[String(q.order_no)] = q.correct_option
+        if (!cancelled) setCorrectMap(cm)
+      }
       if (cancelled) return
       setSessionDate(sess?.session_date || '')
       setExam(ex as ExamRow | null)
@@ -103,6 +111,14 @@ export default function ExamStatusPage() {
   const rows = students.map(s => {
     const a = answers[s.id]
     const grila = countFilled(a?.grila_answers)
+    // corecte / gresite din cele raspunse la grila (comparat cu raspunsul corect)
+    let grilaCorect = 0, grilaGresit = 0
+    if (a?.grila_answers) {
+      for (const [k, v] of Object.entries(a.grila_answers)) {
+        if (v == null || String(v).trim() === '') continue
+        if (correctMap[k] && v === correctMap[k]) grilaCorect++; else grilaGresit++
+      }
+    }
     const trad = countFilled(a?.translation_answers)
     const done = grila + trad
     const pct = totalAll > 0 ? Math.round((done / totalAll) * 100) : 0
@@ -113,7 +129,7 @@ export default function ExamStatusPage() {
       a?.updated_at ? new Date(a.updated_at).getTime() : 0,
     )
     const connected = !finalized && lastActive > 0 && (now - lastActive) < CONNECTED_MS
-    return { s, grila, trad, pct, finalized, connected, started: !!a }
+    return { s, grila, grilaCorect, grilaGresit, trad, pct, finalized, connected, started: !!a }
   })
 
   // ordine pentru sortarea dupa stare: conectat > pe pauza (inceput) > finalizat > neinceput
@@ -122,6 +138,7 @@ export default function ExamStatusPage() {
     let cmp = 0
     if (sortCol === 'name') cmp = a.s.full_name.localeCompare(b.s.full_name, 'ro')
     else if (sortCol === 'grila') cmp = a.grila - b.grila
+    else if (sortCol === 'gresite') cmp = a.grilaGresit - b.grilaGresit
     else if (sortCol === 'trad') cmp = a.trad - b.trad
     else if (sortCol === 'pct') cmp = a.pct - b.pct
     else if (sortCol === 'stare') cmp = stareRank(a) - stareRank(b)
@@ -150,13 +167,14 @@ export default function ExamStatusPage() {
         <div className="flex items-center gap-3 px-3 py-1 text-[11px] font-medium text-gray-400 uppercase tracking-wide select-none">
           <div className="w-4" />
           <button onClick={() => toggleSort('name')} className="flex-1 text-left flex items-center gap-1 hover:text-blue-600">Cursant {arrow('name')}</button>
-          <button onClick={() => toggleSort('grila')} className="w-28 flex items-center justify-center gap-1 hover:text-blue-600">Grilă {arrow('grila')}</button>
-          <button onClick={() => toggleSort('trad')} className="w-28 flex items-center justify-center gap-1 hover:text-blue-600">Traduceri {arrow('trad')}</button>
+          <button onClick={() => toggleSort('grila')} className="w-24 flex items-center justify-center gap-1 hover:text-blue-600">Grilă {arrow('grila')}</button>
+          <button onClick={() => toggleSort('gresite')} className="w-28 flex items-center justify-center gap-1 hover:text-blue-600">Corecte/Greșite {arrow('gresite')}</button>
+          <button onClick={() => toggleSort('trad')} className="w-24 flex items-center justify-center gap-1 hover:text-blue-600">Traduceri {arrow('trad')}</button>
           <button onClick={() => toggleSort('pct')} className="w-16 flex items-center justify-end gap-1 hover:text-blue-600">Progres {arrow('pct')}</button>
           <button onClick={() => toggleSort('stare')} className="w-28 flex items-center justify-end gap-1 hover:text-blue-600">Stare {arrow('stare')}</button>
         </div>
 
-        {rows.map(({ s, grila, trad, pct, finalized, connected, started }) => (
+        {rows.map(({ s, grila, grilaCorect, grilaGresit, trad, pct, finalized, connected, started }) => (
           <div key={s.id}
             className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border ${finalized ? 'border-green-200' : 'border-gray-100'}`}
             style={finalized ? { background: '#dcfce7' } : {}}>
@@ -165,8 +183,13 @@ export default function ExamStatusPage() {
               <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: connected ? '#22c55e' : (finalized ? '#16a34a' : '#ef4444') }} />
             </span>
             <div className="flex-1 text-sm font-medium text-gray-900 truncate">{s.full_name}</div>
-            <div className="w-28 text-center text-xs text-gray-600 font-mono">{grila}/{totalGrila}</div>
-            <div className="w-28 text-center text-xs text-gray-600 font-mono">{trad}/{totalTrad}</div>
+            <div className="w-24 text-center text-xs text-gray-600 font-mono">{grila}/{totalGrila}</div>
+            <div className="w-28 text-center text-xs font-mono">
+              {grila > 0
+                ? <><span className="text-green-600 font-semibold">{grilaCorect}</span><span className="text-gray-300"> / </span><span className="text-red-500 font-semibold">{grilaGresit}</span></>
+                : <span className="text-gray-300">—</span>}
+            </div>
+            <div className="w-24 text-center text-xs text-gray-600 font-mono">{trad}/{totalTrad}</div>
             <div className="w-16 text-right text-sm font-semibold" style={{ color: pct === 100 ? '#16a34a' : '#374151' }}>{pct}%</div>
             <div className="w-28 text-right">
               {finalized ? (
