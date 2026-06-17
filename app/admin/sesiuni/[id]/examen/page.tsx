@@ -240,6 +240,8 @@ export default function ExamenPage() {
 
   const [tab, setTab] = useState<'config' | 'results'>('config')
   const [resultsView, setResultsView] = useState<'answers' | 'noshow'>('answers')
+  const [resSort, setResSort] = useState<'nume' | 'status' | 'grila' | 'trad' | 'sim' | null>(null)
+  const [resSortDir, setResSortDir] = useState<'asc' | 'desc'>('asc')
   const paramsApplied = useRef(false)
   const [answers, setAnswers] = useState<Answer[]>([])
   const [students, setStudents] = useState<StudentLite[]>([])
@@ -793,6 +795,11 @@ export default function ExamenPage() {
       .eq('id', a.id)
     if (error) { alert('Eroare: ' + error.message); return }
     await loadAll()
+  }
+
+  function toggleResSort(c: 'nume' | 'status' | 'grila' | 'trad' | 'sim') {
+    if (resSort === c) setResSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setResSort(c); setResSortDir(c === 'nume' ? 'asc' : 'desc') }
   }
 
   function openResolveForStudent(studentId: string) {
@@ -1467,9 +1474,33 @@ export default function ExamenPage() {
                 Niciun cursant nu a început încă examenul.
               </div>
             )}
-            {exam && answers.length > 0 && (
+            {exam && answers.length > 0 && (() => {
+              const rank: Record<string, number> = { in_progress: 0, submitted: 1, graded: 2 }
+              const sorted = resSort ? [...answers].sort((x, y) => {
+                const sx = students.find(s => s.id === x.student_id), sy = students.find(s => s.id === y.student_id)
+                let cmp = 0
+                if (resSort === 'nume') cmp = (sx?.full_name || '').localeCompare(sy?.full_name || '', 'ro')
+                else if (resSort === 'status') cmp = (rank[x.status] ?? 0) - (rank[y.status] ?? 0)
+                else if (resSort === 'grila') cmp = (x.grila_score || 0) - (y.grila_score || 0)
+                else if (resSort === 'trad') cmp = (x.translation_score || 0) - (y.translation_score || 0)
+                else if (resSort === 'sim') cmp = (x.simulator_score || 0) - (y.simulator_score || 0)
+                return resSortDir === 'asc' ? cmp : -cmp
+              }) : answers
+              const arr = (c: string) => resSort === c ? (resSortDir === 'asc' ? '↑' : '↓') : '↕'
+              return (
+              <>
+              <div className="flex items-center justify-between gap-4 px-5 py-2 bg-gray-50 border-b border-gray-100 text-[11px] font-semibold text-gray-400 uppercase select-none">
+                <button onClick={() => toggleResSort('nume')} className="flex-1 text-left flex items-center gap-1 hover:text-blue-600"><span className="w-6 inline-block shrink-0 text-right pr-1">#</span>Nume {arr('nume')}</button>
+                <div className="flex items-center gap-3 shrink-0">
+                  <button onClick={() => toggleResSort('status')} className="w-16 text-center hover:text-blue-600">Status {arr('status')}</button>
+                  <button onClick={() => toggleResSort('grila')} className="w-20 text-center hover:text-blue-600">Grilă {arr('grila')}</button>
+                  <button onClick={() => toggleResSort('trad')} className="w-14 text-center hover:text-blue-600">Trad {arr('trad')}</button>
+                  <button onClick={() => toggleResSort('sim')} className="w-14 text-center hover:text-blue-600">Sim {arr('sim')}</button>
+                  <span className="w-4" />
+                </div>
+              </div>
               <div className="divide-y divide-gray-100">
-                {answers.map(a => {
+                {sorted.map((a, idx) => {
                   const st = students.find(x => x.id === a.student_id)
                   const isOpen = expandedId === a.id
                   const draftScore = gradeDraft[a.id] ?? a.translation_score ?? 0
@@ -1477,13 +1508,16 @@ export default function ExamenPage() {
                     <div key={a.id}>
                       <button onClick={() => setExpandedId(isOpen ? null : a.id)}
                         className="w-full flex items-center justify-between gap-4 px-5 py-3 hover:bg-gray-50 text-left">
-                        <div className="flex-1 min-w-0">
-                          <div className="font-medium text-sm text-gray-900 truncate">
-                            {st?.full_name || '—'}
-                          </div>
-                          <div className="text-xs text-gray-400">
-                            {st?.email || ''}
-                            {a.submitted_at && ` · trimis ${new Date(a.submitted_at).toLocaleString('ro-RO')}`}
+                        <div className="flex items-center gap-3 flex-1 min-w-0">
+                          <span className="w-6 text-xs text-gray-300 text-right shrink-0">{idx + 1}</span>
+                          <div className="min-w-0 flex-1">
+                            <div className="font-medium text-sm text-gray-900 truncate">
+                              {st?.full_name || '—'}
+                            </div>
+                            <div className="text-xs text-gray-400">
+                              {st?.email || ''}
+                              {a.submitted_at && ` · trimis ${new Date(a.submitted_at).toLocaleString('ro-RO')}`}
+                            </div>
                           </div>
                         </div>
                         <div className="flex items-center gap-3 shrink-0">
@@ -1667,7 +1701,9 @@ export default function ExamenPage() {
                   )
                 })}
               </div>
-            )}
+              </>
+              )
+            })()}
           </div>
           </>
         )}
