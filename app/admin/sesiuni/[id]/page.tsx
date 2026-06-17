@@ -289,6 +289,38 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
   const [sortDir, setSortDir] = useState<'asc'|'desc'>('asc')
   const [normChanges, setNormChanges] = useState<AddressChange[]|null>(null)
   const [normBusy, setNormBusy] = useState(false)
+  const isRadio = (sess.class_caa || '').toLowerCase().match(/radio|lrc/) != null
+  const examClosed = (sess as any).radio_exam_status === 'closed'
+  const [examResults, setExamResults] = useState<Record<string, { submitted: boolean; correct: number }>>({})
+
+  // Rezultate examen radio (grila corecte per cursant) pentru patratica de examen
+  useEffect(() => {
+    if (!isRadio) return
+    let cancelled = false
+    ;(async () => {
+      const { data: ex } = await supabase.from('radio_exams').select('id').eq('session_id', sess.id).maybeSingle()
+      if (!ex || cancelled) return
+      const [{ data: qs }, { data: ans }] = await Promise.all([
+        supabase.from('radio_exam_questions').select('order_no, correct_option').eq('exam_id', ex.id),
+        supabase.from('radio_exam_answers').select('student_id, grila_answers, status').eq('exam_id', ex.id),
+      ])
+      const cm: Record<string, string> = {}
+      for (const q of (qs || []) as any[]) cm[String(q.order_no)] = q.correct_option
+      const res: Record<string, { submitted: boolean; correct: number }> = {}
+      for (const a of (ans || []) as any[]) {
+        let correct = 0
+        for (const [k, v] of Object.entries(a.grila_answers || {})) { if (v && cm[k] && v === cm[k]) correct++ }
+        res[a.student_id] = { submitted: a.status === 'submitted' || a.status === 'graded', correct }
+      }
+      if (!cancelled) setExamResults(res)
+    })()
+    return () => { cancelled = true }
+  }, [isRadio, sess.id])
+
+  async function updateClass(s: Student, value: string) {
+    setStudents(students.map(x => x.id === s.id ? { ...x, class_caa: value } : x))
+    await supabase.from('students').update({ class_caa: value }).eq('id', s.id)
+  }
 
   function toggleSort(col: string) {
     if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
@@ -757,7 +789,17 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
                       {/* Data expirare CI */}
                       <td className="px-2 py-2 text-gray-400 text-xs">{trunc(s.expiry_date)}</td>
                       {/* Clasa */}
-                      <td className="px-2 py-2 text-gray-500 text-xs">{(s.class_caa||'').replace(',','+')}</td>
+                      <td className="px-2 py-2 text-gray-500 text-xs">
+                        {isRadio ? (
+                          <select value={s.class_caa||''} onClick={e=>e.stopPropagation()} onChange={e=>updateClass(s, e.target.value)}
+                            className="text-xs border border-gray-200 rounded px-1 py-0.5 bg-white focus:outline-none focus:ring-1 focus:ring-purple-400">
+                            {!['Obtinere LRC','Prelungire LRC','Radio'].includes(s.class_caa||'') && <option value={s.class_caa||''}>{s.class_caa||'—'}</option>}
+                            <option value="Obtinere LRC">Obținere</option>
+                            <option value="Prelungire LRC">Prelungire</option>
+                            <option value="Radio">Radio</option>
+                          </select>
+                        ) : (s.class_caa||'').replace(',','+')}
+                      </td>
                       {/* Portal status */}
                       <td className="px-2 py-2">
                         <span className="text-xs font-medium" style={{color:ps.color}}>{ps.label}</span>
@@ -841,6 +883,18 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
                               )}
                             </div>
                           )}
+                          {/* Rezultat examen radio (inainte de absent) */}
+                          {isRadio && !isAbsent && (() => {
+                            const r = examResults[s.id]
+                            const box = 'w-7 h-7 rounded border flex items-center justify-center text-xs font-bold shrink-0'
+                            if (r?.submitted) {
+                              const n = r.correct
+                              const c = n >= 18 ? '#16a34a' : n >= 15 ? '#2563eb' : n === 14 ? '#ea580c' : '#dc2626'
+                              return <span className={box} style={{ color: c, borderColor: c }} title={`Rezultat grilă: ${n}/20`}>{n}</span>
+                            }
+                            if (examClosed) return <span className={box + ' border-red-300 text-red-400'} title="Nu a susținut examenul">–</span>
+                            return <span className={box + ' border-gray-200 text-gray-300'} title="Examen neînceput">–</span>
+                          })()}
                           {/* Muta la absenti */}
                           {!isAbsent && absentSession && (
                             <button onClick={()=>markAbsent(s)} disabled={moving===s.id}
@@ -849,8 +903,8 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
                               <UserX size={12}/>
                             </button>
                           )}
-                          {/* Muta la Sailing */}
-                          {!isAbsent && !s.only_sailing && (
+                          {/* Muta la Sailing (nu la radio) */}
+                          {!isAbsent && !s.only_sailing && !isRadio && (
                             <button onClick={()=>markSailing(s)}
                               className="p-1.5 rounded border border-orange-100 text-orange-400 hover:text-orange-600 hover:bg-orange-50 transition-colors font-bold text-xs w-7 h-7 flex items-center justify-center"
                               title="Mută la Sailing (categoria S) — dispare din liste și PV">
