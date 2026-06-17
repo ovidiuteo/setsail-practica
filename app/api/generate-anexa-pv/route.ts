@@ -30,12 +30,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }
 
-  // Filtrăm cursanții după tipul examenului (Obținere / Prelungire)
-  // și sortăm alfabetic, identic cu tabelul admin
+  // Filtrăm cursanții după clasa CAA:
+  // - Prelungire: doar "Prelungire LRC"
+  // - Obținere:   "Obtinere LRC" + "Radio"
   const students = allStudents
-    .filter((s: any) => isPrelungire
-      ? s.obtinere_prelungire === 'prelungire'
-      : s.obtinere_prelungire !== 'prelungire')
+    .filter((s: any) => {
+      const c = String(s.class_caa || '').toLowerCase().trim()
+      return isPrelungire
+        ? c.includes('prelungire')
+        : (c.includes('obtinere') || c.includes('obținere') || c === 'radio')
+    })
     .sort((a: any, b: any) => (a.full_name || '').localeCompare(b.full_name || '', 'ro'))
 
   const { data: antetDoc } = await supabase
