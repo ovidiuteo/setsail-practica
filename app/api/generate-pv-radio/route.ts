@@ -200,7 +200,7 @@ ${antetHtml}
 
   const bold = (t: string, size = 18) => new TextRun({ text: t, bold: true, size, font: 'Arial' })
   const reg = (t: string, size = 17) => new TextRun({ text: t, size, font: 'Arial' })
-  const para = (ch: any[], align = AlignmentType.LEFT, sp = 60) =>
+  const para = (ch: any[], align: any = AlignmentType.LEFT, sp = 60) =>
     new Paragraph({ alignment: align, spacing: { before: sp, after: sp }, children: ch })
 
   const cell = (ch: any[], opts?: any) => new TableCell({
