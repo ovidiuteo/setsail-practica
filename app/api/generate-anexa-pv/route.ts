@@ -49,6 +49,20 @@ export async function POST(req: NextRequest) {
   })
   const dateStr = session.session_date.replace(/-/g, '_')
 
+  // Formateaza data nasterii robust: birth_date poate fi "dd.mm.yyyy" (din OCR/portal)
+  // sau "yyyy-mm-dd" (ISO). new Date("17.02.1983") => Invalid Date, deci parsam manual.
+  function formatBirthDate(raw: string | null | undefined): string {
+    if (!raw) return ''
+    const s = String(raw).trim()
+    let m = s.match(/^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})$/)        // dd.mm.yyyy / dd-mm-yyyy
+    if (m) return `${m[1].padStart(2, '0')}.${m[2].padStart(2, '0')}.${m[3]}`
+    m = s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/)                       // yyyy-mm-dd (ISO)
+    if (m) return `${m[3].padStart(2, '0')}.${m[2].padStart(2, '0')}.${m[1]}`
+    const d = new Date(s)
+    if (!isNaN(d.getTime())) return d.toLocaleDateString('ro-RO')
+    return s   // necunoscut — afișăm valoarea brută, niciodată "Invalid Date"
+  }
+
   const pvTitlu = isPrelungire
     ? 'Anexă la proces verbal de examen de evaluare nr. ............... din...........'
     : 'Anexă la proces verbal de examen nr. ............... din...........'
@@ -64,7 +78,7 @@ export async function POST(req: NextRequest) {
     const minRows = Math.max(students.length, 8)
     const dataRows = Array.from({ length: minRows }, (_, i) => {
       const s = students[i]
-      const bd = s?.birth_date ? new Date(s.birth_date).toLocaleDateString('ro-RO') : ''
+      const bd = formatBirthDate(s?.birth_date)
       // În modelul SetSail: primul cuvânt din full_name = NUME, restul = PRENUME
       const parts = (s?.full_name || '').split(/\s+/).filter(Boolean)
       const nume = parts[0] || ''
@@ -163,7 +177,7 @@ ${antetHtml}
   const minRows = Math.max(students.length, 8)
   const dataRows = Array.from({ length: minRows }, (_, i) => {
     const s = students[i]
-    const bd = s?.birth_date ? new Date(s.birth_date).toLocaleDateString('ro-RO') : ''
+    const bd = formatBirthDate(s?.birth_date)
     const parts = (s?.full_name || '').split(/\s+/).filter(Boolean)
     const nume = parts[0] || ''
     const prenume = parts.length > 1 ? parts.slice(1).join(' ') : ''

@@ -151,10 +151,10 @@ export async function POST(req: NextRequest) {
     const html = `<!DOCTYPE html>
 <html><head><meta charset="UTF-8">
 <style>
-  @page { size: A4 landscape; margin: 15mm; }
+  @page { size: A4 portrait; margin: 15mm; }
   @media print { html,body { background:white!important; padding:0!important; } body { box-shadow:none!important; margin:0!important; padding:0!important; width:auto!important; } }
   html { background:#e0e0e0; padding:20px; }
-  body { font-family:Arial,sans-serif; font-size:10pt; background:#fff; width:267mm; margin:0 auto; padding:15mm; box-shadow:0 0 20px rgba(0,0,0,0.3); }
+  body { font-family:Arial,sans-serif; font-size:10pt; background:#fff; width:180mm; margin:0 auto; padding:15mm; box-shadow:0 0 20px rgba(0,0,0,0.3); }
   h2 { text-align:center; font-size:11pt; margin:10px 0; }
   table { width:100%; border-collapse:collapse; margin:10px 0; font-size:9pt; }
   th { font-weight:bold; text-align:center; vertical-align:middle; }
@@ -213,7 +213,7 @@ ${antetHtml}
       const mt = antetDoc.file_data.includes('png') ? 'png' : 'jpg'
       headerImg = [new Paragraph({
         spacing: { after: 100 },
-        children: [new ImageRun({ data: buf, type: mt as any, transformation: { width: 940, height: 80 } })]
+        children: [new ImageRun({ data: buf, type: mt as any, transformation: { width: 700, height: 60 } })]
       })]
     } catch(e) { console.error(e) }
   }
@@ -227,8 +227,8 @@ ${antetHtml}
     new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 80, after: 80 }, children: [bold(line, 20)] })
   )
 
-  // Total content width landscape A4 = 297mm - 30mm margins = 267mm = ~15189 DXA
-  const TW = 15188
+  // Total content width portrait A4 = 210mm - 30mm margins = 180mm = ~10206 DXA
+  const TW = 10206
 
   // Tabel cursanti
   const minRows = Math.max(students.length, 8)
@@ -237,8 +237,8 @@ ${antetHtml}
   let colWidths: number[]
 
   if (isPrelungire) {
-    // 4 coloane
-    colWidths = [500, 4000, 7000, 3689]
+    // 4 coloane (proporțional pe lățimea portrait)
+    colWidths = [340, 2686, 4700, 2480]
     headerRow = new TableRow({ tableHeader: true, children: [
       cell([para([bold('Nr.\ncrt.', 16)])], { w: colWidths[0], shade }),
       cell([para([bold('Numele și prenumele', 16)])], { w: colWidths[1], shade }),
@@ -252,8 +252,8 @@ ${antetHtml}
       cell([para([reg('În funcție de rezultat se va completa: Admis sau Respins', 15)])], { w: colWidths[3] }),
     ]})
   } else {
-    // 6 coloane
-    colWidths = [500, 3200, 3800, 2400, 2800, 2489]
+    // 6 coloane (proporțional pe lățimea portrait)
+    colWidths = [340, 2150, 2556, 1610, 1880, 1670]
     headerRow = new TableRow({ tableHeader: true, children: [
       cell([para([bold('Nr.\ncrt.', 15)])], { w: colWidths[0], shade }),
       cell([para([bold('Numele și prenumele', 15)])], { w: colWidths[1], shade }),
@@ -309,7 +309,7 @@ ${antetHtml}
     sections: [{
       properties: {
         page: {
-          size: { width: 16838, height: 11906, orientation: 'landscape' as any },
+          size: { width: 11906, height: 16838 },
           margin: {
             top: convertMillimetersToTwip(15),
             right: convertMillimetersToTwip(15),
