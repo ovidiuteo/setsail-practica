@@ -1779,7 +1779,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
               <div className="space-y-2">
                 {/* 1. PV Obtinere */}
                 <div className="flex gap-1.5">
-                  <button onClick={async()=>{setGPV(true);try{await generateDocRadio('/api/generate-pv-radio',`PV_LRC_OBTINERE_${sess.session_date}.docx`,'obtinere','docx')}catch(e:any){alert(e.message)}setGPV(false)}}
+                  <button onClick={async()=>{setGPV(true);try{await generateDocRadio('/api/generate-pv-radio',`PV obt ${sess.session_date}.docx`,'obtinere','docx')}catch(e:any){alert(e.message)}setGPV(false)}}
                     disabled={gPV||students.length===0} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#1d4ed8'}}>
                     <FileText size={12}/>{gPV?'...':'PV Obținere LRC'}
                   </button>
@@ -1793,7 +1793,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                 </div>
                 {/* 2. Anexa Obtinere */}
                 <div className="flex gap-1.5">
-                  <button onClick={async()=>{try{await generateDocRadio('/api/generate-anexa-pv',`Anexa_PV_LRC_OBTINERE_${sess.session_date}.docx`,'obtinere','docx')}catch(e:any){alert(e.message)}}}
+                  <button onClick={async()=>{try{await generateDocRadio('/api/generate-anexa-pv',`ANEX obt ${sess.session_date}.docx`,'obtinere','docx')}catch(e:any){alert(e.message)}}}
                     disabled={students.length===0} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#1d4ed8'}}>
                     <FileText size={12}/>Anexă PV Obținere LRC
                   </button>
@@ -1809,7 +1809,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                 <div className="border-t border-gray-100 pt-1 mt-1"/>
                 {/* 3. PV Prelungire */}
                 <div className="flex gap-1.5">
-                  <button onClick={async()=>{try{await generateDocRadio('/api/generate-pv-radio',`PV_LRC_PRELUNGIRE_${sess.session_date}.docx`,'prelungire','docx')}catch(e:any){alert(e.message)}}}
+                  <button onClick={async()=>{try{await generateDocRadio('/api/generate-pv-radio',`PV pre ${sess.session_date}.docx`,'prelungire','docx')}catch(e:any){alert(e.message)}}}
                     disabled={students.length===0} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#1d4ed8'}}>
                     <FileText size={12}/>PV Prelungire LRC
                   </button>
@@ -1823,7 +1823,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                 </div>
                 {/* 4. Anexa Prelungire */}
                 <div className="flex gap-1.5">
-                  <button onClick={async()=>{try{await generateDocRadio('/api/generate-anexa-pv',`Anexa_PV_LRC_PRELUNGIRE_${sess.session_date}.docx`,'prelungire','docx')}catch(e:any){alert(e.message)}}}
+                  <button onClick={async()=>{try{await generateDocRadio('/api/generate-anexa-pv',`ANEX pre ${sess.session_date}.docx`,'prelungire','docx')}catch(e:any){alert(e.message)}}}
                     disabled={students.length===0} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#1d4ed8'}}>
                     <FileText size={12}/>Anexă PV Prelungire LRC
                   </button>

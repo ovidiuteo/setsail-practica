@@ -66,6 +66,7 @@ type StudentLite = {
   signature_random: string | null
   portal_status: string | null
   signed_at: string | null
+  communication_target: boolean | null
 }
 type PoolQuestionRow = {
   id: string
@@ -383,7 +384,7 @@ export default function ExamenPage() {
       // Studenți din sesiune
       const { data: sts } = await supabase
         .from('students')
-        .select('id, full_name, email, class_caa, ci_image_data, ci_series, ci_number, signature_data, signature_random, portal_status, signed_at')
+        .select('id, full_name, email, class_caa, ci_image_data, ci_series, ci_number, signature_data, signature_random, portal_status, signed_at, communication_target')
         .eq('session_id', sessionId)
       setStudents((sts || []) as StudentLite[])
 
@@ -1459,6 +1460,14 @@ export default function ExamenPage() {
                           <div className="text-xs text-gray-400">{s.class_caa}</div>
                         </div>
                         <div className="flex items-center gap-3 shrink-0">
+                          {/* Comunicare email — toggle gri/verde */}
+                          <button onClick={async()=>{ if(!s.email) return; const nv=!s.communication_target; await supabase.from('students').update({communication_target:nv}).eq('id',s.id); setStudents(students.map(st=>st.id===s.id?{...st,communication_target:nv}:st)) }}
+                            disabled={!s.email} title={s.email?(s.communication_target?'Email activ':'Email inactiv'):'Fără email'}
+                            className="p-1 rounded hover:bg-gray-100 disabled:opacity-20 transition-colors">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" stroke={s.communication_target&&s.email?'#16a34a':'#d1d5db'}>
+                              <rect x="2" y="4" width="20" height="16" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>
+                            </svg>
+                          </button>
                           {/* CI scanat */}
                           {s.ci_image_data ? (
                             <button onClick={()=>{const w=window.open('','_blank');w?.document.write(`<img src="${s.ci_image_data}" style="max-width:100%;"/>`)}}
