@@ -601,13 +601,13 @@ export default function PortalPage() {
               <h2 className="font-bold text-gray-900 mb-1">Date personale</h2>
               <p className="text-xs text-gray-400 mb-3">Incarcati act identitate si semnati</p>
             {student?.portal_status === 'signed' && (
-              <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-xl text-xs text-green-700 flex items-center gap-2">
+              <div className="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-xl text-xs text-purple-700 flex items-center gap-2">
                 <CheckCircle size={14} className="shrink-0" />
                 Ați completat deja această fișă. Puteți modifica orice informație și salva din nou.
               </div>
             )}
             {(student?.class_caa || '').toLowerCase().match(/radio|lrc/) && examSubmitted ? (
-              <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-xl text-xs text-green-700 flex items-center gap-2">
+              <div className="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-xl text-xs text-purple-700 flex items-center gap-2">
                 <CheckCircle size={14} className="shrink-0" />
                 <span><strong>Test finalizat</strong> — examenul a fost trimis. Nu mai poate fi accesat.</span>
               </div>
@@ -954,7 +954,9 @@ export default function PortalPage() {
               <div className="mt-5">
                 <button onClick={saveAll} disabled={saving}
                   className={`w-full py-3.5 rounded-xl text-sm font-bold shadow-lg transition-all ${saving ? 'opacity-60 cursor-not-allowed' : 'hover:opacity-90'}`}
-                  style={{ background: '#86efac', color: '#14532d' }}>
+                  style={student?.portal_status === 'signed'
+                    ? { background: '#93c5fd', color: '#1e3a8a' }
+                    : { background: '#86efac', color: '#14532d' }}>
                   {saving ? 'Se salvează...' : student?.portal_status === 'signed' ? '✓ Actualizează datele' : '✓ Salvează și finalizează'}
                 </button>
               </div>
