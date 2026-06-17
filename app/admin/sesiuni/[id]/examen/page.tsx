@@ -1041,10 +1041,16 @@ export default function ExamenPage() {
               </p>
             </div>
           </div>
-          <span className="px-3 py-1.5 rounded-md text-xs font-semibold"
-            style={{ background: stMeta.bg, color: stMeta.color }}>
-            {stMeta.label}
-          </span>
+          <div className="flex items-center gap-2 shrink-0">
+            <a href={`/admin/sesiuni/${sessionId}/examen/status`} target="_blank" rel="noopener noreferrer"
+              className="px-3 py-1.5 rounded-md text-xs font-medium border border-emerald-200 text-emerald-700 hover:bg-emerald-50 flex items-center gap-1.5">
+              <span className="inline-block w-2 h-2 rounded-full bg-emerald-500"/> Live results <ExternalLink size={11}/>
+            </a>
+            <span className="px-3 py-1.5 rounded-md text-xs font-semibold"
+              style={{ background: stMeta.bg, color: stMeta.color }}>
+              {stMeta.label}
+            </span>
+          </div>
         </div>
 
         {/* Acces pool global */}
@@ -1084,10 +1090,6 @@ export default function ExamenPage() {
                 </button>
               )
             })}
-            <a href={`/admin/sesiuni/${sessionId}/examen/status`} target="_blank" rel="noopener noreferrer"
-              className="px-3 py-1.5 rounded-lg text-xs font-medium border border-emerald-200 text-emerald-700 hover:bg-emerald-50 flex items-center gap-1.5">
-              <span className="inline-block w-2 h-2 rounded-full bg-emerald-500"/> Live results <ExternalLink size={11}/>
-            </a>
           </div>
           <p className="text-xs text-gray-400 mt-2">
             • <strong>Ciornă</strong> — editezi liber, cursanții nu văd nimic.
