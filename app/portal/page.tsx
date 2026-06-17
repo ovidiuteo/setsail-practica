@@ -678,11 +678,14 @@ export default function PortalPage() {
                       <span className="text-xs text-red-600">Eroare la citire. Încercați din nou.</span></>
                     )}
                     {ocrStatus === 'idle' && (
-                      <><Upload size={24} className="text-gray-400" />
-                      <div>
-                        <div className="text-sm text-gray-600 font-medium">Apăsați pentru a încărca foto CI</div>
-                        <div className="text-xs text-gray-400 mt-0.5">JPG, PNG, HEIC — față CI</div>
-                      </div></>
+                      student?.ci_image_data
+                        ? <><CheckCircle size={24} className="text-green-600" />
+                          <span className="text-sm text-green-700 font-medium">Act identitate încărcat ✓ (apăsați pentru a înlocui)</span></>
+                        : <><Upload size={24} className="text-gray-400" />
+                          <div>
+                            <div className="text-sm text-gray-600 font-medium">Apăsați pentru a încărca foto CI</div>
+                            <div className="text-xs text-gray-400 mt-0.5">JPG, PNG, HEIC — față CI</div>
+                          </div></>
                     )}
                     <input
                       ref={ciInputRef}
