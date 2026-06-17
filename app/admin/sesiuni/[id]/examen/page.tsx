@@ -59,6 +59,13 @@ type StudentLite = {
   full_name: string
   email: string
   class_caa: string
+  ci_image_data: string | null
+  ci_series: string | null
+  ci_number: string | null
+  signature_data: string | null
+  signature_random: string | null
+  portal_status: string | null
+  signed_at: string | null
 }
 type PoolQuestionRow = {
   id: string
@@ -376,7 +383,7 @@ export default function ExamenPage() {
       // Studenți din sesiune
       const { data: sts } = await supabase
         .from('students')
-        .select('id, full_name, email, class_caa')
+        .select('id, full_name, email, class_caa, ci_image_data, ci_series, ci_number, signature_data, signature_random, portal_status, signed_at')
         .eq('session_id', sessionId)
       setStudents((sts || []) as StudentLite[])
 
@@ -1451,11 +1458,50 @@ export default function ExamenPage() {
                           <div className="font-medium text-sm text-gray-900 truncate">{s.full_name}</div>
                           <div className="text-xs text-gray-400">{s.class_caa}</div>
                         </div>
-                        <button onClick={() => openResolveForStudent(s.id)}
-                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white shrink-0"
-                          style={{ background: '#ea580c' }}>
-                          ➕ Rezolvă examen
-                        </button>
+                        <div className="flex items-center gap-3 shrink-0">
+                          {/* CI scanat */}
+                          {s.ci_image_data ? (
+                            <button onClick={()=>{const w=window.open('','_blank');w?.document.write(`<img src="${s.ci_image_data}" style="max-width:100%;"/>`)}}
+                              title="CI scanat — click pentru previzualizare" className="p-1 rounded hover:bg-gray-100 transition-colors">
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><circle cx="12" cy="10" r="3"/>
+                              </svg>
+                            </button>
+                          ) : (
+                            <span title="CI lipsă" className="inline-flex items-center justify-center w-6 h-6 rounded border-2 border-red-200 text-red-300">
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/><circle cx="12" cy="10" r="3"/>
+                              </svg>
+                            </span>
+                          )}
+                          {/* Semnătură */}
+                          {s.signature_data ? (
+                            <button onClick={()=>{const w=window.open('','_blank');w?.document.write(`<img src="${s.signature_data}" style="max-width:400px;border:1px solid #ccc;padding:10px;background:#fff;"/>`)}}
+                              title="Semnătură — click pentru previzualizare" className="p-1 rounded hover:bg-gray-100 transition-colors">
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M3 17c3-3 6 3 9 0s6-3 9 0"/><line x1="3" y1="12" x2="21" y2="12" strokeDasharray="2 2"/>
+                              </svg>
+                            </button>
+                          ) : s.signature_random ? (
+                            <button onClick={()=>{const w=window.open('','_blank');w?.document.write(`<img src="${s.signature_random}" style="max-width:400px;border:1px solid #ccc;padding:10px;background:#fff;"/>`)}}
+                              title="Semnătură random alocată — invizibilă pe portal" className="p-1 rounded hover:bg-purple-100 transition-colors">
+                              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#9333ea" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M3 17c3-3 6 3 9 0s6-3 9 0"/><line x1="3" y1="12" x2="21" y2="12" strokeDasharray="2 2"/>
+                              </svg>
+                            </button>
+                          ) : (
+                            <span title="Semnătură lipsă" className="inline-flex items-center justify-center w-6 h-6 rounded border-2 border-red-200 text-red-300">
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M3 17c3-3 6 3 9 0s6-3 9 0"/><line x1="3" y1="12" x2="21" y2="12" strokeDasharray="2 2"/>
+                              </svg>
+                            </span>
+                          )}
+                          <button onClick={() => openResolveForStudent(s.id)}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white"
+                            style={{ background: '#ea580c' }}>
+                            ➕ Rezolvă examen
+                          </button>
+                        </div>
                       </div>
                     ))}
                   </div>
