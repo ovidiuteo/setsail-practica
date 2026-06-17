@@ -1084,6 +1084,10 @@ export default function ExamenPage() {
                 </button>
               )
             })}
+            <a href={`/admin/sesiuni/${sessionId}/examen/status`} target="_blank" rel="noopener noreferrer"
+              className="px-3 py-1.5 rounded-lg text-xs font-medium border border-emerald-200 text-emerald-700 hover:bg-emerald-50 flex items-center gap-1.5">
+              <span className="inline-block w-2 h-2 rounded-full bg-emerald-500"/> Live results <ExternalLink size={11}/>
+            </a>
           </div>
           <p className="text-xs text-gray-400 mt-2">
             • <strong>Ciornă</strong> — editezi liber, cursanții nu văd nimic.
@@ -1477,7 +1481,7 @@ export default function ExamenPage() {
                             {a.status === 'graded' ? 'Notat' : a.status === 'submitted' ? 'Trimis' : 'În lucru'}
                           </span>
                           <div className="text-xs text-gray-600">
-                            <strong>{a.grila_score}</strong>/{NUM_GRILA} grilă
+                            <strong style={{ color: a.grila_score >= 18 ? '#16a34a' : a.grila_score >= 15 ? '#2563eb' : a.grila_score === 14 ? '#ea580c' : '#dc2626' }}>{a.grila_score}</strong>/{NUM_GRILA} grilă
                           </div>
                           <div className="text-xs text-gray-600">
                             <strong>{a.translation_score}</strong>/5 trad.
