@@ -247,6 +247,18 @@ export default function PortalExamenPage() {
     return () => clearInterval(interval)
   }, [phase, doSave])
 
+  // Heartbeat pentru pagina de status (conectat live) — necondiționat, la ~10s
+  useEffect(() => {
+    if (phase !== 'ready') return
+    const beat = () => {
+      if (!answerRowIdRef.current) return
+      supabase.from('radio_exam_answers').update({ last_seen: new Date().toISOString() }).eq('id', answerRowIdRef.current)
+    }
+    beat()
+    const interval = setInterval(beat, 10000)
+    return () => clearInterval(interval)
+  }, [phase])
+
   // ---------- SUBMIT FINAL ----------
   async function submitFinal() {
     if (!answerRow || !examId) return

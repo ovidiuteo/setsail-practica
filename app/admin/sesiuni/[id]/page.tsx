@@ -3051,6 +3051,12 @@ export default function SessionDetailPage() {
           <GitBranch size={12}/> {cloneSessions.length>0?'Adaugă clonă':'Clonează'}
         </Link>
         {/(radio|lrc)/i.test(mainSession.class_caa||'') && (
+          <Link href={`/admin/sesiuni/${id}/examen/status`}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-emerald-200 text-emerald-700 hover:bg-emerald-50">
+            <span className="inline-block w-2 h-2 rounded-full bg-emerald-500"/> Status
+          </Link>
+        )}
+        {/(radio|lrc)/i.test(mainSession.class_caa||'') && (
           <Link href={`/admin/sesiuni/${id}/examen`}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-purple-200 text-purple-700 hover:bg-purple-50">
             <FileText size={12}/> Examen
