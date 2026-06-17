@@ -18,6 +18,7 @@ type Student = {
   expiry_date: string; nationality: string; signature_data: string
   original_session_id: string; allocated_session_id: string
   signature_pool: boolean; signature_random: string
+  ci_verso_data: string; adeverinta_adresa_data: string; doc_type: string
 }
 
 type Session = {
@@ -384,6 +385,32 @@ export default function CursantAdminPage() {
                 <ScanLine size={24} className="mx-auto mb-2 text-red-300"/>
                 <p className="text-xs text-red-400">CI nescanat</p>
                 <p className="text-xs text-gray-400 mt-1">Click pentru scanare</p>
+              </div>
+            )}
+
+            {student.ci_verso_data && (
+              <div className="mt-3">
+                <p className="text-xs font-medium text-gray-500 mb-1">Verso CI</p>
+                <div className="relative group rounded-xl overflow-hidden border border-gray-100 cursor-pointer"
+                  onClick={() => { const w = window.open('', '_blank'); w?.document.write(`<img src="${student.ci_verso_data}" style="max-width:100%;"/>`) }}>
+                  <img src={student.ci_verso_data} alt="Verso CI" className="w-full object-cover" style={{ maxHeight: 160 }}/>
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all flex items-center justify-center">
+                    <ExternalLink size={20} className="text-white opacity-0 group-hover:opacity-100 transition-all"/>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {student.adeverinta_adresa_data && (
+              <div className="mt-3">
+                <p className="text-xs font-medium text-gray-500 mb-1">Adeverință adresă</p>
+                <div className="relative group rounded-xl overflow-hidden border border-gray-100 cursor-pointer"
+                  onClick={() => { const w = window.open('', '_blank'); w?.document.write(`<img src="${student.adeverinta_adresa_data}" style="max-width:100%;"/>`) }}>
+                  <img src={student.adeverinta_adresa_data} alt="Adeverință adresă" className="w-full object-cover" style={{ maxHeight: 160 }}/>
+                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all flex items-center justify-center">
+                    <ExternalLink size={20} className="text-white opacity-0 group-hover:opacity-100 transition-all"/>
+                  </div>
+                </div>
               </div>
             )}
           </div>
