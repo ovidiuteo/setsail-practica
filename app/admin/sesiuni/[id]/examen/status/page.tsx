@@ -13,10 +13,13 @@ type AnswerRow = {
   translation_answers: Record<string, string> | null
   status: string
   last_seen: string | null
+  updated_at: string | null
   submitted_at: string | null
 }
 
-const CONNECTED_MS = 25000 // conectat daca heartbeat in ultimele 25s
+type SortCol = 'name' | 'grila' | 'trad' | 'pct' | 'stare'
+
+const CONNECTED_MS = 35000 // conectat daca heartbeat / ultima salvare in ultimele 35s
 
 function countFilled(obj: Record<string, string> | null | undefined): number {
   if (!obj) return 0
@@ -33,6 +36,14 @@ export default function ExamStatusPage() {
   const [loading, setLoading] = useState(true)
   const [now, setNow] = useState(0) // ms; setat dupa mount ca sa evitam mismatch SSR
   const [sessionDate, setSessionDate] = useState<string>('')
+  const [sortCol, setSortCol] = useState<SortCol>('name')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
+
+  function toggleSort(col: SortCol) {
+    if (sortCol === col) setSortDir(d => d === 'asc' ? 'desc' : 'asc')
+    else { setSortCol(col); setSortDir(col === 'name' ? 'asc' : 'desc') }
+  }
+  const arrow = (col: SortCol) => sortCol === col ? (sortDir === 'asc' ? '↑' : '↓') : <span className="text-gray-300">↕</span>
 
   // Incarca examenul + cursantii o data
   useEffect(() => {
@@ -56,7 +67,7 @@ export default function ExamStatusPage() {
   // Poll raspunsuri + ceas
   const poll = useCallback(async (examId: string) => {
     const { data } = await supabase.from('radio_exam_answers')
-      .select('student_id, grila_answers, translation_answers, status, last_seen, submitted_at')
+      .select('student_id, grila_answers, translation_answers, status, last_seen, updated_at, submitted_at')
       .eq('exam_id', examId)
     const map: Record<string, AnswerRow> = {}
     for (const a of (data || []) as AnswerRow[]) map[a.student_id] = a
@@ -96,8 +107,26 @@ export default function ExamStatusPage() {
     const done = grila + trad
     const pct = totalAll > 0 ? Math.round((done / totalAll) * 100) : 0
     const finalized = a?.status === 'submitted' || a?.status === 'graded'
-    const connected = !finalized && !!a?.last_seen && (now - new Date(a.last_seen).getTime()) < CONNECTED_MS
+    // conectat = heartbeat (last_seen) SAU ultima salvare (updated_at) recente
+    const lastActive = Math.max(
+      a?.last_seen ? new Date(a.last_seen).getTime() : 0,
+      a?.updated_at ? new Date(a.updated_at).getTime() : 0,
+    )
+    const connected = !finalized && lastActive > 0 && (now - lastActive) < CONNECTED_MS
     return { s, grila, trad, pct, finalized, connected, started: !!a }
+  })
+
+  // ordine pentru sortarea dupa stare: conectat > pe pauza (inceput) > finalizat > neinceput
+  const stareRank = (r: typeof rows[number]) => r.connected ? 3 : (r.started && !r.finalized ? 2 : (r.finalized ? 1 : 0))
+  rows.sort((a, b) => {
+    let cmp = 0
+    if (sortCol === 'name') cmp = a.s.full_name.localeCompare(b.s.full_name, 'ro')
+    else if (sortCol === 'grila') cmp = a.grila - b.grila
+    else if (sortCol === 'trad') cmp = a.trad - b.trad
+    else if (sortCol === 'pct') cmp = a.pct - b.pct
+    else if (sortCol === 'stare') cmp = stareRank(a) - stareRank(b)
+    if (cmp === 0) cmp = (a.s.order_in_session || 0) - (b.s.order_in_session || 0)
+    return sortDir === 'asc' ? cmp : -cmp
   })
 
   const nrConnected = rows.filter(r => r.connected).length
@@ -118,13 +147,13 @@ export default function ExamStatusPage() {
 
       <div className="space-y-1.5">
         {/* Cap tabel */}
-        <div className="flex items-center gap-3 px-3 py-1 text-[11px] font-medium text-gray-400 uppercase tracking-wide">
+        <div className="flex items-center gap-3 px-3 py-1 text-[11px] font-medium text-gray-400 uppercase tracking-wide select-none">
           <div className="w-4" />
-          <div className="flex-1">Cursant</div>
-          <div className="w-28 text-center">Grilă</div>
-          <div className="w-28 text-center">Traduceri</div>
-          <div className="w-16 text-right">Progres</div>
-          <div className="w-28 text-right">Stare</div>
+          <button onClick={() => toggleSort('name')} className="flex-1 text-left flex items-center gap-1 hover:text-blue-600">Cursant {arrow('name')}</button>
+          <button onClick={() => toggleSort('grila')} className="w-28 flex items-center justify-center gap-1 hover:text-blue-600">Grilă {arrow('grila')}</button>
+          <button onClick={() => toggleSort('trad')} className="w-28 flex items-center justify-center gap-1 hover:text-blue-600">Traduceri {arrow('trad')}</button>
+          <button onClick={() => toggleSort('pct')} className="w-16 flex items-center justify-end gap-1 hover:text-blue-600">Progres {arrow('pct')}</button>
+          <button onClick={() => toggleSort('stare')} className="w-28 flex items-center justify-end gap-1 hover:text-blue-600">Stare {arrow('stare')}</button>
         </div>
 
         {rows.map(({ s, grila, trad, pct, finalized, connected, started }) => (
