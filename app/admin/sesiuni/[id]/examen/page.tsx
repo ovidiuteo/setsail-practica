@@ -757,8 +757,8 @@ export default function ExamenPage() {
   function openResolveNew() {
     setResolveStudentId('')
     setResolveGrilaScore(NUM_GRILA)
-    setResolveTradScore('')
-    setResolveSimScore('')
+    setResolveTradScore(String(NUM_TRANS))
+    setResolveSimScore('10')
     setResolveExistingAnswerId(null)
     setShowResolve(true)
   }
@@ -805,8 +805,8 @@ export default function ExamenPage() {
   function openResolveForStudent(studentId: string) {
     setResolveStudentId(studentId)
     setResolveGrilaScore(NUM_GRILA)
-    setResolveTradScore('')
-    setResolveSimScore('')
+    setResolveTradScore(String(NUM_TRANS))
+    setResolveSimScore('10')
     setResolveExistingAnswerId(null)
     setShowResolve(true)
   }
@@ -814,8 +814,8 @@ export default function ExamenPage() {
   function openResolveFromExisting(answer: Answer) {
     setResolveStudentId(answer.student_id)
     setResolveGrilaScore(NUM_GRILA)
-    setResolveTradScore('')
-    setResolveSimScore('')
+    setResolveTradScore(String(NUM_TRANS))
+    setResolveSimScore('10')
     setResolveExistingAnswerId(answer.id)
     setShowResolve(true)
   }
