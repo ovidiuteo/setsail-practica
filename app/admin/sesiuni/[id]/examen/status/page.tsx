@@ -123,17 +123,13 @@ export default function ExamStatusPage() {
     const done = grila + trad
     const pct = totalAll > 0 ? Math.round((done / totalAll) * 100) : 0
     const finalized = a?.status === 'submitted' || a?.status === 'graded'
-    // conectat = heartbeat (last_seen) SAU ultima salvare (updated_at) recente
-    const lastActive = Math.max(
-      a?.last_seen ? new Date(a.last_seen).getTime() : 0,
-      a?.updated_at ? new Date(a.updated_at).getTime() : 0,
-    )
-    const connected = !finalized && lastActive > 0 && (now - lastActive) < CONNECTED_MS
-    return { s, grila, grilaCorect, grilaGresit, trad, pct, finalized, connected, started: !!a }
+    // A intrat in test = exista rand de raspuns (sau a raspuns la ceva). Doar cine n-a intrat deloc e rosu.
+    const started = !!a
+    return { s, grila, grilaCorect, grilaGresit, trad, pct, finalized, started }
   })
 
-  // ordine pentru sortarea dupa stare: conectat > pe pauza (inceput) > finalizat > neinceput
-  const stareRank = (r: typeof rows[number]) => r.connected ? 3 : (r.started && !r.finalized ? 2 : (r.finalized ? 1 : 0))
+  // ordine pentru sortarea dupa stare: neinceput < in lucru < finalizat
+  const stareRank = (r: typeof rows[number]) => r.finalized ? 2 : (r.started ? 1 : 0)
   rows.sort((a, b) => {
     let cmp = 0
     if (sortCol === 'name') cmp = a.s.full_name.localeCompare(b.s.full_name, 'ro')
@@ -146,7 +142,7 @@ export default function ExamStatusPage() {
     return sortDir === 'asc' ? cmp : -cmp
   })
 
-  const nrConnected = rows.filter(r => r.connected).length
+  const nrStarted = rows.filter(r => r.started).length
   const nrFinalized = rows.filter(r => r.finalized).length
 
   return (
@@ -158,7 +154,7 @@ export default function ExamStatusPage() {
       </div>
       <p className="text-xs text-gray-500 mb-5 ml-8">
         {sessionDate ? new Date(sessionDate).toLocaleDateString('ro-RO', { day: '2-digit', month: 'long', year: 'numeric' }) + ' · ' : ''}
-        {students.length} cursanți · <span className="text-green-600 font-medium">{nrConnected} conectați</span> · {nrFinalized} finalizați ·
+        {students.length} cursanți · <span className="text-green-600 font-medium">{nrStarted} în test</span> · {nrFinalized} finalizați ·
         grilă {totalGrila} întrebări, traduceri {totalTrad} fraze · actualizare la 4s
       </p>
 
@@ -174,13 +170,13 @@ export default function ExamStatusPage() {
           <button onClick={() => toggleSort('stare')} className="w-28 flex items-center justify-end gap-1 hover:text-blue-600">Stare {arrow('stare')}</button>
         </div>
 
-        {rows.map(({ s, grila, grilaCorect, grilaGresit, trad, pct, finalized, connected, started }) => (
+        {rows.map(({ s, grila, grilaCorect, grilaGresit, trad, pct, finalized, started }) => (
           <div key={s.id}
             className={`flex items-center gap-3 px-3 py-2.5 rounded-xl border ${finalized ? 'border-green-200' : 'border-gray-100'}`}
             style={finalized ? { background: '#dcfce7' } : {}}>
-            {/* Indicator conectat */}
-            <span className="w-4 flex justify-center" title={connected ? 'Conectat' : (finalized ? 'Test finalizat' : 'Neconectat')}>
-              <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: connected ? '#22c55e' : (finalized ? '#16a34a' : '#ef4444') }} />
+            {/* Indicator: verde daca a intrat in test, rosu daca n-a intrat deloc */}
+            <span className="w-4 flex justify-center" title={started ? (finalized ? 'Test finalizat' : 'În test') : 'N-a intrat'}>
+              <span className="inline-block w-2.5 h-2.5 rounded-full" style={{ background: started ? '#22c55e' : '#ef4444' }} />
             </span>
             <div className="flex-1 text-sm font-medium text-gray-900 truncate">{s.full_name}</div>
             <div className="w-24 text-center text-xs text-gray-600 font-mono">{grila}/{totalGrila}</div>
@@ -196,10 +192,8 @@ export default function ExamStatusPage() {
                 <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-700">
                   <CheckCircle2 size={13} /> Test finalizat
                 </span>
-              ) : connected ? (
-                <span className="text-xs font-medium text-green-600">În lucru</span>
               ) : started ? (
-                <span className="text-xs text-amber-600">Pe pauză</span>
+                <span className="text-xs font-medium text-green-600">În lucru</span>
               ) : (
                 <span className="text-xs text-gray-300">Neînceput</span>
               )}

@@ -20,6 +20,16 @@ export default function PortalPage() {
   const [signatureSaved, setSignatureSaved] = useState(false)
   const [existingSignature, setExistingSignature] = useState<string | null>(null)
   const [scannedFields, setScannedFields] = useState<Set<string>>(new Set())
+  const [examSubmitted, setExamSubmitted] = useState(false)
+
+  // Verifica daca acest cursant a finalizat deja examenul (status submitted/graded)
+  useEffect(() => {
+    if (!student?.id) { setExamSubmitted(false); return }
+    let cancelled = false
+    supabase.from('radio_exam_answers').select('status').eq('student_id', student.id)
+      .then(({ data }) => { if (!cancelled) setExamSubmitted((data || []).some((a: any) => a.status === 'submitted' || a.status === 'graded')) })
+    return () => { cancelled = true }
+  }, [student?.id])
 
   const [form, setForm] = useState({
     phone: '', birth_date: '', ci_series: '', ci_number: '',
@@ -516,13 +526,18 @@ export default function PortalPage() {
                 Ați completat deja această fișă. Puteți modifica orice informație și salva din nou.
               </div>
             )}
-            {session?.radio_exam_status === 'active' && (student?.class_caa || '').toLowerCase().match(/radio|lrc/) && (
+            {(student?.class_caa || '').toLowerCase().match(/radio|lrc/) && examSubmitted ? (
+              <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-xl text-xs text-green-700 flex items-center gap-2">
+                <CheckCircle size={14} className="shrink-0" />
+                <span><strong>Test finalizat</strong> — examenul a fost trimis. Nu mai poate fi accesat.</span>
+              </div>
+            ) : session?.radio_exam_status === 'active' && (student?.class_caa || '').toLowerCase().match(/radio|lrc/) ? (
               <a href={`/portal/examen?cod=${session.access_code}`}
                 className="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-xl text-xs text-purple-700 hover:bg-purple-100 transition-colors flex items-center gap-2">
                 <span className="text-base leading-none">📻</span>
                 <span><strong>Examinare Radio LRC disponibilă</strong> — apasă aici pentru a începe examenul.</span>
               </a>
-            )}
+            ) : null}
 
               {/* Info fixă */}
               <div className="bg-gray-50 rounded-xl p-3 mb-5 space-y-1.5">
