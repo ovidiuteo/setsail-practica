@@ -1,5 +1,5 @@
 'use client'
-import React, { useEffect, useState, useCallback } from 'react'
+import React, { useEffect, useState, useCallback, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
@@ -238,6 +238,8 @@ export default function ExamenPage() {
   const [translations, setTranslations] = useState<Translation[]>([])
 
   const [tab, setTab] = useState<'config' | 'results'>('config')
+  const [resultsView, setResultsView] = useState<'answers' | 'noshow'>('answers')
+  const paramsApplied = useRef(false)
   const [answers, setAnswers] = useState<Answer[]>([])
   const [students, setStudents] = useState<StudentLite[]>([])
   const [expandedId, setExpandedId] = useState<string | null>(null)
@@ -398,6 +400,23 @@ export default function ExamenPage() {
   }, [sessionId])
 
   useEffect(() => { if (sessionId) loadAll() }, [sessionId, loadAll])
+
+  // Aplica o singura data parametrii din URL (?tab=results&view=noshow&student=<id>)
+  // folositi de patratica de rezultat din tabelul de cursanti
+  useEffect(() => {
+    if (loading || paramsApplied.current) return
+    paramsApplied.current = true
+    const p = new URLSearchParams(window.location.search)
+    if (p.get('tab') === 'results') setTab('results')
+    if (p.get('view') === 'noshow') setResultsView('noshow')
+    const sid = p.get('student')
+    if (sid) {
+      setTab('results')
+      const ans = answers.find(a => a.student_id === sid)
+      if (ans) { setResultsView('answers'); setExpandedId(ans.id) }
+      else { setResultsView('noshow') }
+    }
+  }, [loading, answers])
 
   // ---------- ENSURE EXAM ROW ----------
   async function ensureExamRow(): Promise<RadioExam | null> {
@@ -731,6 +750,15 @@ export default function ExamenPage() {
   // ---------- REZOLVARE MANUALĂ CURSANT ----------
   function openResolveNew() {
     setResolveStudentId('')
+    setResolveGrilaScore(NUM_GRILA)
+    setResolveTradScore('')
+    setResolveSimScore('')
+    setResolveExistingAnswerId(null)
+    setShowResolve(true)
+  }
+
+  function openResolveForStudent(studentId: string) {
+    setResolveStudentId(studentId)
     setResolveGrilaScore(NUM_GRILA)
     setResolveTradScore('')
     setResolveSimScore('')
@@ -1336,7 +1364,53 @@ export default function ExamenPage() {
               </span>
             </div>
           )}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+          {/* Sub-tab-uri: Raspunsuri vs cursanti care nu au intrat */}
+          {exam && (() => {
+            const noShow = students.filter(s => !answers.find(a => a.student_id === s.id))
+            return (
+              <div className="flex gap-2 mb-3 border-b border-gray-200">
+                <button onClick={() => setResultsView('answers')}
+                  className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${resultsView === 'answers' ? 'border-purple-600 text-purple-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+                  Răspunsuri ({answers.length})
+                </button>
+                <button onClick={() => setResultsView('noshow')}
+                  className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${resultsView === 'noshow' ? 'border-purple-600 text-purple-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+                  Nu au intrat ({noShow.length})
+                </button>
+              </div>
+            )
+          })()}
+          {/* Cursanti care nu au intrat la examen */}
+          {exam && resultsView === 'noshow' && (() => {
+            const noShow = students.filter(s => !answers.find(a => a.student_id === s.id))
+            return (
+              <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+                <div className="px-5 py-3 border-b border-gray-100 text-xs text-gray-500">
+                  Cursanți fără rezultat (nu au deschis examenul). Alege-i și rezolvă-le examenul manual.
+                </div>
+                {noShow.length === 0 ? (
+                  <div className="p-8 text-center text-gray-400 text-sm">Toți cursanții au intrat la examen.</div>
+                ) : (
+                  <div className="divide-y divide-gray-100">
+                    {noShow.map(s => (
+                      <div key={s.id} id={`noshow-${s.id}`} className="flex items-center justify-between gap-4 px-5 py-3">
+                        <div className="min-w-0">
+                          <div className="font-medium text-sm text-gray-900 truncate">{s.full_name}</div>
+                          <div className="text-xs text-gray-400">{s.class_caa}</div>
+                        </div>
+                        <button onClick={() => openResolveForStudent(s.id)}
+                          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white shrink-0"
+                          style={{ background: '#ea580c' }}>
+                          ➕ Rezolvă examen
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
+          })()}
+          <div className={`bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden ${resultsView !== 'answers' ? 'hidden' : ''}`}>
             {!exam && (
               <div className="p-8 text-center text-gray-400 text-sm">
                 Examenul nu a fost încă creat. Completează tab-ul „Configurare".

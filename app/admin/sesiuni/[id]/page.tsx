@@ -886,14 +886,17 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
                           {/* Rezultat examen radio (inainte de absent) */}
                           {isRadio && !isAbsent && (() => {
                             const r = examResults[s.id]
-                            const box = 'w-7 h-7 rounded border flex items-center justify-center text-xs font-bold shrink-0'
+                            const box = 'w-7 h-7 rounded border flex items-center justify-center text-xs font-bold shrink-0 hover:opacity-70 transition-opacity'
+                            const href = r
+                              ? `/admin/sesiuni/${sess.id}/examen?tab=results&student=${s.id}`
+                              : `/admin/sesiuni/${sess.id}/examen?tab=results&view=noshow&student=${s.id}`
                             if (r?.submitted) {
                               const n = r.correct
                               const c = n >= 18 ? '#16a34a' : n >= 15 ? '#2563eb' : n === 14 ? '#ea580c' : '#dc2626'
-                              return <span className={box} style={{ color: c, borderColor: c }} title={`Rezultat grilă: ${n}/20`}>{n}</span>
+                              return <Link href={href} className={box} style={{ color: c, borderColor: c }} title={`Rezultat grilă: ${n}/20 — vezi rezultate`}>{n}</Link>
                             }
-                            if (examClosed) return <span className={box + ' border-red-300 text-red-400'} title="Nu a susținut examenul">–</span>
-                            return <span className={box + ' border-gray-200 text-gray-300'} title="Examen neînceput">–</span>
+                            if (examClosed) return <Link href={href} className={box + ' border-red-300 text-red-400'} title="Nu a susținut examenul — rezolvă">–</Link>
+                            return <Link href={href} className={box + ' border-gray-200 text-gray-300'} title="Examen neînceput — rezolvă">–</Link>
                           })()}
                           {/* Muta la absenti */}
                           {!isAbsent && absentSession && (
