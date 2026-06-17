@@ -180,9 +180,9 @@ export default function ExamStatusPage() {
             </span>
             <div className="flex-1 text-sm font-medium text-gray-900 truncate">{s.full_name}</div>
             <div className="w-24 text-center text-xs text-gray-600 font-mono">{grila}/{totalGrila}</div>
-            <div className="w-28 text-center text-xs font-mono">
+            <div className={`w-28 text-center text-xs font-mono rounded-md py-0.5 ${grila > 0 && grilaGresit >= 7 ? 'bg-red-200' : ''}`}>
               {grila > 0
-                ? <><span className="text-green-600 font-semibold">{grilaCorect}</span><span className="text-gray-300"> / </span><span className="text-red-500 font-semibold">{grilaGresit}</span></>
+                ? <><span className="text-green-600 font-semibold">{grilaCorect}</span><span className="text-gray-300"> / </span><span className="font-semibold" style={{ color: grilaGresit === 0 ? '#16a34a' : grilaGresit <= 2 ? '#2563eb' : '#dc2626' }}>{grilaGresit}</span></>
                 : <span className="text-gray-300">—</span>}
             </div>
             <div className="w-24 text-center text-xs text-gray-600 font-mono">{trad}/{totalTrad}</div>
