@@ -782,6 +782,19 @@ export default function ExamenPage() {
     }
   }
 
+  // Marcheaza examenul ca finalizat (trimis) pentru un cursant care a raspuns dar
+  // nu a apasat „Finalizează" (a inchis portalul). Recalculeaza scorul grila.
+  async function finalizeAnswer(a: Answer) {
+    if (!confirm('Marchezi examenul ca finalizat (trimis) pentru acest cursant?')) return
+    let score = 0
+    for (const q of questions) { if ((a.grila_answers || {})[String(q.order_no)] === q.correct_option) score++ }
+    const { error } = await supabase.from('radio_exam_answers')
+      .update({ status: 'submitted', submitted_at: a.submitted_at || new Date().toISOString(), grila_score: score, updated_at: new Date().toISOString() })
+      .eq('id', a.id)
+    if (error) { alert('Eroare: ' + error.message); return }
+    await loadAll()
+  }
+
   function openResolveForStudent(studentId: string) {
     setResolveStudentId(studentId)
     setResolveGrilaScore(NUM_GRILA)
@@ -1634,11 +1647,16 @@ export default function ExamenPage() {
                                 <Trash2 size={12} />
                                 Șterge răspunsurile
                               </button>
+                              <button onClick={() => openResolveFromExisting(a)}
+                                className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-white hover:opacity-90"
+                                style={{ background: '#7c3aed' }}>
+                                ✨ Șterge și rezolvă
+                              </button>
                               {a.status === 'in_progress' && (
-                                <button onClick={() => openResolveFromExisting(a)}
+                                <button onClick={() => finalizeAnswer(a)}
                                   className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium text-white hover:opacity-90"
-                                  style={{ background: '#7c3aed' }}>
-                                  ✨ Șterge și rezolvă
+                                  style={{ background: '#059669' }}>
+                                  <Check size={12} /> Finalizează
                                 </button>
                               )}
                             </div>
