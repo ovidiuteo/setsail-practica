@@ -114,7 +114,8 @@ export default function PortalExamenPage() {
                 || sessList[0]
       setSession(sess)
 
-      if (sess.radio_exam_status !== 'active') {
+      // 'active' si 'hidden' permit sustinerea (la 'hidden' doar linkul e ascuns din portal, examenul ruleaza)
+      if (sess.radio_exam_status !== 'active' && sess.radio_exam_status !== 'hidden') {
         if (sess.radio_exam_status === 'closed') setPhase('closed')
         else setPhase('no-active')
         return

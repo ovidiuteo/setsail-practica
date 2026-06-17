@@ -7,7 +7,7 @@ import {
   ArrowLeft, Save, Circle, CircleDot, FileText, Users,
   Play, Lock, RotateCcw, ChevronDown, ChevronUp, Loader2, Check,
   Sparkles, ExternalLink, AlertCircle, Shuffle, Trash2, Copy,
-  Upload, X
+  Upload, X, EyeOff
 } from 'lucide-react'
 
 type RadioExam = {
@@ -86,6 +86,7 @@ const NUM_TRANS = 5
 const STATUS_META: Record<string, { label: string; bg: string; color: string }> = {
   draft:  { label: 'Ciornă',  bg: '#6b728020', color: '#6b7280' },
   active: { label: 'Activ',   bg: '#05966920', color: '#059669' },
+  hidden: { label: 'Ascuns',  bg: '#d9770620', color: '#d97706' },
   closed: { label: 'Închis',  bg: '#7c3aed20', color: '#7c3aed' },
 }
 
@@ -605,9 +606,9 @@ export default function ExamenPage() {
   }
 
   // ---------- STATUS ----------
-  async function changeStatus(newStatus: 'draft' | 'active' | 'closed') {
+  async function changeStatus(newStatus: 'draft' | 'active' | 'hidden' | 'closed') {
     if (newStatus === radioExamStatus) return
-    if (newStatus === 'active') {
+    if (newStatus === 'active' || newStatus === 'hidden') {
       if (!exam || questions.length !== NUM_GRILA || translations.length !== NUM_TRANS) {
         alert('Generează mai întâi cele ' + NUM_GRILA + ' întrebări și ' + NUM_TRANS + ' traduceri din pool.')
         return
@@ -1036,7 +1037,7 @@ export default function ExamenPage() {
         <div className="bg-white rounded-xl p-4 shadow-sm border border-gray-100">
           <div className="text-xs font-semibold text-gray-700 mb-2">Stare examen</div>
           <div className="flex flex-wrap gap-2">
-            {(['draft', 'active', 'closed'] as const).map(s => {
+            {(['draft', 'active', 'hidden', 'closed'] as const).map(s => {
               const active = radioExamStatus === s
               const meta = STATUS_META[s]
               return (
@@ -1053,6 +1054,7 @@ export default function ExamenPage() {
                 >
                   {s === 'draft' && <RotateCcw size={12} className="inline mr-1" />}
                   {s === 'active' && <Play size={12} className="inline mr-1" />}
+                  {s === 'hidden' && <EyeOff size={12} className="inline mr-1" />}
                   {s === 'closed' && <Lock size={12} className="inline mr-1" />}
                   {meta.label}
                 </button>
@@ -1062,6 +1064,7 @@ export default function ExamenPage() {
           <p className="text-xs text-gray-400 mt-2">
             • <strong>Ciornă</strong> — editezi liber, cursanții nu văd nimic.
             <br />• <strong>Activ</strong> — cursanții pot accesa examenul din portal (necesită 20 întrebări + 5 traduceri generate).
+            <br />• <strong>Ascuns</strong> — linkul dispare din portal, dar examenul rămâne funcțional (cine îl are deschis poate continua/trimite). Util ca să oprești accesul nou fără să închizi.
             <br />• <strong>Închis</strong> — cursanții nu mai pot trimite. Notează rezultatele.
           </p>
         </div>
