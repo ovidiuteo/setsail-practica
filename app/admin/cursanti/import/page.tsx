@@ -56,14 +56,17 @@ export default function ImportCursantiPage() {
     supabase.from('sessions')
       .select('id, session_date, access_code, locations(name), class_caa, status')
       .eq('session_type', 'principal')
-      .gte('session_date', today)
       .order('session_date', { ascending: true })
       .then(({ data }) => {
-        setSessions(data || [])
-        // Default: Focus intai, apoi prima activa, altfel prima din lista
-        const focusSess = data?.find((s: any) => s.status === 'focus')
-        const activeSess = data?.find((s: any) => s.status === 'active')
-        const defaultSess = focusSess || activeSess || data?.[0]
+        // Arătăm: toate sesiunile viitoare + cele din trecut care NU sunt
+        // finalizate (completed) sau ciorne (draft).
+        const list = (data || []).filter((s: any) =>
+          s.session_date >= today || (s.status !== 'completed' && s.status !== 'draft'))
+        setSessions(list)
+        // Default: Focus întâi, apoi prima activă cronologic, altfel prima din listă
+        const focusSess = list.find((s: any) => s.status === 'focus')
+        const activeSess = list.find((s: any) => s.status === 'active')
+        const defaultSess = focusSess || activeSess || list[0]
         if (defaultSess) {
           setSelectedSession(defaultSess.id)
           setDefaultClass(defaultClassFor(defaultSess.class_caa))
