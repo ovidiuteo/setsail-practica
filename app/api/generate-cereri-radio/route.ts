@@ -22,12 +22,22 @@ export async function POST(req: NextRequest) {
     const { data: session } = await supabase
       .from('sessions').select('*, locations(*)').eq('id', session_id).single()
 
-    const { data: students } = await supabase
+    const { data: allStudents } = await supabase
       .from('students').select('*')
       .eq('session_id', session_id).eq('only_sailing', false)
       .order('order_in_session')
 
-    if (!session || !students) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    if (!session || !allStudents) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+    // Filtrăm după clasa CAA:
+    // - Prelungire (reconfirmare): doar "Prelungire LRC"
+    // - Obținere:                  "Obtinere LRC" + "Radio"
+    const students = allStudents.filter((s: any) => {
+      const c = String(s.class_caa || '').toLowerCase().trim()
+      return isPrelungire
+        ? c.includes('prelungire')
+        : (c.includes('obtinere') || c.includes('obținere') || c === 'radio')
+    })
 
     const sessionDate = new Date(session.session_date).toLocaleDateString('ro-RO', {
       day: '2-digit', month: '2-digit', year: 'numeric'
