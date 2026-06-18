@@ -5,7 +5,7 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import {
   ArrowLeft, Save, ScanLine, Loader2, CheckCircle,
-  AlertCircle, ExternalLink, Trash2, Copy, Check
+  AlertCircle, ExternalLink, Trash2, Copy, Check, X
 } from 'lucide-react'
 import CIImageEditor from '@/components/CIImageEditor'
 
@@ -61,6 +61,14 @@ export default function CursantAdminPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [imgKey, setImgKey] = useState(Date.now())
   const ciInputRef = useRef<HTMLInputElement>(null)
+  // RE-OCR CI
+  const [reocrOpen, setReocrOpen] = useState(false)
+  const [reocrLoading, setReocrLoading] = useState(false)
+  const [reocrErr, setReocrErr] = useState(false)
+  const [reocrDone, setReocrDone] = useState(false)
+  const [reocrVals, setReocrVals] = useState<Record<string, string>>({})
+  const [reocrApply, setReocrApply] = useState<Record<string, boolean>>({})
+  const [reocrChanged, setReocrChanged] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     async function load() {
@@ -179,6 +187,79 @@ export default function CursantAdminPage() {
     setScanning(false)
   }
 
+  // === RE-OCR CI: reanalizează buletinul deja încărcat, cu atenție la diacritice ===
+  const REOCR_FIELDS: { key: keyof Student; label: string }[] = [
+    { key: 'full_name', label: 'Nume complet' },
+    { key: 'cnp', label: 'CNP' },
+    { key: 'birth_date', label: 'Data nașterii' },
+    { key: 'ci_series', label: 'Serie CI' },
+    { key: 'ci_number', label: 'Număr CI' },
+    { key: 'expiry_date', label: 'Expirare CI' },
+    { key: 'nationality', label: 'Cetățenie' },
+    { key: 'address', label: 'Adresă' },
+    { key: 'city', label: 'Localitate' },
+    { key: 'county', label: 'Județ / Sector' },
+    { key: 'country', label: 'Țară' },
+  ]
+
+  function openReocr() {
+    setReocrOpen(true)
+    setReocrDone(false); setReocrErr(false)
+    setReocrVals({}); setReocrApply({}); setReocrChanged({})
+    runReocr()
+  }
+
+  // Pre-completează câmpurile cu valorile curente (pt. editare manuală dacă OCR pică)
+  function reocrPrefillCurrent() {
+    const vals: Record<string, string> = {}, apply: Record<string, boolean> = {}, changed: Record<string, boolean> = {}
+    for (const f of REOCR_FIELDS) { vals[f.key] = String((student as any)?.[f.key] || ''); apply[f.key] = false; changed[f.key] = false }
+    setReocrVals(vals); setReocrApply(apply); setReocrChanged(changed)
+  }
+
+  async function runReocr() {
+    if (!student?.ci_image_data) { reocrPrefillCurrent(); setReocrErr(true); return }
+    setReocrLoading(true); setReocrErr(false); setReocrDone(false)
+    try {
+      const res = await fetch('/api/ocr-ci', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageData: student.ci_image_data, mediaType: 'image/jpeg', careful: true })
+      })
+      const json = await res.json()
+      if (!json.success || !json.data) { reocrPrefillCurrent(); setReocrErr(true); setReocrLoading(false); return }
+      const d = json.data
+      const fullName = (d.last_name && d.first_name) ? d.last_name.toUpperCase() + ' ' + d.first_name.toUpperCase() : ''
+      const sugg: Record<string, string> = {
+        full_name: fullName, cnp: d.cnp || '', birth_date: d.birth_date || '', ci_series: d.ci_series || '',
+        ci_number: d.ci_number || '', expiry_date: d.expiry_date || '', nationality: d.nationality || '',
+        address: d.address || '', city: d.city || '', county: d.county || '', country: d.country || '',
+      }
+      const vals: Record<string, string> = {}, apply: Record<string, boolean> = {}, changed: Record<string, boolean> = {}
+      for (const f of REOCR_FIELDS) {
+        const cur = String((student as any)[f.key] || '')
+        const s = sugg[f.key] || ''
+        const isChanged = !!s && s !== cur
+        changed[f.key] = isChanged
+        vals[f.key] = s || cur          // prefill cu sugestia dacă există, altfel valoarea curentă
+        apply[f.key] = isChanged        // bifat default doar dacă s-a schimbat
+      }
+      setReocrVals(vals); setReocrApply(apply); setReocrChanged(changed); setReocrDone(true)
+    } catch { reocrPrefillCurrent(); setReocrErr(true) }
+    setReocrLoading(false)
+  }
+
+  async function applyReocr() {
+    const updates: any = {}
+    for (const f of REOCR_FIELDS) {
+      if (reocrApply[f.key]) updates[f.key] = (reocrVals[f.key] || '').trim()
+    }
+    if (Object.keys(updates).length) {
+      await supabase.from('students').update(updates).eq('id', id)
+      setStudent(s => s ? { ...s, ...updates } : s)
+      setForm(f => ({ ...f, ...updates }))
+    }
+    setReocrOpen(false)
+  }
+
   async function deleteStudent() {
     await supabase.from('students').delete().eq('id', id)
     router.push(session ? `/admin/sesiuni/${session.id}` : '/admin/cursanti')
@@ -215,6 +296,71 @@ export default function CursantAdminPage() {
       <input ref={ciInputRef} type="file" accept="image/*,application/pdf" className="hidden"
         onChange={e => { if (e.target.files?.[0]) { setPendingFile(e.target.files[0]); e.target.value = '' } }}
       />
+
+      {/* Modal RE-OCR CI */}
+      {reocrOpen && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between p-5 border-b border-gray-100">
+              <div>
+                <h3 className="font-semibold text-gray-900">RE-OCR Carte de identitate</h3>
+                <p className="text-xs text-gray-400">Reanalizează cu atenție (diacritice); bifează ce modificări să se aplice. Câmpurile sunt și editabile manual.</p>
+              </div>
+              <button onClick={() => setReocrOpen(false)} className="p-1 rounded hover:bg-gray-100 text-gray-400"><X size={18}/></button>
+            </div>
+            <div className="p-5 overflow-y-auto">
+              {student?.ci_image_data && (
+                <img src={student.ci_image_data} alt="CI" className="w-full max-h-72 object-contain rounded-xl border border-gray-100 mb-4 bg-gray-50"/>
+              )}
+              <div className="flex items-center gap-2 mb-4 flex-wrap">
+                <button onClick={runReocr} disabled={reocrLoading}
+                  className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border border-purple-200 text-purple-600 hover:bg-purple-50 disabled:opacity-50">
+                  {reocrLoading ? <Loader2 size={12} className="animate-spin"/> : <ScanLine size={12}/>}
+                  {reocrLoading ? 'Reanalizez...' : 'Reanalizează din nou'}
+                </button>
+                {reocrErr && <span className="text-xs text-red-500 flex items-center gap-1"><AlertCircle size={12}/> Eroare la citire — poți completa manual</span>}
+                {reocrDone && !reocrErr && <span className="text-xs text-green-600 flex items-center gap-1"><CheckCircle size={12}/> Reanalizat — verifică modificările evidențiate</span>}
+              </div>
+
+              {reocrLoading && !reocrDone && <div className="text-center text-gray-400 py-6 text-sm">Se reanalizează buletinul...</div>}
+
+              {(reocrDone || reocrErr) && (
+                <div className="space-y-2">
+                  {REOCR_FIELDS.map(f => {
+                    const changed = reocrChanged[f.key]
+                    const cur = String((student as any)?.[f.key] || '')
+                    return (
+                      <div key={String(f.key)} className={`rounded-lg p-2.5 border ${changed ? 'border-amber-300 bg-amber-50' : 'border-gray-100'}`}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-xs font-medium text-gray-600 flex items-center gap-1.5">
+                            {f.label}
+                            {changed && <span className="text-[10px] text-amber-600 font-semibold uppercase">modificat</span>}
+                          </span>
+                          <label className="flex items-center gap-1 text-[11px] text-gray-500 cursor-pointer select-none">
+                            <input type="checkbox" checked={!!reocrApply[f.key]} onChange={e => setReocrApply(a => ({ ...a, [f.key]: e.target.checked }))}/>
+                            aplică
+                          </label>
+                        </div>
+                        <input value={reocrVals[f.key] ?? ''}
+                          onChange={e => { const v = e.target.value; setReocrVals(s => ({ ...s, [f.key]: v })); setReocrApply(a => ({ ...a, [f.key]: true })) }}
+                          className="w-full border border-gray-200 rounded-md px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-purple-300"/>
+                        {changed && <p className="text-[11px] text-gray-400 mt-1">era: <span className="line-through">{cur || '—'}</span></p>}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+            <div className="flex justify-end gap-2 p-5 border-t border-gray-100">
+              <button onClick={() => setReocrOpen(false)} className="px-4 py-2 rounded-lg text-xs border border-gray-200 text-gray-500 hover:bg-gray-50">Anulează</button>
+              <button onClick={applyReocr} disabled={!reocrDone && !reocrErr}
+                className="px-4 py-2 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{ background: '#7c3aed' }}>
+                Salvează modificările bifate
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Header */}
       <div className="bg-white border-b border-gray-100 sticky top-0 z-10">
@@ -348,11 +494,20 @@ export default function CursantAdminPage() {
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-semibold text-gray-900 text-sm">Carte de identitate</h3>
-              <button onClick={() => ciInputRef.current?.click()} disabled={scanning}
-                className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border border-blue-200 text-blue-600 hover:bg-blue-50 transition-colors disabled:opacity-50">
-                {scanning ? <Loader2 size={11} className="animate-spin"/> : <ScanLine size={11}/>}
-                {scanning ? 'Scanez...' : 'Scan CI'}
-              </button>
+              <div className="flex items-center gap-1.5">
+                {student.ci_image_data && (
+                  <button onClick={openReocr} disabled={scanning}
+                    className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border border-purple-200 text-purple-600 hover:bg-purple-50 transition-colors disabled:opacity-50"
+                    title="Reanalizează buletinul deja încărcat (atenție la diacritice)">
+                    <ScanLine size={11}/> RE-OCR CI
+                  </button>
+                )}
+                <button onClick={() => ciInputRef.current?.click()} disabled={scanning}
+                  className="flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border border-blue-200 text-blue-600 hover:bg-blue-50 transition-colors disabled:opacity-50">
+                  {scanning ? <Loader2 size={11} className="animate-spin"/> : <ScanLine size={11}/>}
+                  {scanning ? 'Scanez...' : 'Scan CI'}
+                </button>
+              </div>
             </div>
 
             {scanStatus === 'ok' && <p className="text-xs text-green-600 flex items-center gap-1 mb-3"><CheckCircle size={12}/> Date extrase cu succes</p>}

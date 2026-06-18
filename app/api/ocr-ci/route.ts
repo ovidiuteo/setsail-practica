@@ -2,8 +2,11 @@ import { NextRequest, NextResponse } from 'next/server'
 
 export async function POST(req: NextRequest) {
   try {
-    const { imageData, mediaType } = await req.json()
+    const { imageData, mediaType, careful } = await req.json()
     if (!imageData) return NextResponse.json({ error: 'No image data' }, { status: 400 })
+    const carefulNote = careful
+      ? '\n\nATENȚIE SPORITĂ (re-analiză): citește documentul cu MAXIMĂ grijă, mai ales DIACRITICELE (ă, â, î, ș, ț) și cratimele din nume/prenume. Verifică literă cu literă numele, prenumele și CNP-ul. Dacă o literă poate fi cu sau fără diacritic, alege forma corectă conform documentului.'
+      : ''
 
     const base64 = imageData.includes(',') ? imageData.split(',')[1] : imageData
     const imgType = mediaType || 'image/jpeg'
@@ -77,7 +80,7 @@ Returnează DOAR JSON (fără markdown):
   "city": "localitatea de domiciliu sau naștere",
   "county": "județul/sectorul dacă e vizibil",
   "country": "Romania"
-}`
+}` + carefulNote
             }
           ]
         }]
