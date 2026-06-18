@@ -205,7 +205,7 @@ ${antetHtml}
 <p style="text-align:center;font-size:10pt"><strong>Nr. ${docNrTxt} din ${docNrDate}</strong></p>
 <p style="font-size:9pt">Data examinării: <strong>${sessionDate}</strong> &nbsp;&nbsp; Locația: <strong>${session.locations?.name || ''}</strong></p>
 <table>${tableHeader}${dataRows}</table>
-<div style="margin-top:24px;display:grid;grid-template-columns:auto auto 1fr;gap:20px;align-items:start;">
+<div style="margin-top:24px;display:grid;grid-template-columns:auto auto 1fr auto;gap:20px;align-items:start;">
   <div>
     <strong>Președinte comisie:</strong><br>
     <span style="display:inline-block;margin-top:6px;font-weight:bold;">${presedinte ? presedinte.full_name : '...........................................'}</span>
@@ -214,6 +214,7 @@ ${antetHtml}
   <div>
     ${stampilaData ? `<img src="${stampilaData}" style="max-height:110px;max-width:160px;"/>` : ''}
   </div>
+  <div></div>
   <div>
     <strong>Membrii:</strong>
     ${membri.length
@@ -409,12 +410,13 @@ ${antetHtml}
         new Paragraph({ spacing: { before: 240, after: 60 }, children: [] }),
         new Table({
           width: { size: TW, type: WidthType.DXA },
-          columnWidths: [3200, 2400, 4606],
+          columnWidths: [3000, 2200, 1800, 3206],
           rows: [
             new TableRow({ children: [
-              cell([para([bold('Președinte comisie:', 17)]), para([bold(presedinte ? presedinte.full_name : '...............................................', 17)]), ...(presedinte ? sigPara(presedinte.signature_data) : [])], { borders: { top: { style: BorderStyle.NONE, size:0,color:'FFFFFF'}, bottom:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}, left:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}, right:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}}, w: 3200 }),
-              cell(stampImg.length ? stampImg : [para([reg('')])], { borders: { top: { style: BorderStyle.NONE, size:0,color:'FFFFFF'}, bottom:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}, left:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}, right:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}}, w: 2400 }),
-              cell([para([bold('Membrii:', 17)]), ...(membri.length ? membri.flatMap((m: ComisiePers) => [para([bold(m.full_name, 17)]), ...sigPara(m.signature_data)]) : [para([reg('')]), para([reg('...............................................')])])], { borders: { top: { style: BorderStyle.NONE, size:0,color:'FFFFFF'}, bottom:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}, left:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}, right:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}}, w: 4606 }),
+              cell([para([bold('Președinte comisie:', 17)]), para([bold(presedinte ? presedinte.full_name : '...............................................', 17)]), ...(presedinte ? sigPara(presedinte.signature_data) : [])], { borders: { top: { style: BorderStyle.NONE, size:0,color:'FFFFFF'}, bottom:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}, left:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}, right:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}}, w: 3000 }),
+              cell(stampImg.length ? stampImg : [para([reg('')])], { borders: { top: { style: BorderStyle.NONE, size:0,color:'FFFFFF'}, bottom:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}, left:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}, right:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}}, w: 2200 }),
+              cell([para([reg('')])], { borders: { top: { style: BorderStyle.NONE, size:0,color:'FFFFFF'}, bottom:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}, left:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}, right:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}}, w: 1800 }),
+              cell([para([bold('Membrii:', 17)]), ...(membri.length ? membri.flatMap((m: ComisiePers) => [para([bold(m.full_name, 17)]), ...sigPara(m.signature_data)]) : [para([reg('')]), para([reg('...............................................')])])], { borders: { top: { style: BorderStyle.NONE, size:0,color:'FFFFFF'}, bottom:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}, left:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}, right:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}}, w: 3206 }),
             ]})
           ]
         }),
