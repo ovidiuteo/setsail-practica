@@ -488,7 +488,7 @@ export default function CursantAdminPage() {
                     }).eq('id', student.id)
                     setStudent(s => s ? { ...s, signature_random: pick.signature_data } : s)
                   }}
-                  title={student.signature_random ? 'Realocă semnătură random din pool' : 'Alocă semnătură random din pool'}
+                  title={student.signature_random ? 'Realocă (altă semnătură random din pool)' : 'Alocă semnătură random din pool'}
                   className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all border ${
                     student.signature_random
                       ? 'bg-orange-500 text-white border-orange-500'
@@ -496,18 +496,32 @@ export default function CursantAdminPage() {
                   }`}>
                   🟠 Alocă rndm
                 </button>
+                {/* Buton Sterge rand - apare doar daca exista semnatura random */}
+                {student.signature_random && (
+                  <button
+                    onClick={async () => {
+                      await supabase.from('students').update({ signature_random: null, signature_pool_source_id: null }).eq('id', student.id)
+                      setStudent(s => s ? { ...s, signature_random: null, signature_pool_source_id: null } : s)
+                    }}
+                    title="Șterge semnătura random alocată"
+                    className="px-2.5 py-1.5 rounded-lg text-xs font-medium transition-all border border-red-200 text-red-500 hover:bg-red-50">
+                    🗑 Șterge rand
+                  </button>
+                )}
               </div>
             </div>
 
-            {student.signature_data ? (
-              <div>
+            {/* Semnatura proprie (de pe portal) si/sau cea random alocata — afisate ambele daca exista */}
+            {student.signature_data && (
+              <div className="mb-3">
                 <div className="rounded-xl border border-gray-100 p-3 bg-gray-50 cursor-pointer"
                   onClick={() => { const w = window.open('', '_blank'); w?.document.write(`<img src="${student.signature_data}" style="max-width:400px;border:1px solid #ccc;padding:20px;background:#fff;"/>`) }}>
                   <img src={student.signature_data} alt="Semnătură" className="w-full object-contain" style={{ maxHeight: 80 }}/>
                 </div>
-                <p className="text-xs text-gray-400 text-center mt-2">Click pentru mărire</p>
+                <p className="text-xs text-gray-400 text-center mt-2">Semnătură proprie (portal) · click pentru mărire</p>
               </div>
-            ) : student.signature_random ? (
+            )}
+            {student.signature_random && (
               <div>
                 <div className="rounded-xl border-2 border-orange-200 p-3 bg-orange-50 cursor-pointer"
                   onClick={() => { const w = window.open('', '_blank'); w?.document.write(`<img src="${student.signature_random}" style="max-width:400px;border:1px solid #ccc;padding:20px;background:#fff;"/>`) }}>
@@ -515,7 +529,8 @@ export default function CursantAdminPage() {
                 </div>
                 <p className="text-xs text-orange-400 text-center mt-2">🟠 Semnătură alocată random — invizibilă pe portal</p>
               </div>
-            ) : (
+            )}
+            {!student.signature_data && !student.signature_random && (
               <div className="rounded-xl border-2 border-dashed border-red-200 p-6 text-center">
                 <p className="text-xs text-red-400">Nesemnat</p>
                 <p className="text-xs text-gray-400 mt-1">
