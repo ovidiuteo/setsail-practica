@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { stampToTransparentDataUrl } from '@/lib/stamp'
 
 export async function POST(req: NextRequest) {
   const body = await req.json()
@@ -118,12 +117,10 @@ export async function POST(req: NextRequest) {
   const presedinte: ComisiePers | null = comisie[0] || null
   const membri: ComisiePers[] = comisie.slice(1)   // Instructor 2 (+3); dacă nu există 3 → un singur membru
 
-  // Ștampila SetSail (FĂRĂ semnătură) — normalizată cu fundal transparent, între președinte și membri
+  // Ștampila SetSail (FĂRĂ semnătură), originală (fără normalizare), lângă numele președintelui
   const { data: stampilaDoc } = await supabase.from('setsail_documents')
     .select('file_data').eq('tip', 'stampila_fara_semnatura').maybeSingle()
-  const stampilaData: string | null = stampilaDoc?.file_data
-    ? (await stampToTransparentDataUrl(stampilaDoc.file_data)) || stampilaDoc.file_data
-    : null
+  const stampilaData: string | null = stampilaDoc?.file_data || null
 
   // PDF format
   if (format === 'pdf') {
@@ -208,13 +205,13 @@ ${antetHtml}
 <p style="text-align:center;font-size:10pt"><strong>Nr. ${docNrTxt} din ${docNrDate}</strong></p>
 <p style="font-size:9pt">Data examinării: <strong>${sessionDate}</strong> &nbsp;&nbsp; Locația: <strong>${session.locations?.name || ''}</strong></p>
 <table>${tableHeader}${dataRows}</table>
-<div style="margin-top:24px;display:grid;grid-template-columns:1fr auto 1fr;gap:16px;align-items:start;">
+<div style="margin-top:24px;display:grid;grid-template-columns:auto auto 1fr;gap:20px;align-items:start;">
   <div>
     <strong>Președinte comisie:</strong><br>
     <span style="display:inline-block;margin-top:6px;font-weight:bold;">${presedinte ? presedinte.full_name : '...........................................'}</span>
     ${presedinte?.signature_data ? `<div style="margin-top:2px;"><img src="${presedinte.signature_data}" style="max-height:55px;max-width:100%;"/></div>` : ''}
   </div>
-  <div style="text-align:center;">
+  <div>
     ${stampilaData ? `<img src="${stampilaData}" style="max-height:110px;max-width:160px;"/>` : ''}
   </div>
   <div>
@@ -284,7 +281,7 @@ ${antetHtml}
       const buf = Buffer.from(base64, 'base64')
       const mt = stampilaData.includes('png') ? 'png' : 'jpg'
       stampImg = [new Paragraph({
-        alignment: AlignmentType.CENTER,
+        alignment: AlignmentType.LEFT,
         spacing: { before: 40 },
         children: [new ImageRun({ data: buf, type: mt as any, transformation: { width: 150, height: 95 } })]
       })]
@@ -412,12 +409,12 @@ ${antetHtml}
         new Paragraph({ spacing: { before: 240, after: 60 }, children: [] }),
         new Table({
           width: { size: TW, type: WidthType.DXA },
-          columnWidths: [4100, 2006, 4100],
+          columnWidths: [3200, 2400, 4606],
           rows: [
             new TableRow({ children: [
-              cell([para([bold('Președinte comisie:', 17)]), para([bold(presedinte ? presedinte.full_name : '...............................................', 17)]), ...(presedinte ? sigPara(presedinte.signature_data) : [])], { borders: { top: { style: BorderStyle.NONE, size:0,color:'FFFFFF'}, bottom:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}, left:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}, right:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}}, w: 4100 }),
-              cell(stampImg.length ? stampImg : [para([reg('')])], { borders: { top: { style: BorderStyle.NONE, size:0,color:'FFFFFF'}, bottom:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}, left:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}, right:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}}, w: 2006 }),
-              cell([para([bold('Membrii:', 17)]), ...(membri.length ? membri.flatMap((m: ComisiePers) => [para([bold(m.full_name, 17)]), ...sigPara(m.signature_data)]) : [para([reg('')]), para([reg('...............................................')])])], { borders: { top: { style: BorderStyle.NONE, size:0,color:'FFFFFF'}, bottom:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}, left:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}, right:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}}, w: 4100 }),
+              cell([para([bold('Președinte comisie:', 17)]), para([bold(presedinte ? presedinte.full_name : '...............................................', 17)]), ...(presedinte ? sigPara(presedinte.signature_data) : [])], { borders: { top: { style: BorderStyle.NONE, size:0,color:'FFFFFF'}, bottom:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}, left:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}, right:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}}, w: 3200 }),
+              cell(stampImg.length ? stampImg : [para([reg('')])], { borders: { top: { style: BorderStyle.NONE, size:0,color:'FFFFFF'}, bottom:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}, left:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}, right:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}}, w: 2400 }),
+              cell([para([bold('Membrii:', 17)]), ...(membri.length ? membri.flatMap((m: ComisiePers) => [para([bold(m.full_name, 17)]), ...sigPara(m.signature_data)]) : [para([reg('')]), para([reg('...............................................')])])], { borders: { top: { style: BorderStyle.NONE, size:0,color:'FFFFFF'}, bottom:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}, left:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}, right:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}}, w: 4606 }),
             ]})
           ]
         }),
