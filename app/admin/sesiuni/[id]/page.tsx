@@ -2965,8 +2965,17 @@ export default function SessionDetailPage() {
     setStudentsMap(prev => ({...prev, [sessionId]: sts}))
   }
 
-  function startEditSession(sess: Session) {
+  async function startEditSession(sess: Session) {
     setEditingSession(sess.id)
+    // Reîmprospătăm listele (instructori/bărci/etc.) ca cele adăugate recent să apară fără reload
+    Promise.all([
+      supabase.from('locations').select('*').order('name'),
+      supabase.from('boats').select('*').order('name'),
+      supabase.from('evaluators').select('*').order('full_name'),
+      supabase.from('instructors').select('*').order('full_name'),
+    ]).then(([{ data: locations }, { data: boats }, { data: evaluators }, { data: instructors }]) => {
+      setRefs({ locations: locations || [], boats: boats || [], evaluators: evaluators || [], instructors: instructors || [] })
+    })
     setEditSessionValues({
       course_start_date: (sess as any).course_start_date || '',
       session_date: sess.session_date,

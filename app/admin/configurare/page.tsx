@@ -267,6 +267,7 @@ export default function ConfigurarePage() {
             { key: 'phone', label: 'Telefon', placeholder: '0722 488 973' },
             { key: 'email', label: 'Email', placeholder: 'paula@setsail.ro' },
             { key: 'rol', label: 'Rol', placeholder: 'ex: instructor, manager' },
+            { key: 'signature_data', label: 'Semnătură', type: 'image' },
           ]} />
       </div>
 
