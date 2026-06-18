@@ -149,7 +149,7 @@ export async function POST(req: NextRequest) {
 </style>
 </head><body>
 ${antetHtml}
-<p style="text-align:right;font-size:9pt"><strong>Nr. ${iesNrTxt} din ${iesNrDate}</strong><br><span style="font-size:8pt">(nr. identic cu nr. de ieșire al pv)</span></p>
+<p style="text-align:right;font-size:9pt"><strong>Nr. ${iesNrTxt} din ${iesNrDate}</strong><br><span style="font-size:8pt">&nbsp;</span></p>
 <p style="text-align:center;font-size:11pt"><strong>${pvTitlu}</strong></p>
 <p style="text-align:center;font-size:10pt">${scopTitlu}</p>
 <table>
@@ -303,7 +303,7 @@ ${antetHtml}
             cell([para([reg('')])], { b: noBorders, w: TW/2 }),
             cell([
               para([bold(`Nr. ${iesNrTxt} din ${iesNrDate}`, 17)], AlignmentType.RIGHT as any),
-              para([ital('(nr. identic cu nr. de ieșire al pv)', 15)], AlignmentType.RIGHT as any),
+              para([ital(' ', 15)], AlignmentType.RIGHT as any),
             ], { b: noBorders, w: TW/2 }),
           ]})]
         }),
