@@ -1363,8 +1363,8 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
     if (kind === 'doc' && def.anexaOf) return
     const reg = regFor(docTip, kind)
     const existing = (kind === 'iesire' ? iesireNumbers : docNumbers)[docTip]
-    // Data default: PV ANCOM → data examenului (data practicii); restul → azi
-    const fallbackDate = (kind === 'doc' && def.reg === 'pv_ancom' && sess.session_date)
+    // Data default: PV ANCOM (nr. document ȘI nr. ieșire) → data examenului (data practicii); restul → azi
+    const fallbackDate = (def.reg === 'pv_ancom' && sess.session_date)
       ? sess.session_date : new Date().toISOString().slice(0, 10)
     const date = existing?.data_notificare || fallbackDate
     const { data } = await supabase.from('notification_numbers')

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import sharp from 'sharp'
 
 export async function POST(req: NextRequest) {
   const body = await req.json()
@@ -80,9 +81,6 @@ export async function POST(req: NextRequest) {
     .eq('tip', 'antet_radio')
     .single()
 
-  const sessionDate = new Date(session.session_date).toLocaleDateString('ro-RO', {
-    day: '2-digit', month: 'long', year: 'numeric'
-  })
   const dateStr = session.session_date.replace(/-/g, '_')
   const tipLabel = isPrelungire
     ? 'PRELUNGIRII VALABILITĂȚII'
@@ -125,7 +123,7 @@ export async function POST(req: NextRequest) {
   // PDF format
   if (format === 'pdf') {
     const antetHtml = antetDoc?.file_data
-      ? `<div style="text-align:center;margin-bottom:20px;"><img src="${antetDoc.file_data}" style="max-width:100%;height:auto;max-height:80px;"/></div>`
+      ? `<div style="margin-bottom:20px;"><img src="${antetDoc.file_data}" style="width:100%;height:auto;display:block;"/></div>`
       : '<div style="text-align:center;font-weight:bold;font-size:14pt;margin-bottom:20px;">S.C. SET SAIL ADVERTISING S.R.L.</div>'
 
     const pvTitle = isPrelungire
@@ -203,7 +201,6 @@ ${antetHtml}
 <p style="text-align:right;font-size:9pt">Nr. ieșire: <strong>${iesNrTxt}</strong> din <strong>${iesNrDate}</strong></p>
 <h2>${pvTitle}</h2>
 <p style="text-align:center;font-size:10pt"><strong>Nr. ${docNrTxt} din ${docNrDate}</strong></p>
-<p style="font-size:9pt">Data examinării: <strong>${sessionDate}</strong> &nbsp;&nbsp; Locația: <strong>${session.locations?.name || ''}</strong></p>
 <table>${tableHeader}${dataRows}</table>
 <div style="margin-top:24px;display:grid;grid-template-columns:auto auto 1fr auto;gap:20px;align-items:start;">
   <div>
@@ -267,9 +264,13 @@ ${antetHtml}
       const base64 = antetDoc.file_data.includes(',') ? antetDoc.file_data.split(',')[1] : antetDoc.file_data
       const buf = Buffer.from(base64, 'base64')
       const mt = antetDoc.file_data.includes('png') ? 'png' : 'jpg'
+      // Lățime = lățimea conținutului (180mm ≈ 680px), înălțime proporțională
+      const meta = await sharp(buf).metadata()
+      const W = 680
+      const H = (meta.width && meta.height) ? Math.round(W * meta.height / meta.width) : 70
       headerImg = [new Paragraph({
         spacing: { after: 100 },
-        children: [new ImageRun({ data: buf, type: mt as any, transformation: { width: 700, height: 60 } })]
+        children: [new ImageRun({ data: buf, type: mt as any, transformation: { width: W, height: H } })]
       })]
     } catch(e) { console.error(e) }
   }
@@ -405,7 +406,6 @@ ${antetHtml}
         new Paragraph({ alignment: AlignmentType.RIGHT, spacing: { after: 120 }, children: [bold('Nr. ieșire: ', 16), reg(iesNrTxt, 16), reg(' din ', 16), reg(iesNrDate, 16)] }),
         ...titleParagraphs,
         new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 60, after: 120 }, children: [bold(`Nr. ${docNrTxt} din ${docNrDate}`, 18)] }),
-        new Paragraph({ spacing: { before: 0, after: 120 }, children: [bold('Data examinării: ', 17), reg(sessionDate, 17), reg('    Locația: ', 17), bold(session.locations?.name || '', 17)] }),
         studentsTable,
         new Paragraph({ spacing: { before: 240, after: 60 }, children: [] }),
         new Table({

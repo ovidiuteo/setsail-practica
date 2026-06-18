@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import sharp from 'sharp'
 
 export async function POST(req: NextRequest) {
   const body = await req.json()
@@ -110,7 +111,7 @@ export async function POST(req: NextRequest) {
 
   if (format === 'pdf') {
     const antetHtml = antetDoc?.file_data
-      ? `<div style="text-align:center;margin-bottom:16px;"><img src="${antetDoc.file_data}" style="max-width:100%;height:auto;max-height:80px;"/></div>`
+      ? `<div style="margin-bottom:16px;"><img src="${antetDoc.file_data}" style="width:100%;height:auto;display:block;"/></div>`
       : '<div style="text-align:center;font-weight:bold;font-size:13pt;margin-bottom:16px;">S.C. SET SAIL ADVERTISING S.R.L.</div>'
 
     const minRows = Math.max(students.length, 8)
@@ -214,9 +215,13 @@ ${antetHtml}
       const base64 = antetDoc.file_data.includes(',') ? antetDoc.file_data.split(',')[1] : antetDoc.file_data
       const buf = Buffer.from(base64, 'base64')
       const mt = antetDoc.file_data.includes('png') ? 'png' : 'jpg'
+      // Lățime = lățimea conținutului (180mm ≈ 680px), înălțime proporțională
+      const meta = await sharp(buf).metadata()
+      const W = 680
+      const H = (meta.width && meta.height) ? Math.round(W * meta.height / meta.width) : 75
       headerImg = [new Paragraph({
         spacing: { after: 100 },
-        children: [new ImageRun({ data: buf, type: mt as any, transformation: { width: 700, height: 75 } })]
+        children: [new ImageRun({ data: buf, type: mt as any, transformation: { width: W, height: H } })]
       })]
     } catch(e) { console.error(e) }
   }
