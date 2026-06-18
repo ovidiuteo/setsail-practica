@@ -136,12 +136,6 @@ export async function POST(req: NextRequest) {
           <th style="border:1px solid #000;padding:6px;width:35%">Numele și prenumele</th>
           <th style="border:1px solid #000;padding:6px;width:40%">Cunoștințe generale despre sistemul GMDSS, regulamente interne și internaționale de radiocomunicații (scris)</th>
           <th style="border:1px solid #000;padding:6px;width:20%">Rezultat examen de evaluare</th>
-        </tr>
-        <tr class="pvsub">
-          <td style="border:1px solid #000;padding:4px;font-size:9pt"></td>
-          <td style="border:1px solid #000;padding:4px;font-size:9pt"></td>
-          <td style="border:1px solid #000;padding:4px;font-size:9pt">Se va completa: nr. răspunsuri corecte / 20 de întrebări</td>
-          <td style="border:1px solid #000;padding:4px;font-size:9pt">În funcție de rezultat se va completa: Admis sau Respins</td>
         </tr>`
       : `<tr class="pvhead" style="background:#e9d5ff">
           <th style="border:1px solid #000;padding:6px;width:5%">Nr.<br>crt.</th>
@@ -150,14 +144,6 @@ export async function POST(req: NextRequest) {
           <th style="border:1px solid #000;padding:6px;width:20%">Limba engleză – frazeologie standard (scris)</th>
           <th style="border:1px solid #000;padding:6px;width:15%">Simulare trafic GMDSS și exerciții SAR (practic)</th>
           <th style="border:1px solid #000;padding:6px;width:10%">Rezultat</th>
-        </tr>
-        <tr class="pvsub">
-          <td style="border:1px solid #000;padding:4px;font-size:9pt"></td>
-          <td style="border:1px solid #000;padding:4px;font-size:9pt"></td>
-          <td style="border:1px solid #000;padding:4px;font-size:9pt">nr. răsp. corecte / 20 întrebări</td>
-          <td style="border:1px solid #000;padding:4px;font-size:9pt">nr. răsp. corecte / 5 întrebări</td>
-          <td style="border:1px solid #000;padding:4px;font-size:9pt">Notare 1-10</td>
-          <td style="border:1px solid #000;padding:4px;font-size:9pt">Admis / Respins</td>
         </tr>`
 
     const minRows = Math.max(students.length, 8)
@@ -193,8 +179,6 @@ export async function POST(req: NextRequest) {
   h2 { text-align:center; font-size:11pt; margin:10px 0; }
   table { width:100%; border-collapse:collapse; margin:10px 0; font-size:9pt; }
   th { font-weight:bold; text-align:center; vertical-align:middle; }
-  tr.pvhead th { border-bottom:0 !important; }
-  tr.pvsub td { border-top:0 !important; text-align:center !important; }
 </style>
 </head><body>
 ${antetHtml}
@@ -235,10 +219,6 @@ ${antetHtml}
 
   const border = { style: BorderStyle.SINGLE, size: 4, color: '000000' }
   const borders = { top: border, bottom: border, left: border, right: border }
-  const whiteB = { style: BorderStyle.SINGLE, size: 4, color: 'FFFFFF' }
-  // Linia dintre randul de header si cel de descriere = alba (invizibila)
-  const headBorders = { top: border, bottom: whiteB, left: border, right: border }
-  const subBorders = { top: whiteB, bottom: border, left: border, right: border }
   const cellM = { top: 60, bottom: 60, left: 80, right: 80 }
   const shade = { fill: 'E9D5FF', type: ShadingType.SOLID }
 
@@ -316,42 +296,28 @@ ${antetHtml}
   // Tabel cursanti
   const minRows = Math.max(students.length, 8)
 
-  let headerRow: any, subHeaderRow: any
+  let headerRow: any
   let colWidths: number[]
 
   if (isPrelungire) {
     // 4 coloane (proporțional pe lățimea portrait)
     colWidths = [340, 2686, 4700, 2480]
     headerRow = new TableRow({ tableHeader: true, children: [
-      cell([para([bold('Nr.\ncrt.', 16)], AlignmentType.CENTER)], { w: colWidths[0], shade, borders: headBorders }),
-      cell([para([bold('Numele și prenumele', 16)], AlignmentType.CENTER)], { w: colWidths[1], shade, borders: headBorders }),
-      cell([para([bold('Cunoștințe generale despre sistemul GMDSS, regulamente interne și internaționale de radiocomunicații (scris)', 16)], AlignmentType.CENTER)], { w: colWidths[2], shade, borders: headBorders }),
-      cell([para([bold('Rezultat examen de evaluare', 16)], AlignmentType.CENTER)], { w: colWidths[3], shade, borders: headBorders }),
-    ]})
-    subHeaderRow = new TableRow({ children: [
-      cell([para([reg('')], AlignmentType.CENTER)], { w: colWidths[0], borders: subBorders }),
-      cell([para([reg('')], AlignmentType.CENTER)], { w: colWidths[1], borders: subBorders }),
-      cell([para([reg('Se va completa: nr. răspunsuri corecte / 20 de întrebări', 15)], AlignmentType.CENTER)], { w: colWidths[2], borders: subBorders }),
-      cell([para([reg('În funcție de rezultat se va completa: Admis sau Respins', 15)], AlignmentType.CENTER)], { w: colWidths[3], borders: subBorders }),
+      cell([para([bold('Nr.\ncrt.', 16)], AlignmentType.CENTER)], { w: colWidths[0], shade }),
+      cell([para([bold('Numele și prenumele', 16)], AlignmentType.CENTER)], { w: colWidths[1], shade }),
+      cell([para([bold('Cunoștințe generale despre sistemul GMDSS, regulamente interne și internaționale de radiocomunicații (scris)', 16)], AlignmentType.CENTER)], { w: colWidths[2], shade }),
+      cell([para([bold('Rezultat examen de evaluare', 16)], AlignmentType.CENTER)], { w: colWidths[3], shade }),
     ]})
   } else {
     // 6 coloane (proporțional pe lățimea portrait)
     colWidths = [340, 2150, 2556, 1610, 1880, 1670]
     headerRow = new TableRow({ tableHeader: true, children: [
-      cell([para([bold('Nr.\ncrt.', 15)], AlignmentType.CENTER)], { w: colWidths[0], shade, borders: headBorders }),
-      cell([para([bold('Numele și prenumele', 15)], AlignmentType.CENTER)], { w: colWidths[1], shade, borders: headBorders }),
-      cell([para([bold('Cunoștințe generale despre sistemul GMDSS, regulamente interne și internaționale de radiocomunicații (scris)', 15)], AlignmentType.CENTER)], { w: colWidths[2], shade, borders: headBorders }),
-      cell([para([bold('Limba engleză – frazeologie standard (scris)', 15)], AlignmentType.CENTER)], { w: colWidths[3], shade, borders: headBorders }),
-      cell([para([bold('Simulare trafic GMDSS și exerciții de căutare și salvare SAR (proba practică)', 15)], AlignmentType.CENTER)], { w: colWidths[4], shade, borders: headBorders }),
-      cell([para([bold('Rezultat examen de evaluare', 15)], AlignmentType.CENTER)], { w: colWidths[5], shade, borders: headBorders }),
-    ]})
-    subHeaderRow = new TableRow({ children: [
-      cell([para([reg('')], AlignmentType.CENTER)], { w: colWidths[0], borders: subBorders }),
-      cell([para([reg('')], AlignmentType.CENTER)], { w: colWidths[1], borders: subBorders }),
-      cell([para([reg('Se va completa: nr. răspunsuri corecte / 20 de întrebări', 15)], AlignmentType.CENTER)], { w: colWidths[2], borders: subBorders }),
-      cell([para([reg('Se va completa: nr. răspunsuri corecte / 5 întrebări', 15)], AlignmentType.CENTER)], { w: colWidths[3], borders: subBorders }),
-      cell([para([reg('Notare de la 1 la 10', 15)], AlignmentType.CENTER)], { w: colWidths[4], borders: subBorders }),
-      cell([para([reg('În funcție de rezultat se va completa: Admis sau Respins', 15)], AlignmentType.CENTER)], { w: colWidths[5], borders: subBorders }),
+      cell([para([bold('Nr.\ncrt.', 15)], AlignmentType.CENTER)], { w: colWidths[0], shade }),
+      cell([para([bold('Numele și prenumele', 15)], AlignmentType.CENTER)], { w: colWidths[1], shade }),
+      cell([para([bold('Cunoștințe generale despre sistemul GMDSS, regulamente interne și internaționale de radiocomunicații (scris)', 15)], AlignmentType.CENTER)], { w: colWidths[2], shade }),
+      cell([para([bold('Limba engleză – frazeologie standard (scris)', 15)], AlignmentType.CENTER)], { w: colWidths[3], shade }),
+      cell([para([bold('Simulare trafic GMDSS și exerciții de căutare și salvare SAR (proba practică)', 15)], AlignmentType.CENTER)], { w: colWidths[4], shade }),
+      cell([para([bold('Rezultat examen de evaluare', 15)], AlignmentType.CENTER)], { w: colWidths[5], shade }),
     ]})
   }
 
@@ -385,7 +351,7 @@ ${antetHtml}
   const studentsTable = new Table({
     width: { size: TW, type: WidthType.DXA },
     columnWidths: colWidths,
-    rows: [headerRow, subHeaderRow, ...dataRows],
+    rows: [headerRow, ...dataRows],
   })
 
   const doc = new Document({
