@@ -46,6 +46,9 @@ export async function POST(req: NextRequest) {
     const _cd = new Date(session.session_date); _cd.setDate(_cd.getDate() - 6)
     const cerereDate = _cd.toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric' })
     const dateStr = session.session_date.replace(/-/g, '_')
+    const lunaAn = new Date(session.session_date).toLocaleDateString('ro-RO', { month: 'long', year: 'numeric' })
+    // Titlu doc = nume default la „Save as PDF" + numele tab-ului
+    const docTitle = `Cereri ${isPrelungire ? 'prelungire' : 'obtinere'} LRC ${lunaAn} SetSail`
     const gdprText = 'Autoritatea Națională pentru Administrare și Reglementare în Comunicații prelucrează datele dumneavoastră personale în conformitate cu dispozițiile Regulamentului (UE) 2016/679. Scopul prelucrarii îl constituie îndeplinirea obligațiilor legale privind aplicarea politicii naționale în domeniul comunicațiilor electronice, comunicațiilor audiovizuale și al serviciilor poștale, inclusiv prin reglementarea pieței și reglementarea tehnică în aceste domenii, respectând dispozițiile legale, normele și procedurile interne existente în acest sens. În situația în care ANCOM va prelucra ulterior datele cu caracter personal într-un alt scop decât cel pentru care acestea au fost colectate, veți fi informat despre acest lucru înainte de inițierea prelucrării, primind toate detaliile necesare. Datele pot fi dezvăluite de ANCOM unor terți doar în baza unui temei legal. Persoanele vizate de prelucrare își pot exercita toate drepturile prevăzute de Regulamentul 2016/679/UE printr-o cerere scrisă, semnată și datată, trimisă pe adresa autorității. Toate informațiile necesare privind protecția persoanelor fizice în ceea ce priveste prelucrarea datelor cu caracter personal și libera circulație a acestor date sunt disponibile pe pagina de internet http://www.ancom.org.ro/, la secțiunea "GDPR".'
 
     const fn1 = '¹ Se va menționa tipul certificatului: general (GOC-AERO; GOC-GMDSS ; GMDSS-LRC ); restrâns (ROC-AERO; ROC-GMDSS); CNI (pe căile de navigație interioară) Radioelectronist clasa I/ a-II-a.'
@@ -97,6 +100,7 @@ export async function POST(req: NextRequest) {
       const pagesHtml = pagesArr.join('<div class="page-break"></div>')
 
       const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+<title>${docTitle}</title>
 <style>
   @page { size: A4; margin: 20mm; }
   @media print { html,body{background:white!important;padding:0!important;} body{box-shadow:none!important;margin:0!important;padding:0!important;width:auto!important;} .page-break{page-break-after:always;} }
