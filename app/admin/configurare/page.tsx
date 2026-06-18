@@ -564,7 +564,7 @@ function LeadsDashboardTokenSection() {
 function NotificationNumbersSection() {
   const [rows, setRows] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [filterTip, setFilterTip] = useState<'all'|'solicitare'|'document'>('all')
+  const [filterTip, setFilterTip] = useState<string>('all')
 
   async function load() {
     setLoading(true)
@@ -592,9 +592,27 @@ function NotificationNumbersSection() {
     'instiintare-anr':   'Înștiințare ANR',
     'pv-obtinere':       'PV Obținere',
     'anexa-pv-obtinere': 'Anexă PV Obținere',
+    'anexa-obtinere':    'Anexă PV Obținere',
     'pv-prelungire':     'PV Prelungire',
     'anexa-pv-prelungire':'Anexă PV Prelungire',
+    'anexa-prelungire':  'Anexă PV Prelungire',
+    'cereri-obtinere':   'Cerere Obținere',
+    'cereri-prelungire': 'Cerere Prelungire',
   }
+  // Etichete + filtre pe registru (noile: pv_ancom/instiintari_ancom/cereri_ancom; vechi: solicitare/document)
+  const REG_BADGE: Record<string, { label: string; cls: string }> = {
+    solicitare:        { label: 'Înștiințare', cls: 'bg-blue-50 text-blue-700' },
+    document:          { label: 'Document PV', cls: 'bg-purple-50 text-purple-700' },
+    instiintari_ancom: { label: 'Înștiințări ANCOM', cls: 'bg-blue-50 text-blue-700' },
+    pv_ancom:          { label: 'PV ANCOM', cls: 'bg-purple-50 text-purple-700' },
+    cereri_ancom:      { label: 'Cereri ANCOM', cls: 'bg-indigo-50 text-indigo-700' },
+  }
+  const REG_FILTERS: { key: string; label: string }[] = [
+    { key: 'all', label: 'Toate' },
+    { key: 'instiintari_ancom', label: 'Înștiințări ANCOM' },
+    { key: 'pv_ancom', label: 'PV ANCOM' },
+    { key: 'cereri_ancom', label: 'Cereri ANCOM' },
+  ]
 
   const filtered = filterTip === 'all' ? rows : rows.filter(r => r.tip === filterTip)
 
@@ -606,12 +624,12 @@ function NotificationNumbersSection() {
           <p className="text-xs text-gray-400 mt-0.5">{rows.length} înregistrări total</p>
         </div>
         <div className="flex gap-2">
-          {(['all','solicitare','document'] as const).map(t => (
-            <button key={t} onClick={() => setFilterTip(t)}
+          {REG_FILTERS.map(t => (
+            <button key={t.key} onClick={() => setFilterTip(t.key)}
               className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${
-                filterTip === t ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                filterTip === t.key ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
               }`}>
-              {t === 'all' ? 'Toate' : t === 'solicitare' ? 'Înștiințări' : 'Documente PV'}
+              {t.label}
             </button>
           ))}
         </div>
@@ -638,12 +656,8 @@ function NotificationNumbersSection() {
               <tr key={r.id} className="hover:bg-gray-50 transition-colors">
                 <td className="px-6 py-3 font-bold text-gray-900">{r.numar}</td>
                 <td className="px-4 py-3">
-                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                    r.tip === 'solicitare'
-                      ? 'bg-blue-50 text-blue-700'
-                      : 'bg-purple-50 text-purple-700'
-                  }`}>
-                    {r.tip === 'solicitare' ? 'Înștiințare' : 'Document PV'}
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${(REG_BADGE[r.tip]?.cls) || 'bg-gray-100 text-gray-600'}`}>
+                    {REG_BADGE[r.tip]?.label || r.tip}
                   </span>
                 </td>
                 <td className="px-4 py-3 text-gray-700">

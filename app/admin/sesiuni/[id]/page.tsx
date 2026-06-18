@@ -1217,6 +1217,13 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
   const [nrModalNext, setNrModalNext] = useState(1)
   const [nrModalDate, setNrModalDate] = useState(new Date().toISOString().slice(0,10))
   const [nrModalLoading, setNrModalLoading] = useState(false)
+  // Sistem numere per-document (registre separate: PV / Înștiințări / Cereri, reset anual)
+  const [docNumbers, setDocNumbers] = useState<Record<string, { numar: number; data_notificare: string }>>({})
+  const [docNrModal, setDocNrModal] = useState<string | null>(null)   // document_tip al doc-ului editat
+  const [docNrValue, setDocNrValue] = useState(1)
+  const [docNrDate, setDocNrDate] = useState(new Date().toISOString().slice(0,10))
+  const [docNrRecent, setDocNrRecent] = useState<any[]>([])
+  const [docNrSaving, setDocNrSaving] = useState(false)
   const [gPV, setGPV] = useState(false)
   const [gFise, setGFise] = useState(false)
   const [gPDF, setGPDF] = useState(false)
@@ -1250,6 +1257,41 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
     { key: 'pv-prelungire',    label: 'PV Prelungire LRC' },
     { key: 'anexa-pv-prelungire', label: 'Anexă PV Prelungire LRC' },
   ]
+
+  // === Numere documente per-document, pe 3 registre separate (reset anual) ===
+  // tip = registrul (folosit ca filtru pentru "următorul număr" și istoric)
+  const REG_LABEL: Record<string, string> = {
+    pv_ancom: 'PV ANCOM', instiintari_ancom: 'Înștiințări ANCOM', cereri_ancom: 'Cereri examen ANCOM',
+  }
+  // anexaOf = preia numărul PV-ului corespunzător (nu primește număr propriu)
+  const DOC_DEFS: Record<string, { reg: string; label: string; anexaOf?: string }> = {
+    'curs-obtinere':     { reg: 'instiintari_ancom', label: 'Înștiințare Curs Obținere LRC' },
+    'examen-obtinere':   { reg: 'instiintari_ancom', label: 'Înștiințare Examen Obținere LRC' },
+    'curs-prelungire':   { reg: 'instiintari_ancom', label: 'Înștiințare Curs Prelungire LRC' },
+    'examen-prelungire': { reg: 'instiintari_ancom', label: 'Înștiințare Examen Prelungire LRC' },
+    'cereri-obtinere':   { reg: 'cereri_ancom', label: 'Cerere Examen Obținere LRC' },
+    'cereri-prelungire': { reg: 'cereri_ancom', label: 'Cerere Examen Prelungire LRC' },
+    'pv-obtinere':       { reg: 'pv_ancom', label: 'PV Obținere LRC' },
+    'pv-prelungire':     { reg: 'pv_ancom', label: 'PV Prelungire LRC' },
+    'anexa-obtinere':    { reg: 'pv_ancom', label: 'Anexă PV Obținere LRC', anexaOf: 'pv-obtinere' },
+    'anexa-prelungire':  { reg: 'pv_ancom', label: 'Anexă PV Prelungire LRC', anexaOf: 'pv-prelungire' },
+  }
+  const shortDate = (d: string) => { const p = (d || '').split('-'); return p.length === 3 ? `${p[2]}.${p[1]}` : '' }
+
+  // Încarcă numerele alocate documentelor acestei sesiuni
+  useEffect(() => {
+    if (!sess?.id) return
+    supabase.from('notification_numbers')
+      .select('numar, data_notificare, document_tip')
+      .eq('session_id', sess.id)
+      .then(({ data }) => {
+        const m: Record<string, { numar: number; data_notificare: string }> = {}
+        for (const r of (data || []) as any[]) {
+          if (r.document_tip) m[r.document_tip] = { numar: r.numar, data_notificare: r.data_notificare }
+        }
+        setDocNumbers(m)
+      })
+  }, [sess?.id])
 
   async function openNrModal(tip: 'solicitare'|'document') {
     setShowNrModal(tip)
@@ -1296,6 +1338,65 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
     setShowNrModal(null)
     // Refresh pagina ca sa apara noile numere
     window.location.reload()
+  }
+
+  // Deschide modalul de număr pentru un document anume (nu pentru anexe — ele preiau nr. PV)
+  async function openDocNrModal(docTip: string) {
+    const def = DOC_DEFS[docTip]
+    if (!def || def.anexaOf) return
+    const existing = docNumbers[docTip]
+    const date = existing?.data_notificare || new Date().toISOString().slice(0, 10)
+    const { data } = await supabase.from('notification_numbers')
+      .select('numar, data_notificare, document, document_tip, session_id')
+      .eq('tip', def.reg)
+      .order('numar', { ascending: false })
+    const rows = (data || []) as any[]
+    setDocNrRecent(rows)
+    const yr = date.slice(0, 4)
+    const maxY = Math.max(0, ...rows.filter(r => String(r.data_notificare).startsWith(yr)).map(r => r.numar))
+    setDocNrValue(existing?.numar ?? (maxY + 1))
+    setDocNrDate(date)
+    setDocNrModal(docTip)
+  }
+
+  async function saveDocNr() {
+    const docTip = docNrModal
+    if (!docTip) return
+    const def = DOC_DEFS[docTip]
+    setDocNrSaving(true)
+    // Înlocuim rândul existent pentru (sesiune, document)
+    await supabase.from('notification_numbers').delete().eq('session_id', sess.id).eq('document_tip', docTip)
+    await supabase.from('notification_numbers').insert({
+      numar: docNrValue, data_notificare: docNrDate, document: def.label,
+      document_tip: docTip, session_id: sess.id, tip: def.reg,
+    })
+    setDocNumbers(m => ({ ...m, [docTip]: { numar: docNrValue, data_notificare: docNrDate } }))
+    setDocNrSaving(false)
+    setDocNrModal(null)
+  }
+
+  async function clearDocNr(docTip: string) {
+    await supabase.from('notification_numbers').delete().eq('session_id', sess.id).eq('document_tip', docTip)
+    setDocNumbers(m => { const n = { ...m }; delete n[docTip]; return n })
+    setDocNrModal(null)
+  }
+
+  // Chip cu nr.+dată lângă fiecare buton de document (click → modal). Anexa preia nr. PV (read-only).
+  function docChip(docTip: string) {
+    const def = DOC_DEFS[docTip]
+    if (!def) return null
+    const rec = docNumbers[def.anexaOf || docTip]
+    const txt = rec ? `${rec.numar} · ${shortDate(rec.data_notificare)}` : ''
+    if (def.anexaOf) {
+      return <span className="w-14 shrink-0 text-center text-[11px] text-gray-400" title="Preia nr. PV">{txt || '—'}</span>
+    }
+    return (
+      <button type="button" onClick={() => openDocNrModal(docTip)}
+        title="Alocă / modifică numărul documentului"
+        className={`w-14 shrink-0 text-center text-[11px] font-medium rounded-md py-1 border transition-colors ${rec ? 'border-gray-200 text-gray-700 hover:bg-gray-50' : 'border-dashed border-gray-300 text-gray-400 hover:bg-gray-50'}`}>
+        {txt || '+ nr'}
+      </button>
+    )
   }
 
   const [copied, setCopied] = useState(false)
@@ -1481,8 +1582,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
             ['Decizie ANR', sess.evaluators?.decision_number],
             ['Ambarcațiune', sess.boats?.name||'—'],
             ['Clasa CAA', sess.class_caa],
-            ['Nr. înștiințări', sess.request_number||'—'],
-            ...(isRadioSession ? [['Nr. documente PV', (sess as any).nr_document_ancom||'—'] as [string,string]] : []),
+            ...(isRadioSession ? [] : [['Nr. înștiințări', sess.request_number||'—'] as [string,string]]),
             ['Locație detaliată', sess.location_detail||'—'],
             ['Categorie', timelineScopeLabel((sess as any).timeline_scope)],
             ['Link skipper', (sess as any).skipper_url||'—'],
@@ -1677,7 +1777,8 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
               <h3 className="font-semibold text-sm text-gray-900 mb-3">Înștiințări ANCOM</h3>
               <div className="space-y-2">
                 {/* 1. Curs Obtinere */}
-                <div className="flex gap-1.5">
+                <div className="flex gap-1.5 items-center">
+                  {docChip('curs-obtinere')}
                   <button onClick={async()=>{try{await generateDocRadio('/api/generate-instiintare-ancom',`Instiintare_ANCOM_curs-obtinere_${sess.session_date}.docx`,'curs-obtinere','docx')}catch(e:any){alert(e.message)}}}
                     disabled={false} className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium text-white" style={{background:'#1d4ed8'}}>
                     <FileText size={11}/>Curs Obținere
@@ -1691,7 +1792,8 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                   </button>
                 </div>
                 {/* 2. Examen Obtinere */}
-                <div className="flex gap-1.5">
+                <div className="flex gap-1.5 items-center">
+                  {docChip('examen-obtinere')}
                   <button onClick={async()=>{try{await generateDocRadio('/api/generate-instiintare-ancom',`Instiintare_ANCOM_examen-obtinere_${sess.session_date}.docx`,'examen-obtinere','docx')}catch(e:any){alert(e.message)}}}
                     className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium text-white" style={{background:'#1d4ed8'}}>
                     <FileText size={11}/>Examen Obținere
@@ -1707,7 +1809,8 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                 {/* Separator */}
                 <div className="border-t border-gray-100 pt-1 mt-1"/>
                 {/* 3. Curs Prelungire */}
-                <div className="flex gap-1.5">
+                <div className="flex gap-1.5 items-center">
+                  {docChip('curs-prelungire')}
                   <button onClick={async()=>{try{await generateDocRadio('/api/generate-instiintare-ancom',`Instiintare_ANCOM_curs-prelungire_${sess.session_date}.docx`,'curs-prelungire','docx')}catch(e:any){alert(e.message)}}}
                     className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium text-white" style={{background:'#1d4ed8'}}>
                     <FileText size={11}/>Curs Prelungire
@@ -1721,7 +1824,8 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                   </button>
                 </div>
                 {/* 4. Examen Prelungire */}
-                <div className="flex gap-1.5">
+                <div className="flex gap-1.5 items-center">
+                  {docChip('examen-prelungire')}
                   <button onClick={async()=>{try{await generateDocRadio('/api/generate-instiintare-ancom',`Instiintare_ANCOM_examen-prelungire_${sess.session_date}.docx`,'examen-prelungire','docx')}catch(e:any){alert(e.message)}}}
                     className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium text-white" style={{background:'#1d4ed8'}}>
                     <FileText size={11}/>Examen Prelungire
@@ -1743,7 +1847,8 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
             <div className="bg-white rounded-xl p-5 shadow-sm border border-indigo-100">
               <h3 className="font-semibold text-sm text-gray-900 mb-3">Cereri ANCOM</h3>
               <div className="space-y-2">
-                <div className="flex gap-1.5">
+                <div className="flex gap-1.5 items-center">
+                  {docChip('cereri-obtinere')}
                   <button onClick={async()=>{try{await generateDocRadio('/api/generate-cereri-radio',`Cereri_obtinere_${sess.session_date}.docx`,'obtinere','docx')}catch(e:any){alert(e.message)}}}
                     disabled={students.length===0} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#1d4ed8'}}>
                     <FileText size={12}/>Cereri Obținere
@@ -1756,7 +1861,8 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                     <Download size={12}/>PDF Obținere
                   </button>
                 </div>
-                <div className="flex gap-1.5">
+                <div className="flex gap-1.5 items-center">
+                  {docChip('cereri-prelungire')}
                   <button onClick={async()=>{try{await generateDocRadio('/api/generate-cereri-radio',`Cereri_prelungire_${sess.session_date}.docx`,'prelungire','docx')}catch(e:any){alert(e.message)}}}
                     disabled={students.length===0} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#1d4ed8'}}>
                     <FileText size={12}/>Cereri Prelungire
@@ -1778,7 +1884,8 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
             {isRadio ? (
               <div className="space-y-2">
                 {/* 1. PV Obtinere */}
-                <div className="flex gap-1.5">
+                <div className="flex gap-1.5 items-center">
+                  {docChip('pv-obtinere')}
                   <button onClick={async()=>{setGPV(true);try{await generateDocRadio('/api/generate-pv-radio',`PV obt ${sess.session_date}.docx`,'obtinere','docx')}catch(e:any){alert(e.message)}setGPV(false)}}
                     disabled={gPV||students.length===0} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#1d4ed8'}}>
                     <FileText size={12}/>{gPV?'...':'PV Obținere LRC'}
@@ -1792,7 +1899,8 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                   </button>
                 </div>
                 {/* 2. Anexa Obtinere */}
-                <div className="flex gap-1.5">
+                <div className="flex gap-1.5 items-center">
+                  {docChip('anexa-obtinere')}
                   <button onClick={async()=>{try{await generateDocRadio('/api/generate-anexa-pv',`ANEX obt ${sess.session_date}.docx`,'obtinere','docx')}catch(e:any){alert(e.message)}}}
                     disabled={students.length===0} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#1d4ed8'}}>
                     <FileText size={12}/>Anexă PV Obținere LRC
@@ -1808,7 +1916,8 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                 {/* Separator */}
                 <div className="border-t border-gray-100 pt-1 mt-1"/>
                 {/* 3. PV Prelungire */}
-                <div className="flex gap-1.5">
+                <div className="flex gap-1.5 items-center">
+                  {docChip('pv-prelungire')}
                   <button onClick={async()=>{try{await generateDocRadio('/api/generate-pv-radio',`PV pre ${sess.session_date}.docx`,'prelungire','docx')}catch(e:any){alert(e.message)}}}
                     disabled={students.length===0} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#1d4ed8'}}>
                     <FileText size={12}/>PV Prelungire LRC
@@ -1822,7 +1931,8 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                   </button>
                 </div>
                 {/* 4. Anexa Prelungire */}
-                <div className="flex gap-1.5">
+                <div className="flex gap-1.5 items-center">
+                  {docChip('anexa-prelungire')}
                   <button onClick={async()=>{try{await generateDocRadio('/api/generate-anexa-pv',`ANEX pre ${sess.session_date}.docx`,'prelungire','docx')}catch(e:any){alert(e.message)}}}
                     disabled={students.length===0} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#1d4ed8'}}>
                     <FileText size={12}/>Anexă PV Prelungire LRC
@@ -2431,6 +2541,66 @@ Set Sail NauticSchool
           </div>
         </div>
       )}
+      {/* Modal număr per-document (registre separate, reset anual) */}
+      {docNrModal && (() => {
+        const def = DOC_DEFS[docNrModal]
+        const yr = docNrDate.slice(0, 4)
+        const recentYr = docNrRecent.filter((r: any) => String(r.data_notificare).startsWith(yr))
+        return (
+          <div className="fixed inset-0 bg-black bg-opacity-40 z-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl">
+              <div className="flex items-center justify-between p-5 border-b border-gray-100">
+                <div>
+                  <h3 className="font-semibold text-gray-900">{def?.label}</h3>
+                  <p className="text-xs text-gray-400">Registru: {REG_LABEL[def?.reg]} · numerotare anuală ({yr})</p>
+                </div>
+                <button onClick={() => setDocNrModal(null)} className="p-1 rounded hover:bg-gray-100 text-gray-400"><X size={16} /></button>
+              </div>
+              <div className="p-5 grid grid-cols-2 gap-5">
+                {/* Stânga: editor număr + dată */}
+                <div>
+                  <div className="text-xs text-gray-400 mb-1">Număr document</div>
+                  <div className="flex items-center gap-2 mb-4">
+                    <button onClick={() => setDocNrValue(v => Math.max(1, v - 1))} className="w-9 h-9 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 text-lg font-bold">−</button>
+                    <input type="number" value={docNrValue} onChange={e => setDocNrValue(Math.max(1, parseInt(e.target.value) || 1))}
+                      className="flex-1 w-full border-2 border-blue-400 rounded-lg px-3 py-2 text-lg font-bold text-blue-700 text-center focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                    <button onClick={() => setDocNrValue(v => v + 1)} className="w-9 h-9 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 text-lg font-bold">+</button>
+                  </div>
+                  <div className="text-xs text-gray-400 mb-1">Data</div>
+                  <input type="date" value={docNrDate} onChange={e => setDocNrDate(e.target.value)}
+                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                  <button onClick={saveDocNr} disabled={docNrSaving}
+                    className="w-full py-2.5 rounded-xl text-sm font-medium text-white disabled:opacity-50" style={{ background: '#0a1628' }}>
+                    {docNrSaving ? 'Se salvează...' : '✓ Salvează numărul'}
+                  </button>
+                  {docNumbers[docNrModal] && (
+                    <button onClick={() => clearDocNr(docNrModal)} className="w-full mt-2 py-2 rounded-xl text-xs font-medium border border-red-200 text-red-500 hover:bg-red-50">
+                      🗑 Șterge numărul
+                    </button>
+                  )}
+                </div>
+                {/* Dreapta: ultimele acte cu număr din acest registru (anul selectat) */}
+                <div>
+                  <div className="text-xs text-gray-400 font-medium mb-2">Ultimele acte · {REG_LABEL[def?.reg]} {yr}</div>
+                  {recentYr.length === 0 ? (
+                    <div className="text-xs text-gray-300 py-4 text-center">Niciun număr alocat anul acesta.</div>
+                  ) : (
+                    <div className="space-y-0.5 max-h-56 overflow-y-auto">
+                      {recentYr.slice(0, 8).map((r: any, i: number) => (
+                        <div key={i} className="flex items-center gap-2 py-1.5 px-2 rounded-lg bg-gray-50 text-xs">
+                          <span className="font-bold text-gray-900 w-7 shrink-0">{r.numar}</span>
+                          <span className="text-gray-400 shrink-0">{new Date(r.data_notificare).toLocaleDateString('ro-RO')}</span>
+                          <span className="text-gray-500 truncate">{r.document}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </>
   )
 }
