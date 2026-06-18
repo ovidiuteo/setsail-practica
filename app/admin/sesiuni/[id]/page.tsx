@@ -1287,23 +1287,22 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
   const shortDate = (d: string) => { const p = (d || '').split('-'); return p.length === 3 ? `${p[2]}.${p[1]}` : '' }
 
   // Încarcă numerele alocate documentelor acestei sesiuni
-  useEffect(() => {
+  async function loadDocNumbers() {
     if (!sess?.id) return
-    supabase.from('notification_numbers')
+    const { data } = await supabase.from('notification_numbers')
       .select('numar, data_notificare, document_tip, tip')
       .eq('session_id', sess.id)
-      .then(({ data }) => {
-        const dm: Record<string, { numar: number; data_notificare: string }> = {}
-        const im: Record<string, { numar: number; data_notificare: string }> = {}
-        for (const r of (data || []) as any[]) {
-          if (!r.document_tip) continue
-          const v = { numar: r.numar, data_notificare: r.data_notificare }
-          if (r.tip === 'nr_iesire_ancom') im[r.document_tip] = v
-          else dm[r.document_tip] = v
-        }
-        setDocNumbers(dm); setIesireNumbers(im)
-      })
-  }, [sess?.id])
+    const dm: Record<string, { numar: number; data_notificare: string }> = {}
+    const im: Record<string, { numar: number; data_notificare: string }> = {}
+    for (const r of (data || []) as any[]) {
+      if (!r.document_tip) continue
+      const v = { numar: r.numar, data_notificare: r.data_notificare }
+      if (r.tip === 'nr_iesire_ancom') im[r.document_tip] = v
+      else dm[r.document_tip] = v
+    }
+    setDocNumbers(dm); setIesireNumbers(im)
+  }
+  useEffect(() => { loadDocNumbers() }, [sess?.id])
 
   async function openNrModal(tip: 'solicitare'|'document') {
     setShowNrModal(tip)
@@ -1390,14 +1389,20 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
     // Înlocuim DOAR rândul din acest registru pentru (sesiune, document)
     await supabase.from('notification_numbers').delete()
       .eq('session_id', sess.id).eq('document_tip', docTip).eq('tip', reg)
-    await supabase.from('notification_numbers').insert({
+    const { error } = await supabase.from('notification_numbers').insert({
       numar: docNrValue, data_notificare: docNrDate,
       document: (kind === 'iesire' ? 'Nr. ieșire · ' : '') + def.label,
       document_tip: docTip, session_id: sess.id, tip: reg,
     })
+    setDocNrSaving(false)
+    if (error) {
+      // ex: număr deja folosit în acest registru pe anul respectiv
+      alert(`Numărul ${docNrValue} nu a putut fi salvat: ${/duplicate|unique/i.test(error.message) ? `e deja folosit în registrul „${REG_LABEL[reg]}" pe ${docNrDate.slice(0, 4)}. Alege alt număr.` : error.message}`)
+      await loadDocNumbers()   // re-sincronizăm cu DB (rândul vechi a fost șters)
+      return
+    }
     const setter = kind === 'iesire' ? setIesireNumbers : setDocNumbers
     setter(m => ({ ...m, [docTip]: { numar: docNrValue, data_notificare: docNrDate } }))
-    setDocNrSaving(false)
     setDocNrModal(null)
   }
 
