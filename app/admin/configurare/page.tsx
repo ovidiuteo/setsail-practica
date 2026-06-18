@@ -606,9 +606,11 @@ function NotificationNumbersSection() {
     instiintari_ancom: { label: 'Înștiințări ANCOM', cls: 'bg-blue-50 text-blue-700' },
     pv_ancom:          { label: 'PV ANCOM', cls: 'bg-purple-50 text-purple-700' },
     cereri_ancom:      { label: 'Cereri ANCOM', cls: 'bg-indigo-50 text-indigo-700' },
+    nr_iesire_ancom:   { label: 'Nr. ieșire ANCOM', cls: 'bg-emerald-50 text-emerald-700' },
   }
   const REG_FILTERS: { key: string; label: string }[] = [
     { key: 'all', label: 'Toate' },
+    { key: 'nr_iesire_ancom', label: 'Nr. ieșire ANCOM' },
     { key: 'instiintari_ancom', label: 'Înștiințări ANCOM' },
     { key: 'pv_ancom', label: 'PV ANCOM' },
     { key: 'cereri_ancom', label: 'Cereri ANCOM' },
