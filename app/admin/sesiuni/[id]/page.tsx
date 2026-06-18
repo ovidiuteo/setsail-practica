@@ -1284,7 +1284,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
     'anexa-obtinere':    { reg: 'pv_ancom', label: 'Anexă PV Obținere LRC', anexaOf: 'pv-obtinere' },
     'anexa-prelungire':  { reg: 'pv_ancom', label: 'Anexă PV Prelungire LRC', anexaOf: 'pv-prelungire' },
   }
-  const shortDate = (d: string) => { const p = (d || '').split('-'); return p.length === 3 ? `${p[2]}.${p[1]}` : '' }
+  const shortDate = (d: string) => { const p = (d || '').split('-'); return p.length === 3 ? `${p[2]}.${p[1]}.${p[0]}` : '' }
 
   // Încarcă numerele alocate documentelor acestei sesiuni
   async function loadDocNumbers() {

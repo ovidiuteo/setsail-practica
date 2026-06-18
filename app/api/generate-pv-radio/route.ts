@@ -88,6 +88,39 @@ export async function POST(req: NextRequest) {
     ? 'PRELUNGIRII VALABILITĂȚII'
     : 'OBȚINERII'
 
+  // === Numere (document + ieșire) + comisie + ștampilă ===
+  const docTip = isPrelungire ? 'pv-prelungire' : 'pv-obtinere'
+  const { data: nrRows } = await supabase.from('notification_numbers')
+    .select('numar, data_notificare, tip')
+    .eq('session_id', session_id).eq('document_tip', docTip)
+    .in('tip', ['pv_ancom', 'nr_iesire_ancom'])
+  const fmtNrDate = (d: string | null | undefined) => d ? d.split('-').reverse().join('.') : '...............'
+  const docNrRow = (nrRows || []).find((r: any) => r.tip === 'pv_ancom')
+  const iesNrRow = (nrRows || []).find((r: any) => r.tip === 'nr_iesire_ancom')
+  const docNrTxt = docNrRow ? String(docNrRow.numar) : '..........'
+  const docNrDate = fmtNrDate(docNrRow?.data_notificare)
+  const iesNrTxt = iesNrRow ? String(iesNrRow.numar) : '..........'
+  const iesNrDate = fmtNrDate(iesNrRow?.data_notificare)
+
+  // Persoane de contact (în ordinea selectată la sesiune) → președinte + 2 membri
+  const contactIds: string[] = session.contact_person_ids || []
+  let contactNames: string[] = []
+  if (contactIds.length) {
+    const { data: contacts } = await supabase.from('contact_persons').select('id, full_name').in('id', contactIds)
+    contactNames = contactIds.map(id => (contacts || []).find((c: any) => c.id === id)?.full_name).filter(Boolean) as string[]
+  }
+  // Ordinea președinte → membri: prioritate Ovidiu, apoi Sorin, apoi restul (ordinea selectată)
+  const PREZ_PRIORITY = ['ovidiu', 'sorin']
+  const prio = (n: string) => { const i = PREZ_PRIORITY.findIndex(p => n.toLowerCase().includes(p)); return i < 0 ? 99 : i }
+  const orderedContacts = [...contactNames].sort((a, b) => prio(a) - prio(b))
+  const presedinte = orderedContacts[0] || ''
+  const membri = orderedContacts.slice(1, 3)
+
+  // Ștampila SetSail (cu semnătură) — lângă numele președintelui
+  const { data: stampilaDoc } = await supabase.from('setsail_documents')
+    .select('file_data').eq('tip', 'stampila_cu_semnatura').maybeSingle()
+  const stampilaData: string | null = stampilaDoc?.file_data || null
+
   // PDF format
   if (format === 'pdf') {
     const antetHtml = antetDoc?.file_data
@@ -166,14 +199,21 @@ export async function POST(req: NextRequest) {
 </style>
 </head><body>
 ${antetHtml}
-<p style="text-align:right;font-size:9pt">Nr. ................. din .................................</p>
+<p style="text-align:right;font-size:9pt">Nr. ieșire ANCOM: <strong>${iesNrTxt}</strong> din <strong>${iesNrDate}</strong></p>
 <h2>${pvTitle}</h2>
-<p style="text-align:center;font-size:10pt"><strong>Nr. ...... din ...........</strong></p>
+<p style="text-align:center;font-size:10pt"><strong>Nr. ${docNrTxt} din ${docNrDate}</strong></p>
 <p style="font-size:9pt">Data examinării: <strong>${sessionDate}</strong> &nbsp;&nbsp; Locația: <strong>${session.locations?.name || ''}</strong></p>
 <table>${tableHeader}${dataRows}</table>
-<div style="margin-top:20px;display:grid;grid-template-columns:1fr 1fr;gap:20px;">
-  <div><strong>Președinte comisie:</strong><br><br>...........................................</div>
-  <div><strong>Membrii:</strong><br><br>...........................................................<br><br>...........................................................</div>
+<div style="margin-top:24px;display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;">
+  <div>
+    <strong>Președinte comisie:</strong><br>
+    <span style="display:inline-block;margin-top:6px;font-weight:bold;">${presedinte || '...........................................'}</span>
+    ${stampilaData ? `<div style="margin-top:4px;"><img src="${stampilaData}" style="max-height:95px;max-width:100%;"/></div>` : '<br><br>...........................................'}
+  </div>
+  <div><strong>Membrii:</strong><br><br>
+    ${membri[0] || '...........................................................'}<br><br>
+    ${membri[1] || '...........................................................'}
+  </div>
 </div>
 <p style="font-size:8pt;margin-top:15px;font-style:italic">Procesul verbal se va completa în conformitate cu decizia 543/2017-Art. 16${isPrelungire ? ', alin. (1) lit. a)' : ''}.</p>
 </body></html>`
@@ -223,6 +263,20 @@ ${antetHtml}
       headerImg = [new Paragraph({
         spacing: { after: 100 },
         children: [new ImageRun({ data: buf, type: mt as any, transformation: { width: 700, height: 60 } })]
+      })]
+    } catch(e) { console.error(e) }
+  }
+
+  // Ștampila SetSail (cu semnătură) — pt. lângă președintele comisiei
+  let stampImg: any[] = []
+  if (stampilaData) {
+    try {
+      const base64 = stampilaData.includes(',') ? stampilaData.split(',')[1] : stampilaData
+      const buf = Buffer.from(base64, 'base64')
+      const mt = stampilaData.includes('png') ? 'png' : 'jpg'
+      stampImg = [new Paragraph({
+        spacing: { before: 40 },
+        children: [new ImageRun({ data: buf, type: mt as any, transformation: { width: 150, height: 95 } })]
       })]
     } catch(e) { console.error(e) }
   }
@@ -329,9 +383,9 @@ ${antetHtml}
       },
       children: [
         ...headerImg,
-        new Paragraph({ alignment: AlignmentType.RIGHT, spacing: { after: 120 }, children: [reg('Nr. ................. din .................................', 17)] }),
+        new Paragraph({ alignment: AlignmentType.RIGHT, spacing: { after: 120 }, children: [bold('Nr. ieșire ANCOM: ', 16), reg(iesNrTxt, 16), reg(' din ', 16), reg(iesNrDate, 16)] }),
         ...titleParagraphs,
-        new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 60, after: 120 }, children: [bold('Nr. ...... din ...........', 18)] }),
+        new Paragraph({ alignment: AlignmentType.CENTER, spacing: { before: 60, after: 120 }, children: [bold(`Nr. ${docNrTxt} din ${docNrDate}`, 18)] }),
         new Paragraph({ spacing: { before: 0, after: 120 }, children: [bold('Data examinării: ', 17), reg(sessionDate, 17), reg('    Locația: ', 17), bold(session.locations?.name || '', 17)] }),
         studentsTable,
         new Paragraph({ spacing: { before: 240, after: 60 }, children: [] }),
@@ -340,8 +394,8 @@ ${antetHtml}
           columnWidths: [Math.floor(TW/2), Math.ceil(TW/2)],
           rows: [
             new TableRow({ children: [
-              cell([para([bold('Președinte comisie:', 17)]), para([reg('')]), para([reg('...............................................')])], { borders: { top: { style: BorderStyle.NONE, size:0,color:'FFFFFF'}, bottom:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}, left:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}, right:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}}, w: TW/2 }),
-              cell([para([bold('Membrii:', 17)]), para([reg('')]), para([reg('...............................................')]), para([reg('')]), para([reg('...............................................')])], { borders: { top: { style: BorderStyle.NONE, size:0,color:'FFFFFF'}, bottom:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}, left:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}, right:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}}, w: TW/2 }),
+              cell([para([bold('Președinte comisie:', 17)]), para([bold(presedinte || '...............................................', 17)]), ...stampImg], { borders: { top: { style: BorderStyle.NONE, size:0,color:'FFFFFF'}, bottom:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}, left:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}, right:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}}, w: TW/2 }),
+              cell([para([bold('Membrii:', 17)]), para([reg('')]), para([reg(membri[0] || '...............................................')]), para([reg('')]), para([reg(membri[1] || '...............................................')])], { borders: { top: { style: BorderStyle.NONE, size:0,color:'FFFFFF'}, bottom:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}, left:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}, right:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}}, w: TW/2 }),
             ]})
           ]
         }),
