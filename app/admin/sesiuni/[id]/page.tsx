@@ -1411,27 +1411,32 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
   }
 
   // Sub fiecare document: nr. document (rândul 1) + nr. ieșire ANCOM (rândul 2).
-  // Anexa: nr. document preia PV (read-only); nr. ieșire propriu.
+  // Anexa preia AMBELE numere de la PV (read-only).
   function docFooter(docTip: string) {
     const def = DOC_DEFS[docTip]
     if (!def) return null
-    const docRec = docNumbers[def.anexaOf || docTip]
-    const iesRec = iesireNumbers[docTip]
-    const pill = (txt: string, opts: { onClick?: () => void; filled: boolean; readOnly?: boolean; title: string }) => {
-      const cls = `text-[11px] rounded px-1.5 py-0.5 leading-tight ${opts.filled ? 'text-gray-700' : 'text-gray-400'} ${opts.readOnly ? '' : (opts.filled ? 'hover:bg-gray-100' : 'border border-dashed border-gray-300 hover:bg-gray-50')}`
-      if (opts.readOnly) return <span className={cls} title={opts.title}>{txt}</span>
-      return <button type="button" onClick={opts.onClick} title={opts.title} className={cls}>{txt}</button>
+    const src = def.anexaOf || docTip          // anexa preia ambele numere de la PV
+    const ro = !!def.anexaOf
+    const docRec = docNumbers[src]
+    const iesRec = iesireNumbers[src]
+    const pill = (txt: string, opts: { onClick?: () => void; filled: boolean; title: string }) => {
+      const base = 'min-w-[160px] text-center text-xs rounded-md px-3 py-1.5 leading-tight transition-colors'
+      const color = opts.filled ? 'text-gray-900 font-semibold' : 'text-gray-400'
+      if (ro) return <span className={`${base} ${color}`} title={opts.title}>{txt}</span>
+      const interact = opts.filled ? 'border border-gray-200 hover:bg-gray-100' : 'border border-dashed border-gray-300 hover:bg-gray-50'
+      return <button type="button" onClick={opts.onClick} title={opts.title} className={`${base} ${color} ${interact}`}>{txt}</button>
     }
     return (
-      <div className="w-full order-last flex flex-col items-center gap-0.5 pt-0.5">
+      <div className="w-full order-last flex flex-col items-center gap-1 pt-1">
         {pill(
-          (docRec ? `${docRec.numar} · ${shortDate(docRec.data_notificare)}` : (def.anexaOf ? '—' : '+ nr')),
-          { filled: !!docRec, readOnly: !!def.anexaOf, title: def.anexaOf ? 'Preia nr. PV' : 'Nr. document — click pentru alocare',
+          (docRec ? `${docRec.numar} · ${shortDate(docRec.data_notificare)}` : (ro ? '—' : '+ nr')),
+          { filled: !!docRec, title: ro ? 'Preia nr. PV' : 'Nr. document — click pentru alocare',
             onClick: () => openDocNrModal(docTip, 'doc') }
         )}
         {hasIesire(docTip) && pill(
-          (iesRec ? `ieș. ${iesRec.numar} · ${shortDate(iesRec.data_notificare)}` : '+ ieșire'),
-          { filled: !!iesRec, title: 'Nr. ieșire ANCOM — click pentru alocare', onClick: () => openDocNrModal(docTip, 'iesire') }
+          (iesRec ? `ieș. ${iesRec.numar} · ${shortDate(iesRec.data_notificare)}` : (ro ? '—' : '+ ieșire')),
+          { filled: !!iesRec, title: ro ? 'Preia nr. ieșire PV' : 'Nr. ieșire ANCOM — click pentru alocare',
+            onClick: () => openDocNrModal(docTip, 'iesire') }
         )}
       </div>
     )
