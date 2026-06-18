@@ -144,10 +144,10 @@ export async function POST(req: NextRequest) {
         </tr>`
       : `<tr class="pvhead" style="background:#e9d5ff">
           <th style="border:1px solid #000;padding:6px;width:5%">Nr.<br>crt.</th>
-          <th style="border:1px solid #000;padding:6px;width:25%">Numele și prenumele</th>
-          <th style="border:1px solid #000;padding:6px;width:25%">Cunoștințe generale GMDSS, regulamente (scris)</th>
-          <th style="border:1px solid #000;padding:6px;width:20%">Limba engleză – frazeologie standard (scris)</th>
-          <th style="border:1px solid #000;padding:6px;width:15%">Simulare trafic GMDSS și exerciții SAR (practic)</th>
+          <th style="border:1px solid #000;padding:6px;width:55%">Numele și prenumele</th>
+          <th style="border:1px solid #000;padding:6px;width:12.5%">Cunoștințe generale GMDSS, regulamente (scris)</th>
+          <th style="border:1px solid #000;padding:6px;width:10%">Limba engleză – frazeologie standard (scris)</th>
+          <th style="border:1px solid #000;padding:6px;width:7.5%">Simulare trafic GMDSS și exerciții SAR (practic)</th>
           <th style="border:1px solid #000;padding:6px;width:10%">Rezultat</th>
         </tr>`
 
@@ -315,8 +315,9 @@ ${antetHtml}
       cell([para([bold('Rezultat examen de evaluare', 16)], AlignmentType.CENTER)], { w: colWidths[3], shade }),
     ]})
   } else {
-    // 6 coloane (proporțional pe lățimea portrait)
-    colWidths = [340, 2150, 2556, 1610, 1880, 1670]
+    // 6 coloane: cele 3 coloane de probe reduse cu 50%, spațiul mutat la Nume și prenume
+    // [Nr, Nume, Cunoștințe GMDSS, Engleză, Simulare, Rezultat] — total neschimbat (10206)
+    colWidths = [340, 5173, 1278, 805, 940, 1670]
     headerRow = new TableRow({ tableHeader: true, children: [
       cell([para([bold('Nr.\ncrt.', 15)], AlignmentType.CENTER)], { w: colWidths[0], shade }),
       cell([para([bold('Numele și prenumele', 15)], AlignmentType.CENTER)], { w: colWidths[1], shade }),
