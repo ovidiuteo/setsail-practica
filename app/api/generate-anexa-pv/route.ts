@@ -67,11 +67,8 @@ export async function POST(req: NextRequest) {
     .in('tip', ['pv_ancom', 'nr_iesire_ancom'])
   const fmtNrDate = (d: string | null | undefined) => d ? d.split('-').reverse().join('.') : '...............'
   const docNrRow = (nrRows || []).find((r: any) => r.tip === 'pv_ancom')
-  const iesNrRow = (nrRows || []).find((r: any) => r.tip === 'nr_iesire_ancom')
   const docNrTxt = docNrRow ? String(docNrRow.numar) : '...............'
   const docNrDate = fmtNrDate(docNrRow?.data_notificare)
-  const iesNrTxt = iesNrRow ? String(iesNrRow.numar) : '...............'
-  const iesNrDate = fmtNrDate(iesNrRow?.data_notificare)
 
   // Comisia = instructorii sesiunii (Instructor 1 = președinte, 2 & 3 = membri) + semnături
   type ComisiePers = { full_name: string; signature_data: string | null }
@@ -149,7 +146,7 @@ export async function POST(req: NextRequest) {
 </style>
 </head><body>
 ${antetHtml}
-<p style="text-align:right;font-size:9pt"><strong>Nr. ${iesNrTxt} din ${iesNrDate}</strong><br><span style="font-size:8pt">&nbsp;</span></p>
+<p style="text-align:right;font-size:9pt"><strong>&nbsp;</strong><br><span style="font-size:8pt">&nbsp;</span></p>
 <p style="text-align:center;font-size:11pt"><strong>${pvTitlu}</strong></p>
 <p style="text-align:center;font-size:10pt">${scopTitlu}</p>
 <table>
@@ -302,7 +299,7 @@ ${antetHtml}
           rows: [new TableRow({ children: [
             cell([para([reg('')])], { b: noBorders, w: TW/2 }),
             cell([
-              para([bold(`Nr. ${iesNrTxt} din ${iesNrDate}`, 17)], AlignmentType.RIGHT as any),
+              para([bold(' ', 17)], AlignmentType.RIGHT as any),
               para([ital(' ', 15)], AlignmentType.RIGHT as any),
             ], { b: noBorders, w: TW/2 }),
           ]})]
