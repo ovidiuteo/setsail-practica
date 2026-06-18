@@ -53,6 +53,11 @@ export async function POST(req: NextRequest) {
     day: '2-digit', month: 'long', year: 'numeric'
   })
   const dateStr = session.session_date.replace(/-/g, '_')
+  // Titlu doc (eticheta tab + nume default la print → PDF)
+  const MONTHS_RO = ['ianuarie','februarie','martie','aprilie','mai','iunie','iulie','august','septembrie','octombrie','noiembrie','decembrie']
+  const [, mm, dd] = session.session_date.split('-')
+  const dayMonth = `${parseInt(dd)} ${MONTHS_RO[parseInt(mm) - 1] || ''}`.trim()
+  const docTitle = `anexa pv ${isPrelungire ? 'prelungire' : 'obtinere'} LRC ${dayMonth} SetSail`
 
   // Numere preluate de la PV: documentul (titlu) + ieșire (sus, identic cu PV)
   const docTip = isPrelungire ? 'pv-prelungire' : 'pv-obtinere'
@@ -133,6 +138,7 @@ export async function POST(req: NextRequest) {
 
     const html = `<!DOCTYPE html>
 <html><head><meta charset="UTF-8">
+<title>${docTitle}</title>
 <style>
   @page { size: A4; margin: 15mm; }
   @media print { html,body{background:white!important;padding:0!important;} body{box-shadow:none!important;margin:0!important;padding:0!important;width:auto!important;} }
