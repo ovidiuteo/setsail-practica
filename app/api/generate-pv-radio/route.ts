@@ -102,19 +102,20 @@ export async function POST(req: NextRequest) {
   const iesNrTxt = iesNrRow ? String(iesNrRow.numar) : '..........'
   const iesNrDate = fmtNrDate(iesNrRow?.data_notificare)
 
-  // Persoane de contact (în ordinea selectată la sesiune) → președinte + 2 membri
-  const contactIds: string[] = session.contact_person_ids || []
-  let contactNames: string[] = []
-  if (contactIds.length) {
-    const { data: contacts } = await supabase.from('contact_persons').select('id, full_name').in('id', contactIds)
-    contactNames = contactIds.map(id => (contacts || []).find((c: any) => c.id === id)?.full_name).filter(Boolean) as string[]
+  // Comisia = instructorii sesiunii: Instructor 1 = președinte, Instructor 2 & 3 = membri.
+  // Fiecare are semnătura proprie (signature_data) afișată lângă nume.
+  type ComisiePers = { full_name: string; signature_data: string | null }
+  const instrIds = [session.instructor_id, (session as any).instructor_id_2, (session as any).instructor_id_3].filter(Boolean) as string[]
+  let comisie: ComisiePers[] = []
+  if (instrIds.length) {
+    const { data: instrs } = await supabase.from('instructors').select('id, full_name, signature_data').in('id', instrIds)
+    comisie = instrIds
+      .map(id => (instrs || []).find((i: any) => i.id === id))
+      .filter(Boolean)
+      .map((i: any) => ({ full_name: i.full_name, signature_data: i.signature_data || null }))
   }
-  // Ordinea președinte → membri: prioritate Ovidiu, apoi Sorin, apoi restul (ordinea selectată)
-  const PREZ_PRIORITY = ['ovidiu', 'sorin']
-  const prio = (n: string) => { const i = PREZ_PRIORITY.findIndex(p => n.toLowerCase().includes(p)); return i < 0 ? 99 : i }
-  const orderedContacts = [...contactNames].sort((a, b) => prio(a) - prio(b))
-  const presedinte = orderedContacts[0] || ''
-  const membri = orderedContacts.slice(1, 3)
+  const presedinte: ComisiePers | null = comisie[0] || null
+  const membri: ComisiePers[] = comisie.slice(1)   // Instructor 2 (+3); dacă nu există 3 → un singur membru
 
   // Ștampila SetSail (cu semnătură) — lângă numele președintelui
   const { data: stampilaDoc } = await supabase.from('setsail_documents')
@@ -207,12 +208,15 @@ ${antetHtml}
 <div style="margin-top:24px;display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start;">
   <div>
     <strong>Președinte comisie:</strong><br>
-    <span style="display:inline-block;margin-top:6px;font-weight:bold;">${presedinte || '...........................................'}</span>
-    ${stampilaData ? `<div style="margin-top:4px;"><img src="${stampilaData}" style="max-height:95px;max-width:100%;"/></div>` : '<br><br>...........................................'}
+    <span style="display:inline-block;margin-top:6px;font-weight:bold;">${presedinte ? presedinte.full_name : '...........................................'}</span>
+    ${presedinte?.signature_data ? `<div style="margin-top:2px;"><img src="${presedinte.signature_data}" style="max-height:55px;max-width:100%;"/></div>` : ''}
+    ${stampilaData ? `<div style="margin-top:4px;"><img src="${stampilaData}" style="max-height:90px;max-width:100%;"/></div>` : ''}
   </div>
-  <div><strong>Membrii:</strong><br><br>
-    ${membri[0] || '...........................................................'}<br><br>
-    ${membri[1] || '...........................................................'}
+  <div>
+    <strong>Membrii:</strong>
+    ${membri.length
+      ? membri.map(m => `<div style="margin-top:10px;font-weight:bold;">${m.full_name}</div>${m.signature_data ? `<div style="margin-top:2px;"><img src="${m.signature_data}" style="max-height:55px;max-width:100%;"/></div>` : ''}`).join('')
+      : '<br><br>...........................................................'}
   </div>
 </div>
 <p style="font-size:8pt;margin-top:15px;font-style:italic">Procesul verbal se va completa în conformitate cu decizia 543/2017-Art. 16${isPrelungire ? ', alin. (1) lit. a)' : ''}.</p>
@@ -279,6 +283,17 @@ ${antetHtml}
         children: [new ImageRun({ data: buf, type: mt as any, transformation: { width: 150, height: 95 } })]
       })]
     } catch(e) { console.error(e) }
+  }
+
+  // Paragraf cu semnătura unei persoane (din data URL) — pt. comisie
+  const sigPara = (dataUrl: string | null): any[] => {
+    if (!dataUrl) return []
+    try {
+      const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl
+      const buf = Buffer.from(base64, 'base64')
+      const mt = dataUrl.includes('png') ? 'png' : 'jpg'
+      return [new Paragraph({ spacing: { before: 20, after: 0 }, children: [new ImageRun({ data: buf, type: mt as any, transformation: { width: 120, height: 50 } })] })]
+    } catch { return [] }
   }
 
   // Titlu
@@ -394,8 +409,8 @@ ${antetHtml}
           columnWidths: [Math.floor(TW/2), Math.ceil(TW/2)],
           rows: [
             new TableRow({ children: [
-              cell([para([bold('Președinte comisie:', 17)]), para([bold(presedinte || '...............................................', 17)]), ...stampImg], { borders: { top: { style: BorderStyle.NONE, size:0,color:'FFFFFF'}, bottom:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}, left:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}, right:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}}, w: TW/2 }),
-              cell([para([bold('Membrii:', 17)]), para([reg('')]), para([reg(membri[0] || '...............................................')]), para([reg('')]), para([reg(membri[1] || '...............................................')])], { borders: { top: { style: BorderStyle.NONE, size:0,color:'FFFFFF'}, bottom:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}, left:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}, right:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}}, w: TW/2 }),
+              cell([para([bold('Președinte comisie:', 17)]), para([bold(presedinte ? presedinte.full_name : '...............................................', 17)]), ...(presedinte ? sigPara(presedinte.signature_data) : []), ...stampImg], { borders: { top: { style: BorderStyle.NONE, size:0,color:'FFFFFF'}, bottom:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}, left:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}, right:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}}, w: TW/2 }),
+              cell([para([bold('Membrii:', 17)]), ...(membri.length ? membri.flatMap((m: ComisiePers) => [para([bold(m.full_name, 17)]), ...sigPara(m.signature_data)]) : [para([reg('')]), para([reg('...............................................')])])], { borders: { top: { style: BorderStyle.NONE, size:0,color:'FFFFFF'}, bottom:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}, left:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}, right:{style:BorderStyle.NONE,size:0,color:'FFFFFF'}}, w: TW/2 }),
             ]})
           ]
         }),
