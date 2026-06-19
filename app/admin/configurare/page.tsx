@@ -607,6 +607,7 @@ function NotificationNumbersSection() {
   const REG_BADGE: Record<string, { label: string; cls: string }> = {
     solicitare:        { label: 'Înștiințare ANR', cls: 'bg-amber-50 text-amber-700' },
     document:          { label: 'Înștiințare ANR', cls: 'bg-amber-50 text-amber-700' },
+    instiintari_anr:   { label: 'Înștiințări ANR', cls: 'bg-amber-50 text-amber-700' },
     instiintari_ancom: { label: 'Înștiințări ANCOM', cls: 'bg-blue-50 text-blue-700' },
     pv_ancom:          { label: 'PV ANCOM', cls: 'bg-purple-50 text-purple-700' },
     cereri_ancom:      { label: 'Cereri ANCOM', cls: 'bg-indigo-50 text-indigo-700' },

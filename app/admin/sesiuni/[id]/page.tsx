@@ -1264,7 +1264,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
   // tip = registrul (folosit ca filtru pentru "următorul număr" și istoric)
   const REG_LABEL: Record<string, string> = {
     pv_ancom: 'PV ANCOM', instiintari_ancom: 'Înștiințări ANCOM', cereri_ancom: 'Cereri examen ANCOM',
-    nr_iesire_ancom: 'Nr. ieșire ANCOM',
+    nr_iesire_ancom: 'Nr. ieșire ANCOM', instiintari_anr: 'Înștiințări ANR',
   }
   // Documentele care primesc și Nr. ieșire ANCOM (înștiințări + PV + anexe; nu cererile)
   const hasIesire = (docTip: string) => {
@@ -1283,6 +1283,8 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
     'pv-prelungire':     { reg: 'pv_ancom', label: 'PV Prelungire LRC' },
     'anexa-obtinere':    { reg: 'pv_ancom', label: 'Anexă PV Obținere LRC', anexaOf: 'pv-obtinere' },
     'anexa-prelungire':  { reg: 'pv_ancom', label: 'Anexă PV Prelungire LRC', anexaOf: 'pv-prelungire' },
+    // ANR (practica) — registru propriu, per-an, ca ANCOM
+    'instiintare-anr':   { reg: 'instiintari_anr', label: 'Înștiințare ANR' },
   }
   const shortDate = (d: string) => { const p = (d || '').split('-'); return p.length === 3 ? `${p[2]}.${p[1]}.${p[0]}` : '' }
 
@@ -1640,9 +1642,11 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
             <div key={label} className="flex justify-between gap-2">
               <span className="text-gray-400 text-xs shrink-0">{label}</span>
               {label === 'Nr. înștiințări' ? (
-                <button onClick={()=>openNrModal('solicitare')}
-                  className="text-xs font-medium text-blue-600 hover:underline text-right">
-                  {value === '—' ? '+ Alocă număr' : value}
+                <button onClick={()=>openDocNrModal('instiintare-anr','doc')}
+                  className="text-xs font-medium text-amber-600 hover:underline text-right">
+                  {docNumbers['instiintare-anr']
+                    ? `${docNumbers['instiintare-anr'].numar} · ${shortDate(docNumbers['instiintare-anr'].data_notificare)}`
+                    : '+ Alocă număr'}
                 </button>
               ) : label === 'Nr. documente PV' ? (
                 <button onClick={()=>openNrModal('document')}
