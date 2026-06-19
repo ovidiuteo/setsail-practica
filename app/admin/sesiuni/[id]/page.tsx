@@ -1314,7 +1314,9 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
       .order('numar', { ascending: false })
     const history = data || []
     setNrModalData(history)
-    const maxNr = history.length > 0 ? Math.max(...history.map((r:any) => r.numar)) : 0
+    // Numerotare ANR independentă: „următorul" doar din rândurile aceluiași registru (solicitare = ANR)
+    const scoped = history.filter((r:any) => r.tip === tip)
+    const maxNr = scoped.length > 0 ? Math.max(...scoped.map((r:any) => r.numar)) : 0
     setNrModalNext(maxNr + 1)
     setNrModalLoading(false)
   }

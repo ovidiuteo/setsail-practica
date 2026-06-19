@@ -601,9 +601,12 @@ function NotificationNumbersSection() {
     'cereri-prelungire': 'Cerere Prelungire',
   }
   // Etichete + filtre pe registru (noile: pv_ancom/instiintari_ancom/cereri_ancom; vechi: solicitare/document)
+  // Registrele ANCOM (radio). Tot ce nu e aici = Înștiințare ANR (practica)
+  const ANCOM_TIPS = ['instiintari_ancom', 'pv_ancom', 'cereri_ancom', 'nr_iesire_ancom']
+  const isAnr = (tip: string) => !ANCOM_TIPS.includes(tip)
   const REG_BADGE: Record<string, { label: string; cls: string }> = {
-    solicitare:        { label: 'Înștiințare', cls: 'bg-blue-50 text-blue-700' },
-    document:          { label: 'Document PV', cls: 'bg-purple-50 text-purple-700' },
+    solicitare:        { label: 'Înștiințare ANR', cls: 'bg-amber-50 text-amber-700' },
+    document:          { label: 'Înștiințare ANR', cls: 'bg-amber-50 text-amber-700' },
     instiintari_ancom: { label: 'Înștiințări ANCOM', cls: 'bg-blue-50 text-blue-700' },
     pv_ancom:          { label: 'PV ANCOM', cls: 'bg-purple-50 text-purple-700' },
     cereri_ancom:      { label: 'Cereri ANCOM', cls: 'bg-indigo-50 text-indigo-700' },
@@ -611,13 +614,16 @@ function NotificationNumbersSection() {
   }
   const REG_FILTERS: { key: string; label: string }[] = [
     { key: 'all', label: 'Toate' },
+    { key: 'anr', label: 'Înștiințări ANR' },
     { key: 'nr_iesire_ancom', label: 'Nr. ieșire ANCOM' },
     { key: 'instiintari_ancom', label: 'Înștiințări ANCOM' },
     { key: 'pv_ancom', label: 'PV ANCOM' },
     { key: 'cereri_ancom', label: 'Cereri ANCOM' },
   ]
 
-  const filtered = filterTip === 'all' ? rows : rows.filter(r => r.tip === filterTip)
+  const filtered = filterTip === 'all' ? rows
+    : filterTip === 'anr' ? rows.filter(r => isAnr(r.tip))
+    : rows.filter(r => r.tip === filterTip)
 
   return (
     <div className="mt-8 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
