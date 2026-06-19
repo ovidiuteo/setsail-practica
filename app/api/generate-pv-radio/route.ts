@@ -137,18 +137,18 @@ export async function POST(req: NextRequest) {
 
     const tableHeader = isPrelungire
       ? `<tr class="pvhead" style="background:#e9d5ff">
-          <th style="border:1px solid #000;padding:6px;width:5%">Nr.<br>crt.</th>
-          <th style="border:1px solid #000;padding:6px;width:35%">Numele și prenumele</th>
-          <th style="border:1px solid #000;padding:6px;width:40%">Cunoștințe generale despre sistemul GMDSS, regulamente interne și internaționale de radiocomunicații (scris)</th>
-          <th style="border:1px solid #000;padding:6px;width:20%">Rezultat examen de evaluare</th>
+          <th style="border:1px solid #000;padding:1px 6px;width:5%">Nr.<br>crt.</th>
+          <th style="border:1px solid #000;padding:1px 6px;width:35%">Numele și prenumele</th>
+          <th style="border:1px solid #000;padding:1px 6px;width:40%">Cunoștințe generale despre sistemul GMDSS, regulamente interne și internaționale de radiocomunicații (scris)</th>
+          <th style="border:1px solid #000;padding:1px 6px;width:20%">Rezultat examen de evaluare</th>
         </tr>`
       : `<tr class="pvhead" style="background:#e9d5ff">
-          <th style="border:1px solid #000;padding:6px;width:5%">Nr.<br>crt.</th>
-          <th style="border:1px solid #000;padding:6px;width:55%">Numele și prenumele</th>
-          <th style="border:1px solid #000;padding:6px;width:12.5%">Cunoștințe generale GMDSS, regulamente (scris)</th>
-          <th style="border:1px solid #000;padding:6px;width:10%">Limba engleză – frazeologie standard (scris)</th>
-          <th style="border:1px solid #000;padding:6px;width:7.5%">Simulare trafic GMDSS și exerciții SAR (practic)</th>
-          <th style="border:1px solid #000;padding:6px;width:10%">Rezultat</th>
+          <th style="border:1px solid #000;padding:1px 6px;width:5%">Nr.<br>crt.</th>
+          <th style="border:1px solid #000;padding:1px 6px;width:55%">Numele și prenumele</th>
+          <th style="border:1px solid #000;padding:1px 6px;width:12.5%;font-size:7.2pt">Cunoștințe generale GMDSS, regulamente (scris)</th>
+          <th style="border:1px solid #000;padding:1px 6px;width:10%;font-size:7.2pt">Limba engleză – frazeologie standard (scris)</th>
+          <th style="border:1px solid #000;padding:1px 6px;width:7.5%;font-size:7.2pt">Simulare trafic GMDSS (practic)</th>
+          <th style="border:1px solid #000;padding:1px 6px;width:10%">Rezultat</th>
         </tr>`
 
     const minRows = Math.max(students.length, 8)
@@ -238,10 +238,18 @@ ${antetHtml}
     width: opts?.w ? { size: opts.w, type: WidthType.DXA } : undefined,
     columnSpan: opts?.span,
     shading: opts?.shade,
-    margins: cellM,
+    margins: opts?.m ?? cellM,
     children: ch,
     verticalAlign: VerticalAlign.CENTER,
   })
+
+  // Cap de tabel compact: margine sus/jos ~1px (15 twips) + spacing 0
+  const cellMHead = { top: 15, bottom: 15, left: 80, right: 80 }
+  const hpara = (t: string, size: number) => new Paragraph({
+    alignment: AlignmentType.CENTER, spacing: { before: 0, after: 0 },
+    children: [new TextRun({ text: t, bold: true, size, font: 'Arial' })],
+  })
+  const hcell = (t: string, w: number, size: number) => cell([hpara(t, size)], { w, shade, m: cellMHead })
 
   // Antet imagine
   let headerImg: any[] = []
@@ -309,22 +317,23 @@ ${antetHtml}
     // 4 coloane (proporțional pe lățimea portrait)
     colWidths = [340, 2686, 4700, 2480]
     headerRow = new TableRow({ tableHeader: true, children: [
-      cell([para([bold('Nr.\ncrt.', 16)], AlignmentType.CENTER)], { w: colWidths[0], shade }),
-      cell([para([bold('Numele și prenumele', 16)], AlignmentType.CENTER)], { w: colWidths[1], shade }),
-      cell([para([bold('Cunoștințe generale despre sistemul GMDSS, regulamente interne și internaționale de radiocomunicații (scris)', 16)], AlignmentType.CENTER)], { w: colWidths[2], shade }),
-      cell([para([bold('Rezultat examen de evaluare', 16)], AlignmentType.CENTER)], { w: colWidths[3], shade }),
+      hcell('Nr.\ncrt.', colWidths[0], 16),
+      hcell('Numele și prenumele', colWidths[1], 16),
+      hcell('Cunoștințe generale despre sistemul GMDSS, regulamente interne și internaționale de radiocomunicații (scris)', colWidths[2], 16),
+      hcell('Rezultat examen de evaluare', colWidths[3], 16),
     ]})
   } else {
     // 6 coloane: cele 3 coloane de probe reduse cu 50%, spațiul mutat la Nume și prenume
     // [Nr, Nume, Cunoștințe GMDSS, Engleză, Simulare, Rezultat] — total neschimbat (10206)
     colWidths = [340, 5173, 1278, 805, 940, 1670]
+    // Fontul celor 3 coloane de probe redus cu 20% (15 → 12)
     headerRow = new TableRow({ tableHeader: true, children: [
-      cell([para([bold('Nr.\ncrt.', 15)], AlignmentType.CENTER)], { w: colWidths[0], shade }),
-      cell([para([bold('Numele și prenumele', 15)], AlignmentType.CENTER)], { w: colWidths[1], shade }),
-      cell([para([bold('Cunoștințe generale despre sistemul GMDSS, regulamente interne și internaționale de radiocomunicații (scris)', 15)], AlignmentType.CENTER)], { w: colWidths[2], shade }),
-      cell([para([bold('Limba engleză – frazeologie standard (scris)', 15)], AlignmentType.CENTER)], { w: colWidths[3], shade }),
-      cell([para([bold('Simulare trafic GMDSS și exerciții de căutare și salvare SAR (proba practică)', 15)], AlignmentType.CENTER)], { w: colWidths[4], shade }),
-      cell([para([bold('Rezultat examen de evaluare', 15)], AlignmentType.CENTER)], { w: colWidths[5], shade }),
+      hcell('Nr.\ncrt.', colWidths[0], 15),
+      hcell('Numele și prenumele', colWidths[1], 15),
+      hcell('Cunoștințe generale despre sistemul GMDSS, regulamente interne și internaționale de radiocomunicații (scris)', colWidths[2], 12),
+      hcell('Limba engleză – frazeologie standard (scris)', colWidths[3], 12),
+      hcell('Simulare trafic GMDSS (practic)', colWidths[4], 12),
+      hcell('Rezultat examen de evaluare', colWidths[5], 15),
     ]})
   }
 
