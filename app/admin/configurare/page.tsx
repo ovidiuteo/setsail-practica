@@ -273,6 +273,86 @@ export default function ConfigurarePage() {
 
       {/* Numere notificari - sectiune separata full-width */}
       <NotificationNumbersSection />
+
+      {/* Tipuri de fisiere necesare per categorie (ANCOM / ANR) */}
+      <SessionFileTypesSection />
+    </div>
+  )
+}
+
+function SessionFileTypesSection() {
+  const [rows, setRows] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [newLabel, setNewLabel] = useState<Record<string, string>>({ ancom: '', anr: '' })
+  const CATS = [
+    { key: 'anr', label: '⚓ ANR (practică)', color: '#0369a1' },
+    { key: 'ancom', label: '📡 ANCOM (radio)', color: '#7c3aed' },
+  ]
+
+  async function load() {
+    const { data } = await supabase.from('session_file_types').select('*').order('categorie').order('ordine')
+    setRows(data || []); setLoading(false)
+  }
+  useEffect(() => { load() }, [])
+
+  async function add(categorie: string) {
+    const label = (newLabel[categorie] || '').trim()
+    if (!label) return
+    const maxOrd = Math.max(0, ...rows.filter(r => r.categorie === categorie).map(r => r.ordine || 0))
+    const { data } = await supabase.from('session_file_types').insert({ categorie, label, ordine: maxOrd + 1 }).select().single()
+    if (data) setRows(r => [...r, data])
+    setNewLabel(n => ({ ...n, [categorie]: '' }))
+  }
+  async function rename(id: string, label: string) {
+    await supabase.from('session_file_types').update({ label }).eq('id', id)
+    setRows(r => r.map(x => x.id === id ? { ...x, label } : x))
+  }
+  async function remove(id: string, label: string) {
+    if (!confirm(`Ștergi tipul „${label}"? Fișierele deja încărcate trec la „Diverse".`)) return
+    await supabase.from('session_file_types').delete().eq('id', id)
+    setRows(r => r.filter(x => x.id !== id))
+  }
+
+  return (
+    <div className="mt-8 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="px-6 py-4 border-b border-gray-100">
+        <h2 className="font-semibold text-gray-900">📎 Tipuri de fișiere necesare</h2>
+        <p className="text-xs text-gray-400 mt-0.5">Sloturile de upload care apar pe fiecare sesiune, pe categorie. Restul fișierelor merg la „Diverse".</p>
+      </div>
+      {loading ? (
+        <div className="text-center text-gray-400 py-8 text-sm">Se încarcă...</div>
+      ) : (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-6">
+          {CATS.map(cat => {
+            const items = rows.filter(r => r.categorie === cat.key)
+            return (
+              <div key={cat.key}>
+                <div className="text-xs font-semibold mb-2 px-2 py-1 rounded-full inline-block" style={{ background: cat.color + '15', color: cat.color }}>{cat.label}</div>
+                <div className="space-y-1.5 mb-3">
+                  {items.length === 0 ? (
+                    <div className="text-xs text-gray-300 py-2">Niciun tip configurat.</div>
+                  ) : items.map(it => (
+                    <div key={it.id} className="flex items-center gap-2">
+                      <input defaultValue={it.label} onBlur={e => e.target.value.trim() && e.target.value !== it.label && rename(it.id, e.target.value.trim())}
+                        className="flex-1 border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                      <button onClick={() => remove(it.id, it.label)} className="p-1.5 rounded-lg hover:bg-red-50 text-gray-300 hover:text-red-500 transition-colors">
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+                <div className="flex gap-2">
+                  <input value={newLabel[cat.key] || ''} onChange={e => setNewLabel(n => ({ ...n, [cat.key]: e.target.value }))}
+                    onKeyDown={e => e.key === 'Enter' && add(cat.key)}
+                    placeholder="ex: Înștiințare semnată, Decizie ANR…"
+                    className="flex-1 border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                  <button onClick={() => add(cat.key)} className="px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 text-xs font-medium hover:bg-blue-100 whitespace-nowrap">+ Adaugă</button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      )}
     </div>
   )
 }

@@ -2018,6 +2018,9 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
             )}
           </div>
 
+          {/* Fișiere sesiune (upload PDF/DOCX/foto) */}
+          <SessionFilesCard sess={sess} isRadio={isRadio} />
+
           {/* Notificare ANR */}
           <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
             <button onClick={async()=>{
@@ -2659,6 +2662,112 @@ Set Sail NauticSchool
         )
       })()}
     </>
+  )
+}
+
+function SessionFilesCard({ sess, isRadio }: { sess: any; isRadio: boolean }) {
+  const categorie = isRadio ? 'ancom' : 'anr'
+  const [types, setTypes] = useState<any[]>([])
+  const [files, setFiles] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [uploading, setUploading] = useState<string | null>(null)
+  const [open, setOpen] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    let cancelled = false
+    ;(async () => {
+      setLoading(true)
+      const [{ data: t }, res] = await Promise.all([
+        supabase.from('session_file_types').select('*').eq('categorie', categorie).order('ordine'),
+        fetch(`/api/session-files?session_id=${sess.id}`).then(r => r.json()).catch(() => ({ files: [] })),
+      ])
+      if (cancelled) return
+      setTypes(t || []); setFiles(res.files || []); setLoading(false)
+    })()
+    return () => { cancelled = true }
+  }, [open, sess.id, categorie])
+
+  async function upload(file: File, fileTypeId: string | null) {
+    setUploading(fileTypeId || 'diverse')
+    const fd = new FormData()
+    fd.append('session_id', sess.id)
+    if (fileTypeId) fd.append('file_type_id', fileTypeId)
+    fd.append('file', file)
+    const res = await fetch('/api/session-files', { method: 'POST', body: fd })
+    const j = await res.json().catch(() => ({}))
+    if (!res.ok) alert(j.error || 'Eroare la upload')
+    else setFiles(f => [...f, j.file])
+    setUploading(null)
+  }
+  async function del(id: string) {
+    if (!confirm('Ștergi fișierul?')) return
+    await fetch('/api/session-files', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
+    setFiles(f => f.filter(x => x.id !== id))
+  }
+
+  const fileIcon = (mime: string) => (mime || '').startsWith('image/') ? '🖼️' : (mime || '').includes('word') ? '📝' : '📄'
+  const fileRow = (f: any) => (
+    <div key={f.id} className="flex items-center gap-2 text-xs">
+      <span>{fileIcon(f.mime_type)}</span>
+      {f.url
+        ? <a href={f.url} target="_blank" rel="noopener noreferrer" className="flex-1 truncate text-blue-600 hover:underline">{f.file_name}</a>
+        : <span className="flex-1 truncate text-gray-600">{f.file_name}</span>}
+      <button onClick={() => del(f.id)} className="p-1 rounded hover:bg-red-50 text-gray-300 hover:text-red-500"><Trash2 size={12} /></button>
+    </div>
+  )
+  const uploadBtn = (fileTypeId: string | null, label: string) => {
+    const busy = uploading === (fileTypeId || 'diverse')
+    return (
+      <label className={`inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border border-dashed cursor-pointer transition-colors ${busy ? 'border-blue-300 bg-blue-50 text-blue-500' : 'border-gray-300 text-gray-500 hover:bg-gray-50'}`}>
+        <Plus size={12} /> {busy ? 'Se încarcă…' : label}
+        <input type="file" accept="application/pdf,.pdf,.docx,.doc,image/*" className="hidden" disabled={busy}
+          onChange={e => { const fl = e.target.files?.[0]; e.target.value = ''; if (fl) upload(fl, fileTypeId) }} />
+      </label>
+    )
+  }
+
+  const diverse = files.filter(f => !f.file_type_id || !types.some(t => t.id === f.file_type_id))
+
+  return (
+    <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+      <button onClick={() => setOpen(o => !o)} className="w-full flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span>📎</span>
+          <h3 className="font-semibold text-sm text-gray-900">Fișiere sesiune</h3>
+          {files.length > 0 && <span className="text-xs text-gray-400">({files.length})</span>}
+        </div>
+        <ChevronDown size={14} className={`text-gray-400 transition-transform ${open ? 'rotate-180' : ''}`} />
+      </button>
+      {open && (
+        <div className="mt-4 space-y-2.5">
+          {loading ? <div className="text-xs text-gray-400 text-center py-3">Se încarcă...</div> : (<>
+            {types.map(t => {
+              const fs = files.filter(f => f.file_type_id === t.id)
+              return (
+                <div key={t.id} className="rounded-lg border border-gray-100 p-2.5">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <span className="text-xs font-medium text-gray-700">{t.label}</span>
+                    {fs.length === 0 && <span className="text-[10px] text-amber-500 font-medium">lipsă</span>}
+                  </div>
+                  {fs.length > 0 && <div className="space-y-1 mb-2">{fs.map(fileRow)}</div>}
+                  {uploadBtn(t.id, fs.length ? 'Adaugă încă unul' : 'Încarcă')}
+                </div>
+              )
+            })}
+            {/* Diverse */}
+            <div className="rounded-lg border border-gray-100 p-2.5">
+              <div className="text-xs font-medium text-gray-700 mb-1.5">Diverse</div>
+              {diverse.length > 0 && <div className="space-y-1 mb-2">{diverse.map(fileRow)}</div>}
+              {uploadBtn(null, 'Încarcă fișier')}
+            </div>
+            {types.length === 0 && (
+              <p className="text-[11px] text-gray-400">Niciun tip configurat pentru {categorie.toUpperCase()}. Adaugă din Configurator → „Tipuri de fișiere necesare".</p>
+            )}
+          </>)}
+        </div>
+      )}
+    </div>
   )
 }
 
