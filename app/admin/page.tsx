@@ -214,9 +214,8 @@ export default function AdminDashboard() {
       const diff = Math.round((date.getTime() - today.getTime()) / DAY_MS)
       const resolved = msStatus[`${sess.id}:${m.id}`]
       const base = { milestoneLabel: m.label, sessionId: sess.id, milestoneId: m.id, sessionLabel: sessLabel, date }
-      if (resolved) {
-        todos.push({ ...base, type: 'resolved', daysUntil: diff, status: resolved.status, stampedAt: resolved.stamped_at })
-      } else if (diff === 0) todos.push({ ...base, type: 'today', daysUntil: 0 })
+      if (resolved) continue // bifat Done/Anulat → nu se mai afișează
+      if (diff === 0) todos.push({ ...base, type: 'today', daysUntil: 0 })
       else if (diff === 1) todos.push({ ...base, type: 'in1', daysUntil: 1 })
       else if (diff === 2) todos.push({ ...base, type: 'in2', daysUntil: 2 })
       else if (diff < 0 && diff >= -90) todos.push({ ...base, type: 'overdue', daysUntil: diff }) // restanță, până la bifare
@@ -296,7 +295,7 @@ export default function AdminDashboard() {
           <div className="divide-y divide-gray-50">
             {todos.map((t, i) => {
               const meta = t.type === 'overdue'
-                ? { bg: '#fee2e2', dot: '#dc2626', label: `${-t.daysUntil} ${(-t.daysUntil) === 1 ? 'ZI' : 'ZILE'}` }
+                ? { bg: '#fee2e2', dot: '#dc2626', label: `Due ${-t.daysUntil} ${(-t.daysUntil) === 1 ? 'day' : 'days'}` }
                 : t.type === 'today'
                   ? { bg: '#fef2f2', dot: '#dc2626', label: 'AZI' }
                   : t.type === 'in1'
