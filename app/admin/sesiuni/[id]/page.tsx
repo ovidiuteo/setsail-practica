@@ -1212,6 +1212,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
   const [authSubject, setAuthSubject] = useState('')
   const [authBody, setAuthBody] = useState('')
   const [authCopied, setAuthCopied] = useState(false)
+  const [authHelper, setAuthHelper] = useState('')
   const [showNrModal, setShowNrModal] = useState<'solicitare'|'document'|null>(null)
   const [nrModalData, setNrModalData] = useState<any[]>([])
   const [nrModalNext, setNrModalNext] = useState(1)
@@ -1457,6 +1458,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
   const [mailSubject, setMailSubject] = useState('')
   const [mailBody, setMailBody] = useState('')
   const [mailCopied, setMailCopied] = useState<string|null>(null)
+  const [mailHelper, setMailHelper] = useState('')
   const [selectedEmails, setSelectedEmails] = useState<string[]>(
     () => students.filter(s=>s.email).map(s=>s.email)
   )
@@ -2332,6 +2334,7 @@ Set Sail NauticSchool
                               const rawBody = t.body_html || t.body_text || ''
                               setAuthSubject(applyTemplate(t.subject, sess, allContacts))
                               setAuthBody(applyTemplate(rawBody, sess, allContacts))
+                              setAuthHelper(t.helper || '')
                             }}
                             className="text-left px-3 py-2 rounded-lg text-xs border border-gray-200 hover:bg-blue-50 hover:border-blue-200 transition-colors">
                             {t.label}
@@ -2348,6 +2351,12 @@ Set Sail NauticSchool
                   style={{background:'#0a1628'}}>
                   <Mail size={13}/> Deschide în Gmail
                 </a>
+                {authHelper.trim() && (
+                  <div className="mt-2 p-3 rounded-lg border border-amber-200 bg-amber-50 text-xs text-amber-900 whitespace-pre-wrap leading-relaxed">
+                    <div className="font-semibold mb-1">📋 Procedură</div>
+                    {authHelper}
+                  </div>
+                )}
               </div>
             )}
           </div>
@@ -2469,6 +2478,7 @@ Set Sail NauticSchool
                                     const rawBody = t.body_html || t.body_text || ''
                                     setMailSubject(applyTemplate(t.subject, sess, allContacts))
                                     setMailBody(applyTemplate(rawBody, sess, allContacts))
+                                    setMailHelper(t.helper || '')
                                   }}
                                   className="text-left px-3 py-2 rounded-lg text-xs border border-gray-200 hover:bg-blue-50 hover:border-blue-200 transition-colors">
                                   {t.label}
@@ -2509,6 +2519,12 @@ Set Sail NauticSchool
                     style={{background:'#0a1628'}}>
                     <Mail size={13}/> Deschide în Gmail
                   </a>
+                )}
+                {mailHelper.trim() && (
+                  <div className="mt-2 p-3 rounded-lg border border-amber-200 bg-amber-50 text-xs text-amber-900 whitespace-pre-wrap leading-relaxed">
+                    <div className="font-semibold mb-1">📋 Procedură</div>
+                    {mailHelper}
+                  </div>
                 )}
               </div>
             )}

@@ -11,6 +11,7 @@ type Template = {
   subject: string
   body_text: string
   body_html: string
+  helper: string
   to_emails: string
   cc_emails: string
   bcc_emails: string
@@ -62,6 +63,7 @@ const EMPTY_TEMPLATE: Partial<Template> = {
   subject: '',
   body_text: '',
   body_html: '',
+  helper: '',
   to_emails: '',
   cc_emails: '',
   bcc_emails: '',
@@ -123,6 +125,7 @@ export default function MailTemplatesPage() {
       subject: form.subject,
       body_text: form.body_text || '',
       body_html: form.body_html || '',
+      helper: form.helper || '',
       to_emails: form.to_emails || '',
       cc_emails: form.cc_emails || '',
       bcc_emails: form.bcc_emails || '',
@@ -152,6 +155,7 @@ export default function MailTemplatesPage() {
       subject: t.subject,
       body_text: t.body_text || '',
       body_html: t.body_html || '',
+      helper: t.helper || '',
       to_emails: t.to_emails || '',
       cc_emails: t.cc_emails || '',
       bcc_emails: t.bcc_emails || '',
@@ -567,6 +571,16 @@ Folosește {{variabila}} pentru câmpuri dinamice."
                       ))}
                     </div>
                   )}
+                </div>
+
+                {/* Helper / Procedură */}
+                <div>
+                  <label className="text-xs font-medium text-gray-500 mb-1 block">
+                    📋 Helper / procedură <span className="text-gray-400 font-normal">— apare sub „Deschide în Gmail" când selectezi template-ul</span>
+                  </label>
+                  <textarea className={textareaCls.replace('font-mono', '')} rows={4}
+                    placeholder="Procedura care însoțește acest email (ex: după trimitere, atașează PV-ul semnat; sună persoana de contact; verifică BCC office@setsail.ro...)"
+                    value={form.helper || ''} onChange={e => setForm(f => ({ ...f, helper: e.target.value }))} />
                 </div>
 
                 {/* Activ toggle */}
