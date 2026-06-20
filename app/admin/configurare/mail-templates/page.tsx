@@ -2,6 +2,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Plus, Pencil, Trash2, X, Check, Eye, Code, Mail, Tag, ChevronDown, ChevronUp, Copy } from 'lucide-react'
+import { MAIL_VAR_GROUPS, mailVarValues } from '@/lib/mail-template'
 
 type Template = {
   id: string
@@ -84,6 +85,38 @@ export default function MailTemplatesPage() {
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [copied, setCopied] = useState<string | null>(null)
   const [varInput, setVarInput] = useState('')
+  // Picker variabile cu valori-exemplu dintr-o sesiune reală
+  const [varOpen, setVarOpen] = useState(false)
+  const [varSamples, setVarSamples] = useState<Record<string, string>>({})
+  const [varSampleInfo, setVarSampleInfo] = useState('')
+  const [varSamplesLoaded, setVarSamplesLoaded] = useState(false)
+
+  async function loadVarSamples() {
+    if (varSamplesLoaded) return
+    setVarSamplesLoaded(true)
+    const { data: sessions } = await supabase.from('sessions')
+      .select('*, locations(*), boats(*), evaluators(*), instructors(*)')
+      .eq('session_type', 'principal').order('session_date', { ascending: false })
+    const list = sessions || []
+    const sample = list.find((s: any) => s.status === 'completed')
+      || list.find((s: any) => s.status === 'active' || s.status === 'focus') || list[0]
+    if (!sample) return
+    const instrIds = [sample.instructor_id, sample.instructor_id_2, sample.instructor_id_3].filter(Boolean)
+    const [{ data: contacts }, { data: instrs }, { data: info }] = await Promise.all([
+      (sample.contact_person_ids?.length
+        ? supabase.from('contact_persons').select('*').in('id', sample.contact_person_ids)
+        : Promise.resolve({ data: [] as any[] })),
+      (instrIds.length
+        ? supabase.from('instructors').select('id, full_name').in('id', instrIds)
+        : Promise.resolve({ data: [] as any[] })),
+      supabase.from('setsail_info').select('key, value'),
+    ])
+    const ordered = instrIds.map((id: string) => (instrs || []).find((i: any) => i.id === id)).filter(Boolean) as { full_name: string }[]
+    const setsailInfo = Object.fromEntries((info || []).map((r: any) => [r.key, r.value]))
+    setVarSamples(mailVarValues({ origin: window.location.origin, sess: sample, contacts: contacts || [], instructors: ordered, setsailInfo }))
+    const d = sample.session_date ? new Date(sample.session_date).toLocaleDateString('ro-RO', { day: '2-digit', month: 'long', year: 'numeric' }) : ''
+    setVarSampleInfo(`${sample.status === 'completed' ? 'sesiune finalizată' : 'sesiune curentă'} · ${d}${sample.locations?.name ? ' · ' + sample.locations.name : ''}`)
+  }
 
   async function load() {
     const { data } = await supabase.from('mail_templates').select('*').order('categorie').order('label')
@@ -502,14 +535,48 @@ export default function MailTemplatesPage() {
                         </button>
                       ))}
                   </div>
-                  <div className="flex gap-2">
-                    <input className={inputCls + ' text-xs font-mono'} placeholder="variabila_noua"
-                      value={varInput} onChange={e => setVarInput(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && addVariable(varInput)} />
-                    <button onClick={() => addVariable(varInput)}
-                      className="px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 text-xs font-medium hover:bg-blue-100 whitespace-nowrap">
-                      + Adaugă
-                    </button>
+                  <div className="relative">
+                    <div className="flex gap-2">
+                      <input className={inputCls + ' text-xs font-mono'} placeholder="variabila_noua — click pentru listă"
+                        value={varInput}
+                        onFocus={() => { loadVarSamples(); setVarOpen(true) }}
+                        onBlur={() => setTimeout(() => setVarOpen(false), 150)}
+                        onChange={e => { setVarInput(e.target.value); setVarOpen(true) }}
+                        onKeyDown={e => e.key === 'Enter' && addVariable(varInput)} />
+                      <button onClick={() => addVariable(varInput)}
+                        className="px-3 py-1.5 rounded-lg bg-blue-50 text-blue-600 text-xs font-medium hover:bg-blue-100 whitespace-nowrap">
+                        + Adaugă
+                      </button>
+                    </div>
+                    {varOpen && (() => {
+                      const q = varInput.trim().toLowerCase()
+                      const groups = MAIL_VAR_GROUPS
+                        .map(g => ({ ...g, vars: g.vars.filter(v => !q || v.key.toLowerCase().includes(q) || v.label.toLowerCase().includes(q)) }))
+                        .filter(g => g.vars.length > 0)
+                      return (
+                        <div className="absolute z-20 left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg max-h-72 overflow-y-auto">
+                          <div className="px-3 py-1.5 text-[10px] text-gray-400 border-b border-gray-100 sticky top-0 bg-white">
+                            Valori exemplu din: {varSampleInfo || 'se încarcă…'}
+                          </div>
+                          {groups.length === 0 ? (
+                            <div className="px-3 py-3 text-xs text-gray-400">Nicio variabilă pentru „{varInput}".</div>
+                          ) : groups.map(g => (
+                            <div key={g.category}>
+                              <div className="px-3 py-1 text-[11px] font-semibold text-gray-500 bg-gray-50 sticky top-7">{g.icon} {g.category}</div>
+                              {g.vars.map(v => (
+                                <button key={v.key} type="button"
+                                  onMouseDown={(e) => { e.preventDefault(); setVarInput(v.key); setVarOpen(false) }}
+                                  className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-blue-50 transition-colors">
+                                  <code className="text-xs text-blue-600 font-mono shrink-0">{`{{${v.key}}}`}</code>
+                                  <span className="text-[11px] text-gray-400 truncate flex-1 min-w-0">{v.label}</span>
+                                  <span className="text-[11px] text-gray-700 truncate text-right" style={{ maxWidth: '42%' }}>{varSamples[v.key] || '—'}</span>
+                                </button>
+                              ))}
+                            </div>
+                          ))}
+                        </div>
+                      )
+                    })()}
                   </div>
                 </div>
 

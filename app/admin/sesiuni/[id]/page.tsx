@@ -4,45 +4,16 @@ import CIImageEditor from '@/components/CIImageEditor'
 import { supabase } from '@/lib/supabase'
 import { TIMELINE_SCOPES, timelineScopeLabel, scopeForSession } from '@/lib/timeline-scope'
 import { computeAddressChanges, AddressChange } from '@/lib/normalize-address'
+import { applyMailTemplate } from '@/lib/mail-template'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Download, FileText, Users, Copy, Plus, Trash2, Check, X, Pencil, GitBranch, ArrowRight, UserX, Mail, ChevronDown, Database } from 'lucide-react'
 
-function applyTemplate(text: string, sess: any, contacts?: any[]): string {
-  if (!text) return ''
-  const origin = typeof window !== 'undefined' ? window.location.origin : 'https://setsail-practica.vercel.app'
-  const sd  = sess?.session_date || ''
-  const psd = sess?.practice_start_date || ''
-  const vars: Record<string, string> = {
-    'link_portal':                origin + '/portal?cod=' + (sess?.access_code || ''),
-    'data_sesiune':               sd  ? new Date(sd).toLocaleDateString('ro-RO', {day:'2-digit', month:'long', year:'numeric'}) : '',
-    'locatie':                    sess?.location_detail || sess?.locations?.name || '',
-    'ambarcatiune':               sess?.boats?.name || '',
-    'zz_data_start_practica':     psd ? String(new Date(psd).getDate()) : '',
-    'zz_llll_data_practica':      sd  ? new Date(sd).toLocaleDateString('ro-RO', {day:'2-digit', month:'long'}) : '',
-    'ora_start':                  sess?.practice_start_time || '9:30',
-    'zz_data_start_curs':         sess?.course_start_date ? String(new Date(sess.course_start_date).getDate()) : '',
-    'zz_llll_aaaa_data_practica': sd  ? new Date(sd).toLocaleDateString('ro-RO', {day:'2-digit', month:'long', year:'numeric'}) : '',
-  }
-  const contactIds: string[] = sess?.contact_person_ids || []
-  const selected = (contacts || [])
-    .filter((c: any) => contactIds.includes(c.id))
-    .sort((a: any, b: any) => a.full_name.localeCompare(b.full_name, 'ro'))
-  const contactVars: Record<string, string> = {
-    'pers_cont_1': selected[0]?.full_name || '',
-    'pers_cont_2': selected[1]?.full_name || '',
-    'pers_cont_3': selected[2]?.full_name || '',
-    'pers_cont_4': selected[3]?.full_name || '',
-    'tel_cont_1':  selected[0]?.phone || '',
-    'tel_cont_2':  selected[1]?.phone || '',
-    'tel_cont_3':  selected[2]?.phone || '',
-    'tel_cont_4':  selected[3]?.phone || '',
-  }
-  let result = text
-  for (const [key, val] of Object.entries({ ...vars, ...contactVars })) {
-    result = result.split('{{' + key + '}}').join(val)
-  }
-  return result
+function applyTemplate(text: string, sess: any, contacts?: any[], instructors?: { full_name: string }[], setsailInfo?: Record<string, string>): string {
+  return applyMailTemplate(text, {
+    origin: typeof window !== 'undefined' ? window.location.origin : undefined,
+    sess, contacts, instructors, setsailInfo,
+  })
 }
 
 
@@ -1207,6 +1178,8 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
   { sess: Session, students: Student[], allStatuses: string[], onStatusChange:(sid:string,status:string)=>void, allSessions: Session[], allStudents: Record<string,Student[]>, onEditSession:(s:Session)=>void }) {
   const [dbTemplates, setDbTemplates] = useState<any[]>([])
   const [allContacts, setAllContacts] = useState<any[]>([])
+  const [setsailInfo, setSetsailInfo] = useState<Record<string, string>>({})
+  const [sessInstructors, setSessInstructors] = useState<{ full_name: string }[]>([])
   const [sessionContactIds, setSessionContactIds] = useState<string[]>(sess.contact_person_ids || [])
   const [showMailAuth, setShowMailAuth] = useState(false)
   const [authSubject, setAuthSubject] = useState('')
@@ -1243,7 +1216,18 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
       .then(({ data }) => setDbTemplates(data || []))
     supabase.from('contact_persons').select('*').eq('activ', true).order('full_name')
       .then(({ data }) => setAllContacts(data || []))
+    supabase.from('setsail_info').select('key, value')
+      .then(({ data }) => setSetsailInfo(Object.fromEntries((data || []).map((r: any) => [r.key, r.value]))))
   }, [])
+
+  // Instructorii sesiunii în ordine [1,2,3] — pt. variabilele {{instructor_n}} din mail
+  useEffect(() => {
+    const ids = [(sess as any)?.instructor_id, (sess as any)?.instructor_id_2, (sess as any)?.instructor_id_3].filter(Boolean)
+    if (!ids.length) { setSessInstructors([]); return }
+    supabase.from('instructors').select('id, full_name').in('id', ids).then(({ data }) => {
+      setSessInstructors(ids.map((id: string) => (data || []).find((i: any) => i.id === id)).filter(Boolean).map((i: any) => ({ full_name: i.full_name })))
+    })
+  }, [sess?.id])
 
   const isRadioSession = (sess.class_caa||'').toLowerCase().includes('radio') || (sess.class_caa||'').toLowerCase().includes('lrc')
   const SOL_TIPS = isRadioSession ? [
@@ -2332,8 +2316,8 @@ Set Sail NauticSchool
                           <button key={t.id}
                             onClick={()=>{
                               const rawBody = t.body_html || t.body_text || ''
-                              setAuthSubject(applyTemplate(t.subject, sess, allContacts))
-                              setAuthBody(applyTemplate(rawBody, sess, allContacts))
+                              setAuthSubject(applyTemplate(t.subject, sess, allContacts, sessInstructors, setsailInfo))
+                              setAuthBody(applyTemplate(rawBody, sess, allContacts, sessInstructors, setsailInfo))
                               setAuthHelper(t.helper || '')
                             }}
                             className="text-left px-3 py-2 rounded-lg text-xs border border-gray-200 hover:bg-blue-50 hover:border-blue-200 transition-colors">
@@ -2476,8 +2460,8 @@ Set Sail NauticSchool
                                 <button key={t.id}
                                   onClick={()=>{
                                     const rawBody = t.body_html || t.body_text || ''
-                                    setMailSubject(applyTemplate(t.subject, sess, allContacts))
-                                    setMailBody(applyTemplate(rawBody, sess, allContacts))
+                                    setMailSubject(applyTemplate(t.subject, sess, allContacts, sessInstructors, setsailInfo))
+                                    setMailBody(applyTemplate(rawBody, sess, allContacts, sessInstructors, setsailInfo))
                                     setMailHelper(t.helper || '')
                                   }}
                                   className="text-left px-3 py-2 rounded-lg text-xs border border-gray-200 hover:bg-blue-50 hover:border-blue-200 transition-colors">
