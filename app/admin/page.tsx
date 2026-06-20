@@ -24,12 +24,15 @@ function getAnchorDate(s: any, anchor: string): Date | null {
 }
 
 type TodoItem = {
-  type: 'today' | 'in1' | 'in2' | 'inZone'
+  type: 'today' | 'in1' | 'in2' | 'inZone' | 'overdue' | 'resolved'
   milestoneLabel: string
   sessionId: string
+  milestoneId?: string             // pt. milestone-occurrence (checkbox-uri Done/Anulat)
   sessionLabel: string
-  daysUntil: number  // 0 = azi, 1 = mâine, 2 = poimâine
+  daysUntil: number                // 0 = azi, 1 = mâine; negativ = restanță (zile)
   date: Date
+  status?: 'done' | 'anulat'       // pt. type 'resolved'
+  stampedAt?: string
 }
 
 const statusMap: Record<string, { label: string; color: string }> = {
@@ -50,17 +53,20 @@ export default function AdminDashboard() {
   const [moveMenuId, setMoveMenuId] = useState<string|null>(null)
 
   const [milestones, setMilestones] = useState<any[]>([])
+  const [msStatus, setMsStatus] = useState<Record<string, { status: 'done' | 'anulat'; stamped_at: string }>>({})
 
   async function load() {
-    const [{ data: sessions }, { data: allSts }, { data: tlMs }] = await Promise.all([
+    const [{ data: sessions }, { data: allSts }, { data: tlMs }, { data: msSt }] = await Promise.all([
       supabase.from('sessions')
         .select('*, locations(name, county), instructors(full_name), boats(name), evaluators(full_name)')
         .order('session_date', { ascending: true })
         .order('created_at', { ascending: true }),
       supabase.from('students').select('*, sessions!session_id(session_date, session_type, status, locations(name))'),
       supabase.from('timeline_milestones').select('*').order('order_index'),
+      supabase.from('milestone_status').select('*'),
     ])
     setMilestones(tlMs || [])
+    setMsStatus(Object.fromEntries((msSt || []).map((r: any) => [`${r.session_id}:${r.milestone_id}`, { status: r.status, stamped_at: r.stamped_at }])))
 
     const all = sessions || []
     const sts = allSts || []
@@ -166,6 +172,24 @@ export default function AdminDashboard() {
   const absentGroups = Object.values(absentBySession)
     .sort((a,b) => a.sess.session_date.localeCompare(b.sess.session_date))
 
+  // Bifare Done/Anulat pe un milestone → ștampilează data (sau dezbifează)
+  async function setMilestone(sessionId: string, milestoneId: string, status: 'done' | 'anulat') {
+    const key = `${sessionId}:${milestoneId}`
+    const current = msStatus[key]
+    if (current?.status === status) {
+      // re-click pe aceeași bifă → dezbifează
+      await supabase.from('milestone_status').delete().eq('session_id', sessionId).eq('milestone_id', milestoneId)
+      setMsStatus(m => { const n = { ...m }; delete n[key]; return n })
+    } else {
+      const stamped_at = new Date().toISOString()
+      await supabase.from('milestone_status').upsert(
+        { session_id: sessionId, milestone_id: milestoneId, status, stamped_at },
+        { onConflict: 'session_id,milestone_id' }
+      )
+      setMsStatus(m => ({ ...m, [key]: { status, stamped_at } }))
+    }
+  }
+
   // Calculez TO DO items pe baza milestones + sesiuni
   const today = startOfDay(new Date())
   const todos: TodoItem[] = []
@@ -185,12 +209,17 @@ export default function AdminDashboard() {
 
     const sessLabel = `${timelineScopeShort(scope)} ${shortDate(sess.session_date ? startOfDay(new Date(sess.session_date)) : null)} · ${sess.locations?.name || sess.class_caa || ''}`.trim()
 
-    // Milestone-uri în ±2 zile
+    // Milestone-uri: ±2 zile (upcoming), restanțe (overdue) și cele bifate (resolved)
     for (const { m, date } of dated) {
       const diff = Math.round((date.getTime() - today.getTime()) / DAY_MS)
-      if (diff === 0) todos.push({ type: 'today', milestoneLabel: m.label, sessionId: sess.id, sessionLabel: sessLabel, daysUntil: 0, date })
-      else if (diff === 1) todos.push({ type: 'in1', milestoneLabel: m.label, sessionId: sess.id, sessionLabel: sessLabel, daysUntil: 1, date })
-      else if (diff === 2) todos.push({ type: 'in2', milestoneLabel: m.label, sessionId: sess.id, sessionLabel: sessLabel, daysUntil: 2, date })
+      const resolved = msStatus[`${sess.id}:${m.id}`]
+      const base = { milestoneLabel: m.label, sessionId: sess.id, milestoneId: m.id, sessionLabel: sessLabel, date }
+      if (resolved) {
+        todos.push({ ...base, type: 'resolved', daysUntil: diff, status: resolved.status, stampedAt: resolved.stamped_at })
+      } else if (diff === 0) todos.push({ ...base, type: 'today', daysUntil: 0 })
+      else if (diff === 1) todos.push({ ...base, type: 'in1', daysUntil: 1 })
+      else if (diff === 2) todos.push({ ...base, type: 'in2', daysUntil: 2 })
+      else if (diff < 0 && diff >= -90) todos.push({ ...base, type: 'overdue', daysUntil: diff }) // restanță, până la bifare
     }
 
     // Zona activă (perioada în care suntem AZI, dacă nu e fix milestone)
@@ -215,9 +244,9 @@ export default function AdminDashboard() {
       }
     }
   }
-  // Sortăm: azi → mâine → +2 zile → zone
-  const todoOrder: Record<TodoItem['type'], number> = { today: 0, in1: 1, in2: 2, inZone: 3 }
-  todos.sort((a, b) => todoOrder[a.type] - todoOrder[b.type] || a.sessionLabel.localeCompare(b.sessionLabel))
+  // Sortăm: restanțe → azi → mâine → +2 zile → zone → bifate
+  const todoOrder: Record<TodoItem['type'], number> = { overdue: 0, today: 1, in1: 2, in2: 3, inZone: 4, resolved: 5 }
+  todos.sort((a, b) => todoOrder[a.type] - todoOrder[b.type] || (a.daysUntil - b.daysUntil) || a.sessionLabel.localeCompare(b.sessionLabel))
 
   return (
     <div className="p-8" onClick={() => setMoveMenuId(null)}>
@@ -257,7 +286,7 @@ export default function AdminDashboard() {
             <Bell size={16} className="text-amber-500" />
             TO DO
           </h2>
-          <span className="text-xs text-gray-400">Alerte milestones ±2 zile + zone active</span>
+          <span className="text-xs text-gray-400">Restanțe + milestones ±2 zile + zone active</span>
         </div>
         {loading ? (
           <div className="p-6 text-center text-gray-400 text-sm">Se încarcă...</div>
@@ -266,28 +295,49 @@ export default function AdminDashboard() {
         ) : (
           <div className="divide-y divide-gray-50">
             {todos.map((t, i) => {
-              const meta = t.type === 'today'
-                ? { bg: '#fef2f2', dot: '#dc2626', label: 'AZI' }
-                : t.type === 'in1'
-                  ? { bg: '#fff7ed', dot: '#ea580c', label: 'MÂINE' }
-                  : t.type === 'in2'
-                    ? { bg: '#fefce8', dot: '#ca8a04', label: '+2 zile' }
-                    : { bg: '#eff6ff', dot: '#2563eb', label: 'ACUM' }
+              const meta = t.type === 'overdue'
+                ? { bg: '#fee2e2', dot: '#dc2626', label: `${-t.daysUntil} ${(-t.daysUntil) === 1 ? 'ZI' : 'ZILE'}` }
+                : t.type === 'today'
+                  ? { bg: '#fef2f2', dot: '#dc2626', label: 'AZI' }
+                  : t.type === 'in1'
+                    ? { bg: '#fff7ed', dot: '#ea580c', label: 'MÂINE' }
+                    : t.type === 'in2'
+                      ? { bg: '#fefce8', dot: '#ca8a04', label: '+2 zile' }
+                      : t.type === 'resolved'
+                        ? { bg: '#ffffff', dot: '#9ca3af', label: t.status === 'done' ? 'DONE' : 'ANULAT' }
+                        : { bg: '#eff6ff', dot: '#2563eb', label: 'ACUM' }
+              const stamp = t.stampedAt ? new Date(t.stampedAt).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric' }) : ''
+              const hasChecks = t.type !== 'inZone' && t.milestoneId
               return (
-                <Link key={i} href={`/admin/sesiuni/${t.sessionId}`}
-                  className="flex items-center gap-3 px-5 py-3 hover:bg-gray-50 transition-colors"
-                  style={{ background: meta.bg }}>
+                <div key={i} className="flex items-center gap-3 px-5 py-3" style={{ background: meta.bg }}>
                   <span className="inline-block w-2 h-2 rounded-full shrink-0" style={{ background: meta.dot }} />
-                  <span className="text-xs font-bold uppercase tracking-wide shrink-0" style={{ color: meta.dot, minWidth: 64 }}>
+                  <span className="text-xs font-bold uppercase tracking-wide shrink-0 text-right" style={{ color: meta.dot, minWidth: 64 }}>
                     {meta.label}
                   </span>
-                  <span className="text-sm text-gray-900 flex-1 truncate">
+                  <Link href={`/admin/sesiuni/${t.sessionId}`}
+                    className={`text-sm flex-1 truncate hover:underline ${t.type === 'resolved' ? 'text-gray-400 line-through' : 'text-gray-900'}`}>
                     <strong>{t.milestoneLabel}</strong>
                     <span className="text-gray-500"> @ </span>
-                    <span className="text-gray-700">{t.sessionLabel}</span>
-                  </span>
-                  <ExternalLink size={12} className="text-gray-300 shrink-0" />
-                </Link>
+                    <span className={t.type === 'resolved' ? 'text-gray-400' : 'text-gray-700'}>{t.sessionLabel}</span>
+                    {t.type === 'resolved' && stamp && <span className="text-gray-400 no-underline"> · {stamp}</span>}
+                  </Link>
+                  {hasChecks ? (
+                    <div className="flex items-center gap-3 shrink-0">
+                      <label className="flex items-center gap-1 text-xs cursor-pointer select-none" title="Marchează ca finalizat">
+                        <input type="checkbox" checked={t.status === 'done'}
+                          onChange={() => setMilestone(t.sessionId, t.milestoneId!, 'done')} />
+                        <span className={t.status === 'done' ? 'text-green-600 font-medium' : 'text-gray-500'}>Done</span>
+                      </label>
+                      <label className="flex items-center gap-1 text-xs cursor-pointer select-none" title="Marchează ca anulat">
+                        <input type="checkbox" checked={t.status === 'anulat'}
+                          onChange={() => setMilestone(t.sessionId, t.milestoneId!, 'anulat')} />
+                        <span className={t.status === 'anulat' ? 'text-gray-600 font-medium' : 'text-gray-500'}>Anulat</span>
+                      </label>
+                    </div>
+                  ) : (
+                    <ExternalLink size={12} className="text-gray-300 shrink-0" />
+                  )}
+                </div>
               )
             })}
           </div>
