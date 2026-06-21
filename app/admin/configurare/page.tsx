@@ -276,6 +276,89 @@ export default function ConfigurarePage() {
 
       {/* Tipuri de fisiere necesare per categorie (ANCOM / ANR) */}
       <SessionFileTypesSection />
+
+      {/* Simulatoare (pagini gated prin token) */}
+      <SimulatoareSection />
+    </div>
+  )
+}
+
+function SimulatoareSection() {
+  const [rows, setRows] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [copied, setCopied] = useState<string | null>(null)
+  const origin = typeof window !== 'undefined' ? window.location.origin : ''
+
+  async function load() {
+    const { data } = await supabase.from('simulators').select('*').order('ordine').order('title')
+    setRows(data || []); setLoading(false)
+  }
+  useEffect(() => { load() }, [])
+
+  const linkFor = (s: any) => `${origin}/simulatoare/${s.slug}?token=${s.token}`
+
+  function copy(s: any) {
+    navigator.clipboard.writeText(linkFor(s))
+    setCopied(s.id); setTimeout(() => setCopied(null), 2000)
+  }
+  async function toggleActiv(s: any) {
+    await supabase.from('simulators').update({ activ: !s.activ }).eq('id', s.id)
+    setRows(r => r.map(x => x.id === s.id ? { ...x, activ: !x.activ } : x))
+  }
+  async function regen(s: any) {
+    if (!confirm('Generezi un token nou? Link-ul vechi nu va mai funcționa.')) return
+    const arr = new Uint8Array(16); crypto.getRandomValues(arr)
+    const token = Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 24)
+    await supabase.from('simulators').update({ token }).eq('id', s.id)
+    setRows(r => r.map(x => x.id === s.id ? { ...x, token } : x))
+  }
+
+  return (
+    <div className="mt-8 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="px-6 py-4 border-b border-gray-100">
+        <h2 className="font-semibold text-gray-900">🎮 Simulatoare</h2>
+        <p className="text-xs text-gray-400 mt-0.5">Pagini interactive accesibile printr-un link cu token. Trimite link-ul cursanților.</p>
+      </div>
+      {loading ? (
+        <div className="text-center text-gray-400 py-8 text-sm">Se încarcă...</div>
+      ) : rows.length === 0 ? (
+        <div className="text-center text-gray-400 py-8 text-sm">Niciun simulator.</div>
+      ) : (
+        <div className="divide-y divide-gray-50">
+          {rows.map(s => (
+            <div key={s.id} className="px-6 py-4">
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-sm text-gray-900">{s.title}</span>
+                    {!s.activ && <span className="px-1.5 py-0.5 rounded text-xs bg-gray-100 text-gray-400">inactiv</span>}
+                  </div>
+                  {s.descriere && <p className="text-xs text-gray-400 mt-0.5">{s.descriere}</p>}
+                  <code className="block mt-2 text-[11px] text-gray-500 bg-gray-50 rounded-lg px-2.5 py-1.5 border border-gray-100 break-all">{linkFor(s)}</code>
+                </div>
+                <div className="flex flex-col gap-1.5 shrink-0">
+                  <button onClick={() => copy(s)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-blue-200 text-blue-600 hover:bg-blue-50 whitespace-nowrap">
+                    <Copy size={12} /> {copied === s.id ? 'Copiat!' : 'Copiază link'}
+                  </button>
+                  <a href={linkFor(s)} target="_blank" rel="noopener noreferrer"
+                    className="text-center px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 text-gray-600 hover:bg-gray-50 whitespace-nowrap">
+                    Deschide ↗
+                  </a>
+                  <div className="flex gap-1.5">
+                    <button onClick={() => regen(s)} title="Token nou"
+                      className="flex-1 px-2 py-1.5 rounded-lg text-xs border border-gray-200 text-gray-500 hover:bg-gray-50">↻ Token</button>
+                    <button onClick={() => toggleActiv(s)} title={s.activ ? 'Dezactivează' : 'Activează'}
+                      className={`flex-1 px-2 py-1.5 rounded-lg text-xs border ${s.activ ? 'border-green-200 text-green-600 hover:bg-green-50' : 'border-gray-200 text-gray-400 hover:bg-gray-50'}`}>
+                      {s.activ ? 'Activ' : 'Inactiv'}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
