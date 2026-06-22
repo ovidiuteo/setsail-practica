@@ -81,6 +81,7 @@ export default function RosterPage() {
   const [draft, setDraft] = useState('')
   const [saving, setSaving] = useState(false)
   const [ciFor, setCiFor] = useState<Row | null>(null)
+  const [tab, setTab] = useState<'list' | 'verify'>('list')
 
   const load = useCallback(async () => {
     const r = await fetch(`/api/roster?session_id=${id}&token=${encodeURIComponent(token)}`)
@@ -144,10 +145,22 @@ export default function RosterPage() {
           ))}
         </div>
 
+        {/* Taburi */}
+        <div className="mb-4 flex gap-1 border-b border-gray-200">
+          {([['list', 'Listă'], ['verify', 'Verify by ID']] as const).map(([k, lbl]) => (
+            <button key={k} onClick={() => setTab(k)}
+              className={`px-4 py-2 text-sm font-medium -mb-px border-b-2 ${tab === k ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+              {lbl}
+            </button>
+          ))}
+        </div>
+
         {rows === null ? (
           <div className="text-center text-gray-400 py-16">Se încarcă…</div>
         ) : rows.length === 0 ? (
           <div className="text-center text-gray-400 py-16">Niciun cursant în sesiune.</div>
+        ) : tab === 'verify' ? (
+          <VerifyTab sessionId={id} token={token} rows={rows} onRowUpdate={rowUpdate} />
         ) : (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
             <table className="w-full text-sm border-collapse">
@@ -203,6 +216,145 @@ export default function RosterPage() {
         <CiModal sessionId={id} token={token} row={ciFor}
           onClose={() => setCiFor(null)}
           onRowUpdate={rowUpdate} />
+      )}
+    </div>
+  )
+}
+
+function VerifyTab({ sessionId, token, rows, onRowUpdate }: {
+  sessionId: string; token: string; rows: Row[]
+  onRowUpdate: (id: string, partial: Partial<Row>) => void
+}) {
+  const [index, setIndex] = useState(0)
+  const [form, setForm] = useState<Record<string, string>>({})
+  const [dirty, setDirty] = useState(false)
+  const [zoom, setZoom] = useState(1)
+  const [ci, setCi] = useState<string | null | undefined>(undefined)
+  const [editOpen, setEditOpen] = useState(false)
+  const wantId = useRef<string>('')
+  const cur = rows[index]
+
+  const fetchCi = useCallback(async (id: string) => {
+    setCi(undefined); setZoom(1); wantId.current = id
+    const r = await fetch(`/api/roster?session_id=${sessionId}&token=${encodeURIComponent(token)}&student_id=${id}&side=recto`)
+    const j = await r.json()
+    if (wantId.current === id) setCi(j.image || null)
+  }, [sessionId, token])
+
+  // La schimbarea cursantului: reîncarcă formularul + imaginea
+  useEffect(() => {
+    const c = rows[index]; if (!c) return
+    setForm({ full_name: c.full_name || '', cnp: c.cnp || '', birth_date: c.birth_date || '', address: c.address || '', city: c.city || '', county: c.county || '' })
+    setDirty(false); fetchCi(c.id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [index])
+
+  async function saveCurrent() {
+    if (!dirty || !cur) return
+    await fetch('/api/roster', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId, token, student_id: cur.id, fields: form }),
+    })
+    onRowUpdate(cur.id, form as Partial<Row>)
+    setDirty(false)
+  }
+  async function goto(i: number) {
+    if (i === index || i < 0 || i >= rows.length) return
+    await saveCurrent(); setIndex(i)
+  }
+
+  // Navigare cu tastele sus/jos (cu salvare), dacă nu suntem într-un input / modal
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (editOpen) return
+      const tag = (e.target as HTMLElement)?.tagName
+      if (tag === 'INPUT' || tag === 'TEXTAREA') return
+      if (e.key === 'ArrowDown') { e.preventDefault(); goto(index + 1) }
+      if (e.key === 'ArrowUp') { e.preventDefault(); goto(index - 1) }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  })
+
+  if (!cur) return null
+  const isFirst = index === 0, isLast = index === rows.length - 1
+
+  return (
+    <div className="flex flex-col lg:flex-row gap-4">
+      {/* Listă nume */}
+      <div className="lg:w-56 shrink-0 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+        <div className="max-h-[80vh] overflow-y-auto py-1">
+          {rows.map((r, i) => (
+            <button key={r.id} onClick={() => goto(i)}
+              className={`w-full text-left px-3 py-2 text-sm truncate border-l-2 ${i === index ? 'bg-blue-50 text-blue-700 font-medium border-blue-500' : 'text-gray-700 hover:bg-gray-50 border-transparent'}`}>
+              <span className="text-gray-300 text-xs mr-1.5">{i + 1}</span>{r.full_name}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Date cursant */}
+      <div className="md:w-72 shrink-0 bg-white rounded-xl shadow-sm border border-gray-100 p-4 self-start">
+        <div className="flex items-center justify-between mb-3">
+          <span className="text-xs text-gray-400">{index + 1} / {rows.length}</span>
+          {dirty && <span className="text-xs font-medium text-amber-600">● nesalvat</span>}
+        </div>
+        <div className="space-y-3">
+          {FIELDS.map(f => (
+            <label key={f.key} className="block">
+              <span className="block text-[11px] uppercase tracking-wide text-gray-400 mb-1">{f.label}</span>
+              <input value={form[f.key] || ''} onChange={e => { setForm(s => ({ ...s, [f.key]: e.target.value })); setDirty(true) }}
+                className="w-full px-2.5 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200" />
+            </label>
+          ))}
+        </div>
+      </div>
+
+      {/* CI mare + zoom */}
+      <div className="flex-1 min-w-0 bg-white rounded-xl shadow-sm border border-gray-100 p-3 flex flex-col">
+        <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+          <div className="flex items-center gap-1.5">
+            <button onClick={() => setZoom(z => Math.max(0.25, +(z - 0.25).toFixed(2)))} disabled={!ci} title="Zoom -"
+              className="w-8 h-8 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 text-lg disabled:opacity-40">−</button>
+            <span className="text-xs text-gray-500 w-11 text-center">{Math.round(zoom * 100)}%</span>
+            <button onClick={() => setZoom(z => Math.min(5, +(z + 0.25).toFixed(2)))} disabled={!ci} title="Zoom +"
+              className="w-8 h-8 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 text-lg disabled:opacity-40">+</button>
+            <button onClick={() => setZoom(1)} disabled={!ci} title="Pe lățime"
+              className="px-2.5 h-8 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 text-xs disabled:opacity-40">Lățime</button>
+          </div>
+          <button onClick={() => setEditOpen(true)}
+            className="px-3 h-8 rounded-lg text-xs font-medium border border-blue-200 text-blue-600 hover:bg-blue-50">✂ Editează / Crop CI</button>
+        </div>
+
+        <div className="flex-1 overflow-auto bg-gray-50 rounded-lg border border-gray-100 min-h-[320px] flex items-start justify-center">
+          {ci === undefined ? (
+            <div className="text-gray-400 mt-20">Se încarcă…</div>
+          ) : ci === null ? (
+            <div className="text-gray-400 mt-20 text-center">
+              <p className="mb-3">Fără imagine CI.</p>
+              <button onClick={() => setEditOpen(true)} className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm">Adaugă CI</button>
+            </div>
+          ) : (
+            <img src={ci} alt="CI" style={{ width: `${zoom * 100}%` }} className="max-w-none block" />
+          )}
+        </div>
+
+        {/* Săgeți navigare sub CI */}
+        <div className="flex items-center justify-center gap-4 mt-3">
+          {!isFirst && (
+            <button onClick={() => goto(index - 1)} className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border border-gray-200 text-gray-700 hover:bg-gray-50">▲ Anterior</button>
+          )}
+          <span className="text-xs text-gray-400 truncate max-w-[40%]">{cur.full_name}</span>
+          {!isLast && (
+            <button onClick={() => goto(index + 1)} className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border border-gray-200 text-gray-700 hover:bg-gray-50">▼ Următor</button>
+          )}
+        </div>
+      </div>
+
+      {editOpen && (
+        <CiModal sessionId={sessionId} token={token} row={cur}
+          onClose={() => { setEditOpen(false); fetchCi(cur.id) }}
+          onRowUpdate={onRowUpdate} />
       )}
     </div>
   )
