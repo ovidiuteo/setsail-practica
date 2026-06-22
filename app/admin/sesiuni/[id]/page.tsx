@@ -2675,15 +2675,28 @@ function RosterLinkCard({ sess }: { sess: any }) {
   const origin = typeof window !== 'undefined' ? window.location.origin : ''
   const link = token ? `${origin}/sesiune/${sess.id}/cursanti?token=${token}` : ''
 
+  const VERIF: Record<string, string> = { corina: 'Corina', paula: 'Paula', ruxandra: 'Ruxandra' }
+  const verifiedBy = Object.entries(sess.roster_verified || {})
+    .filter(([, v]) => v).map(([k]) => VERIF[k] || k)
+
+  function newToken(): string {
+    const arr = new Uint8Array(16); crypto.getRandomValues(arr)
+    return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 24)
+  }
   async function ensureToken(): Promise<string> {
     if (token) return token
-    const arr = new Uint8Array(16); crypto.getRandomValues(arr)
-    const t = Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 24)
+    const t = newToken()
     setBusy(true)
     await supabase.from('sessions').update({ roster_token: t }).eq('id', sess.id)
-    setBusy(false)
-    setToken(t)
+    setBusy(false); setToken(t)
     return t
+  }
+  async function regen() {
+    if (!confirm('Generezi un token nou? Link-ul vechi nu va mai funcționa.')) return
+    const t = newToken()
+    setBusy(true)
+    await supabase.from('sessions').update({ roster_token: t }).eq('id', sess.id)
+    setBusy(false); setToken(t)
   }
   async function copy() {
     const t = await ensureToken()
@@ -2702,8 +2715,13 @@ function RosterLinkCard({ sess }: { sess: any }) {
         <h3 className="font-semibold text-sm text-gray-900">Tabel cursanți (link cu token)</h3>
       </div>
       <p className="text-xs text-gray-400 mb-3">Pagină editabilă cu toți cursanții (date + CI). Acces doar prin link.</p>
+      {verifiedBy.length > 0 && (
+        <div className="mb-3 flex items-center gap-1.5 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded-lg px-2.5 py-1.5">
+          <Check size={13} /> Listă verificată de {verifiedBy.join(', ')}
+        </div>
+      )}
       {link && <code className="block mb-3 text-[11px] text-gray-500 bg-gray-50 rounded-lg px-2.5 py-1.5 border border-gray-100 break-all">{link}</code>}
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <button onClick={copy} disabled={busy}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-blue-200 text-blue-600 hover:bg-blue-50 disabled:opacity-50">
           <Copy size={12} /> {copied ? '✓ Copiat!' : 'Copiază link'}
@@ -2712,6 +2730,12 @@ function RosterLinkCard({ sess }: { sess: any }) {
           className="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50">
           Deschide ↗
         </button>
+        {token && (
+          <button onClick={regen} disabled={busy} title="Token nou (invalidează link-ul vechi)"
+            className="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-50">
+            ↻ Regenerează token
+          </button>
+        )}
       </div>
     </div>
   )

@@ -6,6 +6,7 @@ type Row = {
   id: string; full_name: string; cnp: string; birth_date: string
   address: string; city: string; county: string; has_ci: boolean; has_verso: boolean
 }
+type Verified = { corina: boolean; paula: boolean; ruxandra: boolean }
 
 const FIELDS: { key: keyof Row; label: string; w?: string }[] = [
   { key: 'full_name', label: 'Nume și prenume', w: 'min-w-[180px]' },
@@ -14,6 +15,9 @@ const FIELDS: { key: keyof Row; label: string; w?: string }[] = [
   { key: 'address', label: 'Adresă', w: 'min-w-[200px]' },
   { key: 'city', label: 'Localitate', w: 'min-w-[120px]' },
   { key: 'county', label: 'Județ', w: 'min-w-[110px]' },
+]
+const VERIFIERS: { key: keyof Verified; label: string }[] = [
+  { key: 'corina', label: 'Corina' }, { key: 'paula', label: 'Paula' }, { key: 'ruxandra', label: 'Ruxandra' },
 ]
 
 // Reduce o imagine la max 1800px lățime, JPEG 0.85
@@ -37,11 +41,41 @@ function downscale(file: File): Promise<string> {
     fr.readAsDataURL(file)
   })
 }
+// Rotește o imagine (data URL) cu 90° (deg = 90 sau -90)
+function rotate(src: string, deg: number): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new Image()
+    img.onload = () => {
+      const c = document.createElement('canvas')
+      c.width = img.height; c.height = img.width
+      const ctx = c.getContext('2d')!
+      ctx.translate(c.width / 2, c.height / 2)
+      ctx.rotate(deg * Math.PI / 180)
+      ctx.drawImage(img, -img.width / 2, -img.height / 2)
+      resolve(c.toDataURL('image/jpeg', 0.9))
+    }
+    img.src = src
+  })
+}
+// Decupează o imagine după un dreptunghi relativ {x,y,w,h} în 0..1
+function crop(src: string, r: { x: number; y: number; w: number; h: number }): Promise<string> {
+  return new Promise((resolve) => {
+    const img = new Image()
+    img.onload = () => {
+      const sx = r.x * img.width, sy = r.y * img.height, sw = r.w * img.width, sh = r.h * img.height
+      const c = document.createElement('canvas'); c.width = Math.max(1, sw); c.height = Math.max(1, sh)
+      c.getContext('2d')!.drawImage(img, sx, sy, sw, sh, 0, 0, sw, sh)
+      resolve(c.toDataURL('image/jpeg', 0.9))
+    }
+    img.src = src
+  })
+}
 
 export default function RosterPage() {
   const { id } = useParams<{ id: string }>()
   const token = useSearchParams().get('token') || ''
   const [rows, setRows] = useState<Row[] | null>(null)
+  const [verified, setVerified] = useState<Verified>({ corina: false, paula: false, ruxandra: false })
   const [denied, setDenied] = useState(false)
   const [edit, setEdit] = useState<{ id: string; field: keyof Row } | null>(null)
   const [draft, setDraft] = useState('')
@@ -53,8 +87,12 @@ export default function RosterPage() {
     if (r.status === 403) { setDenied(true); return }
     const j = await r.json()
     setRows(j.students || [])
+    if (j.verified) setVerified(j.verified)
   }, [id, token])
   useEffect(() => { load() }, [load])
+
+  const rowUpdate = (sid: string, partial: Partial<Row>) =>
+    setRows(rs => (rs || []).map(x => x.id === sid ? { ...x, ...partial } : x))
 
   async function commit() {
     if (!edit) return
@@ -66,8 +104,17 @@ export default function RosterPage() {
     })
     setSaving(false)
     if (!r.ok) { alert('Salvare eșuată.'); return }
-    setRows(rs => (rs || []).map(x => x.id === sid ? { ...x, [field]: draft } : x))
+    rowUpdate(sid, { [field]: draft } as Partial<Row>)
     setEdit(null)
+  }
+
+  async function toggleVerif(key: keyof Verified) {
+    const next = { ...verified, [key]: !verified[key] }
+    setVerified(next)
+    await fetch('/api/roster', {
+      method: 'PUT', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: id, token, verified: next }),
+    })
   }
 
   if (denied) return (
@@ -79,11 +126,22 @@ export default function RosterPage() {
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-8">
       <div className="max-w-6xl mx-auto">
-        <div className="mb-5">
+        <div className="mb-4">
           <h1 className="text-xl font-bold text-gray-900">Cursanți — sesiune</h1>
           <p className="text-sm text-gray-500 mt-1">
-            Click pe o celulă pentru a edita, apoi confirmă cu ✓ (sau Enter). Apasă „CI" pentru imagini.
+            Click pe o celulă pentru a edita, apoi confirmă cu ✓ (sau Enter). Apasă „CI" pentru imagini și date.
           </p>
+        </div>
+
+        {/* Checkbox-uri verificare listă */}
+        <div className="mb-5 flex flex-wrap gap-2">
+          {VERIFIERS.map(v => (
+            <label key={v.key}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border cursor-pointer text-sm select-none transition-colors ${verified[v.key] ? 'border-green-300 bg-green-50 text-green-800' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>
+              <input type="checkbox" checked={verified[v.key]} onChange={() => toggleVerif(v.key)} className="accent-green-600" />
+              Verificat lista {v.label}
+            </label>
+          ))}
         </div>
 
         {rows === null ? (
@@ -144,71 +202,134 @@ export default function RosterPage() {
       {ciFor && (
         <CiModal sessionId={id} token={token} row={ciFor}
           onClose={() => setCiFor(null)}
-          onChanged={(side, has) => setRows(rs => (rs || []).map(x => x.id === ciFor.id ? { ...x, [side === 'verso' ? 'has_verso' : 'has_ci']: has } : x))} />
+          onRowUpdate={rowUpdate} />
       )}
     </div>
   )
 }
 
-function CiModal({ sessionId, token, row, onClose, onChanged }: {
+function CiModal({ sessionId, token, row, onClose, onRowUpdate }: {
   sessionId: string; token: string; row: Row
-  onClose: () => void; onChanged: (side: 'recto' | 'verso', has: boolean) => void
+  onClose: () => void; onRowUpdate: (id: string, partial: Partial<Row>) => void
 }) {
   const [side, setSide] = useState<'recto' | 'verso'>('recto')
-  const [img, setImg] = useState<string | null | undefined>(undefined) // undefined=loading
+  const [img, setImg] = useState<string | null | undefined>(undefined) // undefined=loading, null=none
   const [zoom, setZoom] = useState(1)
   const [busy, setBusy] = useState(false)
+  const [dirty, setDirty] = useState(false)
+  const [cropMode, setCropMode] = useState(false)
+  const [sel, setSel] = useState<{ x: number; y: number; w: number; h: number } | null>(null)
+  const drag = useRef<{ x: number; y: number } | null>(null)
+  const imgRef = useRef<HTMLImageElement>(null)
   const fileRef = useRef<HTMLInputElement>(null)
+  // date cursant
+  const [showFields, setShowFields] = useState(false)
+  const [form, setForm] = useState<Record<string, string>>({})
+  const [savingF, setSavingF] = useState(false)
 
   const fetchImg = useCallback(async (s: 'recto' | 'verso') => {
-    setImg(undefined); setZoom(1)
+    setImg(undefined); setZoom(1); setDirty(false); setCropMode(false); setSel(null)
     const r = await fetch(`/api/roster?session_id=${sessionId}&token=${encodeURIComponent(token)}&student_id=${row.id}&side=${s}`)
     const j = await r.json()
     setImg(j.image || null)
   }, [sessionId, token, row.id])
   useEffect(() => { fetchImg(side) }, [side, fetchImg])
+  useEffect(() => {
+    setForm({ full_name: row.full_name || '', cnp: row.cnp || '', birth_date: row.birth_date || '', address: row.address || '', city: row.city || '', county: row.county || '' })
+  }, [row])
 
-  async function upload(file: File) {
+  async function persistImage(dataUrl: string) {
     setBusy(true)
     try {
-      const dataUrl = await downscale(file)
       const r = await fetch('/api/roster', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: sessionId, token, student_id: row.id, side, imageData: dataUrl }),
       })
       if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.error || 'eroare') }
-      setImg(dataUrl); setZoom(1); onChanged(side, true)
-    } catch (e: any) { alert('Upload eșuat: ' + e.message) }
+      setImg(dataUrl); setDirty(false); setZoom(1)
+      onRowUpdate(row.id, side === 'verso' ? { has_verso: true } : { has_ci: true })
+    } catch (e: any) { alert('Salvare imagine eșuată: ' + e.message) }
     setBusy(false)
+  }
+  async function onPick(file: File) {
+    setBusy(true)
+    try { const d = await downscale(file); setImg(d); setDirty(true); setZoom(1); setCropMode(false); setSel(null) }
+    catch (e: any) { alert('Eroare imagine: ' + e.message) }
+    setBusy(false)
+  }
+  async function doRotate(deg: number) {
+    if (!img) return
+    setBusy(true); const d = await rotate(img, deg); setImg(d); setDirty(true); setZoom(1); setBusy(false)
+  }
+  async function applyCrop() {
+    if (!img || !sel || sel.w < 0.02 || sel.h < 0.02) { setCropMode(false); setSel(null); return }
+    setBusy(true); const d = await crop(img, sel); setImg(d); setDirty(true); setCropMode(false); setSel(null); setZoom(1); setBusy(false)
+  }
+
+  function relFromEvent(e: React.PointerEvent) {
+    const el = imgRef.current; if (!el) return { x: 0, y: 0 }
+    const r = el.getBoundingClientRect()
+    return { x: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), y: Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)) }
+  }
+  function onDown(e: React.PointerEvent) { if (!cropMode) return; const p = relFromEvent(e); drag.current = p; setSel({ x: p.x, y: p.y, w: 0, h: 0 }) }
+  function onMove(e: React.PointerEvent) {
+    if (!cropMode || !drag.current) return
+    const p = relFromEvent(e), s = drag.current
+    setSel({ x: Math.min(s.x, p.x), y: Math.min(s.y, p.y), w: Math.abs(p.x - s.x), h: Math.abs(p.y - s.y) })
+  }
+  function onUp() { drag.current = null }
+
+  async function saveFields() {
+    setSavingF(true)
+    const r = await fetch('/api/roster', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId, token, student_id: row.id, fields: form }),
+    })
+    setSavingF(false)
+    if (!r.ok) { alert('Salvare date eșuată.'); return }
+    onRowUpdate(row.id, form as Partial<Row>)
   }
 
   return (
     <div onClick={onClose} className="fixed inset-0 z-50 bg-black/80 flex flex-col">
-      <div onClick={e => e.stopPropagation()} className="flex items-center justify-between gap-3 px-4 py-3 bg-gray-900 text-gray-100">
+      {/* Toolbar */}
+      <div onClick={e => e.stopPropagation()} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-gray-900 text-gray-100">
         <div className="flex items-center gap-2 min-w-0">
-          <span className="font-medium truncate">{row.full_name}</span>
-          <div className="flex rounded-lg overflow-hidden border border-gray-700 ml-2">
+          <span className="font-medium truncate max-w-[40vw]">{row.full_name}</span>
+          <div className="flex rounded-lg overflow-hidden border border-gray-700 ml-1">
             <button onClick={() => setSide('recto')} className={`px-3 py-1 text-xs ${side === 'recto' ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-800'}`}>Față</button>
             <button onClick={() => setSide('verso')} className={`px-3 py-1 text-xs ${side === 'verso' ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-800'}`}>Verso</button>
           </div>
         </div>
-        <div className="flex items-center gap-1.5">
-          <button onClick={() => setZoom(z => Math.max(0.25, +(z - 0.25).toFixed(2)))} disabled={!img} title="Zoom -"
-            className="w-8 h-8 rounded-lg bg-gray-800 hover:bg-gray-700 text-lg disabled:opacity-40">−</button>
-          <span className="text-xs text-gray-400 w-12 text-center">{Math.round(zoom * 100)}%</span>
-          <button onClick={() => setZoom(z => Math.min(5, +(z + 0.25).toFixed(2)))} disabled={!img} title="Zoom +"
-            className="w-8 h-8 rounded-lg bg-gray-800 hover:bg-gray-700 text-lg disabled:opacity-40">+</button>
-          <button onClick={() => setZoom(1)} disabled={!img} title="Mărime naturală"
-            className="px-2.5 h-8 rounded-lg bg-gray-800 hover:bg-gray-700 text-xs disabled:opacity-40">1:1</button>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {/* rotate + crop */}
+          <button onClick={() => doRotate(-90)} disabled={!img || cropMode} title="Rotește stânga" className="w-8 h-8 rounded-lg bg-gray-800 hover:bg-gray-700 disabled:opacity-40">⟲</button>
+          <button onClick={() => doRotate(90)} disabled={!img || cropMode} title="Rotește dreapta" className="w-8 h-8 rounded-lg bg-gray-800 hover:bg-gray-700 disabled:opacity-40">⟳</button>
+          {!cropMode ? (
+            <button onClick={() => { setCropMode(true); setSel(null); setZoom(1) }} disabled={!img} title="Decupează" className="px-2.5 h-8 rounded-lg bg-gray-800 hover:bg-gray-700 text-xs disabled:opacity-40">✂ Crop</button>
+          ) : (
+            <>
+              <button onClick={applyCrop} className="px-2.5 h-8 rounded-lg bg-green-600 hover:bg-green-500 text-white text-xs">Aplică</button>
+              <button onClick={() => { setCropMode(false); setSel(null) }} className="px-2.5 h-8 rounded-lg bg-gray-800 hover:bg-gray-700 text-xs">Renunță</button>
+            </>
+          )}
+          <span className="w-px h-5 bg-gray-700 mx-0.5" />
+          {/* zoom */}
+          <button onClick={() => setZoom(z => Math.max(0.25, +(z - 0.25).toFixed(2)))} disabled={!img || cropMode} title="Zoom -" className="w-8 h-8 rounded-lg bg-gray-800 hover:bg-gray-700 text-lg disabled:opacity-40">−</button>
+          <span className="text-xs text-gray-400 w-11 text-center">{Math.round(zoom * 100)}%</span>
+          <button onClick={() => setZoom(z => Math.min(5, +(z + 0.25).toFixed(2)))} disabled={!img || cropMode} title="Zoom +" className="w-8 h-8 rounded-lg bg-gray-800 hover:bg-gray-700 text-lg disabled:opacity-40">+</button>
+          <button onClick={() => setZoom(1)} disabled={!img || cropMode} title="Mărime naturală" className="px-2.5 h-8 rounded-lg bg-gray-800 hover:bg-gray-700 text-xs disabled:opacity-40">1:1</button>
+          <span className="w-px h-5 bg-gray-700 mx-0.5" />
+          {/* replace / save */}
           <input ref={fileRef} type="file" accept="image/*" className="hidden"
-            onChange={e => { const f = e.target.files?.[0]; if (f) upload(f); e.target.value = '' }} />
-          <button onClick={() => fileRef.current?.click()} disabled={busy}
-            className="px-3 h-8 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs disabled:opacity-50 ml-1">
-            {busy ? 'Se încarcă…' : img ? 'Înlocuiește' : 'Încarcă'}
-          </button>
+            onChange={e => { const f = e.target.files?.[0]; if (f) onPick(f); e.target.value = '' }} />
+          <button onClick={() => fileRef.current?.click()} disabled={busy} className="px-3 h-8 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-xs disabled:opacity-50">{img ? 'Înlocuiește' : 'Încarcă'}</button>
+          {dirty && <button onClick={() => img && persistImage(img)} disabled={busy} className="px-3 h-8 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs disabled:opacity-50">{busy ? 'Se salvează…' : 'Salvează imaginea'}</button>}
           <button onClick={onClose} className="w-8 h-8 rounded-lg bg-gray-800 hover:bg-gray-700 text-lg ml-1">✕</button>
         </div>
       </div>
+
+      {/* Imagine */}
       <div onClick={e => e.stopPropagation()} className="flex-1 overflow-auto flex items-start justify-center p-4">
         {img === undefined ? (
           <div className="text-gray-400 mt-20">Se încarcă…</div>
@@ -217,9 +338,44 @@ function CiModal({ sessionId, token, row, onClose, onChanged }: {
             <p className="mb-3">Nicio imagine {side === 'verso' ? 'verso' : 'față'}.</p>
             <button onClick={() => fileRef.current?.click()} className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm">Încarcă imagine</button>
           </div>
+        ) : cropMode ? (
+          <div className="relative inline-block max-w-full select-none touch-none"
+            onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} onPointerLeave={onUp}>
+            <img ref={imgRef} src={img} alt="CI" className="max-w-full max-h-[75vh] object-contain pointer-events-none" draggable={false} />
+            {sel && sel.w > 0 && (
+              <div className="absolute border-2 border-blue-400 bg-blue-400/20 pointer-events-none"
+                style={{ left: `${sel.x * 100}%`, top: `${sel.y * 100}%`, width: `${sel.w * 100}%`, height: `${sel.h * 100}%` }} />
+            )}
+            <div className="absolute top-2 left-2 text-xs bg-black/60 text-white px-2 py-1 rounded pointer-events-none">Trage pentru a selecta zona, apoi „Aplică"</div>
+          </div>
         ) : (
-          <img src={img} alt="CI" style={{ transform: `scale(${zoom})`, transformOrigin: 'top center' }}
-            className="shadow-2xl rounded transition-transform" />
+          <img src={img} alt="CI" style={{ transform: `scale(${zoom})`, transformOrigin: 'top center' }} className="shadow-2xl rounded transition-transform" />
+        )}
+      </div>
+
+      {/* Date cursant (dropdown) */}
+      <div onClick={e => e.stopPropagation()} className="bg-gray-900 text-gray-100 border-t border-gray-800">
+        <button onClick={() => setShowFields(s => !s)} className="w-full flex items-center justify-between px-4 py-2.5 text-sm hover:bg-gray-800">
+          <span className="font-medium">Date cursant</span>
+          <span className={`transition-transform ${showFields ? 'rotate-180' : ''}`}>▾</span>
+        </button>
+        {showFields && (
+          <div className="px-4 pb-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+              {FIELDS.map(f => (
+                <label key={f.key} className="block">
+                  <span className="block text-[11px] uppercase tracking-wide text-gray-400 mb-1">{f.label}</span>
+                  <input value={form[f.key] || ''} onChange={e => setForm(s => ({ ...s, [f.key]: e.target.value }))}
+                    className="w-full px-2.5 py-1.5 rounded-lg bg-gray-800 border border-gray-700 text-sm text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500/50" />
+                </label>
+              ))}
+            </div>
+            <div className="mt-3 flex justify-end">
+              <button onClick={saveFields} disabled={savingF} className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm disabled:opacity-50">
+                {savingF ? 'Se salvează…' : 'Salvează modificări'}
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </div>

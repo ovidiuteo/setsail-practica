@@ -22,13 +22,16 @@ async function authed(sb: ReturnType<typeof svc>, sessionId: string, token: stri
   return !!data?.roster_token && data.roster_token === token
 }
 
+const VERIFIERS = ['corina', 'paula', 'ruxandra'] as const
+
 // GET — lista cursanților (fără base64), sau imaginea CI a unui cursant (student_id + side)
 export async function GET(req: NextRequest) {
   const sb = svc()
   const sp = req.nextUrl.searchParams
   const sessionId = sp.get('session_id') || ''
   const token = sp.get('token') || ''
-  if (!(await authed(sb, sessionId, token)))
+  const { data: sess } = await sb.from('sessions').select('roster_token, roster_verified').eq('id', sessionId).maybeSingle()
+  if (!sessionId || !token || !sess?.roster_token || sess.roster_token !== token)
     return NextResponse.json({ error: 'unauthorized' }, { status: 403 })
 
   const studentId = sp.get('student_id')
@@ -49,24 +52,46 @@ export async function GET(req: NextRequest) {
     has_ci: !!r.ci_image_data, has_verso: !!r.ci_verso_data,
   }))
   rows.sort((a, b) => (a.full_name || '').localeCompare(b.full_name || '', 'ro', { sensitivity: 'base' }))
-  return NextResponse.json({ students: rows })
+  const verified: Record<string, boolean> = {}
+  for (const v of VERIFIERS) verified[v] = !!(sess.roster_verified as any)?.[v]
+  return NextResponse.json({ students: rows, verified })
 }
 
-// PATCH — modifică un câmp al unui cursant { session_id, token, student_id, field, value }
+// PATCH — modifică câmpuri ale unui cursant
+//   { session_id, token, student_id, field, value }  sau  { ..., fields: {...} }
 export async function PATCH(req: NextRequest) {
   const sb = svc()
   const body = await req.json().catch(() => ({}))
-  const { session_id, token, student_id, field, value } = body || {}
+  const { session_id, token, student_id, field, value, fields } = body || {}
   if (!(await authed(sb, session_id, token)))
     return NextResponse.json({ error: 'unauthorized' }, { status: 403 })
-  if (!student_id || !EDITABLE.has(field))
-    return NextResponse.json({ error: 'câmp invalid' }, { status: 400 })
+  if (!student_id) return NextResponse.json({ error: 'lipsește cursantul' }, { status: 400 })
 
-  const { error } = await sb.from('students')
-    .update({ [field]: typeof value === 'string' ? value.trim() : value })
-    .eq('id', student_id).eq('session_id', session_id)
+  const updates: Record<string, any> = {}
+  if (fields && typeof fields === 'object') {
+    for (const [k, v] of Object.entries(fields)) if (EDITABLE.has(k)) updates[k] = typeof v === 'string' ? v.trim() : v
+  } else if (EDITABLE.has(field)) {
+    updates[field] = typeof value === 'string' ? value.trim() : value
+  }
+  if (!Object.keys(updates).length) return NextResponse.json({ error: 'câmp invalid' }, { status: 400 })
+
+  const { error } = await sb.from('students').update(updates).eq('id', student_id).eq('session_id', session_id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })
+}
+
+// PUT — actualizează flag-urile de verificare a listei { session_id, token, verified:{corina,paula,ruxandra} }
+export async function PUT(req: NextRequest) {
+  const sb = svc()
+  const body = await req.json().catch(() => ({}))
+  const { session_id, token, verified } = body || {}
+  if (!(await authed(sb, session_id, token)))
+    return NextResponse.json({ error: 'unauthorized' }, { status: 403 })
+  const clean: Record<string, boolean> = {}
+  for (const v of VERIFIERS) clean[v] = !!(verified || {})[v]
+  const { error } = await sb.from('sessions').update({ roster_verified: clean }).eq('id', session_id)
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ ok: true, verified: clean })
 }
 
 // POST — upload imagine CI { session_id, token, student_id, side, imageData(dataURL) }
