@@ -24,6 +24,14 @@ async function authed(sb: ReturnType<typeof svc>, sessionId: string, token: stri
 
 const VERIFIERS = ['corina', 'paula', 'ruxandra'] as const
 
+// Derivă obținere/prelungire din clasă (ex. "Obtinere LRC", "Prelungire LRC")
+function lrcFromClass(cls: string): string {
+  const c = (cls || '').toLowerCase()
+  if (c.includes('prelungire')) return 'prelungire'
+  if (c.includes('obtinere') || c.includes('obținere')) return 'obtinere'
+  return ''
+}
+
 // GET — lista cursanților (fără base64), sau imaginea CI a unui cursant (student_id + side)
 export async function GET(req: NextRequest) {
   const sb = svc()
@@ -43,13 +51,14 @@ export async function GET(req: NextRequest) {
   }
 
   const { data, error } = await sb.from('students')
-    .select('id, full_name, cnp, birth_date, address, city, county, obtinere_prelungire, ci_image_data, ci_verso_data')
+    .select('id, full_name, cnp, birth_date, address, city, county, class_caa, obtinere_prelungire, ci_image_data, ci_verso_data')
     .eq('session_id', sessionId)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   const rows = (data || []).map((r: any) => ({
     id: r.id, full_name: r.full_name, cnp: r.cnp, birth_date: r.birth_date,
     address: r.address, city: r.city, county: r.county,
-    obtinere_prelungire: r.obtinere_prelungire || '',
+    // Informația vine din clasă (sursa de adevăr); valoarea stocată e doar fallback dacă clasa nu o conține
+    obtinere_prelungire: lrcFromClass(r.class_caa) || r.obtinere_prelungire || '',
     has_ci: !!r.ci_image_data, has_verso: !!r.ci_verso_data,
   }))
   rows.sort((a, b) => (a.full_name || '').localeCompare(b.full_name || '', 'ro', { sensitivity: 'base' }))
