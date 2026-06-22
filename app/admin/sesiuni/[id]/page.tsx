@@ -2021,6 +2021,9 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
           {/* Fișiere sesiune (upload PDF/DOCX/foto) */}
           <SessionFilesCard sess={sess} isRadio={isRadio} />
 
+          {/* Link tabel cursanți (gated prin token) */}
+          <RosterLinkCard sess={sess} />
+
           {/* Notificare ANR */}
           <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
             <button onClick={async()=>{
@@ -2662,6 +2665,55 @@ Set Sail NauticSchool
         )
       })()}
     </>
+  )
+}
+
+function RosterLinkCard({ sess }: { sess: any }) {
+  const [token, setToken] = useState<string>(sess.roster_token || '')
+  const [busy, setBusy] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const origin = typeof window !== 'undefined' ? window.location.origin : ''
+  const link = token ? `${origin}/sesiune/${sess.id}/cursanti?token=${token}` : ''
+
+  async function ensureToken(): Promise<string> {
+    if (token) return token
+    const arr = new Uint8Array(16); crypto.getRandomValues(arr)
+    const t = Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 24)
+    setBusy(true)
+    await supabase.from('sessions').update({ roster_token: t }).eq('id', sess.id)
+    setBusy(false)
+    setToken(t)
+    return t
+  }
+  async function copy() {
+    const t = await ensureToken()
+    navigator.clipboard.writeText(`${origin}/sesiune/${sess.id}/cursanti?token=${t}`)
+    setCopied(true); setTimeout(() => setCopied(false), 2000)
+  }
+  async function open() {
+    const t = await ensureToken()
+    window.open(`${origin}/sesiune/${sess.id}/cursanti?token=${t}`, '_blank')
+  }
+
+  return (
+    <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+      <div className="flex items-center gap-2 mb-1">
+        <Users size={15} className="text-gray-400" />
+        <h3 className="font-semibold text-sm text-gray-900">Tabel cursanți (link cu token)</h3>
+      </div>
+      <p className="text-xs text-gray-400 mb-3">Pagină editabilă cu toți cursanții (date + CI). Acces doar prin link.</p>
+      {link && <code className="block mb-3 text-[11px] text-gray-500 bg-gray-50 rounded-lg px-2.5 py-1.5 border border-gray-100 break-all">{link}</code>}
+      <div className="flex gap-2">
+        <button onClick={copy} disabled={busy}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-blue-200 text-blue-600 hover:bg-blue-50 disabled:opacity-50">
+          <Copy size={12} /> {copied ? '✓ Copiat!' : 'Copiază link'}
+        </button>
+        <button onClick={open} disabled={busy}
+          className="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+          Deschide ↗
+        </button>
+      </div>
+    </div>
   )
 }
 
