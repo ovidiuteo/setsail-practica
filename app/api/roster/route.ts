@@ -12,7 +12,7 @@ function svc() {
 }
 
 // Câmpuri editabile de pe pagina gated
-const EDITABLE = new Set(['full_name', 'cnp', 'birth_date', 'address', 'city', 'county'])
+const EDITABLE = new Set(['full_name', 'cnp', 'birth_date', 'address', 'city', 'county', 'obtinere_prelungire'])
 const MAX_IMG = 8 * 1024 * 1024 // ~8MB data URL
 
 // Validează (session_id, token) și întoarce true dacă tokenul corespunde
@@ -43,12 +43,13 @@ export async function GET(req: NextRequest) {
   }
 
   const { data, error } = await sb.from('students')
-    .select('id, full_name, cnp, birth_date, address, city, county, ci_image_data, ci_verso_data')
+    .select('id, full_name, cnp, birth_date, address, city, county, obtinere_prelungire, ci_image_data, ci_verso_data')
     .eq('session_id', sessionId)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   const rows = (data || []).map((r: any) => ({
     id: r.id, full_name: r.full_name, cnp: r.cnp, birth_date: r.birth_date,
     address: r.address, city: r.city, county: r.county,
+    obtinere_prelungire: r.obtinere_prelungire || '',
     has_ci: !!r.ci_image_data, has_verso: !!r.ci_verso_data,
   }))
   rows.sort((a, b) => (a.full_name || '').localeCompare(b.full_name || '', 'ro', { sensitivity: 'base' }))

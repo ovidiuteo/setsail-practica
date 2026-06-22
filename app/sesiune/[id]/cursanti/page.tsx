@@ -4,7 +4,27 @@ import { useParams, useSearchParams } from 'next/navigation'
 
 type Row = {
   id: string; full_name: string; cnp: string; birth_date: string
-  address: string; city: string; county: string; has_ci: boolean; has_verso: boolean
+  address: string; city: string; county: string; obtinere_prelungire: string
+  has_ci: boolean; has_verso: boolean
+}
+
+const LRC_OPTS: [string, string][] = [['', '—'], ['obtinere', 'Obținere LRC'], ['prelungire', 'Prelungire LRC']]
+const lrcLabel = (v: string) => LRC_OPTS.find(o => o[0] === v)?.[1] || '—'
+
+// Select Obținere/Prelungire LRC — albastru bold, cu confirmare suplimentară la modificare
+function LrcSelect({ value, onConfirm }: { value: string; onConfirm: (v: string) => void }) {
+  return (
+    <select value={value || ''}
+      onChange={e => {
+        const v = e.target.value
+        if (v === (value || '')) return
+        if (confirm(`Confirmi modificarea în „${lrcLabel(v)}"?`)) onConfirm(v)
+        else e.target.value = value || '' // revine vizual dacă se anulează
+      }}
+      className="text-sm font-bold text-blue-600 bg-blue-50 border border-blue-200 rounded-lg px-2 py-1 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-200">
+      {LRC_OPTS.map(([v, l]) => <option key={v} value={v} className="font-normal text-gray-800">{l}</option>)}
+    </select>
+  )
 }
 type Verified = { corina: boolean; paula: boolean; ruxandra: boolean }
 
@@ -109,6 +129,15 @@ export default function RosterPage() {
     setEdit(null)
   }
 
+  async function saveLrc(sid: string, v: string) {
+    const r = await fetch('/api/roster', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: id, token, student_id: sid, field: 'obtinere_prelungire', value: v }),
+    })
+    if (!r.ok) { alert('Salvare eșuată.'); return }
+    rowUpdate(sid, { obtinere_prelungire: v } as Partial<Row>)
+  }
+
   async function toggleVerif(key: keyof Verified) {
     const next = { ...verified, [key]: !verified[key] }
     setVerified(next)
@@ -169,6 +198,7 @@ export default function RosterPage() {
                   <th className="px-3 py-2.5 w-8">#</th>
                   {FIELDS.map(f => <th key={f.key} className={`px-3 py-2.5 ${f.w || ''}`}>{f.label}</th>)}
                   <th className="px-3 py-2.5 text-center">CI</th>
+                  <th className="px-3 py-2.5 min-w-[150px]">Obținere / Prelungire LRC</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -203,6 +233,9 @@ export default function RosterPage() {
                         className={`px-2.5 py-1 rounded-lg text-xs font-medium border ${row.has_ci || row.has_verso ? 'border-green-200 text-green-700 bg-green-50 hover:bg-green-100' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
                         {row.has_ci || row.has_verso ? 'CI ✓' : 'CI +'}
                       </button>
+                    </td>
+                    <td className="px-3 py-2">
+                      <LrcSelect value={row.obtinere_prelungire} onConfirm={v => saveLrc(row.id, v)} />
                     </td>
                   </tr>
                 ))}
@@ -262,6 +295,14 @@ function VerifyTab({ sessionId, token, rows, onRowUpdate }: {
     if (i === index || i < 0 || i >= rows.length) return
     await saveCurrent(); setIndex(i)
   }
+  async function saveLrc(v: string) {
+    if (!cur) return
+    await fetch('/api/roster', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId, token, student_id: cur.id, field: 'obtinere_prelungire', value: v }),
+    })
+    onRowUpdate(cur.id, { obtinere_prelungire: v } as Partial<Row>)
+  }
 
   // Navigare cu tastele sus/jos (cu salvare), dacă nu suntem într-un input / modal
   useEffect(() => {
@@ -307,6 +348,10 @@ function VerifyTab({ sessionId, token, rows, onRowUpdate }: {
                 className="w-full px-2.5 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200" />
             </label>
           ))}
+          <div className="pt-3 mt-1 border-t border-gray-100">
+            <span className="block text-[11px] uppercase tracking-wide text-gray-400 mb-1">Obținere / Prelungire LRC</span>
+            <LrcSelect value={cur.obtinere_prelungire || ''} onConfirm={saveLrc} />
+          </div>
         </div>
       </div>
 
