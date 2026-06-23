@@ -8,6 +8,7 @@ export async function POST(req: NextRequest) {
   const tip = req.nextUrl.searchParams.get('tip') || body.tip || 'obtinere'
   const format = req.nextUrl.searchParams.get('format') || body.format || 'docx'
   const stampila = req.nextUrl.searchParams.get('stampila') === 'true' || body.stampila === true
+  const semnatura = req.nextUrl.searchParams.get('semnatura') === 'true' || body.semnatura === true
   const isPrelungire = tip === 'prelungire'
 
   const supabase = createClient(
@@ -78,7 +79,7 @@ export async function POST(req: NextRequest) {
   if (instrIds.length) {
     const { data: instrs } = await supabase.from('instructors').select('id, full_name, signature_data').in('id', instrIds)
     comisie = instrIds.map(id => (instrs || []).find((i: any) => i.id === id)).filter(Boolean)
-      .map((i: any) => ({ full_name: i.full_name, signature_data: i.signature_data || null }))
+      .map((i: any) => ({ full_name: i.full_name, signature_data: semnatura ? (i.signature_data || null) : null }))
   }
   const presedinte: ComisiePers | null = comisie[0] || null
   const membri: ComisiePers[] = comisie.slice(1)

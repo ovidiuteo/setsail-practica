@@ -1204,6 +1204,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
   const [gFise, setGFise] = useState(false)
   const [gPDF, setGPDF] = useState(false)
   const [stamp, setStamp] = useState(false) // PV/Anexă ANCOM: implicit fără ștampilă
+  const [signs, setSigns] = useState(false) // PV/Anexă ANCOM: implicit fără semnături
   const [notif, setNotif] = useState<any>(null)
   const [notifForm, setNotifForm] = useState({ nr_notificare:'', ora_examinare:'10:00', barci_selectate:[] as string[], clasa:'', locatie_curs:'', locatie_examinare:'' })
   const [notifScanFile, setNotifScanFile] = useState<string|null>(null)
@@ -1596,7 +1597,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click()
   }
   async function generateDocRadio(endpoint: string, filename: string, tip: string, format: string) {
-    const res = await fetch(endpoint, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id, tip, format, stampila:stamp})})
+    const res = await fetch(endpoint, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id, tip, format, stampila:stamp, semnatura:signs})})
     if (!res.ok) throw new Error(await res.text())
     const blob = await res.blob()
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click()
@@ -1895,7 +1896,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                     <FileText size={12}/>Cereri Obținere
                   </button>
                   <button onClick={async()=>{try{
-                    const res=await fetch('/api/generate-cereri-radio',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id,tip:'obtinere',format:'pdf',stampila:stamp})})
+                    const res=await fetch('/api/generate-cereri-radio',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id,tip:'obtinere',format:'pdf',stampila:stamp,semnatura:signs})})
                     const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>{w.document.title=w.document.querySelector('title')?.textContent||'Document';w.print()},800)}
                   }catch(e:any){alert(e.message)}}}
                     disabled={students.length===0} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#dc2626'}}>
@@ -1909,7 +1910,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                     <FileText size={12}/>Cereri Prelungire
                   </button>
                   <button onClick={async()=>{try{
-                    const res=await fetch('/api/generate-cereri-radio',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id,tip:'prelungire',format:'pdf',stampila:stamp})})
+                    const res=await fetch('/api/generate-cereri-radio',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id,tip:'prelungire',format:'pdf',stampila:stamp,semnatura:signs})})
                     const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>{w.document.title=w.document.querySelector('title')?.textContent||'Document';w.print()},800)}
                   }catch(e:any){alert(e.message)}}}
                     disabled={students.length===0} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#dc2626'}}>
@@ -1924,11 +1925,17 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
             <h3 className="font-semibold text-sm text-gray-900 mb-3">Documente</h3>
             {isRadio ? (
               <div className="space-y-2">
-                {/* Bifă ștampilă pentru PV + Anexe (implicit fără) */}
-                <label className={`flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer text-xs font-medium select-none ${stamp ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-gray-200 bg-gray-50 text-gray-500'}`}>
-                  <input type="checkbox" checked={stamp} onChange={e => setStamp(e.target.checked)} className="accent-blue-600" />
-                  {stamp ? 'PV / Anexe — CU ștampilă' : 'PV / Anexe — fără ștampilă'}
-                </label>
+                {/* Bife ștampilă + semnături pentru PV + Anexe (implicit fără) */}
+                <div className="flex flex-wrap gap-1.5">
+                  <label className={`flex-1 flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer text-xs font-medium select-none ${stamp ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-gray-200 bg-gray-50 text-gray-500'}`}>
+                    <input type="checkbox" checked={stamp} onChange={e => setStamp(e.target.checked)} className="accent-blue-600" />
+                    {stamp ? 'CU ștampilă' : 'Fără ștampilă'}
+                  </label>
+                  <label className={`flex-1 flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer text-xs font-medium select-none ${signs ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-gray-200 bg-gray-50 text-gray-500'}`}>
+                    <input type="checkbox" checked={signs} onChange={e => setSigns(e.target.checked)} className="accent-blue-600" />
+                    {signs ? 'CU semnături' : 'Fără semnături'}
+                  </label>
+                </div>
                 {/* 1. PV Obtinere */}
                 <div className="flex flex-wrap gap-1.5">
                   {docFooter('pv-obtinere')}
@@ -1937,7 +1944,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                     <FileText size={12}/>{gPV?'...':'PV Obținere LRC'}
                   </button>
                   <button onClick={async()=>{try{
-                    const res=await fetch('/api/generate-pv-radio',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id,tip:'obtinere',format:'pdf',stampila:stamp})})
+                    const res=await fetch('/api/generate-pv-radio',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id,tip:'obtinere',format:'pdf',stampila:stamp,semnatura:signs})})
                     const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>{w.document.title=w.document.querySelector('title')?.textContent||'Document';w.print()},800)}
                   }catch(e:any){alert(e.message)}}}
                     disabled={students.length===0} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#dc2626'}}>
@@ -1952,7 +1959,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                     <FileText size={12}/>Anexă PV Obținere LRC
                   </button>
                   <button onClick={async()=>{try{
-                    const res=await fetch('/api/generate-anexa-pv',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id,tip:'obtinere',format:'pdf',stampila:stamp})})
+                    const res=await fetch('/api/generate-anexa-pv',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id,tip:'obtinere',format:'pdf',stampila:stamp,semnatura:signs})})
                     const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>{w.document.title=w.document.querySelector('title')?.textContent||'Document';w.print()},800)}
                   }catch(e:any){alert(e.message)}}}
                     disabled={students.length===0} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#dc2626'}}>
@@ -1969,7 +1976,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                     <FileText size={12}/>PV Prelungire LRC
                   </button>
                   <button onClick={async()=>{try{
-                    const res=await fetch('/api/generate-pv-radio',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id,tip:'prelungire',format:'pdf',stampila:stamp})})
+                    const res=await fetch('/api/generate-pv-radio',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id,tip:'prelungire',format:'pdf',stampila:stamp,semnatura:signs})})
                     const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>{w.document.title=w.document.querySelector('title')?.textContent||'Document';w.print()},800)}
                   }catch(e:any){alert(e.message)}}}
                     disabled={students.length===0} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#dc2626'}}>
@@ -1984,7 +1991,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                     <FileText size={12}/>Anexă PV Prelungire LRC
                   </button>
                   <button onClick={async()=>{try{
-                    const res=await fetch('/api/generate-anexa-pv',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id,tip:'prelungire',format:'pdf',stampila:stamp})})
+                    const res=await fetch('/api/generate-anexa-pv',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id,tip:'prelungire',format:'pdf',stampila:stamp,semnatura:signs})})
                     const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>{w.document.title=w.document.querySelector('title')?.textContent||'Document';w.print()},800)}
                   }catch(e:any){alert(e.message)}}}
                     disabled={students.length===0} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#dc2626'}}>
