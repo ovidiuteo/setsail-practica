@@ -102,6 +102,7 @@ export default function RosterPage() {
   const [saving, setSaving] = useState(false)
   const [ciFor, setCiFor] = useState<Row | null>(null)
   const [tab, setTab] = useState<'list' | 'verify'>('list')
+  const [docsVisible, setDocsVisible] = useState(false)
 
   const load = useCallback(async () => {
     const r = await fetch(`/api/roster?session_id=${id}&token=${encodeURIComponent(token)}`)
@@ -109,6 +110,7 @@ export default function RosterPage() {
     const j = await r.json()
     setRows(j.students || [])
     if (j.verified) setVerified(j.verified)
+    setDocsVisible(!!j.docs_visible)
   }, [id, token])
   useEffect(() => { load() }, [load])
 
@@ -173,6 +175,9 @@ export default function RosterPage() {
             </label>
           ))}
         </div>
+
+        {/* Documente (PV / Anexe) — doar dacă admin a activat vizibilitatea */}
+        {docsVisible && <DocsSection sessionId={id} />}
 
         {/* Taburi */}
         <div className="mb-4 flex gap-1 border-b border-gray-200">
@@ -251,6 +256,80 @@ export default function RosterPage() {
           onRowUpdate={rowUpdate} />
       )}
     </div>
+  )
+}
+
+function DocsSection({ sessionId }: { sessionId: string }) {
+  const [stamp, setStamp] = useState(false)
+  const [signs, setSigns] = useState(false)
+  const [busy, setBusy] = useState<string | null>(null)
+
+  async function gen(endpoint: string, tip: 'obtinere' | 'prelungire', format: 'docx' | 'pdf', filename: string) {
+    const key = `${endpoint}-${tip}-${format}`
+    setBusy(key)
+    try {
+      const res = await fetch(endpoint, {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId, tip, format, stampila: stamp, semnatura: signs }),
+      })
+      if (!res.ok) throw new Error(await res.text())
+      if (format === 'pdf') {
+        const html = await res.text()
+        const w = window.open('', '_blank')
+        if (w) { w.document.write(html); w.document.close(); setTimeout(() => { w.document.title = w.document.querySelector('title')?.textContent || 'Document'; w.print() }, 800) }
+      } else {
+        const blob = await res.blob()
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click()
+      }
+    } catch (e: any) { alert('Eroare la generare: ' + (e.message || e)) }
+    setBusy(null)
+  }
+
+  const groups: { tip: 'obtinere' | 'prelungire'; label: string }[] = [
+    { tip: 'obtinere', label: 'Obținere LRC' },
+    { tip: 'prelungire', label: 'Prelungire LRC' },
+  ]
+
+  return (
+    <div className="mb-5 bg-white rounded-xl shadow-sm border border-gray-100 p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+        <h2 className="font-semibold text-sm text-gray-900">Documente (PV / Anexe)</h2>
+        <div className="flex gap-1.5">
+          <label className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border cursor-pointer text-xs font-medium select-none ${stamp ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-gray-200 bg-gray-50 text-gray-500'}`}>
+            <input type="checkbox" checked={stamp} onChange={e => setStamp(e.target.checked)} className="accent-blue-600" />
+            {stamp ? 'CU ștampilă' : 'Fără ștampilă'}
+          </label>
+          <label className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border cursor-pointer text-xs font-medium select-none ${signs ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-gray-200 bg-gray-50 text-gray-500'}`}>
+            <input type="checkbox" checked={signs} onChange={e => setSigns(e.target.checked)} className="accent-blue-600" />
+            {signs ? 'CU semnături' : 'Fără semnături'}
+          </label>
+        </div>
+      </div>
+      <div className="space-y-3">
+        {groups.map(g => (
+          <div key={g.tip}>
+            <div className="text-[11px] uppercase tracking-wide text-gray-400 mb-1.5">{g.label}</div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
+              <DocBtn label="PV DOCX" busy={busy === `/api/generate-pv-radio-${g.tip}-docx`} onClick={() => gen('/api/generate-pv-radio', g.tip, 'docx', `PV ${g.tip} ${sessionId}.docx`)} variant="blue" />
+              <DocBtn label="PV PDF" busy={busy === `/api/generate-pv-radio-${g.tip}-pdf`} onClick={() => gen('/api/generate-pv-radio', g.tip, 'pdf', '')} variant="red" />
+              <DocBtn label="Anexă DOCX" busy={busy === `/api/generate-anexa-pv-${g.tip}-docx`} onClick={() => gen('/api/generate-anexa-pv', g.tip, 'docx', `Anexa ${g.tip} ${sessionId}.docx`)} variant="blue" />
+              <DocBtn label="Anexă PDF" busy={busy === `/api/generate-anexa-pv-${g.tip}-pdf`} onClick={() => gen('/api/generate-anexa-pv', g.tip, 'pdf', '')} variant="red" />
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function DocBtn({ label, onClick, busy, variant }: { label: string; onClick: () => void; busy: boolean; variant: 'blue' | 'red' }) {
+  const bg = variant === 'blue' ? '#1d4ed8' : '#dc2626'
+  return (
+    <button onClick={onClick} disabled={busy}
+      className="flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium text-white disabled:opacity-50"
+      style={{ background: bg }}>
+      {busy ? '...' : label}
+    </button>
   )
 }
 

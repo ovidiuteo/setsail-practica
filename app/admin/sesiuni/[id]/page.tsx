@@ -2685,6 +2685,7 @@ function RosterLinkCard({ sess }: { sess: any }) {
   const [token, setToken] = useState<string>(sess.roster_token || '')
   const [busy, setBusy] = useState(false)
   const [copied, setCopied] = useState(false)
+  const [docsVisible, setDocsVisible] = useState<boolean>(!!sess.roster_docs_visible)
   const origin = typeof window !== 'undefined' ? window.location.origin : ''
   const link = token ? `${origin}/sesiune/${sess.id}/cursanti?token=${token}` : ''
 
@@ -2720,6 +2721,11 @@ function RosterLinkCard({ sess }: { sess: any }) {
     const t = await ensureToken()
     window.open(`${origin}/sesiune/${sess.id}/cursanti?token=${t}`, '_blank')
   }
+  async function toggleDocs() {
+    const next = !docsVisible
+    setDocsVisible(next)
+    await supabase.from('sessions').update({ roster_docs_visible: next }).eq('id', sess.id)
+  }
 
   return (
     <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
@@ -2750,6 +2756,10 @@ function RosterLinkCard({ sess }: { sess: any }) {
           </button>
         )}
       </div>
+      <label className={`mt-3 flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer text-xs font-medium select-none ${docsVisible ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-gray-200 bg-gray-50 text-gray-500'}`}>
+        <input type="checkbox" checked={docsVisible} onChange={toggleDocs} className="accent-blue-600" />
+        {docsVisible ? 'Documente vizibile pe pagina cursanților' : 'Documente vizibile pe pagină (PV / Anexe)'}
+      </label>
     </div>
   )
 }
