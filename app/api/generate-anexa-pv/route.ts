@@ -7,6 +7,7 @@ export async function POST(req: NextRequest) {
   const session_id = body.session_id
   const tip = req.nextUrl.searchParams.get('tip') || body.tip || 'obtinere'
   const format = req.nextUrl.searchParams.get('format') || body.format || 'docx'
+  const stampila = req.nextUrl.searchParams.get('stampila') === 'true' || body.stampila === true
   const isPrelungire = tip === 'prelungire'
 
   const supabase = createClient(
@@ -85,7 +86,8 @@ export async function POST(req: NextRequest) {
   // Ștampila SetSail (fără semnătură), originală — lângă președinte
   const { data: stampilaDoc } = await supabase.from('setsail_documents')
     .select('file_data').eq('tip', 'stampila_fara_semnatura').maybeSingle()
-  const stampilaData: string | null = stampilaDoc?.file_data || null
+  // Ștampila se include doar dacă a fost bifat explicit (implicit fără)
+  const stampilaData: string | null = stampila ? (stampilaDoc?.file_data || null) : null
 
   // Data examenului (data practicii) — pentru "Întocmit:"
   const examDateRo = fmtNrDate(session.session_date)
