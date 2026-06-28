@@ -21,6 +21,7 @@ export const MAIL_VAR_GROUPS: MailVarGroup[] = [
       { key: 'locatie', label: 'Locația' },
       { key: 'ambarcatiune', label: 'Ambarcațiunea' },
       { key: 'ora_start', label: 'Ora de start practică' },
+      { key: 'data_start_curs', label: 'Data start curs (zi săpt, zz lună)' },
       { key: 'zz_data_start_practica', label: 'Ziua din data start practică' },
       { key: 'zz_llll_data_practica', label: 'Ziua și luna practicii' },
       { key: 'zz_data_start_curs', label: 'Ziua din data start curs' },
@@ -81,6 +82,7 @@ export function mailVarValues(ctx: MailVarCtx): Record<string, string> {
   const info = ctx.setsailInfo || {}
   const sd = sess.session_date || ''
   const psd = sess.practice_start_date || ''
+  const csd = sess.course_start_date || ''
 
   const contactIds: string[] = sess.contact_person_ids || []
   const selected = (ctx.contacts || [])
@@ -95,6 +97,7 @@ export function mailVarValues(ctx: MailVarCtx): Record<string, string> {
     locatie: sess.location_detail || sess.locations?.name || '',
     ambarcatiune: sess.boats?.name || '',
     ora_start: sess.practice_start_time || '9:30',
+    data_start_curs: csd ? new Date(csd).toLocaleDateString('ro-RO', { weekday: 'long', day: 'numeric', month: 'long' }) : '',
     zz_data_start_practica: psd ? String(new Date(psd).getDate()) : '',
     zz_llll_data_practica: roDate(sd, { day: '2-digit', month: 'long' }),
     zz_data_start_curs: sess.course_start_date ? String(new Date(sess.course_start_date).getDate()) : '',
