@@ -235,9 +235,9 @@ export default function CasaBelvederePage() {
                 <button key={y} onClick={() => setAn(y)} style={{
                   padding: '6px 14px', borderRadius: 8, fontSize: 13, fontWeight: 600,
                   fontFamily: "'Manrope', sans-serif", cursor: 'pointer', transition: 'all .15s',
-                  background: an === y ? '#2A2722' : '#fff',
+                  background: an === y ? '#3BBF78' : '#fff',
                   color: an === y ? '#fff' : '#2A2722',
-                  border: an === y ? '1px solid #2A2722' : '1px solid #E6E1D8',
+                  border: an === y ? '1px solid #2EAD6A' : '1px solid #E6E1D8',
                 }}>
                   {y}
                 </button>
@@ -405,43 +405,44 @@ export default function CasaBelvederePage() {
 
                   {/* Footer / TOTAL row */}
                   {!loading && (
-                    <tr style={{ background: '#2A2722' }}>
-                      <td style={{ padding: '14px 16px' }}>
+                    <tr>
+                      <td style={{ padding: '14px 16px', background: '#4DB87A' }}>
                         <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 11, fontWeight: 800, color: '#fff', letterSpacing: 1.5, textTransform: 'uppercase' }}>
                           TOTAL
                         </div>
-                        <div style={{ fontSize: 10, color: '#6B6560', marginTop: 2 }}>{an}</div>
+                        <div style={{ fontSize: 10, color: '#C8F0D8', marginTop: 2 }}>{an}</div>
                       </td>
-                      {UTILITIES.map(u => {
+                      {UTILITIES.map((u, i) => {
                         const total = utilityTotals[u.key]
+                        const footerBg = i % 2 === 0 ? '#7FCFA0' : '#9ADCB4'
                         return (
                           <td key={u.key} style={{
-                            padding: '14px 10px', textAlign: 'center',
-                            opacity: included[u.key as UtilityKey] ? 1 : 0.25, transition: 'opacity .2s',
+                            padding: '14px 10px', textAlign: 'center', background: footerBg,
+                            opacity: included[u.key as UtilityKey] ? 1 : 0.35, transition: 'opacity .2s',
                           }}>
                             {total > 0 ? (
                               <span style={{ fontFamily: monoFont, fontSize: 14, fontWeight: 700, color: '#fff' }}>
-                                {total.toFixed(0)}&nbsp;<span style={{ fontSize: 10, fontWeight: 400, color: '#6B6560' }}>lei</span>
+                                {total.toFixed(0)}&nbsp;<span style={{ fontSize: 10, fontWeight: 400, color: '#C8F0D8' }}>lei</span>
                               </span>
                             ) : (
-                              <span style={{ color: '#4A4540', fontSize: 14 }}>—</span>
+                              <span style={{ color: '#C8F0D8', fontSize: 14 }}>—</span>
                             )}
                           </td>
                         )
                       })}
-                      {/* Grand total cell */}
-                      <td style={{ padding: '14px 12px', textAlign: 'center', background: '#1C1A16', borderRadius: '0 0 20px 0' }}>
+                      {/* Grand total cell — cel mai închis */}
+                      <td style={{ padding: '14px 12px', textAlign: 'center', background: '#1E7A40', borderRadius: '0 0 20px 0' }}>
                         {grandTotalLei > 0 ? (
                           <>
                             <div style={{ fontFamily: monoFont, fontSize: 16, fontWeight: 800, color: '#fff' }}>
-                              {grandTotalLei.toFixed(0)}&nbsp;<span style={{ fontSize: 11, fontWeight: 400, color: '#6B6560' }}>lei</span>
+                              {grandTotalLei.toFixed(0)}&nbsp;<span style={{ fontSize: 11, fontWeight: 400, color: '#A8DEC0' }}>lei</span>
                             </div>
-                            <div style={{ fontFamily: monoFont, fontSize: 11, color: '#6B6560', marginTop: 3 }}>
+                            <div style={{ fontFamily: monoFont, fontSize: 11, color: '#A8DEC0', marginTop: 3 }}>
                               {grandTotalEur.toFixed(2)}&nbsp;<span style={{ opacity: 0.75 }}>eur</span>
                             </div>
                           </>
                         ) : (
-                          <span style={{ color: '#4A4540', fontSize: 14 }}>—</span>
+                          <span style={{ color: '#A8DEC0', fontSize: 14 }}>—</span>
                         )}
                       </td>
                     </tr>
