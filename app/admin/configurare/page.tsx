@@ -224,6 +224,10 @@ export default function ConfigurarePage() {
           </svg>
           Template-uri Email
         </a>
+        <a href="/casa-belvedere" target="_blank" rel="noopener noreferrer"
+          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border border-amber-200 text-amber-800 hover:bg-amber-50 transition-colors">
+          🏠 CBD Utilități
+        </a>
         </div>
       </div>
       <LandingTokenSection />
