@@ -74,7 +74,7 @@ const UTILITIES = [
     bg: '#D2E3F7', cellBg: '#EBF3FC', text: '#275189', accent: '#3E81D6',
   },
   {
-    key: 'gunoi', title: 'GUNOI MENAJER', supplier: 'Urban', unit: '4 pers.',
+    key: 'gunoi', title: 'GUNOI MENAJER', supplier: 'Urban', unit: '',
     bg: '#D4EAD7', cellBg: '#EAF5EC', text: '#2E6B3C', accent: '#4CA45E',
   },
   {
