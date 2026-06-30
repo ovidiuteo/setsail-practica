@@ -63,23 +63,23 @@ function SeasonIcon({ season }: { season: string }) {
 const UTILITIES = [
   {
     key: 'energie', title: 'ENERGIE ELECTRICĂ', supplier: 'Hidroelectrica', unit: 'kWh',
-    bg: '#E3D6F6', text: '#4A3284', accent: '#7C5BD0',
+    bg: '#E3D6F6', cellBg: '#F4F0FD', text: '#4A3284', accent: '#7C5BD0',
   },
   {
     key: 'gaze', title: 'GAZE NATURALE', supplier: 'Engie', unit: 'mc',
-    bg: '#CDEAE5', text: '#1F6F66', accent: '#2A9D8F',
+    bg: '#CDEAE5', cellBg: '#E8F7F4', text: '#1F6F66', accent: '#2A9D8F',
   },
   {
     key: 'apa', title: 'APĂ RECE', supplier: 'ApaNova', unit: 'mc',
-    bg: '#D2E3F7', text: '#275189', accent: '#3E81D6',
+    bg: '#D2E3F7', cellBg: '#EBF3FC', text: '#275189', accent: '#3E81D6',
   },
   {
     key: 'gunoi', title: 'GUNOI MENAJER', supplier: 'Urban', unit: '4 pers.',
-    bg: '#D4EAD7', text: '#2E6B3C', accent: '#4CA45E',
+    bg: '#D4EAD7', cellBg: '#EAF5EC', text: '#2E6B3C', accent: '#4CA45E',
   },
   {
     key: 'internet', title: 'INTERNET / TV', supplier: 'Digi', unit: '1 Gbps',
-    bg: '#D6DAEC', text: '#2C3656', accent: '#46557F',
+    bg: '#D6DAEC', cellBg: '#ECEEF6', text: '#2C3656', accent: '#46557F',
   },
 ]
 
@@ -340,7 +340,7 @@ export default function CasaBelvederePage() {
 
                           return (
                             <td key={u.key} style={{
-                              background: u.bg, borderBottom: '1px solid rgba(0,0,0,0.06)',
+                              background: u.cellBg, borderBottom: '1px solid rgba(0,0,0,0.06)',
                               borderRight: '1px solid #E6E1D8', padding: '8px 10px', textAlign: 'center',
                               opacity: (!included[u.key as UtilityKey] ? 0.3 : isSaving ? 0.6 : 1),
                               transition: 'opacity .2s',
