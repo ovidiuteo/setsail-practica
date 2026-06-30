@@ -1,6 +1,9 @@
 'use client'
 import { useEffect, useState, useRef, useCallback } from 'react'
 
+const UTILITY_KEYS = ['energie', 'gaze', 'apa', 'gunoi', 'internet'] as const
+type UtilityKey = typeof UTILITY_KEYS[number]
+
 const MONTHS = [
   { nr: 1,  label: 'Ianuarie',   icon: '❄️',  season: 'winter'  },
   { nr: 2,  label: 'Februarie',  icon: '❄️',  season: 'winter'  },
@@ -132,6 +135,13 @@ export default function CasaBelvederePage() {
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState<Set<string>>(new Set())
   const [unauthorized, setUnauthorized] = useState(false)
+  const [included, setIncluded] = useState<Record<UtilityKey, boolean>>({
+    energie: true, gaze: true, apa: true, gunoi: true, internet: true,
+  })
+
+  function toggleIncluded(key: UtilityKey) {
+    setIncluded(prev => ({ ...prev, [key]: !prev[key] }))
+  }
 
   async function loadData(year: number) {
     setLoading(true)
@@ -224,9 +234,18 @@ export default function CasaBelvederePage() {
                     <th
                       key={u.key}
                       colSpan={2}
-                      className={`${u.hdr} border-b border-r border-white/40 px-2 py-3 text-center`}
+                      className={`${u.hdr} border-b border-r border-white/40 px-2 py-3 text-center transition-opacity ${!included[u.key as UtilityKey] ? 'opacity-50' : ''}`}
                     >
-                      <div className="text-xs font-bold tracking-wide leading-tight">{u.title}</div>
+                      <div className="text-xs font-bold tracking-wide leading-tight mb-1">{u.title}</div>
+                      <label className="flex items-center justify-center gap-1 cursor-pointer select-none" title={included[u.key as UtilityKey] ? 'Exclud din total' : 'Includ în total'}>
+                        <input
+                          type="checkbox"
+                          checked={included[u.key as UtilityKey]}
+                          onChange={() => toggleIncluded(u.key as UtilityKey)}
+                          className="w-3.5 h-3.5 accent-gray-700 cursor-pointer"
+                        />
+                        <span className="text-[10px] font-normal opacity-80">{included[u.key as UtilityKey] ? 'în total' : 'exclus'}</span>
+                      </label>
                     </th>
                   ))}
                   <th colSpan={2} className="bg-gray-700 border-b border-r border-gray-600 px-2 py-3 text-center">
@@ -316,6 +335,7 @@ export default function CasaBelvederePage() {
                       ))}
                       {(() => {
                         const totalLei = UTILITIES.reduce((sum, u) => {
+                          if (!included[u.key as UtilityKey]) return sum
                           const v = parseFloat(String(row[`${u.key}_valoare`] ?? ''))
                           return sum + (isNaN(v) ? 0 : v)
                         }, 0)
