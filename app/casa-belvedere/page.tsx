@@ -229,6 +229,9 @@ export default function CasaBelvederePage() {
                       <div className="text-xs font-bold tracking-wide leading-tight">{u.title}</div>
                     </th>
                   ))}
+                  <th colSpan={2} className="bg-gray-700 border-b border-r border-gray-600 px-2 py-3 text-center">
+                    <div className="text-xs font-bold tracking-wide text-white leading-tight">TOTAL</div>
+                  </th>
                 </tr>
                 {/* Row 2: supplier + val/idx sub-headers */}
                 <tr>
@@ -240,6 +243,9 @@ export default function CasaBelvederePage() {
                       </th>
                     </>
                   ))}
+                  <th colSpan={2} className="bg-gray-200 border-b border-r border-gray-300 px-2 py-1.5 text-center">
+                    <div className="text-[11px] font-semibold text-gray-600">1 EUR = 5,25 LEI</div>
+                  </th>
                 </tr>
                 {/* Row 3: Valoare / Index */}
                 <tr>
@@ -254,6 +260,12 @@ export default function CasaBelvederePage() {
                       </th>
                     </>
                   ))}
+                  <th className="bg-gray-100 border-b border-r border-gray-200 px-2 py-2 text-center">
+                    <span className="text-[10px] font-semibold text-gray-700 uppercase tracking-wider">LEI</span>
+                  </th>
+                  <th className="bg-gray-100 border-b border-r border-gray-200 px-2 py-2 text-center">
+                    <span className="text-[10px] font-semibold text-gray-500 uppercase tracking-wider">EUR</span>
+                  </th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -302,6 +314,28 @@ export default function CasaBelvederePage() {
                           </td>
                         </>
                       ))}
+                      {(() => {
+                        const totalLei = UTILITIES.reduce((sum, u) => {
+                          const v = parseFloat(String(row[`${u.key}_valoare`] ?? ''))
+                          return sum + (isNaN(v) ? 0 : v)
+                        }, 0)
+                        const totalEur = totalLei / 5.25
+                        const hasAny = UTILITIES.some(u => row[`${u.key}_valoare`] != null && row[`${u.key}_valoare`] !== '')
+                        return (
+                          <>
+                            <td className="border-r border-gray-200 px-2 py-1 bg-gray-100 text-center">
+                              {hasAny
+                                ? <span className="text-sm font-black text-gray-900">{totalLei.toFixed(2)}</span>
+                                : <span className="text-gray-300 text-xs">—</span>}
+                            </td>
+                            <td className="border-r border-gray-200 px-2 py-1 bg-gray-50 text-center">
+                              {hasAny
+                                ? <span className="text-sm font-black text-gray-700">{totalEur.toFixed(2)}</span>
+                                : <span className="text-gray-300 text-xs">—</span>}
+                            </td>
+                          </>
+                        )
+                      })()}
                     </tr>
                   )
                 })}
