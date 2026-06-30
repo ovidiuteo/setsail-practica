@@ -235,9 +235,9 @@ export default function CasaBelvederePage() {
                 <button key={y} onClick={() => setAn(y)} style={{
                   padding: '6px 14px', borderRadius: 8, fontSize: 13, fontWeight: 600,
                   fontFamily: "'Manrope', sans-serif", cursor: 'pointer', transition: 'all .15s',
-                  background: an === y ? '#3BBF78' : '#fff',
+                  background: an === y ? '#1E7A40' : '#fff',
                   color: an === y ? '#fff' : '#2A2722',
-                  border: an === y ? '1px solid #2EAD6A' : '1px solid #E6E1D8',
+                  border: an === y ? '1px solid #1E7A40' : '1px solid #E6E1D8',
                 }}>
                   {y}
                 </button>
@@ -406,11 +406,11 @@ export default function CasaBelvederePage() {
                   {/* Footer / TOTAL row */}
                   {!loading && (
                     <tr>
-                      <td style={{ padding: '14px 16px', background: '#4DB87A' }}>
+                      <td style={{ padding: '14px 16px', background: '#1E7A40' }}>
                         <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 11, fontWeight: 800, color: '#fff', letterSpacing: 1.5, textTransform: 'uppercase' }}>
                           TOTAL
                         </div>
-                        <div style={{ fontSize: 10, color: '#C8F0D8', marginTop: 2 }}>{an}</div>
+                        <div style={{ fontSize: 10, color: '#A8DEC0', marginTop: 2 }}>{an}</div>
                       </td>
                       {UTILITIES.map((u, i) => {
                         const total = utilityTotals[u.key]
