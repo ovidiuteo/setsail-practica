@@ -5,7 +5,7 @@ import {
   Mail, CheckCircle, Clock, Ban, Search, RefreshCw,
   ChevronDown, ChevronUp, Send, Sparkles, Pin, PinOff,
   Filter, X, Check, ChevronRight, CheckSquare, Square,
-  Download, Calendar
+  Download, Calendar, Copy
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -55,6 +55,13 @@ export default function EmailuriPage() {
   const [expandedId, setExpandedId]   = useState<string | null>(null)
   const [activeReply, setActiveReply] = useState<{ id: string; text: string } | null>(null)
   const [analyzingId, setAnalyzingId] = useState<string | null>(null)
+  const [copiedId, setCopiedId]       = useState<string | null>(null)
+
+  function copyAddress(email: Email) {
+    navigator.clipboard.writeText(email.from_address)
+    setCopiedId(email.id)
+    setTimeout(() => setCopiedId(c => (c === email.id ? null : c)), 1500)
+  }
 
   // Whitelist checkboxes
   const [selectedIds, setSelectedIds]         = useState<Set<string>>(new Set())
@@ -397,6 +404,11 @@ export default function EmailuriPage() {
             <div className="flex items-center gap-2 flex-wrap mb-0.5">
               <span className="font-medium text-gray-900 text-sm">{email.from_name || email.from_address}</span>
               {email.from_name && <span className="text-xs text-gray-400">{email.from_address}</span>}
+              <button onClick={e => { e.stopPropagation(); copyAddress(email) }}
+                title="Copiază email"
+                className={`flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium border transition-colors ${copiedId === email.id ? 'border-green-200 text-green-600 bg-green-50' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
+                {copiedId === email.id ? <><Check size={11} /> Copiat</> : <><Copy size={11} /> Copiază email</>}
+              </button>
               {pri && <span className="px-2 py-0.5 rounded-full text-xs font-medium" style={{ background: pri.bg, color: pri.color }}>{pri.label}</span>}
               {email.category && <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">{categoryLabel[email.category] || email.category}</span>}
               {email.reply_sent && <span className="flex items-center gap-1 text-xs text-green-600"><Send size={10} /> Trimis</span>}
