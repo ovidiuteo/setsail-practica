@@ -2037,6 +2037,9 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
           {/* Link tabel cursanți (gated prin token) */}
           <RosterLinkCard sess={sess} />
 
+          {/* Coduri QR grup (A4 printabil) */}
+          <QrPdfCard sess={sess} />
+
           {/* Notificare ANR */}
           <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
             <button onClick={async()=>{
@@ -2760,6 +2763,148 @@ function RosterLinkCard({ sess }: { sess: any }) {
         <input type="checkbox" checked={docsVisible} onChange={toggleDocs} className="accent-blue-600" />
         {docsVisible ? 'Documente vizibile pe pagina cursanților' : 'Documente vizibile pe pagină (PV / Anexe)'}
       </label>
+    </div>
+  )
+}
+
+// Construiește pagina A4 (HTML printabil) cu 3 QR-uri așezate în triunghi
+function buildQrPdfHtml(luna: string, an: string, imgs: { portal: string; skipper: string; whatsapp: string }): string {
+  const NAVY = '#0B3D6B', GREEN = '#26AE61', BORDER = '#CCD6DE', GRAY = '#6b7a86'
+  return `<!DOCTYPE html><html lang="ro"><head><meta charset="utf-8">
+<title>SETSAIL CDS ${luna} ${an}</title>
+<style>
+  @page { size: A4 portrait; margin: 0; }
+  * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  html,body { margin:0; padding:0; }
+  .page { position:relative; width:210mm; height:297mm; margin:0 auto; font-family:Arial,Helvetica,sans-serif; color:#222; overflow:hidden; }
+  .title { position:absolute; top:14mm; left:0; right:0; text-align:center; font-size:26pt; font-weight:bold; color:${NAVY}; letter-spacing:0.5px; }
+  .rule { position:absolute; top:27mm; left:50%; transform:translateX(-50%); width:106mm; height:2px; background:${NAVY}; }
+  .subtitle { position:absolute; top:30mm; left:0; right:0; text-align:center; font-size:12pt; color:${GRAY}; }
+  .card { position:absolute; width:64mm; background:#fff; border:1px solid ${BORDER}; border-radius:4mm; overflow:hidden; box-shadow:0 1px 4px rgba(0,0,0,0.06); z-index:1; }
+  .band { height:8mm; display:flex; align-items:center; justify-content:center; color:#fff; font-weight:bold; font-size:9.5pt; letter-spacing:0.5px; text-align:center; }
+  .qr { display:block; width:53mm; height:53mm; margin:5mm auto 3mm; object-fit:contain; }
+  .sub { position:absolute; width:64mm; text-align:center; font-size:8.5pt; color:${GRAY}; z-index:1; }
+  .footer { position:absolute; bottom:12mm; left:0; right:0; text-align:center; font-size:9pt; color:${GRAY}; }
+  svg.tri { position:absolute; inset:0; width:210mm; height:297mm; z-index:0; }
+</style></head>
+<body>
+<div class="page">
+  <svg class="tri" viewBox="0 0 210 297" preserveAspectRatio="none">
+    <line x1="105" y1="81.5" x2="63" y2="189.5" stroke="${BORDER}" stroke-width="0.5" stroke-dasharray="2 2"/>
+    <line x1="105" y1="81.5" x2="147" y2="189.5" stroke="${BORDER}" stroke-width="0.5" stroke-dasharray="2 2"/>
+    <line x1="63" y1="189.5" x2="147" y2="189.5" stroke="${BORDER}" stroke-width="0.5" stroke-dasharray="2 2"/>
+  </svg>
+
+  <div class="title">SETSAIL CDS ${luna} ${an}</div>
+  <div class="rule"></div>
+  <div class="subtitle">Scaneaza codurile QR de mai jos</div>
+
+  <div class="card" style="left:73mm; top:42mm;">
+    <div class="band" style="background:${NAVY};">UPLOAD CI PENTRU PRACTICA</div>
+    <img class="qr" src="${imgs.portal}"/>
+  </div>
+  <div class="sub" style="left:73mm; top:113mm;">setsail-practica.vercel.app</div>
+
+  <div class="card" style="left:31mm; top:150mm;">
+    <div class="band" style="background:${NAVY};">PLATFORMA SETSAIL</div>
+    <img class="qr" src="${imgs.skipper}"/>
+  </div>
+  <div class="sub" style="left:31mm; top:221mm;">skipper.setsail.ro &nbsp;·&nbsp; Simulator examen</div>
+
+  <div class="card" style="left:115mm; top:150mm;">
+    <div class="band" style="background:${GREEN};">GRUP WHATSAPP</div>
+    <img class="qr" src="${imgs.whatsapp}"/>
+  </div>
+  <div class="sub" style="left:115mm; top:221mm;">Scaneaza pentru a intra in grup</div>
+
+  <div class="footer">SetSail NauticSchool &nbsp;·&nbsp; setsail.ro</div>
+</div>
+<script>window.onload=function(){setTimeout(function(){window.focus();window.print();},400);};</script>
+</body></html>`
+}
+
+function QrPdfCard({ sess }: { sess: any }) {
+  const [open, setOpen] = useState(false)
+  const d = sess.practice_start_date || sess.session_date
+  const [luna, setLuna] = useState(d ? new Date(d).toLocaleDateString('ro-RO', { month: 'long' }).toUpperCase() : '')
+  const [an, setAn] = useState(d ? String(new Date(d).getFullYear()) : '')
+  const [imgs, setImgs] = useState<{ portal?: string; skipper?: string; whatsapp?: string }>({})
+
+  function pick(slot: 'portal' | 'skipper' | 'whatsapp', file?: File) {
+    if (!file) return
+    const fr = new FileReader()
+    fr.onload = () => setImgs(s => ({ ...s, [slot]: fr.result as string }))
+    fr.readAsDataURL(file)
+  }
+  const ready = !!(imgs.portal && imgs.skipper && imgs.whatsapp)
+
+  function generate() {
+    if (!ready) return
+    const html = buildQrPdfHtml(luna, an, imgs as { portal: string; skipper: string; whatsapp: string })
+    const w = window.open('', '_blank')
+    if (w) { w.document.write(html); w.document.close() }
+  }
+
+  const SLOTS: { key: 'portal' | 'skipper' | 'whatsapp'; label: string; band: string; hint: string }[] = [
+    { key: 'portal', label: 'UPLOAD CI PENTRU PRACTICA', band: '#0B3D6B', hint: 'QR portal (setsail-practica.vercel.app/portal?cod=...)' },
+    { key: 'skipper', label: 'PLATFORMA SETSAIL', band: '#0B3D6B', hint: 'QR skipper.setsail.ro (fix)' },
+    { key: 'whatsapp', label: 'GRUP WHATSAPP', band: '#26AE61', hint: 'QR grup WhatsApp (cu sigla lui)' },
+  ]
+
+  return (
+    <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+      <div className="flex items-center gap-2 mb-1">
+        <FileText size={15} className="text-gray-400" />
+        <h3 className="font-semibold text-sm text-gray-900">Coduri QR grup (A4 PDF)</h3>
+      </div>
+      <p className="text-xs text-gray-400 mb-3">Încarci cele 3 QR-uri (portal, skipper, WhatsApp) și le așez în triunghi pe o pagină A4 printabilă.</p>
+      <button onClick={() => setOpen(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white" style={{ background: '#0B3D6B' }}>
+        <FileText size={12} /> QR PDF
+      </button>
+
+      {open && (
+        <div onClick={() => setOpen(false)} className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div onClick={e => e.stopPropagation()} className="bg-white rounded-2xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <h3 className="font-semibold text-gray-900">Pagina A4 cu QR-uri (triunghi)</h3>
+              <button onClick={() => setOpen(false)} className="text-gray-400 hover:text-gray-700"><X size={18} /></button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div className="flex gap-3">
+                <label className="flex-1"><span className="block text-xs text-gray-500 mb-1">Luna</span>
+                  <input value={luna} onChange={e => setLuna(e.target.value.toUpperCase())} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" /></label>
+                <label className="w-28"><span className="block text-xs text-gray-500 mb-1">An</span>
+                  <input value={an} onChange={e => setAn(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" /></label>
+              </div>
+              {SLOTS.map(s => (
+                <div key={s.key} className="border border-gray-200 rounded-xl overflow-hidden">
+                  <div className="px-3 py-1.5 text-xs font-bold text-white" style={{ background: s.band }}>{s.label}</div>
+                  <div className="p-3 flex items-center gap-3">
+                    {imgs[s.key] ? (
+                      <img src={imgs[s.key]} alt="" className="w-16 h-16 object-contain rounded border border-gray-100 bg-gray-50" />
+                    ) : (
+                      <div className="w-16 h-16 rounded border border-dashed border-gray-300 bg-gray-50 flex items-center justify-center text-gray-300 text-[10px]">QR</div>
+                    )}
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs text-gray-400 mb-1.5">{s.hint}</p>
+                      <label className="inline-block px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 text-gray-600 hover:bg-gray-50 cursor-pointer">
+                        {imgs[s.key] ? 'Schimbă imaginea' : 'Încarcă QR'}
+                        <input type="file" accept="image/*" className="hidden" onChange={e => pick(s.key, e.target.files?.[0])} />
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100">
+              <button onClick={() => setOpen(false)} className="px-4 py-2 rounded-lg text-sm border border-gray-200 text-gray-600 hover:bg-gray-50">Renunță</button>
+              <button onClick={generate} disabled={!ready} className="px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50" style={{ background: '#0B3D6B' }}>
+                Generează PDF (print)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
