@@ -2830,10 +2830,28 @@ function QrPdfCard({ sess }: { sess: any }) {
   const [an, setAn] = useState(d ? String(new Date(d).getFullYear()) : '')
   const [imgs, setImgs] = useState<{ portal?: string; skipper?: string; whatsapp?: string }>({})
 
+  // La deschidere, preîncarcă QR-ul skipper salvat ca default (dacă există)
+  useEffect(() => {
+    if (!open) return
+    supabase.from('setsail_documents').select('file_data').eq('tip', 'qr_skipper').maybeSingle()
+      .then(({ data }) => { if (data?.file_data) setImgs(s => ({ ...s, skipper: s.skipper || data.file_data })) })
+  }, [open])
+
+  // Salvează QR-ul skipper ca default global (devine default pentru toate grupele viitoare)
+  async function saveSkipperDefault(dataUrl: string) {
+    const { data } = await supabase.from('setsail_documents').select('id').eq('tip', 'qr_skipper').maybeSingle()
+    if (data?.id) await supabase.from('setsail_documents').update({ file_data: dataUrl, label: 'QR skipper', file_name: 'qr_skipper.png' }).eq('id', data.id)
+    else await supabase.from('setsail_documents').insert({ tip: 'qr_skipper', file_data: dataUrl, label: 'QR skipper', file_name: 'qr_skipper.png' })
+  }
+
   function pick(slot: 'portal' | 'skipper' | 'whatsapp', file?: File) {
     if (!file) return
     const fr = new FileReader()
-    fr.onload = () => setImgs(s => ({ ...s, [slot]: fr.result as string }))
+    fr.onload = () => {
+      const url = fr.result as string
+      setImgs(s => ({ ...s, [slot]: url }))
+      if (slot === 'skipper') saveSkipperDefault(url) // devine default de acum înainte
+    }
     fr.readAsDataURL(file)
   }
   const ready = !!(imgs.portal && imgs.skipper && imgs.whatsapp)
@@ -2847,7 +2865,7 @@ function QrPdfCard({ sess }: { sess: any }) {
 
   const SLOTS: { key: 'portal' | 'skipper' | 'whatsapp'; label: string; band: string; hint: string }[] = [
     { key: 'portal', label: 'UPLOAD CI PENTRU PRACTICA', band: '#0B3D6B', hint: 'QR portal (setsail-practica.vercel.app/portal?cod=...)' },
-    { key: 'skipper', label: 'PLATFORMA SETSAIL', band: '#0B3D6B', hint: 'QR skipper.setsail.ro (fix)' },
+    { key: 'skipper', label: 'PLATFORMA SETSAIL', band: '#0B3D6B', hint: 'QR skipper.setsail.ro — se reține ca default pentru toate grupele' },
     { key: 'whatsapp', label: 'GRUP WHATSAPP', band: '#26AE61', hint: 'QR grup WhatsApp (cu sigla lui)' },
   ]
 
