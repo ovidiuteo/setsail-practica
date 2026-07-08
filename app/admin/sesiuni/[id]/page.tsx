@@ -30,7 +30,7 @@ const portalMap: Record<string, { label: string; color: string }> = {
 }
 
 type Student = {
-  id: string; full_name: string; cnp: string; email: string; phone: string
+  id: string; full_name: string; last_name?: string; first_name?: string; cnp: string; email: string; phone: string
   birth_date: string; ci_series: string; ci_number: string; ci_image_data: string
   address: string; county: string; city: string; country: string
   class_caa: string; portal_status: string; signed_at: string; session_id: string
@@ -53,7 +53,24 @@ function skipperGroupId(url?: string): string {
 // phpMyAdmin (rnauti39_teste) — ATENTIE: tokenul cpsessXXXX expira la fiecare login cPanel; actualizeaza-l aici cand nu mai merge.
 const PHPMYADMIN_URL = 'https://www.setsail.ro:2083/cpsess6483062998/3rdparty/phpMyAdmin/index.php?route=/database/sql&db=rnauti39_teste'
 
-const EMPTY_ST = { full_name:'', cnp:'', email:'', phone:'', birth_date:'', ci_series:'', ci_number:'', address:'', county:'', class_caa:'C,D' }
+const EMPTY_ST = { last_name:'', first_name:'', full_name:'', cnp:'', email:'', phone:'', birth_date:'', ci_series:'', ci_number:'', address:'', county:'', class_caa:'C,D' }
+
+// Împarte un nume complet în nume de familie + prenume (ultimul cuvânt = prenume,
+// restul = nume de familie — acoperă nume compuse gen "STANCIU - CUCU IULIA").
+function splitName(full: string): { last: string; first: string } {
+  const p = (full || '').trim().split(/\s+/).filter(Boolean)
+  if (p.length >= 2) return { last: p.slice(0, -1).join(' '), first: p[p.length - 1] }
+  if (p.length === 1) return { last: p[0], first: '' }
+  return { last: '', first: '' }
+}
+// Scriere tolerantă a numelui separat: dacă coloanele last_name/first_name nu există
+// încă (înainte de migrare), update-ul eșuează silențios și nu strică restul.
+async function writeNameSplit(id: string, last?: string, first?: string) {
+  await supabase.from('students').update({
+    last_name: (last || '').toUpperCase().trim(),
+    first_name: (first || '').toUpperCase().trim(),
+  }).eq('id', id)
+}
 
 
 function CIAdminScan({ studentId, students, setStudents }: {
@@ -91,6 +108,8 @@ function CIAdminScan({ studentId, students, setStudents }: {
         if (d.country) updates.country = d.country
         if (d.last_name && d.first_name) updates.full_name = d.last_name.toUpperCase() + ' ' + d.first_name.toUpperCase()
         await supabase.from('students').update(updates).eq('id', studentId)
+        // Nume și prenume separat (primul rând CI = nume, al doilea = prenume)
+        if (d.last_name || d.first_name) await writeNameSplit(studentId, d.last_name, d.first_name)
         // Re-fetch din DB pentru a garanta ca avem imaginea noua, nu cea din cache
         const { data: fresh } = await supabase.from('students').select('*').eq('id', studentId).single()
         setStudents(students.map(s => s.id === studentId ? (fresh || {...s, ...updates}) : s))
@@ -474,13 +493,20 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
 
   function startEdit(s: Student) {
     setEditingId(s.id)
-    setEditValues({ full_name: s.full_name||'', cnp: s.cnp||'', email: s.email||'', phone: s.phone||'', birth_date: s.birth_date||'', ci_series: s.ci_series||'', ci_number: s.ci_number||'', address: s.address||'', county: s.county||'', class_caa: s.class_caa||'C,D' })
+    const sp = splitName(s.full_name || '')
+    setEditValues({ last_name: s.last_name || sp.last, first_name: s.first_name || sp.first, cnp: s.cnp||'', email: s.email||'', phone: s.phone||'', birth_date: s.birth_date||'', ci_series: s.ci_series||'', ci_number: s.ci_number||'', address: s.address||'', county: s.county||'', class_caa: s.class_caa||'C,D' })
   }
 
   async function saveEdit(sid: string) {
     setSaving(true)
-    const { data } = await supabase.from('students').update({...editValues, full_name: editValues.full_name.toUpperCase()}).eq('id', sid).select().single()
-    if (data) setStudents(students.map(s => s.id === sid ? data as Student : s))
+    const last = (editValues.last_name || '').toUpperCase().trim()
+    const first = (editValues.first_name || '').toUpperCase().trim()
+    const full = [last, first].filter(Boolean).join(' ')
+    const { last_name, first_name, ...rest } = editValues
+    const mainPayload = { ...rest, full_name: full }
+    await supabase.from('students').update(mainPayload).eq('id', sid)
+    await writeNameSplit(sid, last, first) // tolerant (coloanele noi)
+    setStudents(students.map(s => s.id === sid ? { ...s, ...mainPayload, last_name: last, first_name: first } as Student : s))
     setEditingId(null); setEditValues({}); setSaving(false)
   }
 
@@ -522,15 +548,22 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
   }
 
   async function addStudent() {
-    if (!newSt.full_name) return
+    if (!newSt.last_name && !newSt.first_name) return
     setAdding(true)
+    const last = (newSt.last_name || '').toUpperCase().trim()
+    const first = (newSt.first_name || '').toUpperCase().trim()
+    const full = [last, first].filter(Boolean).join(' ')
     const maxOrder = students.reduce((m,s) => Math.max(m, s.order_in_session||0), 0)
+    const { last_name, first_name, ...rest } = newSt
     const { data } = await supabase.from('students').insert({
-      ...newSt, full_name: newSt.full_name.toUpperCase(),
+      ...rest, full_name: full,
       session_id: sess.id, original_session_id: sess.id,
       order_in_session: maxOrder+1, portal_status: 'pending'
     }).select().single()
-    if (data) setStudents([...students, data as Student])
+    if (data) {
+      await writeNameSplit(data.id, last, first) // tolerant (coloanele noi)
+      setStudents([...students, { ...(data as Student), last_name: last, first_name: first }])
+    }
     setNewSt(EMPTY_ST); setShowAdd(false); setAdding(false)
   }
 
@@ -624,8 +657,10 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
       {showAdd && (
         <div className="p-4 border-b border-blue-50 bg-blue-50/40">
           <div className="grid grid-cols-4 gap-2 mb-2">
-            <div className="col-span-2"><div className="text-xs text-gray-400 mb-1">Nume complet *</div>
-              <input className={addCls} placeholder="POPESCU ION" value={newSt.full_name} onChange={e=>setNewSt((s:any)=>({...s,full_name:e.target.value.toUpperCase()}))}/></div>
+            <div><div className="text-xs text-gray-400 mb-1">Nume *</div>
+              <input className={addCls} placeholder="POPESCU" value={newSt.last_name} onChange={e=>setNewSt((s:any)=>({...s,last_name:e.target.value.toUpperCase()}))}/></div>
+            <div><div className="text-xs text-gray-400 mb-1">Prenume *</div>
+              <input className={addCls} placeholder="ION" value={newSt.first_name} onChange={e=>setNewSt((s:any)=>({...s,first_name:e.target.value.toUpperCase()}))}/></div>
             <div><div className="text-xs text-gray-400 mb-1">CNP</div><input className={addCls} placeholder="1800101..." value={newSt.cnp} onChange={e=>setNewSt((s:any)=>({...s,cnp:e.target.value}))}/></div>
             <div><div className="text-xs text-gray-400 mb-1">Clasa</div>
               <select className={addCls} value={newSt.class_caa} onChange={e=>setNewSt((s:any)=>({...s,class_caa:e.target.value}))}>
@@ -700,7 +735,10 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
                     {isEditing ? (<>
                       <td className="px-2 py-2 text-center"><span className="text-gray-200">✉</span></td>
                       <td className="px-2 py-2 text-gray-300 text-xs text-right">{i+1}</td>
-                      <td className="px-1 py-1.5"><input className={inCls+' font-medium min-w-28'} value={editValues.full_name} onChange={e=>setEditValues((v:any)=>({...v,full_name:e.target.value.toUpperCase()}))}/></td>
+                      <td className="px-1 py-1.5"><div className="flex gap-1">
+                        <input className={inCls+' font-medium min-w-20'} placeholder="Nume" title="Nume (de familie)" value={editValues.last_name||''} onChange={e=>setEditValues((v:any)=>({...v,last_name:e.target.value.toUpperCase()}))}/>
+                        <input className={inCls+' min-w-20'} placeholder="Prenume" title="Prenume" value={editValues.first_name||''} onChange={e=>setEditValues((v:any)=>({...v,first_name:e.target.value.toUpperCase()}))}/>
+                      </div></td>
                       <td className="px-1 py-1.5"><input className={inCls+' font-mono w-24'} value={editValues.cnp} onChange={e=>setEditValues((v:any)=>({...v,cnp:e.target.value}))}/></td>
                       <td className="px-1 py-1.5"><input className={inCls+' min-w-28'} value={editValues.email} onChange={e=>setEditValues((v:any)=>({...v,email:e.target.value}))}/></td>
                       <td className="px-1 py-1.5"><input className={inCls+' w-24'} value={editValues.phone} onChange={e=>setEditValues((v:any)=>({...v,phone:e.target.value}))}/></td>
@@ -3588,16 +3626,15 @@ export default function SessionDetailPage() {
       if (sets.length === 0) { noData.push(s.full_name || email); continue }
 
       // Nume corect: users.name = nume de familie, users.first_name = prenume.
-      // Regula: ultimul cuvant = prenume, restul = nume de familie (acopera nume
-      // compuse gen "STANCIU - CUCU IULIA" -> name="STANCIU - CUCU", first_name="IULIA").
-      const nameParts = (s.full_name || '').trim().split(/\s+/).filter(Boolean)
+      // Sursa: campurile separate last_name/first_name (din CI); daca lipsesc,
+      // fallback pe split din full_name (ultimul cuvant = prenume, restul = familie).
+      const lnRaw = ((s as any).last_name || '').trim()
+      const fnRaw = ((s as any).first_name || '').trim()
+      const famName = lnRaw || fnRaw ? lnRaw : splitName(s.full_name || '').last
+      const givenName = lnRaw || fnRaw ? fnRaw : splitName(s.full_name || '').first
       const uSets: string[] = []
-      if (nameParts.length >= 2) {
-        uSets.push(`u.name='${sqlEsc(nameParts.slice(0, -1).join(' '))}'`)
-        uSets.push(`u.first_name='${sqlEsc(nameParts[nameParts.length - 1])}'`)
-      } else if (nameParts.length === 1) {
-        uSets.push(`u.name='${sqlEsc(nameParts[0])}'`)
-      }
+      if (famName) uSets.push(`u.name='${sqlEsc(famName)}'`)
+      if (givenName) uSets.push(`u.first_name='${sqlEsc(givenName)}'`)
 
       count++
       const allSets = [...uSets, ...sets, 's.updated_at=NOW()']
