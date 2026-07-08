@@ -2078,6 +2078,9 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
           {/* Coduri QR grup (A4 printabil) */}
           <QrPdfCard sess={sess} />
 
+          {/* Foaie de prezență (A4 landscape printabil) */}
+          <AttendanceCard sess={sess} />
+
           {/* Notificare ANR */}
           <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
             <button onClick={async()=>{
@@ -2801,6 +2804,136 @@ function RosterLinkCard({ sess }: { sess: any }) {
         <input type="checkbox" checked={docsVisible} onChange={toggleDocs} className="accent-blue-600" />
         {docsVisible ? 'Documente vizibile pe pagina cursanților' : 'Documente vizibile pe pagină (PV / Anexe)'}
       </label>
+    </div>
+  )
+}
+
+// Title Case pentru afișarea numelor (păstrează diacritice, capitalizează după spațiu/cratimă)
+function titleCaseRo(s: string): string {
+  return (s || '').toLocaleLowerCase('ro-RO').replace(/(^|[\s\-])([a-zăâîșț])/g, (_m, sep, ch) => sep + ch.toLocaleUpperCase('ro-RO'))
+}
+
+// Construiește foaia de prezență A4 landscape (HTML printabil)
+function buildAttendanceHtml(titlu: string, grupa: string, zile: string[], names: string[]): string {
+  const esc = (s: string) => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+  const dayCols = zile.map(z => `<th class="day">${esc(z)}</th>`).join('')
+  const rows = names.map((n, i) => `<tr><td class="nr">${i + 1}</td><td class="name">${esc(n)}</td>${zile.map(() => '<td class="day"></td>').join('')}</tr>`).join('')
+  return `<!DOCTYPE html><html lang="ro"><head><meta charset="utf-8"><title>${esc(titlu)}</title>
+<style>
+  @page { size: A4 landscape; margin: 12mm; }
+  * { -webkit-print-color-adjust: exact; print-color-adjust: exact; box-sizing: border-box; }
+  body { margin:0; font-family: Arial, Helvetica, sans-serif; color:#222; }
+  h1 { text-align:center; font-size:16pt; font-weight:bold; margin:0 0 16px; }
+  .grupa { font-weight:bold; font-size:12.5pt; margin:0 0 10px; }
+  table { width:100%; border-collapse:collapse; table-layout:fixed; }
+  th, td { border:1px solid #b9b9b9; padding:6px 8px; font-size:11pt; }
+  th { background:#d9e7cd; font-weight:bold; text-align:center; }
+  td.nr, th.nr { width:34px; text-align:center; color:#333; }
+  td.name { text-align:left; }
+  th.day, td.day { width:120px; }
+  tr { height:26px; }
+</style></head>
+<body>
+  <h1>${esc(titlu)}</h1>
+  <div class="grupa">${esc(grupa)}</div>
+  <table>
+    <thead><tr><th class="nr">Nr.</th><th>Nume</th>${dayCols}</tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <script>window.onload=function(){setTimeout(function(){window.focus();window.print();},350);};<\/script>
+</body></html>`
+}
+
+function AttendanceCard({ sess }: { sess: any }) {
+  const [open, setOpen] = useState(false)
+  const [names, setNames] = useState<string[]>([])
+  const sd = sess.session_date
+  const csd = sess.course_start_date || sess.practice_start_date || sd
+  const dRo = (v: string, o: Intl.DateTimeFormatOptions) => v ? new Date(v).toLocaleDateString('ro-RO', o) : ''
+  // Zile: de la data start curs la data practicii (nume zile săptămână); fallback Luni–Joi
+  function deriveZile(): string[] {
+    if (!csd || !sd) return ['Luni', 'Marți', 'Miercuri', 'Joi']
+    const a = new Date(csd), b = new Date(sd)
+    if (isNaN(+a) || isNaN(+b) || b < a) return ['Luni', 'Marți', 'Miercuri', 'Joi']
+    const out: string[] = []
+    for (let t = new Date(a); t <= b && out.length < 10; t.setDate(t.getDate() + 1)) {
+      const w = t.toLocaleDateString('ro-RO', { weekday: 'long' })
+      out.push(w.charAt(0).toLocaleUpperCase('ro-RO') + w.slice(1))
+    }
+    return out.length ? out : ['Luni', 'Marți', 'Miercuri', 'Joi']
+  }
+  const d1 = csd ? String(new Date(csd).getDate()) : ''
+  const d2 = sd ? String(new Date(sd).getDate()) : ''
+  const luna = dRo(sd, { month: 'long' })
+  const an = sd ? String(new Date(sd).getFullYear()) : ''
+  const [titlu, setTitlu] = useState(`Prezență ${d1 && d2 ? d1 + '-' + d2 + ' ' : ''}${luna} ${an}`.replace(/\s+/g, ' ').trim())
+  const [grupa, setGrupa] = useState('Grupa 1')
+  const [zileStr, setZileStr] = useState(deriveZile().join(', '))
+
+  useEffect(() => {
+    if (!open) return
+    ;(async () => {
+      // Toți cursanții sesiunii, inclusiv cei de la sailing (intră și ei la prezență)
+      const { data } = await supabase.from('students').select('full_name').eq('session_id', sess.id)
+      const list = (data || [])
+        .filter((s: any) => (s.full_name || '').trim())
+        .map((s: any) => titleCaseRo(s.full_name))
+        .sort((a: string, b: string) => a.localeCompare(b, 'ro', { sensitivity: 'base' }))
+      setNames(list)
+      // Grupa: sesiunea principală = Grupa 1; clonele = Grupa 2, 3, ... (după ordinea creării)
+      if (!sess.parent_session_id) setGrupa('Grupa 1')
+      else {
+        const { data: cl } = await supabase.from('sessions').select('id, created_at')
+          .eq('parent_session_id', sess.parent_session_id).eq('session_type', 'clone').order('created_at')
+        const idx = (cl || []).findIndex((x: any) => x.id === sess.id)
+        setGrupa('Grupa ' + (idx >= 0 ? idx + 2 : 2))
+      }
+    })()
+  }, [open, sess.id])
+
+  function generate() {
+    const zile = zileStr.split(',').map(z => z.trim()).filter(Boolean)
+    const html = buildAttendanceHtml(titlu, grupa, zile, names)
+    const w = window.open('', '_blank')
+    if (w) { w.document.write(html); w.document.close() }
+  }
+
+  return (
+    <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
+      <div className="flex items-center gap-2 mb-1">
+        <FileText size={15} className="text-gray-400" />
+        <h3 className="font-semibold text-sm text-gray-900">Foaie de prezență (A4)</h3>
+      </div>
+      <p className="text-xs text-gray-400 mb-3">Tabel de prezență cu cursanții sesiunii (alfabetic) și câte o coloană per zi de practică.</p>
+      <button onClick={() => setOpen(true)} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white" style={{ background: '#0a1628' }}>
+        <FileText size={12} /> Foaie prezență
+      </button>
+
+      {open && (
+        <div onClick={() => setOpen(false)} className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div onClick={e => e.stopPropagation()} className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <h3 className="font-semibold text-gray-900">Foaie de prezență</h3>
+              <button onClick={() => setOpen(false)} className="text-gray-400 hover:text-gray-700"><X size={18} /></button>
+            </div>
+            <div className="p-5 space-y-3">
+              <label className="block"><span className="block text-xs text-gray-500 mb-1">Titlu</span>
+                <input value={titlu} onChange={e => setTitlu(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" /></label>
+              <label className="block"><span className="block text-xs text-gray-500 mb-1">Grupă</span>
+                <input value={grupa} onChange={e => setGrupa(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" /></label>
+              <label className="block"><span className="block text-xs text-gray-500 mb-1">Zile (coloane, separate prin virgulă)</span>
+                <input value={zileStr} onChange={e => setZileStr(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" /></label>
+              <p className="text-xs text-gray-400">{names.length} cursanți (alfabetic)</p>
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100">
+              <button onClick={() => setOpen(false)} className="px-4 py-2 rounded-lg text-sm border border-gray-200 text-gray-600 hover:bg-gray-50">Renunță</button>
+              <button onClick={generate} disabled={names.length === 0} className="px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50" style={{ background: '#0a1628' }}>
+                Generează PDF (print)
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
