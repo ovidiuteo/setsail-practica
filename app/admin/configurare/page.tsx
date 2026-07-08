@@ -283,6 +283,95 @@ export default function ConfigurarePage() {
 
       {/* Simulatoare (pagini gated prin token) */}
       <SimulatoareSection />
+
+      {/* Voucher Cadou (emitere + listă) */}
+      <VoucherCadouSection />
+    </div>
+  )
+}
+
+function VoucherCadouSection() {
+  const [rows, setRows] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [token, setToken] = useState<string>('')
+  const [busy, setBusy] = useState(false)
+  const [copied, setCopied] = useState(false)
+  const origin = typeof window !== 'undefined' ? window.location.origin : ''
+  const TIP_LABEL: Record<string, string> = { cds: 'CDS', motor: 'Motor', valoric: 'Valoric' }
+
+  async function load() {
+    const [{ data: v }, { data: cfg }] = await Promise.all([
+      supabase.from('voucher_cadou').select('*').order('data_emiterii', { ascending: false }),
+      supabase.from('voucher_cadou_config').select('token').eq('id', 1).maybeSingle(),
+    ])
+    setRows(v || []); setToken(cfg?.token || ''); setLoading(false)
+  }
+  useEffect(() => { load() }, [])
+
+  function newToken() {
+    const arr = new Uint8Array(16); crypto.getRandomValues(arr)
+    return Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 24)
+  }
+  async function ensureToken(): Promise<string> {
+    if (token) return token
+    const t = newToken(); setBusy(true)
+    await supabase.from('voucher_cadou_config').update({ token: t, updated_at: new Date().toISOString() }).eq('id', 1)
+    setBusy(false); setToken(t); return t
+  }
+  async function regen() {
+    if (!confirm('Token nou? Link-ul vechi nu va mai funcționa.')) return
+    const t = newToken(); setBusy(true)
+    await supabase.from('voucher_cadou_config').update({ token: t, updated_at: new Date().toISOString() }).eq('id', 1)
+    setBusy(false); setToken(t)
+  }
+  const link = (t: string) => `${origin}/emite-voucher-cadou?token=${t}`
+  async function copy() { const t = await ensureToken(); navigator.clipboard.writeText(link(t)); setCopied(true); setTimeout(() => setCopied(false), 2000) }
+  async function open() { const t = await ensureToken(); window.open(link(t), '_blank') }
+
+  return (
+    <div className="mt-8 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="px-6 py-4 border-b border-gray-100">
+        <h2 className="font-semibold text-gray-900">🎁 Voucher Cadou</h2>
+        <p className="text-xs text-gray-400 mt-0.5">Emitere vouchere cadou (CDS / Motor / valoric). Pagina se poate deschide de oricine are link-ul cu token.</p>
+      </div>
+      <div className="px-6 py-4 border-b border-gray-50">
+        {token && <code className="block mb-3 text-[11px] text-gray-500 bg-gray-50 rounded-lg px-2.5 py-1.5 border border-gray-100 break-all">{link(token)}</code>}
+        <div className="flex flex-wrap gap-2">
+          <button onClick={copy} disabled={busy} className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-blue-200 text-blue-600 hover:bg-blue-50 disabled:opacity-50">
+            <Copy size={12} /> {copied ? '✓ Copiat!' : 'Copiază link emitere'}
+          </button>
+          <button onClick={open} disabled={busy} className="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50">Deschide ↗</button>
+          {token && <button onClick={regen} disabled={busy} className="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-50">↻ Regenerează token</button>}
+        </div>
+      </div>
+      {loading ? (
+        <div className="text-center text-gray-400 py-8 text-sm">Se încarcă...</div>
+      ) : rows.length === 0 ? (
+        <div className="text-center text-gray-400 py-8 text-sm">Niciun voucher emis.</div>
+      ) : (
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                <th className="px-4 py-2.5">Nume</th><th className="px-4 py-2.5">Prenume</th>
+                <th className="px-4 py-2.5">Tip</th><th className="px-4 py-2.5">Observații</th>
+                <th className="px-4 py-2.5">Data emiterii</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-gray-50">
+              {rows.map(v => (
+                <tr key={v.id} className="hover:bg-gray-50/60">
+                  <td className="px-4 py-2 text-gray-800">{v.nume || '—'}</td>
+                  <td className="px-4 py-2 text-gray-800">{v.prenume || '—'}</td>
+                  <td className="px-4 py-2"><span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">{TIP_LABEL[v.tip] || v.tip}{v.tip === 'valoric' && v.suma ? ` · ${v.suma}€` : ''}</span></td>
+                  <td className="px-4 py-2 text-gray-500 text-xs max-w-[240px] truncate" title={v.observatii || ''}>{v.observatii || '—'}</td>
+                  <td className="px-4 py-2 text-gray-500 text-xs whitespace-nowrap">{v.data_emiterii ? new Date(v.data_emiterii).toLocaleDateString('ro-RO', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   )
 }
