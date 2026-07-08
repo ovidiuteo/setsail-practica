@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState, useCallback, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 
 type Tip = 'cds' | 'motor' | 'valoric'
@@ -30,7 +30,7 @@ const POS: any = {
 }
 const BLUE = '#1c6cb0', GOLD = '#b5893c'
 
-export default function EmiteVoucher() {
+function EmiteVoucherInner() {
   const token = useSearchParams().get('token') || ''
   const [state, setState] = useState<'loading' | 'ok' | 'denied'>('loading')
   const [tip, setTip] = useState<Tip>('cds')
@@ -177,5 +177,13 @@ export default function EmiteVoucher() {
         </div>
       </div>
     </div>
+  )
+}
+
+export default function EmiteVoucherCadou() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-gray-400">Se încarcă…</div>}>
+      <EmiteVoucherInner />
+    </Suspense>
   )
 }
