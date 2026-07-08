@@ -3586,13 +3586,28 @@ export default function SessionDetailPage() {
       }
 
       if (sets.length === 0) { noData.push(s.full_name || email); continue }
+
+      // Nume corect: users.name = nume de familie, users.first_name = prenume.
+      // Regula: ultimul cuvant = prenume, restul = nume de familie (acopera nume
+      // compuse gen "STANCIU - CUCU IULIA" -> name="STANCIU - CUCU", first_name="IULIA").
+      const nameParts = (s.full_name || '').trim().split(/\s+/).filter(Boolean)
+      const uSets: string[] = []
+      if (nameParts.length >= 2) {
+        uSets.push(`u.name='${sqlEsc(nameParts.slice(0, -1).join(' '))}'`)
+        uSets.push(`u.first_name='${sqlEsc(nameParts[nameParts.length - 1])}'`)
+      } else if (nameParts.length === 1) {
+        uSets.push(`u.name='${sqlEsc(nameParts[0])}'`)
+      }
+
       count++
+      const allSets = [...uSets, ...sets, 's.updated_at=NOW()']
+      if (uSets.length) allSets.push('u.updated_at=NOW()')
       blocks.push(
         `-- ${s.full_name || ''}`.trimEnd() + '\n' +
         `UPDATE students s\n` +
         `  JOIN users u ON u.id = s.user\n` +
         `  JOIN sheets sh ON sh.user = u.id\n` +
-        `SET ${sets.join(', ')}, s.updated_at=NOW()\n` +
+        `SET ${allSets.join(', ')}\n` +
         `WHERE sh.\`group\` = ${gExpr} AND lower(trim(u.email)) = '${sqlEsc(email)}';`
       )
     }
@@ -3603,6 +3618,7 @@ export default function SessionDetailPage() {
       `-- ============================================================`,
       `-- UPDATE cursanti serie ${gExpr} -> rnauti39_teste`,
       `-- Sursa de adevar: Supabase practica-setsail. DOAR UPDATE, fara INSERT/DELETE.`,
+      `-- Nume: users.name = nume de familie, users.first_name = prenume (ultimul cuvant din nume).`,
       `-- Scope: sheets.group = ${gExpr} (apartenenta la serie, incl. neplatiti) + match pe email.`,
       `-- Ruleaza pe baza rnauti39_teste, conexiune utf8mb4 (altfel se strica diacriticele).`,
       `-- Backup recomandat inainte (de-comenteaza randul urmator):`,
