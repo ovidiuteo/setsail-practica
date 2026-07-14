@@ -765,30 +765,23 @@ function AdeverintaVhf({ student, session }: { student: Student; session: Sessio
   const draw = useCallback(() => {
     const cv = canvasRef.current; if (!cv) return
     let img = imgRef.current
-    if (!img) { const im = new Image(); im.onload = () => { imgRef.current = im; draw() }; im.src = '/adeverinte/vhf.png'; return }
+    if (!img) { const im = new Image(); im.onload = () => { imgRef.current = im; draw() }; im.src = '/adeverinte/vhf.jpg'; return }
     const W = img.naturalWidth, H = img.naturalHeight
     cv.width = W; cv.height = H
     const ctx = cv.getContext('2d')!
     ctx.drawImage(img, 0, 0, W, H)
-    // șterge datele vechi (bandă albă; pt = cât urcă deasupra liniei) + redesenează linia punctată
-    const clearLine = (x0: number, x1: number, ly: number, pt = 0.030) => {
-      ctx.fillStyle = '#ffffff'; ctx.fillRect(x0 * W, (ly - pt) * H, (x1 - x0) * W, (pt + 0.008) * H)
-      ctx.strokeStyle = '#6b6f86'; ctx.lineWidth = Math.max(1, H * 0.0015)
-      ctx.setLineDash([H * 0.0035, H * 0.006]); ctx.beginPath()
-      ctx.moveTo(x0 * W, ly * H); ctx.lineTo(x1 * W, ly * H); ctx.stroke(); ctx.setLineDash([])
-    }
+    // Template gol (linii punctate curate) — scriem doar textul, fără white-out.
     const put = (t: string, x: number, by: number, size: number, bold = false, align: CanvasTextAlign = 'left') => {
       if (!t) return; ctx.fillStyle = '#000000'; ctx.font = `italic ${bold ? 'bold ' : ''}${size * H}px Arial`
       ctx.textAlign = align; ctx.textBaseline = 'alphabetic'; ctx.fillText(t, x * W, by * H)
     }
-    // câmp: [x0, x1] pt. curățare, linia punctată (ly), pt sus, apoi textul
-    clearLine(0.435, 0.585, 0.384, 0.030); put(f.nr, 0.46, 0.377, 0.023, false, 'center')
-    clearLine(0.505, 0.905, 0.470, 0.034); put(f.nume, 0.53, 0.462, 0.023, true)     // bold, mai în dreapta
-    clearLine(0.245, 0.905, 0.518, 0.038); put(f.domiciliu, 0.28, 0.512, 0.019)      // șterge adresa veche
-    clearLine(0.435, 0.485, 0.566, 0.038); put(f.seria, 0.445, 0.559, 0.019)
-    clearLine(0.545, 0.625, 0.566, 0.038); put(f.nrci, 0.56, 0.559, 0.019)
-    clearLine(0.68, 0.905, 0.566, 0.038); put(f.cnp, 0.69, 0.559, 0.020)
-    clearLine(0.66, 0.905, 0.648, 0.040); put(f.sesiune, 0.685, 0.642, 0.019)
+    put(f.nr, 0.46, 0.377, 0.023, false, 'center')
+    put(f.nume, 0.53, 0.462, 0.023, true)          // bold, mai în dreapta
+    put(f.domiciliu, 0.28, 0.512, 0.019)
+    put(f.seria, 0.445, 0.559, 0.019)
+    put(f.nrci, 0.56, 0.559, 0.019)
+    put(f.cnp, 0.69, 0.559, 0.020)
+    put(f.sesiune, 0.685, 0.642, 0.019)
   }, [f])
 
   useEffect(() => { if (open) draw() }, [open, draw])
