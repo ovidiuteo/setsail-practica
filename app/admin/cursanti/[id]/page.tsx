@@ -740,7 +740,6 @@ export default function CursantAdminPage() {
 
 // ── Adeverință VHF (radiocomunicații) ────────────────────────────────────────
 // Poziții ca fracțiuni din lățime/înălțime (template 1130x1072) — ușor de calibrat.
-const VHF_TEXT = '#26268c'
 function AdeverintaVhf({ student, session }: { student: Student; session: Session | null }) {
   const [open, setOpen] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -771,22 +770,25 @@ function AdeverintaVhf({ student, session }: { student: Student; session: Sessio
     cv.width = W; cv.height = H
     const ctx = cv.getContext('2d')!
     ctx.drawImage(img, 0, 0, W, H)
-    const white = (x0: number, x1: number, by: number, pt = 0.034, pb = 0.004) => {
-      ctx.fillStyle = '#ffffff'; ctx.fillRect(x0 * W, (by - pt) * H, (x1 - x0) * W, (pt + pb) * H)
+    // șterge datele vechi (bandă albă; pt = cât urcă deasupra liniei) + redesenează linia punctată
+    const clearLine = (x0: number, x1: number, ly: number, pt = 0.030) => {
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(x0 * W, (ly - pt) * H, (x1 - x0) * W, (pt + 0.008) * H)
+      ctx.strokeStyle = '#6b6f86'; ctx.lineWidth = Math.max(1, H * 0.0015)
+      ctx.setLineDash([H * 0.0035, H * 0.006]); ctx.beginPath()
+      ctx.moveTo(x0 * W, ly * H); ctx.lineTo(x1 * W, ly * H); ctx.stroke(); ctx.setLineDash([])
     }
-    const put = (t: string, x: number, by: number, size: number, align: CanvasTextAlign = 'left') => {
-      if (!t) return; ctx.fillStyle = VHF_TEXT; ctx.font = `italic bold ${size * H}px Arial`; ctx.textAlign = align; ctx.textBaseline = 'alphabetic'; ctx.fillText(t, x * W, by * H)
+    const put = (t: string, x: number, by: number, size: number, bold = false, align: CanvasTextAlign = 'left') => {
+      if (!t) return; ctx.fillStyle = '#000000'; ctx.font = `italic ${bold ? 'bold ' : ''}${size * H}px Arial`
+      ctx.textAlign = align; ctx.textBaseline = 'alphabetic'; ctx.fillText(t, x * W, by * H)
     }
-    white(0.43, 0.63, 0.378); white(0.41, 0.91, 0.452); white(0.27, 0.93, 0.503)
-    white(0.355, 0.445, 0.552); white(0.505, 0.60, 0.552); white(0.635, 0.92, 0.552)
-    white(0.66, 0.93, 0.632)
-    put(f.nr, 0.47, 0.375, 0.024, 'center')
-    put(f.nume, 0.42, 0.450, 0.026)
-    put(f.domiciliu, 0.29, 0.500, 0.020)
-    put(f.seria, 0.37, 0.549, 0.020)
-    put(f.nrci, 0.51, 0.549, 0.020)
-    put(f.cnp, 0.62, 0.549, 0.022)
-    put(f.sesiune, 0.69, 0.630, 0.020)
+    // câmp: [x0, x1] pt. curățare, linia punctată (ly), pt sus, apoi textul
+    clearLine(0.435, 0.585, 0.384, 0.030); put(f.nr, 0.46, 0.377, 0.023, false, 'center')
+    clearLine(0.505, 0.905, 0.470, 0.034); put(f.nume, 0.53, 0.462, 0.023, true)     // bold, mai în dreapta
+    clearLine(0.245, 0.905, 0.518, 0.038); put(f.domiciliu, 0.28, 0.512, 0.019)      // șterge adresa veche
+    clearLine(0.435, 0.485, 0.566, 0.038); put(f.seria, 0.445, 0.559, 0.019)
+    clearLine(0.545, 0.625, 0.566, 0.038); put(f.nrci, 0.56, 0.559, 0.019)
+    clearLine(0.68, 0.905, 0.566, 0.038); put(f.cnp, 0.69, 0.559, 0.020)
+    clearLine(0.66, 0.905, 0.648, 0.040); put(f.sesiune, 0.685, 0.642, 0.019)
   }, [f])
 
   useEffect(() => { if (open) draw() }, [open, draw])
