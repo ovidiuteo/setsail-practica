@@ -776,11 +776,11 @@ function AdeverintaVhf({ student, session }: { student: Student; session: Sessio
       ctx.textAlign = align; ctx.textBaseline = 'alphabetic'; ctx.fillText(t, x * W, by * H)
     }
     put(f.nr, 0.46, 0.377, 0.023, false, 'center')
-    put(f.nume, 0.53, 0.462, 0.023, true)          // bold, mai în dreapta
-    put(f.domiciliu, 0.28, 0.512, 0.019)
-    put(f.seria, 0.445, 0.559, 0.019)
-    put(f.nrci, 0.56, 0.559, 0.019)
-    put(f.cnp, 0.69, 0.559, 0.020)
+    put(f.nume, 0.53, 0.462, 0.023, true)          // bold, centrat pe linie
+    put(f.domiciliu, 0.28, 0.506, 0.019)           // ridicat un pic
+    put(f.seria, 0.445, 0.550, 0.019)              // ridicate un pic mai mult
+    put(f.nrci, 0.56, 0.550, 0.019)
+    put(f.cnp, 0.69, 0.550, 0.020)
     put(f.sesiune, 0.685, 0.642, 0.019)
   }, [f])
 
