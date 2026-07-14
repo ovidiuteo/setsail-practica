@@ -1,11 +1,11 @@
 'use client'
-import { useEffect, useState, useRef } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import {
   ArrowLeft, Save, ScanLine, Loader2, CheckCircle,
-  AlertCircle, ExternalLink, Trash2, Copy, Check, X
+  AlertCircle, ExternalLink, Trash2, Copy, Check, X, FileText
 } from 'lucide-react'
 import CIImageEditor from '@/components/CIImageEditor'
 
@@ -382,6 +382,8 @@ export default function CursantAdminPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {/* Adeverință VHF (radio) */}
+            <AdeverintaVhf student={student} session={session} />
             {/* Portal link */}
             {session && (
               <a href={`/portal?cod=${session.access_code}&email=${encodeURIComponent(student.email || '')}`}
@@ -733,5 +735,128 @@ export default function CursantAdminPage() {
         </div>
       </div>
     </div>
+  )
+}
+
+// ── Adeverință VHF (radiocomunicații) ────────────────────────────────────────
+// Poziții ca fracțiuni din lățime/înălțime (template 1130x1072) — ușor de calibrat.
+const VHF_TEXT = '#26268c'
+function AdeverintaVhf({ student, session }: { student: Student; session: Session | null }) {
+  const [open, setOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+  const imgRef = useRef<HTMLImageElement | null>(null)
+  const [f, setF] = useState({ nr: '', nume: '', domiciliu: '', seria: '', nrci: '', cnp: '', sesiune: '' })
+
+  useEffect(() => {
+    if (!open) return
+    const domiciliu = [student.address, student.city, student.county].map(x => (x || '').trim()).filter(Boolean).join(', ')
+    const ses = session?.session_date ? new Date(session.session_date).toLocaleDateString('ro-RO', { month: 'long', year: 'numeric' }) : ''
+    setF({
+      nr: String(4000 + Math.floor(Math.random() * 6000)), // 4 cifre, prima ≥ 4
+      nume: (student.full_name || '').trim(),
+      domiciliu,
+      seria: (student.ci_series || '').trim(),
+      nrci: (student.ci_number || '').trim(),
+      cnp: (student.cnp || '').trim(),
+      sesiune: ses,
+    })
+  }, [open, student, session])
+
+  const draw = useCallback(() => {
+    const cv = canvasRef.current; if (!cv) return
+    let img = imgRef.current
+    if (!img) { const im = new Image(); im.onload = () => { imgRef.current = im; draw() }; im.src = '/adeverinte/vhf.png'; return }
+    const W = img.naturalWidth, H = img.naturalHeight
+    cv.width = W; cv.height = H
+    const ctx = cv.getContext('2d')!
+    ctx.drawImage(img, 0, 0, W, H)
+    const white = (x0: number, x1: number, by: number, pt = 0.034, pb = 0.004) => {
+      ctx.fillStyle = '#ffffff'; ctx.fillRect(x0 * W, (by - pt) * H, (x1 - x0) * W, (pt + pb) * H)
+    }
+    const put = (t: string, x: number, by: number, size: number, align: CanvasTextAlign = 'left') => {
+      if (!t) return; ctx.fillStyle = VHF_TEXT; ctx.font = `italic bold ${size * H}px Arial`; ctx.textAlign = align; ctx.textBaseline = 'alphabetic'; ctx.fillText(t, x * W, by * H)
+    }
+    white(0.43, 0.63, 0.378); white(0.41, 0.91, 0.452); white(0.27, 0.93, 0.503)
+    white(0.355, 0.445, 0.552); white(0.505, 0.60, 0.552); white(0.635, 0.92, 0.552)
+    white(0.66, 0.93, 0.632)
+    put(f.nr, 0.47, 0.375, 0.024, 'center')
+    put(f.nume, 0.42, 0.450, 0.026)
+    put(f.domiciliu, 0.29, 0.500, 0.020)
+    put(f.seria, 0.37, 0.549, 0.020)
+    put(f.nrci, 0.51, 0.549, 0.020)
+    put(f.cnp, 0.62, 0.549, 0.022)
+    put(f.sesiune, 0.69, 0.630, 0.020)
+  }, [f])
+
+  useEffect(() => { if (open) draw() }, [open, draw])
+
+  const fileName = `adeverinta vhf ${(f.nume || '').trim()}`.trim()
+  function saveJpg() {
+    setBusy(true); const cv = canvasRef.current!
+    cv.toBlob(b => { if (b) { const a = document.createElement('a'); a.href = URL.createObjectURL(b); a.download = fileName + '.jpg'; a.click() } setBusy(false) }, 'image/jpeg', 0.95)
+  }
+  function savePdf() {
+    setBusy(true); const cv = canvasRef.current!
+    const url = cv.toDataURL('image/jpeg', 0.95)
+    const w = window.open('', '_blank')
+    if (w) {
+      w.document.write(`<!DOCTYPE html><html><head><meta charset="utf-8"><title>${fileName}</title>
+<style>@page{size:A4 portrait;margin:10mm}*{margin:0}body{display:flex;justify-content:center}img{max-width:100%;max-height:100%;height:auto}</style></head>
+<body><img src="${url}"><script>window.onload=function(){setTimeout(function(){window.print()},300)}<\/script></body></html>`)
+      w.document.close()
+    }
+    setBusy(false)
+  }
+
+  const inCls = 'w-full px-2.5 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200'
+  return (
+    <>
+      <button onClick={() => setOpen(true)}
+        className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors">
+        <FileText size={13} /> Adeverință VHF
+      </button>
+      {open && (
+        <div onClick={() => setOpen(false)} className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div onClick={e => e.stopPropagation()} className="bg-white rounded-2xl shadow-xl w-full max-w-4xl max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <h3 className="font-semibold text-gray-900">Adeverință VHF — {student.full_name}</h3>
+              <button onClick={() => setOpen(false)} className="text-gray-400 hover:text-gray-700"><X size={18} /></button>
+            </div>
+            <div className="grid md:grid-cols-2 gap-4 p-5">
+              <div className="space-y-3">
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="block"><span className="block text-xs text-gray-500 mb-1">Nr</span>
+                    <input className={inCls} value={f.nr} onChange={e => setF(s => ({ ...s, nr: e.target.value }))} /></label>
+                  <label className="block"><span className="block text-xs text-gray-500 mb-1">Sesiune</span>
+                    <input className={inCls} value={f.sesiune} onChange={e => setF(s => ({ ...s, sesiune: e.target.value }))} placeholder="24-27 mai 2021" /></label>
+                </div>
+                <label className="block"><span className="block text-xs text-gray-500 mb-1">Dl/Dna (nume complet)</span>
+                  <input className={inCls} value={f.nume} onChange={e => setF(s => ({ ...s, nume: e.target.value }))} /></label>
+                <label className="block"><span className="block text-xs text-gray-500 mb-1">Domiciliat/ă</span>
+                  <input className={inCls} value={f.domiciliu} onChange={e => setF(s => ({ ...s, domiciliu: e.target.value }))} /></label>
+                <div className="grid grid-cols-3 gap-2">
+                  <label className="block"><span className="block text-xs text-gray-500 mb-1">Serie CI</span>
+                    <input className={inCls} value={f.seria} onChange={e => setF(s => ({ ...s, seria: e.target.value }))} /></label>
+                  <label className="block"><span className="block text-xs text-gray-500 mb-1">Nr CI</span>
+                    <input className={inCls} value={f.nrci} onChange={e => setF(s => ({ ...s, nrci: e.target.value }))} /></label>
+                  <label className="block"><span className="block text-xs text-gray-500 mb-1">CNP</span>
+                    <input className={inCls} value={f.cnp} onChange={e => setF(s => ({ ...s, cnp: e.target.value }))} /></label>
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <button onClick={savePdf} disabled={busy} className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium text-white disabled:opacity-50" style={{ background: '#dc2626' }}>Salvează PDF</button>
+                  <button onClick={saveJpg} disabled={busy} className="flex-1 px-4 py-2.5 rounded-lg text-sm font-medium text-white disabled:opacity-50" style={{ background: '#7c3aed' }}>Salvează JPG</button>
+                </div>
+                <p className="text-xs text-gray-400">Fișier: „{fileName}"</p>
+              </div>
+              <div className="self-start">
+                <div className="text-xs text-gray-400 mb-1.5">Previzualizare</div>
+                <canvas ref={canvasRef} className="w-full h-auto rounded-lg border border-gray-100" />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   )
 }
