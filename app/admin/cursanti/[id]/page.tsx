@@ -777,10 +777,10 @@ function AdeverintaVhf({ student, session }: { student: Student; session: Sessio
     }
     put(f.nr, 0.46, 0.377, 0.023, false, 'center')
     put(f.nume, 0.53, 0.462, 0.023, true)          // bold, centrat pe linie
-    put(f.domiciliu, 0.28, 0.506, 0.019)           // ridicat un pic
-    put(f.seria, 0.445, 0.550, 0.019)              // ridicate un pic mai mult
-    put(f.nrci, 0.56, 0.550, 0.019)
-    put(f.cnp, 0.69, 0.550, 0.020)
+    put(f.domiciliu, 0.28, 0.506, 0.019)
+    put(f.seria, 0.44, 0.542, 0.019, false, 'center')   // ridicată mai mult, centrată
+    put(f.nrci, 0.552, 0.546, 0.019, false, 'center')   // centrată pe câmp
+    put(f.cnp, 0.782, 0.546, 0.020, false, 'center')    // centrată pe câmp
     put(f.sesiune, 0.685, 0.642, 0.019)
   }, [f])
 
