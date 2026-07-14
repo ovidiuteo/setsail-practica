@@ -775,12 +775,12 @@ function AdeverintaVhf({ student, session }: { student: Student; session: Sessio
       if (!t) return; ctx.fillStyle = '#000000'; ctx.font = `italic ${bold ? 'bold ' : ''}${size * H}px Arial`
       ctx.textAlign = align; ctx.textBaseline = 'alphabetic'; ctx.fillText(t, x * W, by * H)
     }
-    put(f.nr, 0.46, 0.377, 0.023, false, 'center')
+    put(f.nr, 0.497, 0.377, 0.023, false, 'center')     // ~7mm mai la dreapta
     put(f.nume, 0.53, 0.462, 0.023, true)          // bold, centrat pe linie
     put(f.domiciliu, 0.28, 0.506, 0.019)
-    put(f.seria, 0.44, 0.542, 0.019, false, 'center')   // ridicată mai mult, centrată
-    put(f.nrci, 0.552, 0.546, 0.019, false, 'center')   // centrată pe câmp
-    put(f.cnp, 0.782, 0.546, 0.020, false, 'center')    // centrată pe câmp
+    put(f.seria, 0.46, 0.532, 0.019, false, 'center')   // sus dublu + dreapta 2x
+    put(f.nrci, 0.562, 0.546, 0.019, false, 'center')   // un pic la dreapta
+    put(f.cnp, 0.782, 0.546, 0.020, false, 'center')    // f. bine
     put(f.sesiune, 0.685, 0.642, 0.019)
   }, [f])
 
