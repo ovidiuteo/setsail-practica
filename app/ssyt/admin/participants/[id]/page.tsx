@@ -1,11 +1,19 @@
 import { notFound } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Edit } from 'lucide-react'
+import { ArrowLeft, Edit, Anchor, UserCheck } from 'lucide-react'
 import { supabase } from '@/lib/ssyt/supabase'
 import ParticipantEditForm from './ParticipantEditForm'
 import EditorToggle from '@/components/ssyt/admin/EditorToggle'
+import { effectiveRegattaStatus, regattaStatusColor } from '@/lib/ssyt/regatta-status'
 
 export const revalidate = 0
+
+const CONFIRM: Record<string, { label: string; color: string }> = {
+  confirmed: { label: 'Disponibil', color: '#10B981' },
+  declined: { label: 'Indisponibil', color: '#EF4444' },
+  tentative: { label: 'Nu știu', color: '#F59E0B' },
+  pending: { label: 'În așteptare', color: '#9CA3AF' },
+}
 
 export default async function AdminParticipantDetailPage({ params }: { params: { id: string } }) {
   const { data: participant } = await supabase
@@ -21,6 +29,21 @@ export default async function AdminParticipantDetailPage({ params }: { params: {
     .maybeSingle()
 
   if (!participant) notFound()
+
+  // Participări la regate
+  const { data: participationsRaw } = await supabase
+    .from('ssyt_regatta_participation')
+    .select(`
+      id, confirmation_status, attendance_type, on_crewlist,
+      regatta:ssyt_regattas(id, name, slug, start_date, end_date, status),
+      team:ssyt_teams(id, name, short_name, color_primary)
+    `)
+    .eq('participant_id', params.id)
+
+  const participations = (participationsRaw || [])
+    .map((p: any) => ({ ...p, regatta: Array.isArray(p.regatta) ? p.regatta[0] : p.regatta, team: Array.isArray(p.team) ? p.team[0] : p.team }))
+    .filter((p: any) => p.regatta)
+    .sort((a: any, b: any) => new Date(b.regatta.start_date).getTime() - new Date(a.regatta.start_date).getTime())
 
   const activeMembership = (participant.memberships || []).find((m: any) => m.status === 'active')
   const isSkipper = activeMembership?.team?.skipper_id === participant.id
@@ -102,6 +125,71 @@ export default async function AdminParticipantDetailPage({ params }: { params: {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Participări la regate */}
+      <div className="rounded-lg overflow-hidden mt-6" style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
+        <div className="px-5 py-3 flex items-center justify-between" style={{ background: '#f8f9fa', borderBottom: '1px solid #e5e7eb' }}>
+          <h2 className="text-sm font-medium uppercase tracking-wider text-gray-500 inline-flex items-center gap-1.5">
+            <Anchor size={14} /> Participări la regate
+          </h2>
+          <span className="text-xs text-gray-400">{participations.length}</span>
+        </div>
+        {participations.length === 0 ? (
+          <div className="px-5 py-8 text-center text-sm text-gray-400 italic">Nicio participare înregistrată.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead style={{ background: '#fff', borderBottom: '1px solid #e5e7eb' }}>
+                <tr>
+                  <th className="text-left px-5 py-3 text-xs font-medium uppercase tracking-wider text-gray-500">Regatta</th>
+                  <th className="text-left px-4 py-3 text-xs font-medium uppercase tracking-wider text-gray-500">Echipă</th>
+                  <th className="text-center px-4 py-3 text-xs font-medium uppercase tracking-wider text-gray-500">Când</th>
+                  <th className="text-center px-4 py-3 text-xs font-medium uppercase tracking-wider text-gray-500">Disponibilitate</th>
+                  <th className="text-center px-4 py-3 text-xs font-medium uppercase tracking-wider text-gray-500">Crewlist</th>
+                </tr>
+              </thead>
+              <tbody>
+                {participations.map((p: any) => {
+                  const eff = effectiveRegattaStatus(p.regatta)
+                  const effColor = regattaStatusColor(eff)
+                  const conf = p.confirmation_status ? CONFIRM[p.confirmation_status] : null
+                  return (
+                    <tr key={p.id} style={{ borderTop: '1px solid #f3f4f6' }}>
+                      <td className="px-5 py-3">
+                        <Link href={`/ssyt/admin/regattas/${p.regatta.id}`} className="font-medium hover:underline" style={{ color: '#0a1628' }}>
+                          {p.regatta.name}
+                        </Link>
+                        <div className="text-xs text-gray-500">
+                          {new Date(p.regatta.start_date).toLocaleDateString('ro-RO', { day: 'numeric', month: 'short', year: 'numeric' })}
+                        </div>
+                      </td>
+                      <td className="px-4 py-3">
+                        {p.team ? (
+                          <Link href={`/ssyt/admin/teams/${p.team.id}`} className="inline-flex items-center gap-1.5 hover:underline">
+                            <span className="w-2.5 h-2.5 rounded-full" style={{ background: p.team.color_primary || '#4A5568' }}></span>
+                            <span className="text-gray-700">{p.team.short_name || p.team.name}</span>
+                          </Link>
+                        ) : <span className="text-gray-400 text-xs">—</span>}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: `${effColor}15`, color: effColor }}>{eff}</span>
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {conf ? (
+                          <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: `${conf.color}15`, color: conf.color }}>{conf.label}</span>
+                        ) : <span className="text-gray-300 text-xs">—</span>}
+                      </td>
+                      <td className="px-4 py-3 text-center">
+                        {p.on_crewlist ? <UserCheck size={16} className="inline" style={{ color: '#10B981' }} /> : <span className="text-gray-300 text-xs">—</span>}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   )
