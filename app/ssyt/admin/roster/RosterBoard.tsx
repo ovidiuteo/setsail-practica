@@ -182,7 +182,37 @@ export default function RosterBoard({
         return
       }
 
-      if (currentMembership) {
+      // Persoana are deja un membership în echipa țintă (poate ascuns / 'left')?
+      // UNIQUE(team_id, participant_id) → nu putem face insert nou; reactivăm.
+      const { data: targetExisting } = await supabase
+        .from('ssyt_team_memberships')
+        .select('id, team_id, participant_id, membership_type, status')
+        .eq('team_id', targetColumnId)
+        .eq('participant_id', participantId)
+        .maybeSingle()
+
+      if (targetExisting) {
+        // Un-hide: reactivăm membership-ul existent în loc de duplicate
+        const { data: reactivated, error } = await supabase
+          .from('ssyt_team_memberships')
+          .update({ status: 'active' })
+          .eq('id', targetExisting.id)
+          .select('id, team_id, participant_id, membership_type, status')
+          .single()
+        if (error) throw error
+        // Dacă venea dintr-o altă echipă activă, ștergem vechiul membership ca să nu fie dublu
+        let removedId: string | null = null
+        if (currentMembership && currentMembership.id !== targetExisting.id) {
+          const { error: delErr } = await supabase.from('ssyt_team_memberships').delete().eq('id', currentMembership.id)
+          if (delErr) throw delErr
+          removedId = currentMembership.id
+        }
+        setMemberships((prev) => {
+          const next = prev.filter((m) => m.id !== removedId && m.id !== (reactivated as Membership).id)
+          next.push(reactivated as Membership)
+          return next
+        })
+      } else if (currentMembership) {
         const { error } = await supabase
           .from('ssyt_team_memberships')
           .update({ team_id: targetColumnId })
