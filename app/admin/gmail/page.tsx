@@ -810,7 +810,13 @@ function LeadMailModal({ lead, sessions, contacts, setsailInfo, instructorMap, o
   // Denumirile prietenoase din tabelul de variabile (după cheia formulei)
   const labelFor = (key: string) => {
     const v = variabile.find(x => String(x.formula || '').replace(/[{}\s]/g, '') === key)
-    return v?.denumire || MAIL_VARIABLES_FLAT.find(m => m.key === key)?.label || key
+    if (v?.denumire) return v.denumire
+    const std = MAIL_VARIABLES_FLAT.find(m => m.key === key)
+    if (std) return std.label
+    // fallback: eticheta câmpului din interes (ex. „Babysitter" pt. o cheie custom_*)
+    const inFld = (interest?.fields || []).find((f: any) => f.key === key)
+    if (inFld?.label && inFld.label !== key) return inFld.label
+    return key
   }
   const interestVal = (key: string) => ((interest?.fields || []).find((f: any) => f.key === key)?.value) || ''
 
