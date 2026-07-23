@@ -1316,8 +1316,9 @@ function IntereseSection({ sessions, contacts, setsailInfo, instructorMap }: {
     const vals = sessionValues(s)
     create({ nume: `${vals.nume_program}${vals.interval ? ' — ' + vals.interval : ''}`, tip_program: 'curs', source_type: 'session', source_id: s.id, fields: buildFields('curs', vals) })
   }
-  function createBlank(genre: Genre) {
-    create({ nume: '', tip_program: genre, source_type: 'blank', fields: buildFields(genre) })
+  function createBlankCateg(c: any) {
+    const gb = (c.gen_baza || 'curs') as Genre
+    create({ nume: '', tip_program: gb, categorie_id: c.id, source_type: 'blank', fields: buildFields(gb) })
   }
 
   async function saveInterest(id: string, patch: any) {
@@ -1354,10 +1355,11 @@ function IntereseSection({ sessions, contacts, setsailInfo, instructorMap }: {
                   className="w-full text-left px-2 py-1.5 rounded-lg text-xs hover:bg-blue-50">{sessionLabel(s)}</button>
               ))}
               <div className="border-t border-gray-100 my-1" />
-              <div className="text-xs font-semibold text-gray-400 px-2 py-1">Gol (manual)</div>
-              <button onClick={() => createBlank('curs')} className="w-full text-left px-2 py-1.5 rounded-lg text-xs hover:bg-gray-50">＋ Curs blank</button>
-              <button onClick={() => createBlank('expeditie')} className="w-full text-left px-2 py-1.5 rounded-lg text-xs hover:bg-gray-50">＋ Expediție blank</button>
-              <button onClick={() => createBlank('practica_suplimentara')} className="w-full text-left px-2 py-1.5 rounded-lg text-xs hover:bg-gray-50">＋ Practică suplimentară blank</button>
+              <div className="text-xs font-semibold text-gray-400 px-2 py-1">Gol, pe categorie</div>
+              {categorii.length === 0 && <div className="px-2 py-1 text-xs text-gray-400 italic">Nicio categorie (adaugă din „Edit categ").</div>}
+              {categorii.map(c => (
+                <button key={c.id} onClick={() => createBlankCateg(c)} className="w-full text-left px-2 py-1.5 rounded-lg text-xs hover:bg-gray-50">＋ {c.nume} <span className="text-gray-400">({genreLabel(c.gen_baza)})</span></button>
+              ))}
             </div>
           )}
         </div>
@@ -1384,16 +1386,18 @@ function IntereseSection({ sessions, contacts, setsailInfo, instructorMap }: {
 // ── Modal: gestionează categoriile intereselor (adaugă / redenumește / șterge) ──
 function InterestCategoriesModal({ categorii, onClose, onChanged }: { categorii: any[]; onClose: () => void; onChanged: () => void }) {
   const [nume, setNume] = useState('')
+  const [genBaza, setGenBaza] = useState<Genre>('curs')
   const [busy, setBusy] = useState(false)
   async function add() {
     if (!nume.trim()) return
     setBusy(true)
-    const r = await fetch('/api/interese-categorii', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nume }) })
+    const r = await fetch('/api/interese-categorii', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nume, gen_baza: genBaza }) })
     setBusy(false)
     if (!r.ok) { const j = await r.json().catch(() => ({})); alert(j.error || 'Eroare'); return }
     setNume(''); onChanged()
   }
   async function rename(id: string, v: string) { await fetch('/api/interese-categorii', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, nume: v }) }); onChanged() }
+  async function setGen(id: string, g: string) { await fetch('/api/interese-categorii', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, gen_baza: g }) }); onChanged() }
   async function del(id: string) { if (!confirm('Ștergi categoria? (interesele rămân, dar fără categorie)')) return; await fetch('/api/interese-categorii', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) }); onChanged() }
 
   return (
@@ -1404,17 +1408,26 @@ function InterestCategoriesModal({ categorii, onClose, onChanged }: { categorii:
           <button onClick={onClose} className="p-1 rounded hover:bg-gray-100 text-gray-400"><X size={18} /></button>
         </div>
         <div className="p-5 space-y-3">
+          <p className="text-xs text-gray-400">„Set câmpuri" decide ce câmpuri implicite are un interes din acea categorie.</p>
           <div className="flex gap-2">
             <input value={nume} onChange={e => setNume(e.target.value)} onKeyDown={e => e.key === 'Enter' && add()}
               placeholder="Categorie nouă…" className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-sm" />
+            <select value={genBaza} onChange={e => setGenBaza(e.target.value as Genre)} title="Set câmpuri"
+              className="px-2 py-2 rounded-lg border border-gray-200 text-xs bg-white cursor-pointer">
+              {INTEREST_GENRES.map(g => <option key={g.key} value={g.key}>{g.label}</option>)}
+            </select>
             <button onClick={add} disabled={busy || !nume.trim()} className="flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50" style={{ background: '#1d4ed8' }}><Plus size={14} /> Adaugă</button>
           </div>
           {categorii.length === 0 ? <p className="text-xs text-gray-400 italic">Nicio categorie încă.</p> : (
-            <div className="space-y-1">
+            <div className="space-y-1 max-h-72 overflow-y-auto">
               {categorii.map(c => (
                 <div key={c.id} className="flex items-center gap-2">
                   <input defaultValue={c.nume} onBlur={e => e.target.value !== c.nume && rename(c.id, e.target.value)}
                     className="flex-1 px-2 py-1.5 rounded border border-gray-200 text-sm bg-white" />
+                  <select value={c.gen_baza || 'curs'} onChange={e => setGen(c.id, e.target.value)} title="Set câmpuri"
+                    className="px-2 py-1.5 rounded border border-gray-200 text-xs bg-white cursor-pointer">
+                    {INTEREST_GENRES.map(g => <option key={g.key} value={g.key}>{g.label}</option>)}
+                  </select>
                   <button onClick={() => del(c.id)} className="p-1.5 text-gray-300 hover:text-red-500"><Trash2 size={14} /></button>
                 </div>
               ))}
@@ -1437,7 +1450,15 @@ function InterestCard({ interes, variabile, categorii, onSave, onDelete }: { int
   const [varPicker, setVarPicker] = useState(false)
 
   const saveFields = (nf: InterestField[]) => { setFields(nf); onSave({ fields: nf }) }
-  const changeGenre = (g: Genre) => { setGenre(g); const nf = buildFields(g, {}, fields); setFields(nf); onSave({ tip_program: g, fields: nf }) }
+  // Categoria = tipul: setează gen_baza (pt. câmpuri) + reconstruiește catalogul păstrând valorile/custom
+  const pickCateg = (id: string) => {
+    if (!id) { onSave({ categorie_id: null }); return }
+    const c = categorii.find(x => x.id === id)
+    const gb = ((c?.gen_baza as Genre) || genre)
+    const nf = buildFields(gb, {}, fields)
+    setGenre(gb); setFields(nf)
+    onSave({ categorie_id: id, tip_program: gb, fields: nf })
+  }
   const toggleVis = (i: number) => saveFields(fields.map((f, idx) => idx === i ? { ...f, visible: !f.visible } : f))
   const setVal = (i: number, v: string) => setFields(prev => prev.map((f, idx) => idx === i ? { ...f, value: v } : f))
   const setLabel = (i: number, v: string) => setFields(prev => prev.map((f, idx) => idx === i ? { ...f, label: v } : f))
@@ -1460,12 +1481,8 @@ function InterestCard({ interes, variabile, categorii, onSave, onDelete }: { int
         </button>
         <input value={nume} onChange={e => setNume(e.target.value)} onBlur={() => nume !== interes.nume && onSave({ nume })}
           placeholder="Titlu interes…" className="flex-1 px-2 py-1.5 rounded-lg border border-gray-200 text-sm font-medium bg-white" />
-        <select value={genre} onChange={e => changeGenre(e.target.value as Genre)}
-          className="text-xs rounded-lg border border-gray-200 px-2 py-1.5 bg-white cursor-pointer">
-          {INTEREST_GENRES.map(g => <option key={g.key} value={g.key}>{g.label}</option>)}
-        </select>
-        <select value={interes.categorie_id || ''} onChange={e => onSave({ categorie_id: e.target.value || null })} title="Categorie"
-          className="text-xs rounded-lg border border-gray-200 px-2 py-1.5 bg-white cursor-pointer max-w-[9rem]">
+        <select value={interes.categorie_id || ''} onChange={e => pickCateg(e.target.value)} title="Categorie (tip)"
+          className="text-xs rounded-lg border border-gray-200 px-2 py-1.5 bg-white cursor-pointer max-w-[11rem]">
           <option value="">— categorie —</option>
           {categorii.map(c => <option key={c.id} value={c.id}>{c.nume}</option>)}
         </select>
