@@ -601,7 +601,7 @@ function LeadsTab() {
   const STATUS = ['nou', 'contactat', 'cursant', 'respins']
   return (
     <div className="space-y-6">
-      <LeadTemplatesSection mailTemplates={mailTemplates} />
+      <LeadTemplatesSection mailTemplates={mailTemplates} sessions={mailSessions} contacts={mailContacts} setsailInfo={mailSetsailInfo} instructorMap={instructorMap} />
       <IntereseSection sessions={mailSessions} contacts={mailContacts} setsailInfo={mailSetsailInfo} instructorMap={instructorMap} />
       <VariabileSection />
       <div className="grid lg:grid-cols-2 gap-4">
@@ -1058,8 +1058,7 @@ function LeadMailModal({ lead, sessions, contacts, setsailInfo, instructorMap, o
       {showNewTpl && (
         <NewTemplateModal
           initial={{ label: aiTpl?.label || '', subject: aiTpl?.subject ?? subject, body: aiTpl?.body ?? body }}
-          variables={aiVariables}
-          sampleVals={finalVals}
+          previewCtx={{ sessions, contacts, setsailInfo, instructorMap, preferLeadId: lead.id, preferInterestId: interestId }}
           onClose={() => setShowNewTpl(false)}
           onSaved={async () => { await refreshLeadTpls(); setShowNewTpl(false) }}
         />
@@ -1069,10 +1068,9 @@ function LeadMailModal({ lead, sessions, contacts, setsailInfo, instructorMap, o
 }
 
 // ── Modal: creează (AI) / editează un template din lead_templates (picker variabile + preview) ──
-function NewTemplateModal({ initial, variables, sampleVals, onClose, onSaved }: {
+function NewTemplateModal({ initial, previewCtx, onClose, onSaved }: {
   initial: { id?: string; label: string; categorie?: string; subject: string; body: string }
-  variables: { key: string; label: string; sample: string }[]
-  sampleVals: Record<string, string>
+  previewCtx: { sessions: any[]; contacts: any[]; setsailInfo: Record<string, string>; instructorMap: Record<string, string>; preferLeadId?: string; preferInterestId?: string }
   onClose: () => void; onSaved: () => void
 }) {
   const isEdit = !!initial.id
@@ -1086,6 +1084,54 @@ function NewTemplateModal({ initial, variables, sampleVals, onClose, onSaved }: 
   const bodyRef = useRef<HTMLTextAreaElement>(null)
   const [focusedField, setFocusedField] = useState<'subject' | 'body'>('body')
   const inCls = 'w-full px-3 py-2 rounded-lg border border-gray-200 text-sm'
+
+  // Preview cu date reale: dropdown lead + interes (default = ultimul folosit din localStorage)
+  const [leads, setLeads] = useState<any[]>([])
+  const [interese, setInterese] = useState<any[]>([])
+  const [leadId, setLeadId] = useState('')
+  const [interestId, setInterestId] = useState('')
+  useEffect(() => { fetch('/api/mail-leads').then(r => r.json()).then(j => setLeads(j.leads || [])) }, [])
+  useEffect(() => { fetch('/api/interese').then(r => r.json()).then(j => setInterese(j.interese || [])) }, [])
+  const lsGet = (k: string) => { try { return localStorage.getItem(k) || '' } catch { return '' } }
+  const lsSet = (k: string, v: string) => { try { localStorage.setItem(k, v) } catch {} }
+  useEffect(() => {
+    if (leadId || !leads.length) return
+    const pick = [lsGet('tpl_prev_lead'), previewCtx.preferLeadId].find(id => id && leads.some(l => l.id === id))
+    setLeadId(pick || leads[0].id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [leads])
+  useEffect(() => {
+    if (interestId || !interese.length) return
+    const pick = [lsGet('tpl_prev_interest'), previewCtx.preferInterestId].find(id => id && interese.some(i => i.id === id))
+    setInterestId(pick || interese[0].id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [interese])
+  const pickLead = (id: string) => { setLeadId(id); lsSet('tpl_prev_lead', id) }
+  const pickInterest = (id: string) => { setInterestId(id); lsSet('tpl_prev_interest', id) }
+
+  const lead = useMemo(() => leads.find(l => l.id === leadId) || null, [leads, leadId])
+  const interest = useMemo(() => interese.find(i => i.id === interestId) || null, [interese, interestId])
+
+  const sampleVals = useMemo(() => {
+    const m: Record<string, string> = {}
+    const s = interest?.source_id ? previewCtx.sessions.find(x => x.id === interest.source_id) : null
+    if (s) {
+      const instr = [s.instructor_id, s.instructor_id_2, s.instructor_id_3].filter(Boolean).map((id: string) => previewCtx.instructorMap[id]).filter(Boolean).map((n: string) => ({ full_name: n }))
+      Object.assign(m, mailVarValues({ origin: typeof window !== 'undefined' ? window.location.origin : undefined, sess: s, contacts: previewCtx.contacts, instructors: instr, setsailInfo: previewCtx.setsailInfo }))
+    }
+    if (lead) { m.prenume = lead.prenume || ''; m.nume = lead.nume || ''; m.email = lead.email || '' }
+    for (const f of (interest?.fields || []) as InterestField[]) if (f.value) m[f.key] = f.value
+    return m
+  }, [interest, lead, previewCtx])
+
+  const variables = useMemo(() => {
+    const seen = new Set<string>(); const out: { key: string; label: string; sample: string }[] = []
+    const push = (k: string, l: string) => { if (k && !seen.has(k)) { seen.add(k); out.push({ key: k, label: l, sample: String(sampleVals[k] || '') }) } }
+    push('prenume', 'Prenume client'); push('nume', 'Nume client')
+    for (const v of MAIL_VARIABLES_FLAT) push(v.key, v.label)
+    for (const f of (interest?.fields || []) as InterestField[]) push(f.key, f.label || f.key)
+    return out
+  }, [sampleVals, interest])
 
   function insertVar(key: string) {
     const token = `{{${key}}}`
@@ -1153,11 +1199,25 @@ function NewTemplateModal({ initial, variables, sampleVals, onClose, onSaved }: 
               <span className="text-gray-400">{showPreview ? 'Ascunde' : 'Arată'}</span>
             </button>
             {showPreview && (
-              <div className="px-3 pb-3 space-y-1">
-                <div className="text-[11px] text-gray-400">Subiect</div>
-                <div className="text-xs text-gray-800 bg-white rounded border border-gray-100 px-2 py-1">{apply(subject) || '—'}</div>
-                <div className="text-[11px] text-gray-400 mt-1">Mesaj</div>
-                <div className="text-xs text-gray-800 bg-white rounded border border-gray-100 px-2 py-1 max-h-40 overflow-y-auto whitespace-pre-wrap">{apply(body) || '—'}</div>
+              <div className="px-3 pb-3 space-y-2">
+                <div className="grid grid-cols-2 gap-2">
+                  <label className="block"><span className="block text-[11px] text-gray-400 mb-0.5">Lead</span>
+                    <select value={leadId} onChange={e => pickLead(e.target.value)} className="w-full px-2 py-1 rounded border border-gray-200 text-xs bg-white cursor-pointer">
+                      {leads.length === 0 && <option value="">(niciun lead)</option>}
+                      {leads.map(l => <option key={l.id} value={l.id}>{[l.nume, l.prenume].filter(Boolean).join(' ') || l.email || '(fără nume)'}</option>)}
+                    </select></label>
+                  <label className="block"><span className="block text-[11px] text-gray-400 mb-0.5">Interes</span>
+                    <select value={interestId} onChange={e => pickInterest(e.target.value)} className="w-full px-2 py-1 rounded border border-gray-200 text-xs bg-white cursor-pointer">
+                      {interese.length === 0 && <option value="">(niciun interes)</option>}
+                      {interese.map(i => <option key={i.id} value={i.id}>{genreLabel(i.tip_program)} · {i.nume || '(fără titlu)'}</option>)}
+                    </select></label>
+                </div>
+                <div>
+                  <div className="text-[11px] text-gray-400">Subiect</div>
+                  <div className="text-xs text-gray-800 bg-white rounded border border-gray-100 px-2 py-1">{apply(subject) || '—'}</div>
+                  <div className="text-[11px] text-gray-400 mt-1">Mesaj</div>
+                  <div className="text-xs text-gray-800 bg-white rounded border border-gray-100 px-2 py-1 max-h-40 overflow-y-auto whitespace-pre-wrap">{apply(body) || '—'}</div>
+                </div>
               </div>
             )}
           </div>
@@ -1344,7 +1404,9 @@ const SOURCE_BADGE: Record<string, { label: string; cls: string }> = {
   manual: { label: 'manual', cls: 'bg-gray-50 text-gray-600 border-gray-200' },
 }
 
-function LeadTemplatesSection({ mailTemplates }: { mailTemplates: any[] }) {
+function LeadTemplatesSection({ mailTemplates, sessions, contacts, setsailInfo, instructorMap }: {
+  mailTemplates: any[]; sessions: any[]; contacts: any[]; setsailInfo: Record<string, string>; instructorMap: Record<string, string>
+}) {
   const [items, setItems] = useState<any[]>([])
   const [gmail, setGmail] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -1353,7 +1415,6 @@ function LeadTemplatesSection({ mailTemplates }: { mailTemplates: any[] }) {
   const [pickGm, setPickGm] = useState('')
   const [busy, setBusy] = useState(false)
   const [editTpl, setEditTpl] = useState<any | null>(null)
-  const sectionVars = useMemo(() => MAIL_VARIABLES_FLAT.map(v => ({ key: v.key, label: v.label, sample: '' })), [])
 
   async function load() {
     const r = await fetch('/api/lead-templates'); const j = await r.json()
@@ -1441,8 +1502,7 @@ function LeadTemplatesSection({ mailTemplates }: { mailTemplates: any[] }) {
       {editTpl && (
         <NewTemplateModal
           initial={{ id: editTpl.id, label: editTpl.label, categorie: editTpl.categorie, subject: editTpl.subject || '', body: editTpl.body_html || editTpl.body_text || '' }}
-          variables={sectionVars}
-          sampleVals={{}}
+          previewCtx={{ sessions, contacts, setsailInfo, instructorMap }}
           onClose={() => setEditTpl(null)}
           onSaved={async () => { await load(); setEditTpl(null) }}
         />
