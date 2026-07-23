@@ -517,7 +517,7 @@ function LeadsTab() {
   const [raw, setRaw] = useState('')
   const [extracting, setExtracting] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [form, setForm] = useState({ nume: '', prenume: '', email: '', telefon: '', observatii: '' })
+  const [form, setForm] = useState({ nume: '', prenume: '', email: '', telefon: '', rezumat: '', observatii: '' })
   const [extra, setExtra] = useState<Record<string, any>>({})
   const [leads, setLeads] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -535,8 +535,10 @@ function LeadsTab() {
       const r = await fetch('/api/extract-lead', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: raw }) })
       const j = await r.json()
       if (!r.ok) throw new Error(j.error || 'eroare')
-      setForm({ nume: j.nume || '', prenume: j.prenume || '', email: j.email || '', telefon: j.telefon || '', observatii: form.observatii })
-      setExtra(j.extra || {})
+      const ex = j.extra || {}
+      const rez = Object.entries(ex).map(([k, v]) => `${k}: ${v}`).join(' · ')
+      setForm({ nume: j.nume || '', prenume: j.prenume || '', email: j.email || '', telefon: j.telefon || '', rezumat: rez, observatii: form.observatii })
+      setExtra(ex)
     } catch (e: any) { alert('Extragere eșuată: ' + e.message) }
     setExtracting(false)
   }
@@ -544,16 +546,15 @@ function LeadsTab() {
   async function addLead() {
     if (!form.nume && !form.prenume && !form.email) { alert('Completează cel puțin numele sau emailul.'); return }
     setSaving(true)
-    const obs = [form.observatii, Object.keys(extra).length ? 'Extra: ' + JSON.stringify(extra) : ''].filter(Boolean).join(' | ')
     const r = await fetch('/api/mail-leads', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...form, observatii: obs, extra, raw_email: raw }),
+      body: JSON.stringify({ ...form, extra, raw_email: raw }),
     })
     const j = await r.json()
     setSaving(false)
     if (!r.ok) { alert('Salvare eșuată: ' + (j.error || '')); return }
     setLeads(l => [j.lead, ...l])
-    setForm({ nume: '', prenume: '', email: '', telefon: '', observatii: '' }); setExtra({}); setRaw('')
+    setForm({ nume: '', prenume: '', email: '', telefon: '', rezumat: '', observatii: '' }); setExtra({}); setRaw('')
   }
 
   async function del(id: string) {
@@ -596,11 +597,11 @@ function LeadsTab() {
             <label className="block"><span className="block text-xs text-gray-500 mb-1">Telefon</span>
               <input className={inCls} value={form.telefon} onChange={e => setForm(f => ({ ...f, telefon: e.target.value }))} /></label>
           </div>
+          <label className="block mt-3"><span className="block text-xs text-gray-500 mb-1">Rezumat</span>
+            <textarea rows={2} className={inCls} value={form.rezumat} onChange={e => setForm(f => ({ ...f, rezumat: e.target.value }))}
+              placeholder="Rezumatul datelor extrase (curs interesat, sesiune, status…)" /></label>
           <label className="block mt-3"><span className="block text-xs text-gray-500 mb-1">Observații</span>
             <input className={inCls} value={form.observatii} onChange={e => setForm(f => ({ ...f, observatii: e.target.value }))} /></label>
-          {Object.keys(extra).length > 0 && (
-            <p className="text-xs text-gray-400 mt-2">Alte date extrase: {Object.entries(extra).map(([k, v]) => `${k}: ${v}`).join(' · ')}</p>
-          )}
           <button onClick={addLead} disabled={saving}
             className="mt-3 px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50" style={{ background: '#0a1628' }}>
             {saving ? 'Se adaugă…' : '+ Adaugă lead'}

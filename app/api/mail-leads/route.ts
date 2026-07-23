@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
   const b = await req.json().catch(() => ({}))
   const { data, error } = await svc().from('mail_leads').insert({
     nume: clean(b.nume), prenume: clean(b.prenume), email: clean(b.email), telefon: clean(b.telefon),
-    observatii: clean(b.observatii), sursa: clean(b.sursa) || 'import mail',
+    rezumat: clean(b.rezumat), observatii: clean(b.observatii), sursa: clean(b.sursa) || 'import mail',
     extra: b.extra && typeof b.extra === 'object' ? b.extra : {},
     raw_email: clean(b.raw_email) || null,
   }).select().single()
@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ lead: data })
 }
 
-const EDITABLE = new Set(['nume', 'prenume', 'email', 'telefon', 'observatii', 'status'])
+const EDITABLE = new Set(['nume', 'prenume', 'email', 'telefon', 'rezumat', 'observatii', 'status'])
 export async function PATCH(req: NextRequest) {
   const b = await req.json().catch(() => ({}))
   if (!b?.id) return NextResponse.json({ error: 'no id' }, { status: 400 })
