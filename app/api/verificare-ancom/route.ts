@@ -186,12 +186,13 @@ export async function POST(req: NextRequest) {
       const name = slug(s.full_name)
       const c = String(s.class_caa || '').toLowerCase()
       const isPrelungire = c.includes('prelungire')
+      const grup = isPrelungire ? 'prelungire' : 'obtinere' // folder mare per tip
 
       const cerere = await cererePdf(s, { isPrelungire, sessionDate, cerereDate })
-      zip.file(`${name}/${name} - Cerere ${isPrelungire ? 'prelungire' : 'obtinere'}.pdf`, cerere)
+      zip.file(`${grup}/${name}/${name} - Cerere ${grup}.pdf`, cerere)
 
       const ci = await ciPdf(s)
-      if (ci) zip.file(`${name}/${name} - CI.pdf`, ci)
+      if (ci) zip.file(`${grup}/${name}/${name} - CI.pdf`, ci)
       else missing.push(s.full_name)
     }
 
