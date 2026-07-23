@@ -87,6 +87,8 @@ export default function GmailTemplatesPage() {
   const [draft, setDraft] = useState<Partial<Template>>({})
   const [savingId, setSavingId] = useState<string | null>(null)
   const [tab, setTab] = useState<'templates' | 'leads'>('templates')
+  useEffect(() => { try { const t = localStorage.getItem('gmail_tab'); if (t === 'leads' || t === 'templates') setTab(t) } catch {} }, [])
+  const changeTab = (k: 'templates' | 'leads') => { setTab(k); try { localStorage.setItem('gmail_tab', k) } catch {} }
 
   async function load() {
     setLoading(true)
@@ -200,7 +202,7 @@ export default function GmailTemplatesPage() {
       {/* Tabs */}
       <div className="flex gap-1 border-b border-gray-200 mb-4">
         {([['templates', 'Template-uri'], ['leads', 'Import mail → Leaduri']] as const).map(([k, lbl]) => (
-          <button key={k} onClick={() => setTab(k)}
+          <button key={k} onClick={() => changeTab(k)}
             className={`px-4 py-2 text-sm font-medium -mb-px border-b-2 ${tab === k ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
             {lbl}
           </button>
@@ -699,7 +701,7 @@ function LeadsTab() {
           contacts={mailContacts}
           setsailInfo={mailSetsailInfo}
           instructorMap={instructorMap}
-          onClose={() => setMailLead(null)}
+          onClose={() => { setMailLead(null); try { window.location.reload() } catch {} }}
         />
       )}
       {editLead && (
