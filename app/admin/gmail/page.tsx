@@ -1360,7 +1360,8 @@ function InterestCard({ interes, variabile, onSave, onDelete }: { interes: any; 
   const toggleVis = (i: number) => saveFields(fields.map((f, idx) => idx === i ? { ...f, visible: !f.visible } : f))
   const setVal = (i: number, v: string) => setFields(prev => prev.map((f, idx) => idx === i ? { ...f, value: v } : f))
   const setLabel = (i: number, v: string) => setFields(prev => prev.map((f, idx) => idx === i ? { ...f, label: v } : f))
-  const addCustom = () => saveFields([...fields, { key: 'custom_' + Date.now(), label: 'Câmp nou', value: '', visible: true, custom: true }])
+  const setKey = (i: number, v: string) => setFields(prev => prev.map((f, idx) => idx === i ? { ...f, key: v.trim().toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '') } : f))
+  const addCustom = () => saveFields([...fields, { key: '', label: 'Câmp nou', value: '', visible: true, custom: true }])
   const removeField = (i: number) => saveFields(fields.filter((_, idx) => idx !== i))
   const addFromVar = (v: any) => {
     const key = String(v.formula || '').replace(/[{}\s]/g, '') || String(v.cod || '').trim()
@@ -1387,15 +1388,19 @@ function InterestCard({ interes, variabile, onSave, onDelete }: { interes: any; 
       {openCard && (<>
       <div className="space-y-1">
         {fields.map((f, i) => (
-          <div key={f.key} className={`flex items-center gap-2 ${f.visible ? '' : 'opacity-50'}`}>
+          <div key={i} className={`flex items-center gap-2 ${f.visible ? '' : 'opacity-50'}`}>
             <button onClick={() => toggleVis(i)} title={f.visible ? 'Ascunde câmpul' : 'Arată câmpul'}
               className={`p-1 rounded ${f.visible ? 'text-indigo-600' : 'text-gray-400'} hover:bg-white`}>
               {f.visible ? <Eye size={14} /> : <EyeOff size={14} />}
             </button>
             {f.custom
               ? <input value={f.label} onChange={e => setLabel(i, e.target.value)} onBlur={() => onSave({ fields })}
-                  className="w-40 shrink-0 px-2 py-1 rounded border border-gray-200 text-xs bg-white" placeholder="Nume câmp" />
-              : <span className="w-40 shrink-0 text-xs text-gray-500" title={`{{${f.key}}}`}>{f.label}</span>}
+                  className="w-28 shrink-0 px-2 py-1 rounded border border-gray-200 text-xs bg-white" placeholder="Nume câmp" />
+              : <span className="w-28 shrink-0 text-xs text-gray-500 truncate" title={f.label}>{f.label}</span>}
+            {f.custom
+              ? <input value={f.key} onChange={e => setKey(i, e.target.value)} onBlur={() => onSave({ fields })}
+                  className="w-28 shrink-0 px-2 py-1 rounded border border-gray-200 text-[11px] font-mono bg-white" placeholder="cheie" title="Cheia formulei: devine {{cheie}} în template" />
+              : <span className="w-28 shrink-0 text-[10px] font-mono text-gray-400 truncate" title={`{{${f.key}}}`}>{`{{${f.key}}}`}</span>}
             <input value={f.value} onChange={e => setVal(i, e.target.value)} onBlur={() => onSave({ fields })}
               className="flex-1 px-2 py-1 rounded border border-gray-200 text-xs bg-white" placeholder="valoare…" />
             {f.custom && <button onClick={() => removeField(i)} className="p-1 text-gray-300 hover:text-red-500"><X size={13} /></button>}
