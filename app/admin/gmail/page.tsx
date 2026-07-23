@@ -17,7 +17,7 @@ import {
 } from 'lucide-react'
 import GoogleGIcon from '@/components/GoogleGIcon'
 import { supabase } from '@/lib/supabase'
-import { mailVarValues } from '@/lib/mail-template'
+import { mailVarValues, extractVars, MAIL_VARIABLES_FLAT } from '@/lib/mail-template'
 import { buildFields, INTEREST_GENRES, genreLabel, type Genre, type InterestField } from '@/lib/interese-catalog'
 import { Plus, Eye, EyeOff } from 'lucide-react'
 
@@ -601,6 +601,7 @@ function LeadsTab() {
   return (
     <div className="space-y-6">
       <IntereseSection sessions={mailSessions} contacts={mailContacts} setsailInfo={mailSetsailInfo} instructorMap={instructorMap} />
+      <VariabileSection />
       <div className="grid lg:grid-cols-2 gap-4">
         {/* Import */}
         <div className="bg-white rounded-xl border border-gray-200 p-4">
@@ -704,17 +705,21 @@ function LeadMailModal({ lead, templates, sessions, contacts, setsailInfo, instr
   setsailInfo: Record<string, string>; instructorMap: Record<string, string>; onClose: () => void
 }) {
   const [interese, setInterese] = useState<any[]>([])
+  const [variabile, setVariabile] = useState<any[]>([])
   const [interestId, setInterestId] = useState('')
   const [to, setTo] = useState(lead.email || '')
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
   const [tplId, setTplId] = useState('')
   const [copied, setCopied] = useState<string | null>(null)
+  const [values, setValues] = useState<Record<string, string>>({}) // valori pt. câmpurile cerute de template
   useEffect(() => { fetch('/api/interese').then(r => r.json()).then(j => setInterese(j.interese || [])) }, [])
+  useEffect(() => { fetch('/api/variabile').then(r => r.json()).then(j => setVariabile(j.variabile || [])) }, [])
   useEffect(() => { if (!interestId && interese.length) setInterestId(interese[0].id) }, [interese, interestId])
 
   const interest = useMemo(() => interese.find(i => i.id === interestId) || null, [interese, interestId])
   const sourceSession = useMemo(() => (interest?.source_id ? sessions.find(s => s.id === interest.source_id) || null : null), [interest, sessions])
+  const tpl = useMemo(() => templates.find(t => t.id === tplId) || null, [templates, tplId])
 
   // Valorile de bază din sesiunea-sursă (acoperă toate variabilele {{...}} din template)
   const baseVals = useMemo(() => {
@@ -724,25 +729,59 @@ function LeadMailModal({ lead, templates, sessions, contacts, setsailInfo, instr
     return mailVarValues({ origin: typeof window !== 'undefined' ? window.location.origin : undefined, sess: sourceSession, contacts, instructors: instr, setsailInfo })
   }, [sourceSession, contacts, instructorMap, setsailInfo])
 
-  // Peste bază punem valorile (nevide) editate în interes → editările curatate câștigă
-  const mergedVals = useMemo(() => {
-    const m: Record<string, string> = { ...baseVals }
+  // Denumirile prietenoase din tabelul de variabile (după cheia formulei)
+  const labelFor = (key: string) => {
+    const v = variabile.find(x => String(x.formula || '').replace(/[{}\s]/g, '') === key)
+    return v?.denumire || MAIL_VARIABLES_FLAT.find(m => m.key === key)?.label || key
+  }
+  const interestVal = (key: string) => ((interest?.fields || []).find((f: any) => f.key === key)?.value) || ''
+
+  // Câmpurile cerute de template-ul selectat (formulele {{...}} unice)
+  const required = useMemo(() => (tpl ? extractVars(`${tpl.subject || ''} ${tpl.body_html || tpl.body_text || ''}`) : []), [tpl])
+
+  // Seed valorile câmpurilor cerute la schimbarea interesului sau a template-ului
+  useEffect(() => {
+    const seed: Record<string, string> = {}
+    for (const k of required) seed[k] = interestVal(k) || baseVals[k] || ''
+    setValues(seed)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [interestId, tplId, required.join('|'), JSON.stringify(baseVals)])
+
+  const interestFieldMap = useMemo(() => {
+    const m: Record<string, string> = {}
     for (const f of (interest?.fields || []) as InterestField[]) if (f.value) m[f.key] = f.value
     return m
-  }, [baseVals, interest])
+  }, [interest])
+  const finalVals = useMemo(() => ({ ...baseVals, ...interestFieldMap, ...values }), [baseVals, interestFieldMap, values])
 
   const applyVals = (text: string, vals: Record<string, string>) => {
     let r = text || ''
     for (const [k, v] of Object.entries(vals)) r = r.split('{{' + k + '}}').join(v)
     return r
   }
+  const missing = required.filter(k => !String(values[k] || '').trim())
 
   function genereaza() {
-    const tpl = templates.find(t => t.id === tplId)
     if (!tpl) { alert('Selectează întâi un template.'); return }
-    if (!interest) { alert('Selectează un interes.'); return }
-    setSubject(applyVals(tpl.subject || '', mergedVals))
-    setBody(applyVals(tpl.body_html || tpl.body_text || '', mergedVals))
+    setSubject(applyVals(tpl.subject || '', finalVals))
+    setBody(applyVals(tpl.body_html || tpl.body_text || '', finalVals))
+  }
+
+  // Salvează valoarea unui câmp în interes (persistă pt. viitor)
+  async function persist(key: string) {
+    if (!interest) return
+    const val = String(values[key] || '')
+    const fields = [...((interest.fields || []) as InterestField[])]
+    const idx = fields.findIndex(f => f.key === key)
+    if (idx >= 0) { if (fields[idx].value === val) return; fields[idx] = { ...fields[idx], value: val } }
+    else fields.push({ key, label: labelFor(key), value: val, visible: true, custom: false })
+    setInterese(prev => prev.map(i => i.id === interest.id ? { ...i, fields } : i))
+    await fetch('/api/interese', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: interest.id, fields }) })
+  }
+
+  function guardSend(e: any) {
+    if (!subject.trim() && !body.trim()) { e.preventDefault(); alert('Generează întâi mesajul din template.'); return }
+    if (missing.length) { e.preventDefault(); alert('Completează câmpurile obligatorii înainte de trimitere:\n- ' + missing.map(labelFor).join('\n- ')); return }
   }
 
   const visibleFields = ((interest?.fields || []) as InterestField[]).filter(f => f.visible && f.value)
@@ -779,7 +818,7 @@ function LeadMailModal({ lead, templates, sessions, contacts, setsailInfo, instr
                 {interese.map(i => <option key={i.id} value={i.id}>{genreLabel(i.tip_program)} · {i.nume || '(fără titlu)'}</option>)}
               </select>
             )}
-            {visibleFields.length > 0 && (
+            {!tpl && visibleFields.length > 0 && (
               <div className="mt-3 grid sm:grid-cols-2 gap-x-4 gap-y-1">
                 {visibleFields.map(f => (
                   <div key={f.key} className="flex items-start justify-between gap-2 text-xs py-0.5 border-b border-indigo-100/70">
@@ -789,6 +828,7 @@ function LeadMailModal({ lead, templates, sessions, contacts, setsailInfo, instr
                 ))}
               </div>
             )}
+            {!tpl && <p className="text-[11px] text-gray-400 mt-2">Alege un template mai jos ca să vezi câmpurile necesare.</p>}
           </div>
 
           {/* Selector template + generează */}
@@ -808,6 +848,38 @@ function LeadMailModal({ lead, templates, sessions, contacts, setsailInfo, instr
               <Sparkles size={14} /> Generează template
             </button>
           </div>
+
+          {/* Câmpuri necesare pentru template (obligatorii înainte de trimitere) */}
+          {tpl && (
+            <div className={`rounded-xl border p-4 ${missing.length ? 'border-red-200 bg-red-50/40' : 'border-emerald-200 bg-emerald-50/30'}`}>
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="font-semibold text-sm text-gray-800">🧩 Câmpuri necesare pentru „{tpl.label}"</h4>
+                <span className={`text-xs font-medium ${missing.length ? 'text-red-600' : 'text-emerald-600'}`}>
+                  {missing.length ? `${missing.length} de completat` : 'Complet ✓'}
+                </span>
+              </div>
+              {required.length === 0 ? (
+                <p className="text-xs text-gray-500 italic">Acest template nu conține variabile.</p>
+              ) : (
+                <div className="space-y-1.5">
+                  {required.map(k => {
+                    const empty = !String(values[k] || '').trim()
+                    return (
+                      <div key={k} className="flex items-center gap-2">
+                        <span className="w-44 shrink-0 text-xs text-gray-600" title={`{{${k}}}`}>
+                          {labelFor(k)}{empty && <span className="text-red-500"> *</span>}
+                        </span>
+                        <input value={values[k] || ''} onChange={e => setValues(v => ({ ...v, [k]: e.target.value }))} onBlur={() => persist(k)}
+                          placeholder={`{{${k}}}`}
+                          className={`flex-1 px-2 py-1 rounded border text-xs bg-white ${empty ? 'border-red-300 bg-red-50' : 'border-gray-200'}`} />
+                      </div>
+                    )
+                  })}
+                  <p className="text-[11px] text-gray-400 pt-1">Valorile completate se salvează în interes (pentru viitor). Câmpurile marcate cu <span className="text-red-500">*</span> sunt obligatorii.</p>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Către */}
           <label className="block">
@@ -838,11 +910,11 @@ function LeadMailModal({ lead, templates, sessions, contacts, setsailInfo, instr
           {/* Butoane trimitere */}
           <div className="flex flex-col sm:flex-row gap-2">
             <a href={gmailUrl} target="_blank" rel="noopener noreferrer"
-              onClick={() => { if (isHtml) copy(body, 'body') }}
+              onClick={e => { guardSend(e); if (!e.defaultPrevented && isHtml) copy(body, 'body') }}
               className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium text-white" style={{ background: '#0a1628' }}>
               <GoogleGIcon size={15} /> {isHtml ? 'Gmail (lipește HTML)' : 'Trimite prin Gmail'}
             </a>
-            <a href={mailtoUrl}
+            <a href={mailtoUrl} onClick={guardSend}
               className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium text-white" style={{ background: '#0f766e' }}>
               <Smartphone size={15} /> Android (mobil)
             </a>
@@ -1008,6 +1080,82 @@ function InterestCard({ interes, onSave, onDelete }: { interes: any; onSave: (pa
         ))}
       </div>
       <button onClick={addCustom} className="mt-2 flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800"><Plus size={12} /> Adaugă câmp custom</button>
+    </div>
+  )
+}
+
+// ── Secțiune „Variabile": cod intern · denumire proprie · formulă {{...}} ──
+function VariabileSection() {
+  const [rows, setRows] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [open, setOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
+
+  async function load() {
+    const r = await fetch('/api/variabile'); const j = await r.json()
+    setRows(j.variabile || []); setLoading(false)
+  }
+  useEffect(() => { load() }, [])
+
+  async function addRow() {
+    const r = await fetch('/api/variabile', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cod: '', denumire: '', formula: '' }) })
+    const j = await r.json(); if (r.ok) setRows(x => [...x, j.variabila])
+  }
+  async function save(id: string, patch: any) {
+    setRows(prev => prev.map(r => r.id === id ? { ...r, ...patch } : r))
+    await fetch('/api/variabile', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, ...patch }) })
+  }
+  async function del(id: string) {
+    setRows(prev => prev.filter(r => r.id !== id))
+    await fetch('/api/variabile', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
+  }
+  async function importStandard() {
+    setBusy(true)
+    const bulk = MAIL_VARIABLES_FLAT.map(v => ({ cod: v.key, denumire: v.label, formula: `{{${v.key}}}` }))
+    const r = await fetch('/api/variabile', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ bulk }) })
+    const j = await r.json(); setBusy(false)
+    if (r.ok) { await load(); alert(`Importate ${j.inserted} variabile noi din catalog.`) } else alert(j.error || 'Eroare')
+  }
+
+  const cell = 'px-2 py-1 rounded border border-gray-200 text-xs bg-white w-full'
+  return (
+    <div className="bg-white rounded-xl border border-gray-200">
+      <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+        <button onClick={() => setOpen(o => !o)} className="flex items-center gap-2 font-semibold text-gray-900">
+          <ChevronDown size={16} className={`text-gray-400 transition-transform ${open ? '' : '-rotate-90'}`} />
+          🔤 Variabile <span className="text-xs font-normal text-gray-400">({rows.length})</span>
+        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={importStandard} disabled={busy} className="text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 hover:bg-gray-50 disabled:opacity-50">Importă din catalog</button>
+          <button onClick={addRow} className="flex items-center gap-1 text-xs px-2.5 py-1.5 rounded-lg text-white" style={{ background: '#1d4ed8' }}><Plus size={13} /> Rând</button>
+        </div>
+      </div>
+      {open && (
+        <div className="p-4">
+          <p className="text-xs text-gray-400 mb-2">Mapare între formula din template și o denumire prietenoasă. „Cod intern" e opțional (referință proprie).</p>
+          {loading ? <div className="text-center text-gray-400 py-3 text-sm">Se încarcă…</div>
+            : rows.length === 0 ? <div className="text-center text-gray-400 py-3 text-sm">Nicio variabilă. Apasă „Importă din catalog" sau „Rând".</div>
+              : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-xs">
+                    <thead><tr className="text-left text-gray-400">
+                      <th className="px-2 py-1 font-medium">Cod intern</th><th className="px-2 py-1 font-medium">Denumire</th><th className="px-2 py-1 font-medium">Formulă</th><th></th>
+                    </tr></thead>
+                    <tbody>
+                      {rows.map(r => (
+                        <tr key={r.id}>
+                          <td className="py-1 pr-2 w-40"><input className={cell} defaultValue={r.cod} onBlur={e => e.target.value !== r.cod && save(r.id, { cod: e.target.value })} placeholder="data_pract" /></td>
+                          <td className="py-1 pr-2"><input className={cell} defaultValue={r.denumire} onBlur={e => e.target.value !== r.denumire && save(r.id, { denumire: e.target.value })} placeholder="Zi început full" /></td>
+                          <td className="py-1 pr-2 w-56"><input className={`${cell} font-mono`} defaultValue={r.formula} onBlur={e => e.target.value !== r.formula && save(r.id, { formula: e.target.value })} placeholder="{{zz_llll_data_practica}}" /></td>
+                          <td className="py-1 w-8 text-right"><button onClick={() => del(r.id)} className="p-1 text-gray-300 hover:text-red-500"><Trash2 size={13} /></button></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+        </div>
+      )}
     </div>
   )
 }

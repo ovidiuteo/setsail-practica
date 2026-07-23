@@ -133,6 +133,19 @@ export function mailVarValues(ctx: MailVarCtx): Record<string, string> {
   }
 }
 
+// Extrage cheile interne ale formulelor {{cheie}} dintr-un text (unic, în ordinea apariției)
+export function extractVars(text: string): string[] {
+  const out: string[] = []
+  const seen = new Set<string>()
+  const re = /\{\{\s*([a-zA-Z0-9_]+)\s*\}\}/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(text || ''))) {
+    const k = m[1]
+    if (!seen.has(k)) { seen.add(k); out.push(k) }
+  }
+  return out
+}
+
 export function applyMailTemplate(text: string, ctx: MailVarCtx): string {
   if (!text) return ''
   const vals = mailVarValues(ctx)
