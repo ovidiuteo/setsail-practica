@@ -80,6 +80,7 @@ export default function GmailTemplatesPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [draft, setDraft] = useState<Partial<Template>>({})
   const [savingId, setSavingId] = useState<string | null>(null)
+  const [tab, setTab] = useState<'templates' | 'leads'>('templates')
 
   async function load() {
     setLoading(true)
@@ -190,6 +191,19 @@ export default function GmailTemplatesPage() {
         </button>
       </div>
 
+      {/* Tabs */}
+      <div className="flex gap-1 border-b border-gray-200 mb-4">
+        {([['templates', 'Template-uri'], ['leads', 'Import mail → Leaduri']] as const).map(([k, lbl]) => (
+          <button key={k} onClick={() => setTab(k)}
+            className={`px-4 py-2 text-sm font-medium -mb-px border-b-2 ${tab === k ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+            {lbl}
+          </button>
+        ))}
+      </div>
+
+      {tab === 'leads' && <LeadsTab />}
+
+      {tab === 'templates' && (<>
       {/* Stats */}
       <div className="grid grid-cols-4 gap-3 mb-5">
         <StatCard label="Total" value={stats.total} color="#374151" />
@@ -494,6 +508,148 @@ export default function GmailTemplatesPage() {
           })}
         </div>
       )}
+      </>)}
+    </div>
+  )
+}
+
+function LeadsTab() {
+  const [raw, setRaw] = useState('')
+  const [extracting, setExtracting] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [form, setForm] = useState({ nume: '', prenume: '', email: '', telefon: '', observatii: '' })
+  const [extra, setExtra] = useState<Record<string, any>>({})
+  const [leads, setLeads] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+
+  async function load() {
+    const r = await fetch('/api/mail-leads'); const j = await r.json()
+    setLeads(j.leads || []); setLoading(false)
+  }
+  useEffect(() => { load() }, [])
+
+  async function extract() {
+    if (!raw.trim()) return
+    setExtracting(true)
+    try {
+      const r = await fetch('/api/extract-lead', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text: raw }) })
+      const j = await r.json()
+      if (!r.ok) throw new Error(j.error || 'eroare')
+      setForm({ nume: j.nume || '', prenume: j.prenume || '', email: j.email || '', telefon: j.telefon || '', observatii: form.observatii })
+      setExtra(j.extra || {})
+    } catch (e: any) { alert('Extragere eșuată: ' + e.message) }
+    setExtracting(false)
+  }
+
+  async function addLead() {
+    if (!form.nume && !form.prenume && !form.email) { alert('Completează cel puțin numele sau emailul.'); return }
+    setSaving(true)
+    const obs = [form.observatii, Object.keys(extra).length ? 'Extra: ' + JSON.stringify(extra) : ''].filter(Boolean).join(' | ')
+    const r = await fetch('/api/mail-leads', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...form, observatii: obs, extra, raw_email: raw }),
+    })
+    const j = await r.json()
+    setSaving(false)
+    if (!r.ok) { alert('Salvare eșuată: ' + (j.error || '')); return }
+    setLeads(l => [j.lead, ...l])
+    setForm({ nume: '', prenume: '', email: '', telefon: '', observatii: '' }); setExtra({}); setRaw('')
+  }
+
+  async function del(id: string) {
+    if (!confirm('Ștergi lead-ul?')) return
+    await fetch('/api/mail-leads', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
+    setLeads(l => l.filter(x => x.id !== id))
+  }
+  async function setStatus(id: string, status: string) {
+    await fetch('/api/mail-leads', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, status }) })
+    setLeads(l => l.map(x => x.id === id ? { ...x, status } : x))
+  }
+
+  const inCls = 'w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200'
+  const STATUS = ['nou', 'contactat', 'cursant', 'respins']
+  return (
+    <div className="space-y-6">
+      <div className="grid lg:grid-cols-2 gap-4">
+        {/* Import */}
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <h3 className="font-semibold text-gray-900 mb-1">Importă email brut</h3>
+          <p className="text-xs text-gray-400 mb-3">Copiază emailul din Gmail (inclusiv semnătura/contactul) și lipește aici. Extrag automat datele.</p>
+          <textarea value={raw} onChange={e => setRaw(e.target.value)} rows={8}
+            placeholder="Lipește aici emailul copiat din inbox..."
+            className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200 font-mono" />
+          <button onClick={extract} disabled={extracting || !raw.trim()}
+            className="mt-2 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white disabled:opacity-50" style={{ background: '#1d4ed8' }}>
+            <Sparkles size={14} /> {extracting ? 'Se extrage…' : 'Extrage date'}
+          </button>
+        </div>
+        {/* Form */}
+        <div className="bg-white rounded-xl border border-gray-200 p-4">
+          <h3 className="font-semibold text-gray-900 mb-3">Date lead (editabile)</h3>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block"><span className="block text-xs text-gray-500 mb-1">Nume</span>
+              <input className={inCls} value={form.nume} onChange={e => setForm(f => ({ ...f, nume: e.target.value.toUpperCase() }))} /></label>
+            <label className="block"><span className="block text-xs text-gray-500 mb-1">Prenume</span>
+              <input className={inCls} value={form.prenume} onChange={e => setForm(f => ({ ...f, prenume: e.target.value.toUpperCase() }))} /></label>
+            <label className="block"><span className="block text-xs text-gray-500 mb-1">Email</span>
+              <input className={inCls} value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} /></label>
+            <label className="block"><span className="block text-xs text-gray-500 mb-1">Telefon</span>
+              <input className={inCls} value={form.telefon} onChange={e => setForm(f => ({ ...f, telefon: e.target.value }))} /></label>
+          </div>
+          <label className="block mt-3"><span className="block text-xs text-gray-500 mb-1">Observații</span>
+            <input className={inCls} value={form.observatii} onChange={e => setForm(f => ({ ...f, observatii: e.target.value }))} /></label>
+          {Object.keys(extra).length > 0 && (
+            <p className="text-xs text-gray-400 mt-2">Alte date extrase: {Object.entries(extra).map(([k, v]) => `${k}: ${v}`).join(' · ')}</p>
+          )}
+          <button onClick={addLead} disabled={saving}
+            className="mt-3 px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50" style={{ background: '#0a1628' }}>
+            {saving ? 'Se adaugă…' : '+ Adaugă lead'}
+          </button>
+        </div>
+      </div>
+
+      {/* Leaduri */}
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+        <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+          <h3 className="font-semibold text-gray-900">Leaduri ({leads.length})</h3>
+          <button onClick={load} className="text-xs text-gray-500 hover:text-gray-700 flex items-center gap-1"><RefreshCw size={12} /> Reîncarcă</button>
+        </div>
+        {loading ? (
+          <div className="text-center text-gray-400 py-8 text-sm">Se încarcă…</div>
+        ) : leads.length === 0 ? (
+          <div className="text-center text-gray-400 py-8 text-sm">Niciun lead încă.</div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  <th className="px-4 py-2.5">Nume</th><th className="px-4 py-2.5">Prenume</th>
+                  <th className="px-4 py-2.5">Email</th><th className="px-4 py-2.5">Telefon</th>
+                  <th className="px-4 py-2.5">Status</th><th className="px-4 py-2.5">Data</th><th className="px-4 py-2.5"></th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-gray-50">
+                {leads.map(l => (
+                  <tr key={l.id} className="hover:bg-gray-50/60">
+                    <td className="px-4 py-2 text-gray-800">{l.nume || '—'}</td>
+                    <td className="px-4 py-2 text-gray-800">{l.prenume || '—'}</td>
+                    <td className="px-4 py-2 text-gray-600">{l.email || '—'}</td>
+                    <td className="px-4 py-2 text-gray-600">{l.telefon || '—'}</td>
+                    <td className="px-4 py-2">
+                      <select value={l.status} onChange={e => setStatus(l.id, e.target.value)}
+                        className="text-xs rounded-lg border border-gray-200 px-2 py-1 bg-white cursor-pointer">
+                        {STATUS.map(s => <option key={s} value={s}>{s}</option>)}
+                      </select>
+                    </td>
+                    <td className="px-4 py-2 text-gray-400 text-xs whitespace-nowrap">{l.created_at ? new Date(l.created_at).toLocaleDateString('ro-RO', { day: '2-digit', month: 'short' }) : ''}</td>
+                    <td className="px-4 py-2 text-right"><button onClick={() => del(l.id)} className="text-gray-300 hover:text-red-500"><Trash2 size={14} /></button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
