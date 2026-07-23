@@ -1243,6 +1243,8 @@ function IntereseSection({ sessions, contacts, setsailInfo, instructorMap }: {
   const [open, setOpen] = useState(false)
   const [picker, setPicker] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [variabile, setVariabile] = useState<any[]>([])
+  useEffect(() => { fetch('/api/variabile').then(r => r.json()).then(j => setVariabile(j.variabile || [])) }, [])
 
   useEffect(() => {
     fetch('/api/interese').then(r => r.json()).then(j => { setItems(j.interese || []); setLoading(false) })
@@ -1336,7 +1338,7 @@ function IntereseSection({ sessions, contacts, setsailInfo, instructorMap }: {
           {loading ? <div className="text-center text-gray-400 py-4 text-sm">Se încarcă…</div>
             : items.length === 0 ? <div className="text-center text-gray-400 py-4 text-sm">Niciun interes încă. Apasă „Creează interes".</div>
               : items.map(it => (
-                <InterestCard key={it.id} interes={it}
+                <InterestCard key={it.id} interes={it} variabile={variabile}
                   onSave={(patch: any) => saveInterest(it.id, patch)}
                   onDelete={() => removeInterest(it.id)} />
               ))}
@@ -1346,11 +1348,12 @@ function IntereseSection({ sessions, contacts, setsailInfo, instructorMap }: {
   )
 }
 
-function InterestCard({ interes, onSave, onDelete }: { interes: any; onSave: (patch: any) => void; onDelete: () => void }) {
+function InterestCard({ interes, variabile, onSave, onDelete }: { interes: any; variabile: any[]; onSave: (patch: any) => void; onDelete: () => void }) {
   const [nume, setNume] = useState(interes.nume || '')
   const [genre, setGenre] = useState<Genre>(interes.tip_program || 'curs')
   const [fields, setFields] = useState<InterestField[]>(Array.isArray(interes.fields) ? interes.fields : [])
   const [openCard, setOpenCard] = useState(false)
+  const [varPicker, setVarPicker] = useState(false)
 
   const saveFields = (nf: InterestField[]) => { setFields(nf); onSave({ fields: nf }) }
   const changeGenre = (g: Genre) => { setGenre(g); const nf = buildFields(g, {}, fields); setFields(nf); onSave({ tip_program: g, fields: nf }) }
@@ -1359,6 +1362,13 @@ function InterestCard({ interes, onSave, onDelete }: { interes: any; onSave: (pa
   const setLabel = (i: number, v: string) => setFields(prev => prev.map((f, idx) => idx === i ? { ...f, label: v } : f))
   const addCustom = () => saveFields([...fields, { key: 'custom_' + Date.now(), label: 'Câmp nou', value: '', visible: true, custom: true }])
   const removeField = (i: number) => saveFields(fields.filter((_, idx) => idx !== i))
+  const addFromVar = (v: any) => {
+    const key = String(v.formula || '').replace(/[{}\s]/g, '') || String(v.cod || '').trim()
+    if (!key) return
+    setVarPicker(false)
+    if (fields.some(f => f.key === key)) { alert('Câmpul există deja în interes.'); return }
+    saveFields([...fields, { key, label: v.denumire || v.cod || key, value: '', visible: true, custom: true }])
+  }
 
   return (
     <div className="rounded-xl border border-indigo-100 bg-indigo-50/30 p-3">
@@ -1392,7 +1402,29 @@ function InterestCard({ interes, onSave, onDelete }: { interes: any; onSave: (pa
           </div>
         ))}
       </div>
-      <button onClick={addCustom} className="mt-2 flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800"><Plus size={12} /> Adaugă câmp custom</button>
+      <div className="mt-2 flex items-center gap-3">
+        <button onClick={addCustom} className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800"><Plus size={12} /> Adaugă câmp custom</button>
+        <div className="relative">
+          <button onClick={() => setVarPicker(p => !p)} className="flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800"><Plus size={12} /> Importă din variabile</button>
+          {varPicker && (
+            <div className="absolute left-0 bottom-full mb-1 w-64 max-h-64 overflow-y-auto bg-white rounded-xl border border-gray-200 shadow-lg z-20 p-1">
+              {variabile.length === 0 && <div className="px-2 py-2 text-xs text-gray-400 italic">Nicio variabilă definită.</div>}
+              {variabile.map(v => {
+                const key = String(v.formula || '').replace(/[{}\s]/g, '') || String(v.cod || '')
+                const exists = fields.some(f => f.key === key)
+                return (
+                  <button key={v.id} onClick={() => addFromVar(v)} disabled={exists}
+                    className="w-full text-left px-2 py-1.5 rounded-lg text-xs hover:bg-indigo-50 disabled:opacity-40 disabled:hover:bg-transparent">
+                    <span className="font-medium">{v.denumire || v.cod || key}</span>
+                    <span className="text-gray-400 font-mono ml-1">{v.formula}</span>
+                    {exists && <span className="text-gray-400"> · există</span>}
+                  </button>
+                )
+              })}
+            </div>
+          )}
+        </div>
+      </div>
       </>)}
     </div>
   )
