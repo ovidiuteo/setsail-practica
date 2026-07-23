@@ -601,6 +601,7 @@ function LeadsTab() {
   const STATUS = ['nou', 'contactat', 'cursant', 'respins']
   return (
     <div className="space-y-6">
+      <LeadTemplatesSection mailTemplates={mailTemplates} />
       <IntereseSection sessions={mailSessions} contacts={mailContacts} setsailInfo={mailSetsailInfo} instructorMap={instructorMap} />
       <VariabileSection />
       <div className="grid lg:grid-cols-2 gap-4">
@@ -694,7 +695,6 @@ function LeadsTab() {
       {mailLead && (
         <LeadMailModal
           lead={mailLead}
-          templates={mailTemplates}
           sessions={mailSessions}
           contacts={mailContacts}
           setsailInfo={mailSetsailInfo}
@@ -768,8 +768,8 @@ function LeadEditModal({ lead, onClose, onSaved }: { lead: any; onClose: () => v
 }
 
 // ── Modal: trimite mail către lead, cu template + card „interese" (program/serie) ──
-function LeadMailModal({ lead, templates, sessions, contacts, setsailInfo, instructorMap, onClose }: {
-  lead: any; templates: any[]; sessions: any[]; contacts: any[]
+function LeadMailModal({ lead, sessions, contacts, setsailInfo, instructorMap, onClose }: {
+  lead: any; sessions: any[]; contacts: any[]
   setsailInfo: Record<string, string>; instructorMap: Record<string, string>; onClose: () => void
 }) {
   const [interese, setInterese] = useState<any[]>([])
@@ -781,13 +781,19 @@ function LeadMailModal({ lead, templates, sessions, contacts, setsailInfo, instr
   const [tplId, setTplId] = useState('')
   const [copied, setCopied] = useState<string | null>(null)
   const [values, setValues] = useState<Record<string, string>>({}) // valori pt. câmpurile cerute de template
+  const [leadTpls, setLeadTpls] = useState<any[]>([])
+  const [openInterest, setOpenInterest] = useState(false)   // rânduri collapse, default închise
+  const [openTpl, setOpenTpl] = useState(false)
+  const [showNewTpl, setShowNewTpl] = useState(false)
+  const refreshLeadTpls = () => fetch('/api/lead-templates').then(r => r.json()).then(j => setLeadTpls(j.templates || []))
   useEffect(() => { fetch('/api/interese').then(r => r.json()).then(j => setInterese(j.interese || [])) }, [])
   useEffect(() => { fetch('/api/variabile').then(r => r.json()).then(j => setVariabile(j.variabile || [])) }, [])
+  useEffect(() => { refreshLeadTpls() }, [])
   useEffect(() => { if (!interestId && interese.length) setInterestId(interese[0].id) }, [interese, interestId])
 
   const interest = useMemo(() => interese.find(i => i.id === interestId) || null, [interese, interestId])
   const sourceSession = useMemo(() => (interest?.source_id ? sessions.find(s => s.id === interest.source_id) || null : null), [interest, sessions])
-  const tpl = useMemo(() => templates.find(t => t.id === tplId) || null, [templates, tplId])
+  const tpl = useMemo(() => leadTpls.find(t => t.id === tplId) || null, [leadTpls, tplId])
 
   // Valorile de bază din sesiunea-sursă (acoperă toate variabilele {{...}} din template)
   const baseVals = useMemo(() => {
@@ -873,48 +879,61 @@ function LeadMailModal({ lead, templates, sessions, contacts, setsailInfo, instr
         </div>
 
         <div className="p-5 space-y-4">
-          {/* Card INTERESE (din catalogul salvat) */}
-          <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-4">
-            <div className="flex items-center justify-between mb-2">
-              <h4 className="font-semibold text-sm text-indigo-900">🎯 Interes (program / serie)</h4>
-            </div>
-            {interese.length === 0 ? (
-              <p className="text-xs text-gray-500 italic">Niciun interes salvat. Creează-l în secțiunea „Interese" de mai jos, apoi revino.</p>
-            ) : (
-              <select value={interestId} onChange={e => setInterestId(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white cursor-pointer">
-                {interese.map(i => <option key={i.id} value={i.id}>{genreLabel(i.tip_program)} · {i.nume || '(fără titlu)'}</option>)}
-              </select>
-            )}
-            {!tpl && visibleFields.length > 0 && (
-              <div className="mt-3 grid sm:grid-cols-2 gap-x-4 gap-y-1">
-                {visibleFields.map(f => (
-                  <div key={f.key} className="flex items-start justify-between gap-2 text-xs py-0.5 border-b border-indigo-100/70">
-                    <span className="text-gray-500 shrink-0" title={`{{${f.key}}}`}>{f.label}</span>
-                    <span className="text-gray-900 text-right font-medium break-all">{f.value}</span>
-                  </div>
-                ))}
+          {/* Rând collapse: TEMPLATE (default închis) */}
+          <div className="rounded-xl border border-gray-200">
+            <button onClick={() => setOpenTpl(o => !o)} className="w-full flex items-center justify-between px-4 py-2.5 text-left">
+              <span className="flex items-center gap-2 text-sm font-semibold text-gray-800">
+                <ChevronDown size={15} className={`text-gray-400 transition-transform ${openTpl ? '' : '-rotate-90'}`} />
+                📨 Template {tpl && <span className="font-normal text-gray-400">· {tpl.label}</span>}
+              </span>
+            </button>
+            {openTpl && (
+              <div className="px-4 pb-3 flex flex-col sm:flex-row gap-2 sm:items-end">
+                <label className="block flex-1">
+                  <select value={tplId} onChange={e => setTplId(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white cursor-pointer">
+                    <option value="">— alege template —</option>
+                    {leadTpls.map(t => <option key={t.id} value={t.id}>{(SOURCE_BADGE[t.source]?.label || t.source) + ' · ' + t.label}</option>)}
+                  </select>
+                </label>
+                <button onClick={genereaza} disabled={!tplId}
+                  className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50" style={{ background: '#1d4ed8' }}>
+                  <Sparkles size={14} /> Apply template
+                </button>
               </div>
             )}
-            {!tpl && <p className="text-[11px] text-gray-400 mt-2">Alege un template mai jos ca să vezi câmpurile necesare.</p>}
           </div>
 
-          {/* Selector template + generează */}
-          <div className="flex flex-col sm:flex-row gap-2 sm:items-end">
-            <label className="block flex-1">
-              <span className="block text-xs text-gray-500 mb-1">Template</span>
-              <select value={tplId} onChange={e => setTplId(e.target.value)}
-                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white cursor-pointer">
-                <option value="">— alege template —</option>
-                {templates.filter(t => t.categorie !== 'anr' && t.categorie !== 'ancom').map(t => (
-                  <option key={t.id} value={t.id}>{(t.categorie ? t.categorie + ' · ' : '') + t.label}</option>
-                ))}
-              </select>
-            </label>
-            <button onClick={genereaza} disabled={!tplId}
-              className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50" style={{ background: '#1d4ed8' }}>
-              <Sparkles size={14} /> Generează template
+          {/* Rând collapse: INTERES (default închis) */}
+          <div className="rounded-xl border border-indigo-100 bg-indigo-50/40">
+            <button onClick={() => setOpenInterest(o => !o)} className="w-full flex items-center justify-between px-4 py-2.5 text-left">
+              <span className="flex items-center gap-2 text-sm font-semibold text-indigo-900">
+                <ChevronDown size={15} className={`text-indigo-300 transition-transform ${openInterest ? '' : '-rotate-90'}`} />
+                🎯 Interes {interest && <span className="font-normal text-indigo-400">· {interest.nume || '(fără titlu)'}</span>}
+              </span>
             </button>
+            {openInterest && (
+              <div className="px-4 pb-4">
+                {interese.length === 0 ? (
+                  <p className="text-xs text-gray-500 italic">Niciun interes salvat. Creează-l în secțiunea „Interese" de mai jos, apoi revino.</p>
+                ) : (
+                  <select value={interestId} onChange={e => setInterestId(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white cursor-pointer">
+                    {interese.map(i => <option key={i.id} value={i.id}>{genreLabel(i.tip_program)} · {i.nume || '(fără titlu)'}</option>)}
+                  </select>
+                )}
+                {visibleFields.length > 0 && (
+                  <div className="mt-3 grid sm:grid-cols-2 gap-x-4 gap-y-1">
+                    {visibleFields.map(f => (
+                      <div key={f.key} className="flex items-start justify-between gap-2 text-xs py-0.5 border-b border-indigo-100/70">
+                        <span className="text-gray-500 shrink-0" title={`{{${f.key}}}`}>{f.label}</span>
+                        <span className="text-gray-900 text-right font-medium break-all">{f.value}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Câmpuri necesare pentru template (obligatorii înainte de trimitere) */}
@@ -975,8 +994,12 @@ function LeadMailModal({ lead, templates, sessions, contacts, setsailInfo, instr
               className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm font-mono resize-y" />
           </label>
 
-          {/* Butoane trimitere */}
+          {/* Butoane jos: Generează template (primul) + trimitere */}
           <div className="flex flex-col sm:flex-row gap-2">
+            <button onClick={() => { if (!subject.trim() && !body.trim()) { alert('Completează mesajul/subiectul întâi.'); return } setShowNewTpl(true) }}
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium border border-blue-200 text-blue-700 hover:bg-blue-50">
+              <Save size={15} /> Generează template
+            </button>
             <a href={gmailUrl} target="_blank" rel="noopener noreferrer"
               onClick={e => { guardSend(e); if (!e.defaultPrevented && isHtml) copy(body, 'body') }}
               className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium text-white" style={{ background: '#0a1628' }}>
@@ -988,6 +1011,67 @@ function LeadMailModal({ lead, templates, sessions, contacts, setsailInfo, instr
             </a>
           </div>
           {isHtml && <p className="text-[11px] text-gray-400 text-center">Gmail: HTML-ul e copiat automat la click → în fereastra Gmail apasă Ctrl+Shift+V. Pe mobil se trimite varianta text.</p>}
+        </div>
+      </div>
+
+      {showNewTpl && (
+        <NewTemplateModal
+          initial={{ label: tpl?.label ? tpl.label + ' (modificat)' : '', subject, body, isHtml }}
+          onClose={() => setShowNewTpl(false)}
+          onSaved={async () => { await refreshLeadTpls(); setShowNewTpl(false) }}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── Modal: generează un template nou din mailul curent (salvat în lead_templates) ──
+function NewTemplateModal({ initial, onClose, onSaved }: {
+  initial: { label: string; subject: string; body: string; isHtml: boolean }; onClose: () => void; onSaved: () => void
+}) {
+  const [label, setLabel] = useState(initial.label)
+  const [categorie, setCategorie] = useState('general')
+  const [subject, setSubject] = useState(initial.subject)
+  const [body, setBody] = useState(initial.body)
+  const [saving, setSaving] = useState(false)
+  const inCls = 'w-full px-3 py-2 rounded-lg border border-gray-200 text-sm'
+
+  async function save() {
+    if (!label.trim()) { alert('Dă un nume template-ului.'); return }
+    setSaving(true)
+    const isHtml = body.trim().startsWith('<')
+    const r = await fetch('/api/lead-templates', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ label, categorie, subject, body_html: isHtml ? body : null, body_text: isHtml ? null : body, source: 'generat' }),
+    })
+    setSaving(false)
+    if (!r.ok) { const j = await r.json().catch(() => ({})); alert('Salvare eșuată: ' + (j.error || '')); return }
+    onSaved()
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-5 border-b border-gray-100">
+          <h3 className="font-semibold text-gray-900">Template nou</h3>
+          <button onClick={onClose} className="p-1 rounded hover:bg-gray-100 text-gray-400"><X size={18} /></button>
+        </div>
+        <div className="p-5 space-y-3">
+          <p className="text-xs text-gray-400">Salvează mailul curent (cu modificările tale) ca template reutilizabil. Îl vei regăsi în secțiunea „Template-uri leaduri".</p>
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block"><span className="block text-xs text-gray-500 mb-1">Nume template</span>
+              <input className={inCls} value={label} onChange={e => setLabel(e.target.value)} placeholder="ex. Ofertă curs intensiv" /></label>
+            <label className="block"><span className="block text-xs text-gray-500 mb-1">Categorie</span>
+              <input className={inCls} value={categorie} onChange={e => setCategorie(e.target.value)} placeholder="general" /></label>
+          </div>
+          <label className="block"><span className="block text-xs text-gray-500 mb-1">Subiect</span>
+            <input className={inCls} value={subject} onChange={e => setSubject(e.target.value)} /></label>
+          <label className="block"><span className="block text-xs text-gray-500 mb-1">Mesaj {body.trim().startsWith('<') && <span className="text-amber-600">(HTML)</span>}</span>
+            <textarea rows={8} className={`${inCls} font-mono resize-y`} value={body} onChange={e => setBody(e.target.value)} /></label>
+          <div className="flex justify-end gap-2 pt-1">
+            <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm border border-gray-200 hover:bg-gray-50">Anulează</button>
+            <button onClick={save} disabled={saving} className="px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50" style={{ background: '#1d4ed8' }}>{saving ? 'Se salvează…' : 'Salvează template'}</button>
+          </div>
         </div>
       </div>
     </div>
@@ -1148,6 +1232,108 @@ function InterestCard({ interes, onSave, onDelete }: { interes: any; onSave: (pa
         ))}
       </div>
       <button onClick={addCustom} className="mt-2 flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800"><Plus size={12} /> Adaugă câmp custom</button>
+    </div>
+  )
+}
+
+// ── Secțiune „Template-uri leaduri": zona unificată, import din sesiuni + Gmail + generate ──
+const SOURCE_BADGE: Record<string, { label: string; cls: string }> = {
+  sesiune: { label: 'sesiune', cls: 'bg-blue-50 text-blue-700 border-blue-200' },
+  gmail: { label: 'gmail', cls: 'bg-red-50 text-red-700 border-red-200' },
+  generat: { label: 'generat', cls: 'bg-emerald-50 text-emerald-700 border-emerald-200' },
+  manual: { label: 'manual', cls: 'bg-gray-50 text-gray-600 border-gray-200' },
+}
+
+function LeadTemplatesSection({ mailTemplates }: { mailTemplates: any[] }) {
+  const [items, setItems] = useState<any[]>([])
+  const [gmail, setGmail] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [open, setOpen] = useState(false)
+  const [pickSes, setPickSes] = useState('')
+  const [pickGm, setPickGm] = useState('')
+  const [busy, setBusy] = useState(false)
+
+  async function load() {
+    const r = await fetch('/api/lead-templates'); const j = await r.json()
+    setItems(j.templates || []); setLoading(false)
+  }
+  useEffect(() => { load() }, [])
+  useEffect(() => { fetch('/api/gmail-templates').then(r => r.json()).then(j => setGmail(j.templates || [])).catch(() => {}) }, [])
+
+  async function create(payload: any) {
+    setBusy(true)
+    const r = await fetch('/api/lead-templates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+    const j = await r.json(); setBusy(false)
+    if (!r.ok) { alert(j.error || 'Eroare'); return }
+    setItems(x => [j.template, ...x])
+  }
+  function importSesiune() {
+    const m = mailTemplates.find(t => t.id === pickSes); if (!m) return
+    create({ label: m.label, categorie: m.categorie || 'general', subject: m.subject, body_html: m.body_html || null, body_text: m.body_text || null, source: 'sesiune', source_id: m.id })
+    setPickSes('')
+  }
+  function importGmail() {
+    const g = gmail.find(t => t.id === pickGm); if (!g) return
+    create({ label: g.label, categorie: g.category || 'general', subject: g.subject, body_html: g.body_html || null, body_text: g.body_text || null, source: 'gmail', source_id: g.id })
+    setPickGm('')
+  }
+  async function save(id: string, patch: any) {
+    setItems(prev => prev.map(t => t.id === id ? { ...t, ...patch } : t))
+    await fetch('/api/lead-templates', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, ...patch }) })
+  }
+  async function del(id: string) {
+    if (!confirm('Ștergi template-ul?')) return
+    setItems(prev => prev.filter(t => t.id !== id))
+    await fetch('/api/lead-templates', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200">
+      <div className="px-4 py-3 border-b border-gray-100">
+        <button onClick={() => setOpen(o => !o)} className="flex items-center gap-2 font-semibold text-gray-900 w-full text-left">
+          <ChevronDown size={16} className={`text-gray-400 transition-transform ${open ? '' : '-rotate-90'}`} />
+          📨 Template-uri leaduri <span className="text-xs font-normal text-gray-400">({items.length})</span>
+        </button>
+      </div>
+      {open && (
+        <div className="p-4 space-y-3">
+          <p className="text-xs text-gray-400">Zona unificată de template-uri pentru mailul către leaduri. Importă din sesiuni, din mailul office@ (Gmail) sau generează din modalul de trimitere.</p>
+          <div className="grid sm:grid-cols-2 gap-2">
+            <div className="flex gap-1.5">
+              <select value={pickSes} onChange={e => setPickSes(e.target.value)} className="flex-1 px-2 py-1.5 rounded-lg border border-gray-200 text-xs bg-white cursor-pointer">
+                <option value="">Import din sesiuni…</option>
+                {mailTemplates.filter(t => t.categorie !== 'anr' && t.categorie !== 'ancom').map(t => <option key={t.id} value={t.id}>{(t.categorie ? t.categorie + ' · ' : '') + t.label}</option>)}
+              </select>
+              <button onClick={importSesiune} disabled={!pickSes || busy} className="px-2.5 py-1.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{ background: '#1d4ed8' }}>Importă</button>
+            </div>
+            <div className="flex gap-1.5">
+              <select value={pickGm} onChange={e => setPickGm(e.target.value)} className="flex-1 px-2 py-1.5 rounded-lg border border-gray-200 text-xs bg-white cursor-pointer">
+                <option value="">Import din Gmail (office@)…</option>
+                {gmail.map(t => <option key={t.id} value={t.id}>{(t.category ? t.category + ' · ' : '') + t.label}</option>)}
+              </select>
+              <button onClick={importGmail} disabled={!pickGm || busy} className="px-2.5 py-1.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{ background: '#dc2626' }}>Importă</button>
+            </div>
+          </div>
+          {loading ? <div className="text-center text-gray-400 py-3 text-sm">Se încarcă…</div>
+            : items.length === 0 ? <div className="text-center text-gray-400 py-3 text-sm">Niciun template. Importă din surse sau generează din modalul de mail.</div>
+              : (
+                <div className="space-y-1.5">
+                  {items.map(t => {
+                    const badge = SOURCE_BADGE[t.source] || SOURCE_BADGE.manual
+                    return (
+                      <div key={t.id} className="flex items-center gap-2 rounded-lg border border-gray-100 px-2 py-1.5">
+                        <span className={`shrink-0 text-[10px] px-1.5 py-0.5 rounded border ${badge.cls}`}>{badge.label}</span>
+                        <input defaultValue={t.label} onBlur={e => e.target.value !== t.label && save(t.id, { label: e.target.value })}
+                          className="w-52 shrink-0 px-2 py-1 rounded border border-gray-200 text-xs bg-white" />
+                        <span className="flex-1 text-xs text-gray-400 truncate" title={t.subject}>{t.subject || '—'}</span>
+                        <button onClick={() => del(t.id)} className="p-1 text-gray-300 hover:text-red-500"><Trash2 size={13} /></button>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+        </div>
+      )}
     </div>
   )
 }
