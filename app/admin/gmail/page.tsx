@@ -528,7 +528,8 @@ function LeadsTab() {
   const [leads, setLeads] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   // Date pentru modalul de trimis mail (template + interese/sesiune)
-  const [openLead, setOpenLead] = useState<any | null>(null)
+  const [mailLead, setMailLead] = useState<any | null>(null)
+  const [editLead, setEditLead] = useState<any | null>(null)
   const [mailTemplates, setMailTemplates] = useState<any[]>([])
   const [mailSessions, setMailSessions] = useState<any[]>([])
   const [mailContacts, setMailContacts] = useState<any[]>([])
@@ -657,17 +658,20 @@ function LeadsTab() {
                 <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
                   <th className="px-4 py-2.5">Nume</th><th className="px-4 py-2.5">Prenume</th>
                   <th className="px-4 py-2.5">Email</th><th className="px-4 py-2.5">Telefon</th>
+                  <th className="px-4 py-2.5">Rezumat</th><th className="px-4 py-2.5">Observații</th>
                   <th className="px-4 py-2.5">Status</th><th className="px-4 py-2.5">Data</th><th className="px-4 py-2.5"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {leads.map(l => (
-                  <tr key={l.id} onClick={() => setOpenLead(l)} title="Click pentru a trimite un mail"
+                  <tr key={l.id} onClick={() => setEditLead(l)} title="Click pentru a edita lead-ul"
                     className="hover:bg-blue-50/60 cursor-pointer">
                     <td className="px-4 py-2 text-gray-800">{l.nume || '—'}</td>
                     <td className="px-4 py-2 text-gray-800">{l.prenume || '—'}</td>
                     <td className="px-4 py-2 text-gray-600">{l.email || '—'}</td>
                     <td className="px-4 py-2 text-gray-600">{l.telefon || '—'}</td>
+                    <td className="px-4 py-2 text-gray-500 max-w-[16rem] truncate" title={l.rezumat || ''}>{l.rezumat || '—'}</td>
+                    <td className="px-4 py-2 text-gray-500 max-w-[12rem] truncate" title={l.observatii || ''}>{l.observatii || '—'}</td>
                     <td className="px-4 py-2" onClick={e => e.stopPropagation()}>
                       <select value={l.status} onChange={e => setStatus(l.id, e.target.value)}
                         className="text-xs rounded-lg border border-gray-200 px-2 py-1 bg-white cursor-pointer">
@@ -675,7 +679,10 @@ function LeadsTab() {
                       </select>
                     </td>
                     <td className="px-4 py-2 text-gray-400 text-xs whitespace-nowrap">{l.created_at ? new Date(l.created_at).toLocaleDateString('ro-RO', { day: '2-digit', month: 'short' }) : ''}</td>
-                    <td className="px-4 py-2 text-right"><button onClick={e => { e.stopPropagation(); del(l.id) }} className="text-gray-300 hover:text-red-500"><Trash2 size={14} /></button></td>
+                    <td className="px-4 py-2 text-right whitespace-nowrap">
+                      <button onClick={e => { e.stopPropagation(); setMailLead(l) }} title="Trimite email" className="text-gray-300 hover:text-blue-600 mr-2 align-middle"><Mail size={15} /></button>
+                      <button onClick={e => { e.stopPropagation(); del(l.id) }} title="Șterge lead" className="text-gray-300 hover:text-red-500 align-middle"><Trash2 size={14} /></button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -684,17 +691,78 @@ function LeadsTab() {
         )}
       </div>
 
-      {openLead && (
+      {mailLead && (
         <LeadMailModal
-          lead={openLead}
+          lead={mailLead}
           templates={mailTemplates}
           sessions={mailSessions}
           contacts={mailContacts}
           setsailInfo={mailSetsailInfo}
           instructorMap={instructorMap}
-          onClose={() => setOpenLead(null)}
+          onClose={() => setMailLead(null)}
         />
       )}
+      {editLead && (
+        <LeadEditModal
+          lead={editLead}
+          onClose={() => setEditLead(null)}
+          onSaved={(upd: any) => setLeads(prev => prev.map(x => x.id === upd.id ? { ...x, ...upd } : x))}
+        />
+      )}
+    </div>
+  )
+}
+
+// ── Modal: editează datele unui lead ──
+function LeadEditModal({ lead, onClose, onSaved }: { lead: any; onClose: () => void; onSaved: (upd: any) => void }) {
+  const STATUS = ['nou', 'contactat', 'cursant', 'respins']
+  const [f, setF] = useState({
+    nume: lead.nume || '', prenume: lead.prenume || '', email: lead.email || '',
+    telefon: lead.telefon || '', rezumat: lead.rezumat || '', observatii: lead.observatii || '', status: lead.status || 'nou',
+  })
+  const [saving, setSaving] = useState(false)
+  const inCls = 'w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200'
+
+  async function save() {
+    setSaving(true)
+    const r = await fetch('/api/mail-leads', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: lead.id, ...f }) })
+    setSaving(false)
+    if (!r.ok) { const j = await r.json().catch(() => ({})); alert('Salvare eșuată: ' + (j.error || '')); return }
+    onSaved({ id: lead.id, ...f }); onClose()
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-5 border-b border-gray-100">
+          <h3 className="font-semibold text-gray-900">Editează lead</h3>
+          <button onClick={onClose} className="p-1 rounded hover:bg-gray-100 text-gray-400"><X size={18} /></button>
+        </div>
+        <div className="p-5 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block"><span className="block text-xs text-gray-500 mb-1">Nume</span>
+              <input className={inCls} value={f.nume} onChange={e => setF(s => ({ ...s, nume: e.target.value.toUpperCase() }))} /></label>
+            <label className="block"><span className="block text-xs text-gray-500 mb-1">Prenume</span>
+              <input className={inCls} value={f.prenume} onChange={e => setF(s => ({ ...s, prenume: e.target.value.toUpperCase() }))} /></label>
+            <label className="block"><span className="block text-xs text-gray-500 mb-1">Email</span>
+              <input className={inCls} value={f.email} onChange={e => setF(s => ({ ...s, email: e.target.value }))} /></label>
+            <label className="block"><span className="block text-xs text-gray-500 mb-1">Telefon</span>
+              <input className={inCls} value={f.telefon} onChange={e => setF(s => ({ ...s, telefon: e.target.value }))} /></label>
+          </div>
+          <label className="block"><span className="block text-xs text-gray-500 mb-1">Rezumat</span>
+            <textarea rows={2} className={inCls} value={f.rezumat} onChange={e => setF(s => ({ ...s, rezumat: e.target.value }))} /></label>
+          <label className="block"><span className="block text-xs text-gray-500 mb-1">Observații</span>
+            <input className={inCls} value={f.observatii} onChange={e => setF(s => ({ ...s, observatii: e.target.value }))} /></label>
+          <label className="block"><span className="block text-xs text-gray-500 mb-1">Status</span>
+            <select className={inCls + ' cursor-pointer'} value={f.status} onChange={e => setF(s => ({ ...s, status: e.target.value }))}>
+              {STATUS.map(s => <option key={s} value={s}>{s}</option>)}
+            </select></label>
+          <div className="flex justify-end gap-2 pt-1">
+            <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm border border-gray-200 hover:bg-gray-50">Anulează</button>
+            <button onClick={save} disabled={saving} className="px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50" style={{ background: '#0a1628' }}>{saving ? 'Se salvează…' : 'Salvează'}</button>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
