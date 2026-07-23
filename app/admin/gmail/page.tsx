@@ -1552,6 +1552,30 @@ function InterestCard({ interes, variabile, categorii, onSave, onDelete }: { int
   const [fields, setFields] = useState<InterestField[]>(Array.isArray(interes.fields) ? interes.fields : [])
   const [openCard, setOpenCard] = useState(false)
   const [varPicker, setVarPicker] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
+  const [emailText, setEmailText] = useState('')
+  const [importing, setImporting] = useState(false)
+
+  async function importDinEmail() {
+    if (!emailText.trim()) return
+    setImporting(true)
+    try {
+      const r = await fetch('/api/ai/interes-din-email', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: emailText, fields: fields.map(f => ({ key: f.key, label: f.label })) }),
+      })
+      const j = await r.json().catch(() => null)
+      if (!r.ok || !j) { alert('Extragere eșuată: ' + (j?.error || 'eroare')); return }
+      const vals = j.values || {}
+      const n = Object.keys(vals).length
+      if (!n) { alert('AI-ul nu a găsit informații pentru câmpurile existente.'); return }
+      const nf = fields.map(f => (vals[f.key] ? { ...f, value: vals[f.key], visible: true } : f))
+      saveFields(nf)
+      setImportOpen(false); setEmailText('')
+      alert(`Completate ${n} câmp(uri) din email.`)
+    } catch (e: any) { alert('Eroare: ' + (e?.message || e)) }
+    finally { setImporting(false) }
+  }
 
   const saveFields = (nf: InterestField[]) => { setFields(nf); onSave({ fields: nf }) }
   // Categoria = tipul: setează gen_baza (pt. câmpuri) + reconstruiește catalogul păstrând valorile/custom
@@ -1636,8 +1660,31 @@ function InterestCard({ interes, variabile, categorii, onSave, onDelete }: { int
             </div>
           )}
         </div>
+        <button onClick={() => setImportOpen(true)} className="ml-auto flex items-center gap-1 text-xs font-medium text-emerald-700 hover:text-emerald-900"><Sparkles size={12} /> Info: Importă din email</button>
       </div>
       </>)}
+
+      {importOpen && (
+        <div className="fixed inset-0 bg-black/40 z-[60] flex items-center justify-center p-4" onClick={() => setImportOpen(false)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between p-5 border-b border-gray-100">
+              <h3 className="font-semibold text-gray-900">Info: Importă din email</h3>
+              <button onClick={() => setImportOpen(false)} className="p-1 rounded hover:bg-gray-100 text-gray-400"><X size={18} /></button>
+            </div>
+            <div className="p-5 space-y-3">
+              <p className="text-xs text-gray-400">Lipește textul unui email. AI-ul extrage informația în câmpurile acestui interes (preț, interval, ore, etc.).</p>
+              <textarea value={emailText} onChange={e => setEmailText(e.target.value)} rows={10}
+                placeholder="Lipește aici emailul…" className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-emerald-200" />
+              <div className="flex justify-end gap-2">
+                <button onClick={() => setImportOpen(false)} className="px-4 py-2 rounded-lg text-sm border border-gray-200 hover:bg-gray-50">Anulează</button>
+                <button onClick={importDinEmail} disabled={importing || !emailText.trim()} className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50" style={{ background: '#0f766e' }}>
+                  <Sparkles size={14} /> {importing ? 'Se extrage…' : 'Extrage în câmpuri'}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
