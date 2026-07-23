@@ -795,7 +795,22 @@ function LeadMailModal({ lead, sessions, contacts, setsailInfo, instructorMap, o
   useEffect(() => { fetch('/api/interese').then(r => r.json()).then(j => setInterese(j.interese || [])) }, [])
   useEffect(() => { fetch('/api/variabile').then(r => r.json()).then(j => setVariabile(j.variabile || [])) }, [])
   useEffect(() => { refreshLeadTpls() }, [])
-  useEffect(() => { if (!interestId && interese.length) setInterestId(interese[0].id) }, [interese, interestId])
+  // Default interes: cel setat pe lead → ultimul folosit în sistem → primul
+  useEffect(() => {
+    if (interestId || !interese.length) return
+    const has = (id: string) => !!id && interese.some(i => i.id === id)
+    const fromLast = (() => { try { return localStorage.getItem('last_interest_id') || '' } catch { return '' } })()
+    const pick = [lead.interes_id, fromLast].find(has) || interese[0].id
+    setInterestId(pick)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [interese])
+
+  // Setează interesul: rămâne lipit de lead (până îl schimbi) + memorează ultimul folosit
+  const pickInterest = (id: string) => {
+    setInterestId(id)
+    try { localStorage.setItem('last_interest_id', id) } catch {}
+    fetch('/api/mail-leads', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: lead.id, interes_id: id }) }).catch(() => {})
+  }
 
   const interest = useMemo(() => interese.find(i => i.id === interestId) || null, [interese, interestId])
   const sourceSession = useMemo(() => (interest?.source_id ? sessions.find(s => s.id === interest.source_id) || null : null), [interest, sessions])
@@ -968,7 +983,7 @@ function LeadMailModal({ lead, sessions, contacts, setsailInfo, instructorMap, o
                 {interese.length === 0 ? (
                   <p className="text-xs text-gray-500 italic">Niciun interes salvat. Creează-l în secțiunea „Interese" de mai jos, apoi revino.</p>
                 ) : (
-                  <select value={interestId} onChange={e => setInterestId(e.target.value)}
+                  <select value={interestId} onChange={e => pickInterest(e.target.value)}
                     className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white cursor-pointer">
                     {interese.map(i => <option key={i.id} value={i.id}>{genreLabel(i.tip_program)} · {i.nume || '(fără titlu)'}</option>)}
                   </select>

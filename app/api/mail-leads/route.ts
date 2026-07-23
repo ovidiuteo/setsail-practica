@@ -30,12 +30,12 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ lead: data })
 }
 
-const EDITABLE = new Set(['nume', 'prenume', 'email', 'telefon', 'rezumat', 'observatii', 'status'])
+const EDITABLE = new Set(['nume', 'prenume', 'email', 'telefon', 'rezumat', 'observatii', 'status', 'interes_id'])
 export async function PATCH(req: NextRequest) {
   const b = await req.json().catch(() => ({}))
   if (!b?.id) return NextResponse.json({ error: 'no id' }, { status: 400 })
   const upd: Record<string, any> = {}
-  for (const [k, v] of Object.entries(b)) if (EDITABLE.has(k)) upd[k] = typeof v === 'string' ? v.trim() : v
+  for (const [k, v] of Object.entries(b)) if (EDITABLE.has(k)) upd[k] = k === 'interes_id' ? (v || null) : (typeof v === 'string' ? v.trim() : v)
   if (!Object.keys(upd).length) return NextResponse.json({ error: 'nimic de actualizat' }, { status: 400 })
   const { error } = await svc().from('mail_leads').update(upd).eq('id', b.id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
