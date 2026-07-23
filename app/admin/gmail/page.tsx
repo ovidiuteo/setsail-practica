@@ -1268,6 +1268,10 @@ function IntereseSection({ sessions, contacts, setsailInfo, instructorMap }: {
   const [busy, setBusy] = useState(false)
   const [variabile, setVariabile] = useState<any[]>([])
   useEffect(() => { fetch('/api/variabile').then(r => r.json()).then(j => setVariabile(j.variabile || [])) }, [])
+  const [categorii, setCategorii] = useState<any[]>([])
+  const [showCateg, setShowCateg] = useState(false)
+  const loadCateg = () => fetch('/api/interese-categorii').then(r => r.json()).then(j => setCategorii(j.categorii || []))
+  useEffect(() => { loadCateg() }, [])
 
   useEffect(() => {
     fetch('/api/interese').then(r => r.json()).then(j => { setItems(j.interese || []); setLoading(false) })
@@ -1333,6 +1337,9 @@ function IntereseSection({ sessions, contacts, setsailInfo, instructorMap }: {
           <ChevronDown size={16} className={`text-gray-400 transition-transform ${open ? '' : '-rotate-90'}`} />
           🎯 Interese (programe / serii) <span className="text-xs font-normal text-gray-400">({items.length})</span>
         </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => setShowCateg(true)}
+            className="px-3 py-1.5 rounded-lg text-sm font-medium border border-gray-200 text-gray-600 hover:bg-gray-50">Edit categ</button>
         <div className="relative">
           <button onClick={() => setPicker(p => !p)} disabled={busy}
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white disabled:opacity-50" style={{ background: '#1d4ed8' }}>
@@ -1354,6 +1361,7 @@ function IntereseSection({ sessions, contacts, setsailInfo, instructorMap }: {
             </div>
           )}
         </div>
+        </div>
       </div>
 
       {open && (
@@ -1361,17 +1369,67 @@ function IntereseSection({ sessions, contacts, setsailInfo, instructorMap }: {
           {loading ? <div className="text-center text-gray-400 py-4 text-sm">Se încarcă…</div>
             : items.length === 0 ? <div className="text-center text-gray-400 py-4 text-sm">Niciun interes încă. Apasă „Creează interes".</div>
               : items.map(it => (
-                <InterestCard key={it.id} interes={it} variabile={variabile}
+                <InterestCard key={it.id} interes={it} variabile={variabile} categorii={categorii}
                   onSave={(patch: any) => saveInterest(it.id, patch)}
                   onDelete={() => removeInterest(it.id)} />
               ))}
         </div>
       )}
+
+      {showCateg && <InterestCategoriesModal categorii={categorii} onClose={() => setShowCateg(false)} onChanged={loadCateg} />}
     </div>
   )
 }
 
-function InterestCard({ interes, variabile, onSave, onDelete }: { interes: any; variabile: any[]; onSave: (patch: any) => void; onDelete: () => void }) {
+// ── Modal: gestionează categoriile intereselor (adaugă / redenumește / șterge) ──
+function InterestCategoriesModal({ categorii, onClose, onChanged }: { categorii: any[]; onClose: () => void; onChanged: () => void }) {
+  const [nume, setNume] = useState('')
+  const [busy, setBusy] = useState(false)
+  async function add() {
+    if (!nume.trim()) return
+    setBusy(true)
+    const r = await fetch('/api/interese-categorii', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ nume }) })
+    setBusy(false)
+    if (!r.ok) { const j = await r.json().catch(() => ({})); alert(j.error || 'Eroare'); return }
+    setNume(''); onChanged()
+  }
+  async function rename(id: string, v: string) { await fetch('/api/interese-categorii', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, nume: v }) }); onChanged() }
+  async function del(id: string) { if (!confirm('Ștergi categoria? (interesele rămân, dar fără categorie)')) return; await fetch('/api/interese-categorii', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) }); onChanged() }
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-[60] flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+        <div className="flex items-center justify-between p-5 border-b border-gray-100">
+          <h3 className="font-semibold text-gray-900">Categorii interese</h3>
+          <button onClick={onClose} className="p-1 rounded hover:bg-gray-100 text-gray-400"><X size={18} /></button>
+        </div>
+        <div className="p-5 space-y-3">
+          <div className="flex gap-2">
+            <input value={nume} onChange={e => setNume(e.target.value)} onKeyDown={e => e.key === 'Enter' && add()}
+              placeholder="Categorie nouă…" className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-sm" />
+            <button onClick={add} disabled={busy || !nume.trim()} className="flex items-center gap-1 px-3 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50" style={{ background: '#1d4ed8' }}><Plus size={14} /> Adaugă</button>
+          </div>
+          {categorii.length === 0 ? <p className="text-xs text-gray-400 italic">Nicio categorie încă.</p> : (
+            <div className="space-y-1">
+              {categorii.map(c => (
+                <div key={c.id} className="flex items-center gap-2">
+                  <input defaultValue={c.nume} onBlur={e => e.target.value !== c.nume && rename(c.id, e.target.value)}
+                    className="flex-1 px-2 py-1.5 rounded border border-gray-200 text-sm bg-white" />
+                  <button onClick={() => del(c.id)} className="p-1.5 text-gray-300 hover:text-red-500"><Trash2 size={14} /></button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex justify-end pt-1">
+            <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm border border-gray-200 hover:bg-gray-50">Închide</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function InterestCard({ interes, variabile, categorii, onSave, onDelete }: { interes: any; variabile: any[]; categorii: any[]; onSave: (patch: any) => void; onDelete: () => void }) {
   const [nume, setNume] = useState(interes.nume || '')
   const [genre, setGenre] = useState<Genre>(interes.tip_program || 'curs')
   const [fields, setFields] = useState<InterestField[]>(Array.isArray(interes.fields) ? interes.fields : [])
@@ -1405,6 +1463,11 @@ function InterestCard({ interes, variabile, onSave, onDelete }: { interes: any; 
         <select value={genre} onChange={e => changeGenre(e.target.value as Genre)}
           className="text-xs rounded-lg border border-gray-200 px-2 py-1.5 bg-white cursor-pointer">
           {INTEREST_GENRES.map(g => <option key={g.key} value={g.key}>{g.label}</option>)}
+        </select>
+        <select value={interes.categorie_id || ''} onChange={e => onSave({ categorie_id: e.target.value || null })} title="Categorie"
+          className="text-xs rounded-lg border border-gray-200 px-2 py-1.5 bg-white cursor-pointer max-w-[9rem]">
+          <option value="">— categorie —</option>
+          {categorii.map(c => <option key={c.id} value={c.id}>{c.nume}</option>)}
         </select>
         <button onClick={onDelete} title="Șterge interesul" className="p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50"><Trash2 size={15} /></button>
       </div>
