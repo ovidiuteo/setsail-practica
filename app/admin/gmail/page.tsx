@@ -1068,15 +1068,16 @@ function LeadMailModal({ lead, sessions, contacts, setsailInfo, instructorMap, o
   )
 }
 
-// ── Modal: editează/salvează template generat de AI (picker variabile + preview) ──
+// ── Modal: creează (AI) / editează un template din lead_templates (picker variabile + preview) ──
 function NewTemplateModal({ initial, variables, sampleVals, onClose, onSaved }: {
-  initial: { label: string; subject: string; body: string }
+  initial: { id?: string; label: string; categorie?: string; subject: string; body: string }
   variables: { key: string; label: string; sample: string }[]
   sampleVals: Record<string, string>
   onClose: () => void; onSaved: () => void
 }) {
+  const isEdit = !!initial.id
   const [label, setLabel] = useState(initial.label)
-  const [categorie, setCategorie] = useState('general')
+  const [categorie, setCategorie] = useState(initial.categorie || 'general')
   const [subject, setSubject] = useState(initial.subject)
   const [body, setBody] = useState(initial.body)
   const [saving, setSaving] = useState(false)
@@ -1105,10 +1106,10 @@ function NewTemplateModal({ initial, variables, sampleVals, onClose, onSaved }: 
     if (!label.trim()) { alert('Dă un nume template-ului.'); return }
     setSaving(true)
     const isHtml = body.trim().startsWith('<')
-    const r = await fetch('/api/lead-templates', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ label, categorie, subject, body_html: isHtml ? body : null, body_text: isHtml ? null : body, source: 'generat' }),
-    })
+    const payload: any = { label, categorie, subject, body_html: isHtml ? body : null, body_text: isHtml ? null : body }
+    const r = isEdit
+      ? await fetch('/api/lead-templates', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: initial.id, ...payload }) })
+      : await fetch('/api/lead-templates', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...payload, source: 'generat' }) })
     setSaving(false)
     if (!r.ok) { const j = await r.json().catch(() => ({})); alert('Salvare eșuată: ' + (j.error || '')); return }
     onSaved()
@@ -1118,11 +1119,11 @@ function NewTemplateModal({ initial, variables, sampleVals, onClose, onSaved }: 
     <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between p-5 border-b border-gray-100">
-          <h3 className="font-semibold text-gray-900">Template nou (generat AI)</h3>
+          <h3 className="font-semibold text-gray-900">{isEdit ? 'Editează template' : 'Template nou (generat AI)'}</h3>
           <button onClick={onClose} className="p-1 rounded hover:bg-gray-100 text-gray-400"><X size={18} /></button>
         </div>
         <div className="p-5 space-y-3">
-          <p className="text-xs text-gray-400">AI-ul a înlocuit valorile concrete cu <span className="font-mono">{'{{variabile}}'}</span>. Editează, inserează variabile din picker, verifică în preview, apoi salvează. Îl regăsești în „Template-uri leaduri".</p>
+          <p className="text-xs text-gray-400">{isEdit ? 'Editează template-ul. Inserează variabile din picker și verifică în preview.' : <>AI-ul a înlocuit valorile concrete cu <span className="font-mono">{'{{variabile}}'}</span>. Editează, inserează variabile din picker, verifică în preview, apoi salvează. Îl regăsești în „Template-uri leaduri".</>}</p>
           <div className="grid grid-cols-2 gap-3">
             <label className="block"><span className="block text-xs text-gray-500 mb-1">Nume template</span>
               <input className={inCls} value={label} onChange={e => setLabel(e.target.value)} placeholder="ex. Ofertă curs intensiv" /></label>
@@ -1177,7 +1178,7 @@ function IntereseSection({ sessions, contacts, setsailInfo, instructorMap }: {
 }) {
   const [items, setItems] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
-  const [open, setOpen] = useState(true)
+  const [open, setOpen] = useState(false)
   const [picker, setPicker] = useState(false)
   const [busy, setBusy] = useState(false)
 
@@ -1287,6 +1288,7 @@ function InterestCard({ interes, onSave, onDelete }: { interes: any; onSave: (pa
   const [nume, setNume] = useState(interes.nume || '')
   const [genre, setGenre] = useState<Genre>(interes.tip_program || 'curs')
   const [fields, setFields] = useState<InterestField[]>(Array.isArray(interes.fields) ? interes.fields : [])
+  const [openCard, setOpenCard] = useState(false)
 
   const saveFields = (nf: InterestField[]) => { setFields(nf); onSave({ fields: nf }) }
   const changeGenre = (g: Genre) => { setGenre(g); const nf = buildFields(g, {}, fields); setFields(nf); onSave({ tip_program: g, fields: nf }) }
@@ -1299,6 +1301,9 @@ function InterestCard({ interes, onSave, onDelete }: { interes: any; onSave: (pa
   return (
     <div className="rounded-xl border border-indigo-100 bg-indigo-50/30 p-3">
       <div className="flex items-center gap-2 mb-2">
+        <button onClick={() => setOpenCard(o => !o)} title={openCard ? 'Restrânge' : 'Extinde'} className="p-1 text-indigo-300 hover:text-indigo-600">
+          <ChevronDown size={15} className={`transition-transform ${openCard ? '' : '-rotate-90'}`} />
+        </button>
         <input value={nume} onChange={e => setNume(e.target.value)} onBlur={() => nume !== interes.nume && onSave({ nume })}
           placeholder="Titlu interes…" className="flex-1 px-2 py-1.5 rounded-lg border border-gray-200 text-sm font-medium bg-white" />
         <select value={genre} onChange={e => changeGenre(e.target.value as Genre)}
@@ -1307,6 +1312,7 @@ function InterestCard({ interes, onSave, onDelete }: { interes: any; onSave: (pa
         </select>
         <button onClick={onDelete} title="Șterge interesul" className="p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50"><Trash2 size={15} /></button>
       </div>
+      {openCard && (<>
       <div className="space-y-1">
         {fields.map((f, i) => (
           <div key={f.key} className={`flex items-center gap-2 ${f.visible ? '' : 'opacity-50'}`}>
@@ -1325,6 +1331,7 @@ function InterestCard({ interes, onSave, onDelete }: { interes: any; onSave: (pa
         ))}
       </div>
       <button onClick={addCustom} className="mt-2 flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800"><Plus size={12} /> Adaugă câmp custom</button>
+      </>)}
     </div>
   )
 }
@@ -1345,6 +1352,8 @@ function LeadTemplatesSection({ mailTemplates }: { mailTemplates: any[] }) {
   const [pickSes, setPickSes] = useState('')
   const [pickGm, setPickGm] = useState('')
   const [busy, setBusy] = useState(false)
+  const [editTpl, setEditTpl] = useState<any | null>(null)
+  const sectionVars = useMemo(() => MAIL_VARIABLES_FLAT.map(v => ({ key: v.key, label: v.label, sample: '' })), [])
 
   async function load() {
     const r = await fetch('/api/lead-templates'); const j = await r.json()
@@ -1419,13 +1428,24 @@ function LeadTemplatesSection({ mailTemplates }: { mailTemplates: any[] }) {
                         <input defaultValue={t.label} onBlur={e => e.target.value !== t.label && save(t.id, { label: e.target.value })}
                           className="w-52 shrink-0 px-2 py-1 rounded border border-gray-200 text-xs bg-white" />
                         <span className="flex-1 text-xs text-gray-400 truncate" title={t.subject}>{t.subject || '—'}</span>
-                        <button onClick={() => del(t.id)} className="p-1 text-gray-300 hover:text-red-500"><Trash2 size={13} /></button>
+                        <button onClick={() => setEditTpl(t)} title="Editează template" className="p-1 text-gray-300 hover:text-blue-600"><Edit2 size={13} /></button>
+                        <button onClick={() => del(t.id)} title="Șterge" className="p-1 text-gray-300 hover:text-red-500"><Trash2 size={13} /></button>
                       </div>
                     )
                   })}
                 </div>
               )}
         </div>
+      )}
+
+      {editTpl && (
+        <NewTemplateModal
+          initial={{ id: editTpl.id, label: editTpl.label, categorie: editTpl.categorie, subject: editTpl.subject || '', body: editTpl.body_html || editTpl.body_text || '' }}
+          variables={sectionVars}
+          sampleVals={{}}
+          onClose={() => setEditTpl(null)}
+          onSaved={async () => { await load(); setEditTpl(null) }}
+        />
       )}
     </div>
   )
