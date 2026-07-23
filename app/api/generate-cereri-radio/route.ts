@@ -13,6 +13,9 @@ export async function POST(req: NextRequest) {
     const tip = body.tip || 'obtinere'
     const format = body.format || 'pdf'
     const isPrelungire = tip === 'prelungire'
+    // Filtru opțional: doar anumiți cursanți (ex. cei bifați pt. verificare ANCOM)
+    const studentIdsFilter: string[] | null = Array.isArray(body.student_ids) && body.student_ids.length
+      ? body.student_ids.map(String) : null
 
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -33,6 +36,7 @@ export async function POST(req: NextRequest) {
     // - Prelungire (reconfirmare): doar "Prelungire LRC"
     // - Obținere:                  "Obtinere LRC" + "Radio"
     const students = allStudents.filter((s: any) => {
+      if (studentIdsFilter && !studentIdsFilter.includes(String(s.id))) return false
       const c = String(s.class_caa || '').toLowerCase().trim()
       return isPrelungire
         ? c.includes('prelungire')

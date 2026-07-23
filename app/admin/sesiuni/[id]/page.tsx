@@ -41,6 +41,7 @@ type Student = {
   notes?: string
   signature_pool?: boolean
   signature_random?: string
+  verificare_ancom?: boolean
 }
 type Session = { id: string; session_date: string; course_start_date?: string; status: string; session_type: string; access_code: string; class_caa: string; request_number?: string; location_detail?: string; parent_session_id?: string; is_clone?: boolean; locations?: any; boats?: any; evaluators?: any; instructors?: any; contact_person_ids?: string[]; practice_start_date?: string; practice_start_time?: string; skipper_url?: string }
 
@@ -907,6 +908,19 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
                             if (examClosed) return <Link href={href} className={box + ' border-red-300 text-red-400'} title="Nu a susținut examenul — rezolvă">–</Link>
                             return <Link href={href} className={box + ' border-gray-200 text-gray-300'} title="Examen neînceput — rezolvă">–</Link>
                           })()}
+                          {/* Verificare ANCOM (checkbox, default NO) */}
+                          {isRadio && !isAbsent && (
+                            <label className="flex items-center gap-1 text-[10px] text-gray-500 cursor-pointer select-none shrink-0" title="Verificare ANCOM">
+                              <input type="checkbox" checked={!!s.verificare_ancom}
+                                onChange={async e => {
+                                  const v = e.target.checked
+                                  await supabase.from('students').update({ verificare_ancom: v }).eq('id', s.id)
+                                  setStudents(students.map(x => x.id === s.id ? { ...x, verificare_ancom: v } : x))
+                                }}
+                                className="accent-blue-600" />
+                              ANCOM
+                            </label>
+                          )}
                           {/* Muta la absenti */}
                           {!isAbsent && absentSession && (
                             <button onClick={()=>markAbsent(s)} disabled={moving===s.id}
@@ -1249,6 +1263,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
   const [showNotif, setShowNotif] = useState(false)
   const [gNotif, setGNotif] = useState(false)
   const [notifSaved, setNotifSaved] = useState(false)
+  const [dlAncom, setDlAncom] = useState(false)
   const notifScanRef = useRef<HTMLInputElement|null>(null)
 
   useEffect(() => {
@@ -1641,6 +1656,58 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click()
   }
 
+  // Download verificare ANCOM: zip cu ID-ul (CI) + cererea fiecărui cursant bifat
+  async function downloadVerificareAncom() {
+    setDlAncom(true)
+    try {
+      const { data: checked } = await supabase
+        .from('students')
+        .select('id, full_name, ci_image_data, class_caa')
+        .eq('session_id', sess.id)
+        .eq('verificare_ancom', true)
+        .order('order_in_session')
+      if (!checked || checked.length === 0) { alert('Niciun cursant bifat pentru verificare ANCOM.'); setDlAncom(false); return }
+
+      const JSZip = (await import('jszip')).default
+      const zip = new JSZip()
+      const slug = (n: string) => (n || 'cursant').replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim()
+      const dataUrlParts = (dataUrl: string): { bytes: Uint8Array; ext: string } | null => {
+        const m = /^data:([^;]+);base64,([\s\S]*)$/.exec(dataUrl || '')
+        if (!m) return null
+        const mime = m[1]; const bin = atob(m[2])
+        const bytes = new Uint8Array(bin.length)
+        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
+        const ext = mime.includes('png') ? 'png' : mime.includes('webp') ? 'webp' : mime.includes('pdf') ? 'pdf' : 'jpg'
+        return { bytes, ext }
+      }
+
+      let missingCi = 0
+      for (const s of checked as any[]) {
+        const name = slug(s.full_name)
+        if (s.ci_image_data) {
+          const p = dataUrlParts(s.ci_image_data)
+          if (p) zip.file(`${name}/${name} - CI.${p.ext}`, p.bytes); else missingCi++
+        } else missingCi++
+        const c = String(s.class_caa || '').toLowerCase()
+        const tip = c.includes('prelungire') ? 'prelungire' : 'obtinere'
+        try {
+          const res = await fetch('/api/generate-cereri-radio', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: sess.id, tip, format: 'docx', student_ids: [s.id], stampila: stamp, semnatura: signs })
+          })
+          if (res.ok) zip.file(`${name}/${name} - Cerere ${tip}.docx`, await res.arrayBuffer())
+        } catch {}
+      }
+
+      const blob = await zip.generateAsync({ type: 'blob' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a'); a.href = url; a.download = `Verificare_ANCOM_${sess.session_date}.zip`; a.click()
+      setTimeout(() => URL.revokeObjectURL(url), 5000)
+      if (missingCi) alert(`Arhivă descărcată. Atenție: ${missingCi} cursant(i) fără imagine CI încărcată.`)
+    } catch (e: any) { alert('Eroare la generarea arhivei: ' + (e.message || e)) }
+    setDlAncom(false)
+  }
+
   const st = statusMap[sess.status] || statusMap.draft
   const isAbsent = sess.session_type === 'absent'
   const isRadio = (sess.class_caa || '').toLowerCase().includes('radio') || (sess.class_caa || '').toLowerCase().includes('lrc')
@@ -1954,6 +2021,14 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                     disabled={students.length===0} className="flex-1 flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#dc2626'}}>
                     <Download size={12}/>PDF Prelungire
                   </button>
+                </div>
+                {/* Verificare ANCOM: zip cu CI + cerere pt. cursanții bifați */}
+                <div className="pt-1 border-t border-gray-100">
+                  <button onClick={downloadVerificareAncom} disabled={dlAncom}
+                    className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#0f766e'}}>
+                    <Download size={12}/>{dlAncom ? 'Se pregătește arhiva…' : 'Download verificare ANCOM'}
+                  </button>
+                  <p className="text-[10px] text-gray-400 mt-1 text-center">ZIP: CI + cerere pentru cursanții bifați „ANCOM” în tabel</p>
                 </div>
               </div>
             </div>
