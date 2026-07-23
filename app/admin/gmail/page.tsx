@@ -18,6 +18,8 @@ import {
 import GoogleGIcon from '@/components/GoogleGIcon'
 import { supabase } from '@/lib/supabase'
 import { applyMailTemplate, mailVarValues, MAIL_VAR_GROUPS } from '@/lib/mail-template'
+import { buildFields, INTEREST_GENRES, type Genre, type InterestField } from '@/lib/interese-catalog'
+import { Plus, Eye, EyeOff } from 'lucide-react'
 
 type Template = {
   id: string
@@ -598,6 +600,7 @@ function LeadsTab() {
   const STATUS = ['nou', 'contactat', 'cursant', 'respins']
   return (
     <div className="space-y-6">
+      <IntereseSection sessions={mailSessions} contacts={mailContacts} setsailInfo={mailSetsailInfo} instructorMap={instructorMap} />
       <div className="grid lg:grid-cols-2 gap-4">
         {/* Import */}
         <div className="bg-white rounded-xl border border-gray-200 p-4">
@@ -848,6 +851,164 @@ function LeadMailModal({ lead, templates, sessions, contacts, setsailInfo, instr
           {isHtml && <p className="text-[11px] text-gray-400 text-center">Gmail: HTML-ul e copiat automat la click → în fereastra Gmail apasă Ctrl+Shift+V. Pe mobil se trimite varianta text.</p>}
         </div>
       </div>
+    </div>
+  )
+}
+
+// ── Secțiune „Interese": catalog de interese importate din programe (sesiuni) ──
+function IntereseSection({ sessions, contacts, setsailInfo, instructorMap }: {
+  sessions: any[]; contacts: any[]; setsailInfo: Record<string, string>; instructorMap: Record<string, string>
+}) {
+  const [items, setItems] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [open, setOpen] = useState(true)
+  const [picker, setPicker] = useState(false)
+  const [busy, setBusy] = useState(false)
+
+  useEffect(() => {
+    fetch('/api/interese').then(r => r.json()).then(j => { setItems(j.interese || []); setLoading(false) })
+  }, [])
+
+  const futureSessions = useMemo(() => {
+    const today = new Date(); today.setHours(0, 0, 0, 0)
+    return sessions
+      .filter(s => s.session_date && new Date(s.session_date) >= today)
+      .sort((a, b) => String(a.session_date).localeCompare(String(b.session_date)))
+  }, [sessions])
+
+  function sessionLabel(s: any) {
+    const d = s.session_date ? new Date(s.session_date).toLocaleDateString('ro-RO', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
+    const loc = s.location_detail || s.locations?.name || ''
+    return `${s.class_caa || '—'} · ${d}${loc ? ' · ' + loc : ''}`
+  }
+
+  function sessionValues(s: any): Record<string, string> {
+    const instr = [s.instructor_id, s.instructor_id_2, s.instructor_id_3].filter(Boolean).map((id: string) => instructorMap[id]).filter(Boolean)
+    const ctx = { origin: typeof window !== 'undefined' ? window.location.origin : undefined, sess: s, contacts, instructors: instr.map((n: string) => ({ full_name: n })), setsailInfo }
+    const v = mailVarValues(ctx)
+    const fmt = (d: string) => d ? new Date(d).toLocaleDateString('ro-RO', { day: 'numeric', month: 'long', year: 'numeric' }) : ''
+    const interval = s.practice_start_date && s.session_date && s.practice_start_date !== s.session_date
+      ? `${new Date(s.practice_start_date).getDate()}–${fmt(s.session_date)}` : fmt(s.session_date)
+    return {
+      nume_program: s.class_caa ? `Curs ${s.class_caa}` : 'Curs', interval,
+      locatie: v.locatie, ambarcatiune: v.ambarcatiune, link_portal: v.link_portal,
+      clase: s.class_caa || '', data_start_curs: v.data_start_curs, ora_start: v.ora_start,
+      instructor: [v.instructor_1, v.instructor_2, v.instructor_3].filter(Boolean).join(', '),
+    }
+  }
+
+  async function create(payload: any) {
+    setBusy(true)
+    const r = await fetch('/api/interese', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) })
+    const j = await r.json(); setBusy(false); setPicker(false)
+    if (!r.ok) { alert(j.error || 'Eroare'); return }
+    setItems(x => [j.interes, ...x])
+  }
+  function createFromSession(s: any) {
+    const vals = sessionValues(s)
+    create({ nume: `${vals.nume_program}${vals.interval ? ' — ' + vals.interval : ''}`, tip_program: 'curs', source_type: 'session', source_id: s.id, fields: buildFields('curs', vals) })
+  }
+  function createBlank(genre: Genre) {
+    create({ nume: '', tip_program: genre, source_type: 'blank', fields: buildFields(genre) })
+  }
+
+  async function saveInterest(id: string, patch: any) {
+    setItems(prev => prev.map(it => it.id === id ? { ...it, ...patch } : it))
+    await fetch('/api/interese', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, ...patch }) })
+  }
+  async function removeInterest(id: string) {
+    if (!confirm('Ștergi interesul? (nu afectează programul-sursă)')) return
+    setItems(prev => prev.filter(i => i.id !== id))
+    await fetch('/api/interese', { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }) })
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200">
+      <div className="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+        <button onClick={() => setOpen(o => !o)} className="flex items-center gap-2 font-semibold text-gray-900">
+          <ChevronDown size={16} className={`text-gray-400 transition-transform ${open ? '' : '-rotate-90'}`} />
+          🎯 Interese (programe / serii) <span className="text-xs font-normal text-gray-400">({items.length})</span>
+        </button>
+        <div className="relative">
+          <button onClick={() => setPicker(p => !p)} disabled={busy}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-white disabled:opacity-50" style={{ background: '#1d4ed8' }}>
+            <Plus size={14} /> Creează interes
+          </button>
+          {picker && (
+            <div className="absolute right-0 mt-1 w-80 max-h-96 overflow-y-auto bg-white rounded-xl border border-gray-200 shadow-lg z-20 p-2">
+              <div className="text-xs font-semibold text-gray-400 px-2 py-1">Serii viitoare de practică</div>
+              {futureSessions.length === 0 && <div className="px-2 py-2 text-xs text-gray-400 italic">Nicio serie viitoare.</div>}
+              {futureSessions.map(s => (
+                <button key={s.id} onClick={() => createFromSession(s)}
+                  className="w-full text-left px-2 py-1.5 rounded-lg text-xs hover:bg-blue-50">{sessionLabel(s)}</button>
+              ))}
+              <div className="border-t border-gray-100 my-1" />
+              <div className="text-xs font-semibold text-gray-400 px-2 py-1">Gol (manual)</div>
+              <button onClick={() => createBlank('curs')} className="w-full text-left px-2 py-1.5 rounded-lg text-xs hover:bg-gray-50">＋ Curs blank</button>
+              <button onClick={() => createBlank('expeditie')} className="w-full text-left px-2 py-1.5 rounded-lg text-xs hover:bg-gray-50">＋ Expediție blank</button>
+              <button onClick={() => createBlank('practica_suplimentara')} className="w-full text-left px-2 py-1.5 rounded-lg text-xs hover:bg-gray-50">＋ Practică suplimentară blank</button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {open && (
+        <div className="p-4 space-y-3">
+          {loading ? <div className="text-center text-gray-400 py-4 text-sm">Se încarcă…</div>
+            : items.length === 0 ? <div className="text-center text-gray-400 py-4 text-sm">Niciun interes încă. Apasă „Creează interes".</div>
+              : items.map(it => (
+                <InterestCard key={it.id} interes={it}
+                  onSave={(patch: any) => saveInterest(it.id, patch)}
+                  onDelete={() => removeInterest(it.id)} />
+              ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function InterestCard({ interes, onSave, onDelete }: { interes: any; onSave: (patch: any) => void; onDelete: () => void }) {
+  const [nume, setNume] = useState(interes.nume || '')
+  const [genre, setGenre] = useState<Genre>(interes.tip_program || 'curs')
+  const [fields, setFields] = useState<InterestField[]>(Array.isArray(interes.fields) ? interes.fields : [])
+
+  const saveFields = (nf: InterestField[]) => { setFields(nf); onSave({ fields: nf }) }
+  const changeGenre = (g: Genre) => { setGenre(g); const nf = buildFields(g, {}, fields); setFields(nf); onSave({ tip_program: g, fields: nf }) }
+  const toggleVis = (i: number) => saveFields(fields.map((f, idx) => idx === i ? { ...f, visible: !f.visible } : f))
+  const setVal = (i: number, v: string) => setFields(prev => prev.map((f, idx) => idx === i ? { ...f, value: v } : f))
+  const setLabel = (i: number, v: string) => setFields(prev => prev.map((f, idx) => idx === i ? { ...f, label: v } : f))
+  const addCustom = () => saveFields([...fields, { key: 'custom_' + Date.now(), label: 'Câmp nou', value: '', visible: true, custom: true }])
+  const removeField = (i: number) => saveFields(fields.filter((_, idx) => idx !== i))
+
+  return (
+    <div className="rounded-xl border border-indigo-100 bg-indigo-50/30 p-3">
+      <div className="flex items-center gap-2 mb-2">
+        <input value={nume} onChange={e => setNume(e.target.value)} onBlur={() => nume !== interes.nume && onSave({ nume })}
+          placeholder="Titlu interes…" className="flex-1 px-2 py-1.5 rounded-lg border border-gray-200 text-sm font-medium bg-white" />
+        <select value={genre} onChange={e => changeGenre(e.target.value as Genre)}
+          className="text-xs rounded-lg border border-gray-200 px-2 py-1.5 bg-white cursor-pointer">
+          {INTEREST_GENRES.map(g => <option key={g.key} value={g.key}>{g.label}</option>)}
+        </select>
+        <button onClick={onDelete} title="Șterge interesul" className="p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50"><Trash2 size={15} /></button>
+      </div>
+      <div className="space-y-1">
+        {fields.map((f, i) => (
+          <div key={f.key} className={`flex items-center gap-2 ${f.visible ? '' : 'opacity-50'}`}>
+            <button onClick={() => toggleVis(i)} title={f.visible ? 'Ascunde câmpul' : 'Arată câmpul'}
+              className={`p-1 rounded ${f.visible ? 'text-indigo-600' : 'text-gray-400'} hover:bg-white`}>
+              {f.visible ? <Eye size={14} /> : <EyeOff size={14} />}
+            </button>
+            {f.custom
+              ? <input value={f.label} onChange={e => setLabel(i, e.target.value)} onBlur={() => onSave({ fields })}
+                  className="w-40 shrink-0 px-2 py-1 rounded border border-gray-200 text-xs bg-white" placeholder="Nume câmp" />
+              : <span className="w-40 shrink-0 text-xs text-gray-500" title={`{{${f.key}}}`}>{f.label}</span>}
+            <input value={f.value} onChange={e => setVal(i, e.target.value)} onBlur={() => onSave({ fields })}
+              className="flex-1 px-2 py-1 rounded border border-gray-200 text-xs bg-white" placeholder="valoare…" />
+            {f.custom && <button onClick={() => removeField(i)} className="p-1 text-gray-300 hover:text-red-500"><X size={13} /></button>}
+          </div>
+        ))}
+      </div>
+      <button onClick={addCustom} className="mt-2 flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800"><Plus size={12} /> Adaugă câmp custom</button>
     </div>
   )
 }
