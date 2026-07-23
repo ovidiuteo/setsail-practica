@@ -707,6 +707,7 @@ function LeadsTab() {
           lead={editLead}
           onClose={() => setEditLead(null)}
           onSaved={(upd: any) => setLeads(prev => prev.map(x => x.id === upd.id ? { ...x, ...upd } : x))}
+          onMailing={() => { const l = editLead; setEditLead(null); setMailLead(l) }}
         />
       )}
     </div>
@@ -714,7 +715,7 @@ function LeadsTab() {
 }
 
 // ── Modal: editează datele unui lead ──
-function LeadEditModal({ lead, onClose, onSaved }: { lead: any; onClose: () => void; onSaved: (upd: any) => void }) {
+function LeadEditModal({ lead, onClose, onSaved, onMailing }: { lead: any; onClose: () => void; onSaved: (upd: any) => void; onMailing: () => void }) {
   const STATUS = ['nou', 'contactat', 'cursant', 'respins']
   const [f, setF] = useState({
     nume: lead.nume || '', prenume: lead.prenume || '', email: lead.email || '',
@@ -758,6 +759,7 @@ function LeadEditModal({ lead, onClose, onSaved }: { lead: any; onClose: () => v
               {STATUS.map(s => <option key={s} value={s}>{s}</option>)}
             </select></label>
           <div className="flex justify-end gap-2 pt-1">
+            <button onClick={onMailing} className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium border border-blue-200 text-blue-700 hover:bg-blue-50 mr-auto"><Mail size={15} /> Mailing</button>
             <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm border border-gray-200 hover:bg-gray-50">Anulează</button>
             <button onClick={save} disabled={saving} className="px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50" style={{ background: '#0a1628' }}>{saving ? 'Se salvează…' : 'Salvează'}</button>
           </div>
