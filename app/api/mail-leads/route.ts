@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
   return NextResponse.json({ lead: data })
 }
 
-const EDITABLE = new Set(['nume', 'prenume', 'email', 'telefon', 'rezumat', 'observatii', 'status', 'interes_id'])
+const EDITABLE = new Set(['nume', 'prenume', 'email', 'telefon', 'rezumat', 'observatii', 'status', 'interes_id', 'interes_nume'])
 export async function PATCH(req: NextRequest) {
   const b = await req.json().catch(() => ({}))
   if (!b?.id) return NextResponse.json({ error: 'no id' }, { status: 400 })

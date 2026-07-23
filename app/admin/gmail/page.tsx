@@ -661,6 +661,7 @@ function LeadsTab() {
                 <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
                   <th className="px-4 py-2.5">Nume</th><th className="px-4 py-2.5">Prenume</th>
                   <th className="px-4 py-2.5">Email</th><th className="px-4 py-2.5">Telefon</th>
+                  <th className="px-4 py-2.5">Interes</th>
                   <th className="px-4 py-2.5">Rezumat</th><th className="px-4 py-2.5">Observații</th>
                   <th className="px-4 py-2.5">Status</th><th className="px-4 py-2.5">Data</th><th className="px-4 py-2.5"></th>
                 </tr>
@@ -673,6 +674,7 @@ function LeadsTab() {
                     <td className="px-4 py-2 text-gray-800">{l.prenume || '—'}</td>
                     <td className="px-4 py-2 text-gray-600">{l.email || '—'}</td>
                     <td className="px-4 py-2 text-gray-600">{l.telefon || '—'}</td>
+                    <td className="px-4 py-2 text-gray-700 max-w-[12rem] truncate" title={l.interes_nume || ''}>{l.interes_nume || '—'}</td>
                     <td className="px-4 py-2 text-gray-500 max-w-[16rem] truncate" title={l.rezumat || ''}>{l.rezumat || '—'}</td>
                     <td className="px-4 py-2 text-gray-500 max-w-[12rem] truncate" title={l.observatii || ''}>{l.observatii || '—'}</td>
                     <td className="px-4 py-2" onClick={e => e.stopPropagation()}>
@@ -721,7 +723,7 @@ function LeadEditModal({ lead, onClose, onSaved, onMailing }: { lead: any; onClo
   const STATUS = ['nou', 'contactat', 'cursant', 'respins']
   const [f, setF] = useState({
     nume: lead.nume || '', prenume: lead.prenume || '', email: lead.email || '',
-    telefon: lead.telefon || '', rezumat: lead.rezumat || '', observatii: lead.observatii || '', status: lead.status || 'nou',
+    telefon: lead.telefon || '', interes_nume: lead.interes_nume || '', rezumat: lead.rezumat || '', observatii: lead.observatii || '', status: lead.status || 'nou',
   })
   const [saving, setSaving] = useState(false)
   const inCls = 'w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200'
@@ -752,6 +754,8 @@ function LeadEditModal({ lead, onClose, onSaved, onMailing }: { lead: any; onClo
             <label className="block"><span className="block text-xs text-gray-500 mb-1">Telefon</span>
               <input className={inCls} value={f.telefon} onChange={e => setF(s => ({ ...s, telefon: e.target.value }))} /></label>
           </div>
+          <label className="block"><span className="block text-xs text-gray-500 mb-1">Interes</span>
+            <input className={inCls} value={f.interes_nume} onChange={e => setF(s => ({ ...s, interes_nume: e.target.value }))} placeholder="Titlul interesului (se setează din mailing)" /></label>
           <label className="block"><span className="block text-xs text-gray-500 mb-1">Rezumat</span>
             <textarea rows={2} className={inCls} value={f.rezumat} onChange={e => setF(s => ({ ...s, rezumat: e.target.value }))} /></label>
           <label className="block"><span className="block text-xs text-gray-500 mb-1">Observații</span>
@@ -809,7 +813,9 @@ function LeadMailModal({ lead, sessions, contacts, setsailInfo, instructorMap, o
   const pickInterest = (id: string) => {
     setInterestId(id)
     try { localStorage.setItem('last_interest_id', id) } catch {}
-    fetch('/api/mail-leads', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: lead.id, interes_id: id }) }).catch(() => {})
+    const c = interese.find(i => i.id === id)
+    const titlu = (c?.nume || '').trim() || '(fără titlu)'
+    fetch('/api/mail-leads', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: lead.id, interes_id: id, interes_nume: titlu }) }).catch(() => {})
   }
 
   const interest = useMemo(() => interese.find(i => i.id === interestId) || null, [interese, interestId])
