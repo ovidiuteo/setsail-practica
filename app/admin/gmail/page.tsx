@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Search,
   RefreshCw,
@@ -785,6 +785,8 @@ function LeadMailModal({ lead, sessions, contacts, setsailInfo, instructorMap, o
   const [openInterest, setOpenInterest] = useState(false)   // rânduri collapse, default închise
   const [openTpl, setOpenTpl] = useState(false)
   const [showNewTpl, setShowNewTpl] = useState(false)
+  const [generating, setGenerating] = useState(false)
+  const [aiTpl, setAiTpl] = useState<{ label: string; subject: string; body: string } | null>(null)
   const refreshLeadTpls = () => fetch('/api/lead-templates').then(r => r.json()).then(j => setLeadTpls(j.templates || []))
   useEffect(() => { fetch('/api/interese').then(r => r.json()).then(j => setInterese(j.interese || [])) }, [])
   useEffect(() => { fetch('/api/variabile').then(r => r.json()).then(j => setVariabile(j.variabile || [])) }, [])
@@ -813,10 +815,13 @@ function LeadMailModal({ lead, sessions, contacts, setsailInfo, instructorMap, o
   // Câmpurile cerute de template-ul selectat (formulele {{...}} unice)
   const required = useMemo(() => (tpl ? extractVars(`${tpl.subject || ''} ${tpl.body_html || tpl.body_text || ''}`) : []), [tpl])
 
+  // Valorile lead-ului (client) — pt. personalizare {{prenume}}, {{nume}}
+  const leadVals = useMemo(() => ({ prenume: lead.prenume || '', nume: lead.nume || '', email: lead.email || '' }), [lead])
+
   // Seed valorile câmpurilor cerute la schimbarea interesului sau a template-ului
   useEffect(() => {
     const seed: Record<string, string> = {}
-    for (const k of required) seed[k] = interestVal(k) || baseVals[k] || ''
+    for (const k of required) seed[k] = interestVal(k) || baseVals[k] || (leadVals as any)[k] || ''
     setValues(seed)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [interestId, tplId, required.join('|'), JSON.stringify(baseVals)])
@@ -826,7 +831,7 @@ function LeadMailModal({ lead, sessions, contacts, setsailInfo, instructorMap, o
     for (const f of (interest?.fields || []) as InterestField[]) if (f.value) m[f.key] = f.value
     return m
   }, [interest])
-  const finalVals = useMemo(() => ({ ...baseVals, ...interestFieldMap, ...values }), [baseVals, interestFieldMap, values])
+  const finalVals = useMemo(() => ({ ...baseVals, ...leadVals, ...interestFieldMap, ...values }), [baseVals, leadVals, interestFieldMap, values])
 
   const applyVals = (text: string, vals: Record<string, string>) => {
     let r = text || ''
@@ -839,6 +844,42 @@ function LeadMailModal({ lead, sessions, contacts, setsailInfo, instructorMap, o
     if (!tpl) { alert('Selectează întâi un template.'); return }
     setSubject(applyVals(tpl.subject || '', finalVals))
     setBody(applyVals(tpl.body_html || tpl.body_text || '', finalVals))
+  }
+
+  // Variabilele disponibile pt. AI + picker (lead + catalog + câmpurile interesului), cu exemple din valorile curente
+  const aiVariables = useMemo(() => {
+    const seen = new Set<string>()
+    const out: { key: string; label: string; sample: string }[] = []
+    const push = (key: string, label: string) => { if (key && !seen.has(key)) { seen.add(key); out.push({ key, label, sample: String((finalVals as any)[key] || '') }) } }
+    push('prenume', 'Prenume client'); push('nume', 'Nume client')
+    for (const v of MAIL_VARIABLES_FLAT) push(v.key, labelFor(v.key))
+    for (const f of (interest?.fields || []) as InterestField[]) push(f.key, f.label || labelFor(f.key))
+    return out
+  }, [finalVals, interest, variabile])
+
+  // Generează template AI din mailul curent (înlocuiește valorile concrete cu {{variabile}})
+  async function generateTemplateAI() {
+    if (!subject.trim() && !body.trim()) { alert('Completează mesajul/subiectul întâi.'); return }
+    setGenerating(true)
+    try {
+      const r = await fetch('/api/ai/mail-template', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ subject, body, variables: aiVariables }),
+      })
+      const j = await r.json().catch(() => null)
+      if (!r.ok || !j) {
+        // fallback: deschide modalul cu conținutul brut, arată eroarea
+        setAiTpl({ label: tpl?.label ? tpl.label + ' (modificat)' : '', subject, body })
+        setShowNewTpl(true)
+        alert('AI indisponibil (' + (j?.error || 'eroare') + '). Poți salva template-ul manual.')
+        return
+      }
+      setAiTpl({ label: j.label || (tpl?.label || ''), subject: j.subject ?? subject, body: j.body ?? body })
+      setShowNewTpl(true)
+    } catch (e: any) {
+      setAiTpl({ label: tpl?.label || '', subject, body }); setShowNewTpl(true)
+      alert('Eroare AI: ' + (e?.message || e))
+    } finally { setGenerating(false) }
   }
 
   // Salvează valoarea unui câmp în interes (persistă pt. viitor)
@@ -996,9 +1037,9 @@ function LeadMailModal({ lead, sessions, contacts, setsailInfo, instructorMap, o
 
           {/* Butoane jos: Generează template (primul) + trimitere */}
           <div className="flex flex-col sm:flex-row gap-2">
-            <button onClick={() => { if (!subject.trim() && !body.trim()) { alert('Completează mesajul/subiectul întâi.'); return } setShowNewTpl(true) }}
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium border border-blue-200 text-blue-700 hover:bg-blue-50">
-              <Save size={15} /> Generează template
+            <button onClick={generateTemplateAI} disabled={generating}
+              className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-lg text-sm font-medium border border-blue-200 text-blue-700 hover:bg-blue-50 disabled:opacity-50">
+              <Sparkles size={15} /> {generating ? 'Se generează…' : 'Generează template'}
             </button>
             <a href={gmailUrl} target="_blank" rel="noopener noreferrer"
               onClick={e => { guardSend(e); if (!e.defaultPrevented && isHtml) copy(body, 'body') }}
@@ -1016,7 +1057,9 @@ function LeadMailModal({ lead, sessions, contacts, setsailInfo, instructorMap, o
 
       {showNewTpl && (
         <NewTemplateModal
-          initial={{ label: tpl?.label ? tpl.label + ' (modificat)' : '', subject, body, isHtml }}
+          initial={{ label: aiTpl?.label || '', subject: aiTpl?.subject ?? subject, body: aiTpl?.body ?? body }}
+          variables={aiVariables}
+          sampleVals={finalVals}
           onClose={() => setShowNewTpl(false)}
           onSaved={async () => { await refreshLeadTpls(); setShowNewTpl(false) }}
         />
@@ -1025,16 +1068,38 @@ function LeadMailModal({ lead, sessions, contacts, setsailInfo, instructorMap, o
   )
 }
 
-// ── Modal: generează un template nou din mailul curent (salvat în lead_templates) ──
-function NewTemplateModal({ initial, onClose, onSaved }: {
-  initial: { label: string; subject: string; body: string; isHtml: boolean }; onClose: () => void; onSaved: () => void
+// ── Modal: editează/salvează template generat de AI (picker variabile + preview) ──
+function NewTemplateModal({ initial, variables, sampleVals, onClose, onSaved }: {
+  initial: { label: string; subject: string; body: string }
+  variables: { key: string; label: string; sample: string }[]
+  sampleVals: Record<string, string>
+  onClose: () => void; onSaved: () => void
 }) {
   const [label, setLabel] = useState(initial.label)
   const [categorie, setCategorie] = useState('general')
   const [subject, setSubject] = useState(initial.subject)
   const [body, setBody] = useState(initial.body)
   const [saving, setSaving] = useState(false)
+  const [showPreview, setShowPreview] = useState(true)
+  const subjRef = useRef<HTMLInputElement>(null)
+  const bodyRef = useRef<HTMLTextAreaElement>(null)
+  const [focusedField, setFocusedField] = useState<'subject' | 'body'>('body')
   const inCls = 'w-full px-3 py-2 rounded-lg border border-gray-200 text-sm'
+
+  function insertVar(key: string) {
+    const token = `{{${key}}}`
+    const isSubj = focusedField === 'subject'
+    const el = isSubj ? subjRef.current : bodyRef.current
+    const val = isSubj ? subject : body
+    const set = isSubj ? setSubject : setBody
+    const start = el?.selectionStart ?? val.length
+    const end = el?.selectionEnd ?? val.length
+    const nv = val.slice(0, start) + token + val.slice(end)
+    set(nv)
+    requestAnimationFrame(() => { if (el) { el.focus(); const p = start + token.length; el.setSelectionRange(p, p) } })
+  }
+
+  const apply = (t: string) => { let r = t || ''; for (const [k, v] of Object.entries(sampleVals)) r = r.split('{{' + k + '}}').join(v); return r }
 
   async function save() {
     if (!label.trim()) { alert('Dă un nume template-ului.'); return }
@@ -1053,11 +1118,11 @@ function NewTemplateModal({ initial, onClose, onSaved }: {
     <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" onClick={e => e.stopPropagation()}>
         <div className="flex items-center justify-between p-5 border-b border-gray-100">
-          <h3 className="font-semibold text-gray-900">Template nou</h3>
+          <h3 className="font-semibold text-gray-900">Template nou (generat AI)</h3>
           <button onClick={onClose} className="p-1 rounded hover:bg-gray-100 text-gray-400"><X size={18} /></button>
         </div>
         <div className="p-5 space-y-3">
-          <p className="text-xs text-gray-400">Salvează mailul curent (cu modificările tale) ca template reutilizabil. Îl vei regăsi în secțiunea „Template-uri leaduri".</p>
+          <p className="text-xs text-gray-400">AI-ul a înlocuit valorile concrete cu <span className="font-mono">{'{{variabile}}'}</span>. Editează, inserează variabile din picker, verifică în preview, apoi salvează. Îl regăsești în „Template-uri leaduri".</p>
           <div className="grid grid-cols-2 gap-3">
             <label className="block"><span className="block text-xs text-gray-500 mb-1">Nume template</span>
               <input className={inCls} value={label} onChange={e => setLabel(e.target.value)} placeholder="ex. Ofertă curs intensiv" /></label>
@@ -1065,12 +1130,40 @@ function NewTemplateModal({ initial, onClose, onSaved }: {
               <input className={inCls} value={categorie} onChange={e => setCategorie(e.target.value)} placeholder="general" /></label>
           </div>
           <label className="block"><span className="block text-xs text-gray-500 mb-1">Subiect</span>
-            <input className={inCls} value={subject} onChange={e => setSubject(e.target.value)} /></label>
+            <input ref={subjRef} onFocus={() => setFocusedField('subject')} className={inCls} value={subject} onChange={e => setSubject(e.target.value)} /></label>
           <label className="block"><span className="block text-xs text-gray-500 mb-1">Mesaj {body.trim().startsWith('<') && <span className="text-amber-600">(HTML)</span>}</span>
-            <textarea rows={8} className={`${inCls} font-mono resize-y`} value={body} onChange={e => setBody(e.target.value)} /></label>
+            <textarea ref={bodyRef} onFocus={() => setFocusedField('body')} rows={8} className={`${inCls} font-mono resize-y`} value={body} onChange={e => setBody(e.target.value)} /></label>
+
+          {/* Picker de variabile — inserează {{cheie}} la poziția cursorului */}
+          <div>
+            <div className="text-xs text-gray-500 mb-1">Inserează variabilă (în ultimul câmp focusat: <b>{focusedField === 'subject' ? 'Subiect' : 'Mesaj'}</b>)</div>
+            <div className="flex flex-wrap gap-1 max-h-28 overflow-y-auto">
+              {variables.map(v => (
+                <button key={v.key} onClick={() => insertVar(v.key)} title={v.label + (v.sample ? ` (ex: ${v.sample})` : '')}
+                  className="px-2 py-1 rounded border border-gray-200 text-[11px] font-mono hover:bg-blue-50 hover:border-blue-200">{`{{${v.key}}}`}</button>
+              ))}
+            </div>
+          </div>
+
+          {/* Preview cu date reale (interesul curent) */}
+          <div className="rounded-lg border border-gray-100 bg-gray-50/60">
+            <button onClick={() => setShowPreview(p => !p)} className="w-full flex items-center justify-between px-3 py-2 text-xs font-medium text-gray-600">
+              <span>👁 Preview cu date reale</span>
+              <span className="text-gray-400">{showPreview ? 'Ascunde' : 'Arată'}</span>
+            </button>
+            {showPreview && (
+              <div className="px-3 pb-3 space-y-1">
+                <div className="text-[11px] text-gray-400">Subiect</div>
+                <div className="text-xs text-gray-800 bg-white rounded border border-gray-100 px-2 py-1">{apply(subject) || '—'}</div>
+                <div className="text-[11px] text-gray-400 mt-1">Mesaj</div>
+                <div className="text-xs text-gray-800 bg-white rounded border border-gray-100 px-2 py-1 max-h-40 overflow-y-auto whitespace-pre-wrap">{apply(body) || '—'}</div>
+              </div>
+            )}
+          </div>
+
           <div className="flex justify-end gap-2 pt-1">
             <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm border border-gray-200 hover:bg-gray-50">Anulează</button>
-            <button onClick={save} disabled={saving} className="px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50" style={{ background: '#1d4ed8' }}>{saving ? 'Se salvează…' : 'Salvează template'}</button>
+            <button onClick={save} disabled={saving} className="px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50" style={{ background: '#0E7C86' }}>{saving ? 'Se salvează…' : 'Salvează template'}</button>
           </div>
         </div>
       </div>
