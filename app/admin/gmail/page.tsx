@@ -17,8 +17,8 @@ import {
 } from 'lucide-react'
 import GoogleGIcon from '@/components/GoogleGIcon'
 import { supabase } from '@/lib/supabase'
-import { applyMailTemplate, mailVarValues, MAIL_VAR_GROUPS } from '@/lib/mail-template'
-import { buildFields, INTEREST_GENRES, type Genre, type InterestField } from '@/lib/interese-catalog'
+import { mailVarValues } from '@/lib/mail-template'
+import { buildFields, INTEREST_GENRES, genreLabel, type Genre, type InterestField } from '@/lib/interese-catalog'
 import { Plus, Eye, EyeOff } from 'lucide-react'
 
 type Template = {
@@ -703,49 +703,49 @@ function LeadMailModal({ lead, templates, sessions, contacts, setsailInfo, instr
   lead: any; templates: any[]; sessions: any[]; contacts: any[]
   setsailInfo: Record<string, string>; instructorMap: Record<string, string>; onClose: () => void
 }) {
-  // Interes implicit = cursul intensiv din 6-9 august (C,D, practică 06.08, activ), altfel prima sesiune
-  const defaultSessionId = useMemo(() => {
-    const aug = sessions.find(s => s.practice_start_date === '2026-08-06'
-      && String(s.class_caa || '').toUpperCase().includes('C') && s.status === 'active')
-    return aug?.id || sessions[0]?.id || ''
-  }, [sessions])
-
-  const [sessionId, setSessionId] = useState('')
+  const [interese, setInterese] = useState<any[]>([])
+  const [interestId, setInterestId] = useState('')
   const [to, setTo] = useState(lead.email || '')
   const [subject, setSubject] = useState('')
   const [body, setBody] = useState('')
   const [tplId, setTplId] = useState('')
   const [copied, setCopied] = useState<string | null>(null)
-  useEffect(() => { setSessionId(defaultSessionId) }, [defaultSessionId])
+  useEffect(() => { fetch('/api/interese').then(r => r.json()).then(j => setInterese(j.interese || [])) }, [])
+  useEffect(() => { if (!interestId && interese.length) setInterestId(interese[0].id) }, [interese, interestId])
 
-  const session = useMemo(() => sessions.find(s => s.id === sessionId) || null, [sessions, sessionId])
+  const interest = useMemo(() => interese.find(i => i.id === interestId) || null, [interese, interestId])
+  const sourceSession = useMemo(() => (interest?.source_id ? sessions.find(s => s.id === interest.source_id) || null : null), [interest, sessions])
 
-  // Context de variabile pentru sesiunea (interesul) selectat(ă)
-  const ctx = useMemo(() => {
-    if (!session) return null
-    const instr = [session.instructor_id, session.instructor_id_2, session.instructor_id_3]
+  // Valorile de bază din sesiunea-sursă (acoperă toate variabilele {{...}} din template)
+  const baseVals = useMemo(() => {
+    if (!sourceSession) return {} as Record<string, string>
+    const instr = [sourceSession.instructor_id, sourceSession.instructor_id_2, sourceSession.instructor_id_3]
       .filter(Boolean).map((id: string) => instructorMap[id]).filter(Boolean).map((n: string) => ({ full_name: n }))
-    return {
-      origin: typeof window !== 'undefined' ? window.location.origin : undefined,
-      sess: session, contacts, instructors: instr, setsailInfo,
-    }
-  }, [session, contacts, instructorMap, setsailInfo])
+    return mailVarValues({ origin: typeof window !== 'undefined' ? window.location.origin : undefined, sess: sourceSession, contacts, instructors: instr, setsailInfo })
+  }, [sourceSession, contacts, instructorMap, setsailInfo])
 
-  const vals = useMemo(() => (ctx ? mailVarValues(ctx) : {}), [ctx])
+  // Peste bază punem valorile (nevide) editate în interes → editările curatate câștigă
+  const mergedVals = useMemo(() => {
+    const m: Record<string, string> = { ...baseVals }
+    for (const f of (interest?.fields || []) as InterestField[]) if (f.value) m[f.key] = f.value
+    return m
+  }, [baseVals, interest])
 
-  function sessionLabel(s: any) {
-    const d = s.session_date ? new Date(s.session_date).toLocaleDateString('ro-RO', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
-    const loc = s.location_detail || s.locations?.name || ''
-    return `${s.class_caa || '—'} · ${d}${loc ? ' · ' + loc : ''}`
+  const applyVals = (text: string, vals: Record<string, string>) => {
+    let r = text || ''
+    for (const [k, v] of Object.entries(vals)) r = r.split('{{' + k + '}}').join(v)
+    return r
   }
 
   function genereaza() {
     const tpl = templates.find(t => t.id === tplId)
     if (!tpl) { alert('Selectează întâi un template.'); return }
-    if (!ctx) { alert('Selectează un interes (program/serie).'); return }
-    setSubject(applyMailTemplate(tpl.subject || '', ctx))
-    setBody(applyMailTemplate(tpl.body_html || tpl.body_text || '', ctx))
+    if (!interest) { alert('Selectează un interes.'); return }
+    setSubject(applyVals(tpl.subject || '', mergedVals))
+    setBody(applyVals(tpl.body_html || tpl.body_text || '', mergedVals))
   }
+
+  const visibleFields = ((interest?.fields || []) as InterestField[]).filter(f => f.visible && f.value)
 
   const isHtml = body.trim().startsWith('<')
   const plainBody = isHtml ? body.replace(/<style[\s\S]*?<\/style>/gi, ' ').replace(/<br\s*\/?>/gi, '\n').replace(/<\/(p|div|li|tr|h[1-6])>/gi, '\n').replace(/<[^>]+>/g, '').replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/\n{3,}/g, '\n\n').trim() : body
@@ -753,10 +753,6 @@ function LeadMailModal({ lead, templates, sessions, contacts, setsailInfo, instr
   const mailtoUrl = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(plainBody)}`
 
   const copy = (txt: string, tag: string) => { navigator.clipboard.writeText(txt); setCopied(tag); setTimeout(() => setCopied(null), 2000) }
-
-  // Doar variabilele cu valoare, pentru card
-  const filledVars = MAIL_VAR_GROUPS.flatMap(g => g.vars.map(v => ({ ...v, icon: g.icon })))
-    .filter(v => (vals as any)[v.key])
 
   return (
     <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4" onClick={onClose}>
@@ -770,22 +766,25 @@ function LeadMailModal({ lead, templates, sessions, contacts, setsailInfo, instr
         </div>
 
         <div className="p-5 space-y-4">
-          {/* Card INTERESE */}
+          {/* Card INTERESE (din catalogul salvat) */}
           <div className="rounded-xl border border-indigo-100 bg-indigo-50/40 p-4">
             <div className="flex items-center justify-between mb-2">
-              <h4 className="font-semibold text-sm text-indigo-900">🎯 Interese (program / serie)</h4>
+              <h4 className="font-semibold text-sm text-indigo-900">🎯 Interes (program / serie)</h4>
             </div>
-            <select value={sessionId} onChange={e => setSessionId(e.target.value)}
-              className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white cursor-pointer">
-              {sessions.length === 0 && <option>Se încarcă…</option>}
-              {sessions.map(s => <option key={s.id} value={s.id}>{sessionLabel(s)}</option>)}
-            </select>
-            {filledVars.length > 0 && (
+            {interese.length === 0 ? (
+              <p className="text-xs text-gray-500 italic">Niciun interes salvat. Creează-l în secțiunea „Interese" de mai jos, apoi revino.</p>
+            ) : (
+              <select value={interestId} onChange={e => setInterestId(e.target.value)}
+                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white cursor-pointer">
+                {interese.map(i => <option key={i.id} value={i.id}>{genreLabel(i.tip_program)} · {i.nume || '(fără titlu)'}</option>)}
+              </select>
+            )}
+            {visibleFields.length > 0 && (
               <div className="mt-3 grid sm:grid-cols-2 gap-x-4 gap-y-1">
-                {filledVars.map(v => (
-                  <div key={v.key} className="flex items-start justify-between gap-2 text-xs py-0.5 border-b border-indigo-100/70">
-                    <span className="text-gray-500 shrink-0" title={`{{${v.key}}}`}>{v.icon} {v.label}</span>
-                    <span className="text-gray-900 text-right font-medium break-all">{(vals as any)[v.key]}</span>
+                {visibleFields.map(f => (
+                  <div key={f.key} className="flex items-start justify-between gap-2 text-xs py-0.5 border-b border-indigo-100/70">
+                    <span className="text-gray-500 shrink-0" title={`{{${f.key}}}`}>{f.label}</span>
+                    <span className="text-gray-900 text-right font-medium break-all">{f.value}</span>
                   </div>
                 ))}
               </div>
