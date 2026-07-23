@@ -1,5 +1,13 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  experimental: {
+    // pdfkit citește fișiere .afm relativ la pachet → nu-l bundle-ui, lasă-l require din node_modules
+    serverComponentsExternalPackages: ['pdfkit', 'fontkit'],
+    // Asigură includerea fonturilor TTF în bundle-ul serverless al rutei (pdfkit)
+    outputFileTracingIncludes: {
+      '/api/verificare-ancom': ['./app/api/verificare-ancom/fonts/*.ttf'],
+    },
+  },
   async headers() {
     return [
       {

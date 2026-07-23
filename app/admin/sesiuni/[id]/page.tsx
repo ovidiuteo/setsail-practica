@@ -1656,54 +1656,25 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click()
   }
 
-  // Download verificare ANCOM: zip cu ID-ul (CI) + cererea fiecărui cursant bifat
+  // Download verificare ANCOM: zip cu cererea + copia CI (ambele PDF A4) pt. cursanții bifați
   async function downloadVerificareAncom() {
     setDlAncom(true)
     try {
-      const { data: checked } = await supabase
-        .from('students')
-        .select('id, full_name, ci_image_data, class_caa')
-        .eq('session_id', sess.id)
-        .eq('verificare_ancom', true)
-        .order('order_in_session')
-      if (!checked || checked.length === 0) { alert('Niciun cursant bifat pentru verificare ANCOM.'); setDlAncom(false); return }
-
-      const JSZip = (await import('jszip')).default
-      const zip = new JSZip()
-      const slug = (n: string) => (n || 'cursant').replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim()
-      const dataUrlParts = (dataUrl: string): { bytes: Uint8Array; ext: string } | null => {
-        const m = /^data:([^;]+);base64,([\s\S]*)$/.exec(dataUrl || '')
-        if (!m) return null
-        const mime = m[1]; const bin = atob(m[2])
-        const bytes = new Uint8Array(bin.length)
-        for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i)
-        const ext = mime.includes('png') ? 'png' : mime.includes('webp') ? 'webp' : mime.includes('pdf') ? 'pdf' : 'jpg'
-        return { bytes, ext }
+      const res = await fetch('/api/verificare-ancom', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sess.id }),
+      })
+      if (!res.ok) {
+        let msg = 'Eroare la generarea arhivei'
+        try { msg = (await res.json())?.error || msg } catch {}
+        alert(msg); setDlAncom(false); return
       }
-
-      let missingCi = 0
-      for (const s of checked as any[]) {
-        const name = slug(s.full_name)
-        if (s.ci_image_data) {
-          const p = dataUrlParts(s.ci_image_data)
-          if (p) zip.file(`${name}/${name} - CI.${p.ext}`, p.bytes); else missingCi++
-        } else missingCi++
-        const c = String(s.class_caa || '').toLowerCase()
-        const tip = c.includes('prelungire') ? 'prelungire' : 'obtinere'
-        try {
-          const res = await fetch('/api/generate-cereri-radio', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ session_id: sess.id, tip, format: 'docx', student_ids: [s.id], stampila: stamp, semnatura: signs })
-          })
-          if (res.ok) zip.file(`${name}/${name} - Cerere ${tip}.docx`, await res.arrayBuffer())
-        } catch {}
-      }
-
-      const blob = await zip.generateAsync({ type: 'blob' })
+      const missing = decodeURIComponent(res.headers.get('X-Missing-Ci') || '')
+      const blob = await res.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a'); a.href = url; a.download = `Verificare_ANCOM_${sess.session_date}.zip`; a.click()
       setTimeout(() => URL.revokeObjectURL(url), 5000)
-      if (missingCi) alert(`Arhivă descărcată. Atenție: ${missingCi} cursant(i) fără imagine CI încărcată.`)
+      if (missing.trim()) alert(`Arhivă descărcată. Atenție: fără imagine CI pentru: ${missing}`)
     } catch (e: any) { alert('Eroare la generarea arhivei: ' + (e.message || e)) }
     setDlAncom(false)
   }
@@ -2028,7 +1999,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                     className="w-full flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#0f766e'}}>
                     <Download size={12}/>{dlAncom ? 'Se pregătește arhiva…' : 'Download verificare ANCOM'}
                   </button>
-                  <p className="text-[10px] text-gray-400 mt-1 text-center">ZIP: CI + cerere pentru cursanții bifați „ANCOM” în tabel</p>
+                  <p className="text-[10px] text-gray-400 mt-1 text-center">ZIP cu PDF-uri A4 (cerere + copie CI) pentru cursanții bifați „ANCOM”</p>
                 </div>
               </div>
             </div>
