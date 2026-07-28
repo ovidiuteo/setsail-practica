@@ -61,7 +61,9 @@ export default function AdminDashboard() {
         .select('*, locations(name, county), instructors(full_name), boats(name), evaluators(full_name)')
         .order('session_date', { ascending: true })
         .order('created_at', { ascending: true }),
-      supabase.from('students').select('*, sessions!session_id(session_date, session_type, status, locations(name))'),
+      // Doar ce se folosește (numărare + statistici). `select('*')` aducea și
+      // imaginile CI (base64, ~41 MB) și pica pe statement_timeout-ul de 3s.
+      supabase.from('students').select('session_id, sessions!session_id(session_type)'),
       supabase.from('timeline_milestones').select('*').order('order_index'),
       supabase.from('milestone_status').select('*'),
     ])
@@ -99,13 +101,14 @@ export default function AdminDashboard() {
 
     if (absentSessIds.length > 0) {
       // Cursanti inca pe sesiunile absent (nelocati inca)
+      const ABSENT_COLS = 'id, full_name, session_id, original_session_id, allocated_session_id'
       const { data: stillAbsent } = await supabase
-        .from('students').select('*')
+        .from('students').select(ABSENT_COLS)
         .in('session_id', absentSessIds)
         .order('full_name')
       // Cursanti alocati dar sesiunea tinta nu e completata
       const { data: allocated } = await supabase
-        .from('students').select('*')
+        .from('students').select(ABSENT_COLS)
         .in('original_session_id', absentSessIds)
         .not('session_id', 'in', `(${absentSessIds.join(',')})`)
         .order('full_name')
