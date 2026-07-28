@@ -4,11 +4,12 @@ import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
 import {
   Award, Plus, Printer, Search, Loader2, Wand2, Settings2,
-  Ban, RotateCcw, Pencil, PackageCheck, ListPlus, ListX,
+  Ban, RotateCcw, Pencil, PackageCheck, ListPlus, ListX, UserSearch,
 } from 'lucide-react'
 import { Diploma, DIPLOMA_CATEGORIES, formatDiplomaDate } from '@/lib/diplomas'
 import { DiplomaEditModal, InlineNumber } from './DiplomaQuickEdit'
 import SyncAddressesButton from './SyncAddressesButton'
+import DiplomaIssueModal, { StudentPickerModal, DiplomaStudent } from './DiplomaIssueModal'
 
 const SERIES_COLORS: Record<string, string> = {
   A: 'bg-sky-100 text-sky-700',
@@ -25,6 +26,8 @@ export default function DiplomePage() {
   const [showCancelled, setShowCancelled] = useState(false)
   const [busyId, setBusyId] = useState<string | null>(null)
   const [modalDiploma, setModalDiploma] = useState<Diploma | null>(null)
+  const [showPicker, setShowPicker] = useState(false)
+  const [issueFor, setIssueFor] = useState<DiplomaStudent | null>(null)
 
   const loadAll = useCallback(async () => {
     setLoading(true)
@@ -87,6 +90,10 @@ export default function DiplomePage() {
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <SyncAddressesButton diplomas={rows} onSaved={loadAll} />
+            <button onClick={() => setShowPicker(true)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-amber-200 text-amber-700 hover:bg-amber-50 bg-white">
+              <UserSearch size={13} /> Selectează cursant
+            </button>
             <Link href="/admin/diplome/sabloane"
               className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium border border-gray-200 text-gray-700 hover:bg-gray-100 bg-white">
               <Settings2 size={13} /> Șabloane & imprimante
@@ -247,6 +254,21 @@ export default function DiplomePage() {
           <DiplomaEditModal
             diploma={modalDiploma}
             onClose={() => setModalDiploma(null)}
+            onSaved={loadAll}
+          />
+        )}
+
+        {showPicker && (
+          <StudentPickerModal
+            onClose={() => setShowPicker(false)}
+            onPick={s => { setShowPicker(false); setIssueFor(s) }}
+          />
+        )}
+
+        {issueFor && (
+          <DiplomaIssueModal
+            student={issueFor}
+            onClose={() => setIssueFor(null)}
             onSaved={loadAll}
           />
         )}

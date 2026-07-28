@@ -8,6 +8,11 @@ import {
   AlertCircle, ExternalLink, Trash2, Copy, Check, X, FileText
 } from 'lucide-react'
 import CIImageEditor from '@/components/CIImageEditor'
+import { DIPLOMA_CATEGORIES, DiplomaCategory } from '@/lib/diplomas'
+import DiplomaIssueModal from '@/app/admin/diplome/DiplomaIssueModal'
+
+// Butoanele de diplomă din fișa cursantului, în ordinea uzuală S D C B A
+const DIPLOMA_SERIES_ORDER: DiplomaCategory[] = [...DIPLOMA_CATEGORIES].reverse()
 
 type Student = {
   id: string; full_name: string; cnp: string; email: string; phone: string
@@ -59,6 +64,7 @@ export default function CursantAdminPage() {
   const [scanStatus, setScanStatus] = useState<'idle' | 'ok' | 'error'>('idle')
   const [copied, setCopied] = useState<string | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [diplomaCat, setDiplomaCat] = useState<DiplomaCategory | null>(null)
   const [imgKey, setImgKey] = useState(Date.now())
   const ciInputRef = useRef<HTMLInputElement>(null)
   // RE-OCR CI
@@ -384,6 +390,15 @@ export default function CursantAdminPage() {
           <div className="flex items-center gap-2">
             {/* Adeverință VHF (radio) */}
             <AdeverintaVhf student={student} session={session} />
+            {/* Diplome: câte un buton per serie */}
+            <div className="flex items-center gap-1 pl-1 border-l border-gray-200">
+              {DIPLOMA_SERIES_ORDER.map(c => (
+                <button key={c} onClick={() => setDiplomaCat(c)} title={`Diplomă seria ${c}`}
+                  className="w-8 h-8 rounded-lg text-xs font-bold border border-gray-200 text-gray-600 hover:bg-amber-50 hover:border-amber-300 hover:text-amber-700 transition-colors">
+                  {c}
+                </button>
+              ))}
+            </div>
             {/* Portal link */}
             {session && (
               <a href={`/portal?cod=${session.access_code}&email=${encodeURIComponent(student.email || '')}`}
@@ -734,6 +749,18 @@ export default function CursantAdminPage() {
 
         </div>
       </div>
+
+      {diplomaCat && (
+        <DiplomaIssueModal
+          student={{
+            id: student.id, full_name: student.full_name, cnp: student.cnp,
+            address: student.address, city: student.city, county: student.county,
+            class_caa: student.class_caa, session_id: student.session_id,
+          }}
+          category={diplomaCat}
+          onClose={() => setDiplomaCat(null)}
+        />
+      )}
     </div>
   )
 }

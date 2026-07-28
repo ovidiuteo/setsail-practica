@@ -140,6 +140,39 @@ export function formatDiplomaDate(date: string | null | undefined): string {
   return `${dd}.${mm}.${d.getFullYear()}`
 }
 
+// Rândul „Probă practică" se tipărește implicit doar pe seriile cu probă pe apă.
+export const SHOW_PRACTICE_DEFAULT: Record<DiplomaCategory, boolean> = {
+  A: false, B: true, C: true, D: true, S: false,
+}
+
+const LUNI_RO = ['ianuarie', 'februarie', 'martie', 'aprilie', 'mai', 'iunie',
+  'iulie', 'august', 'septembrie', 'octombrie', 'noiembrie', 'decembrie']
+
+// Serie curs pentru cursul intensiv (fără dată de start): "[ziua practicii - 3]-[ziua practicii] [luna] [anul]"
+// ex. practică pe 20.05.2026 → "17-20 mai 2026"
+export function intensiveGroupName(practiceDate: string): string {
+  const end = new Date(practiceDate)
+  if (isNaN(end.getTime())) return ''
+  const start = new Date(end)
+  start.setDate(end.getDate() - 3)
+  if (start.getMonth() === end.getMonth() && start.getFullYear() === end.getFullYear()) {
+    return `${start.getDate()}-${end.getDate()} ${LUNI_RO[end.getMonth()]} ${end.getFullYear()}`
+  }
+  // intervalul trece peste granița de lună
+  return `${start.getDate()} ${LUNI_RO[start.getMonth()]} - ${end.getDate()} ${LUNI_RO[end.getMonth()]} ${end.getFullYear()}`
+}
+
+// Seria de curs a unei sesiuni: "[prima zi de curs] - [data practicii]",
+// iar la cursul intensiv (fără dată de start) intervalul de 4 zile.
+export function groupNameForSession(
+  s: { session_date?: string | null; course_start_date?: string | null } | null | undefined,
+): string {
+  if (!s?.session_date) return ''
+  return s.course_start_date
+    ? `${formatDiplomaDate(s.course_start_date)} - ${formatDiplomaDate(s.session_date)}`
+    : intensiveGroupName(s.session_date)
+}
+
 // Categoriile implicite pentru un cursant, după clasa CAA (ex. "C", "C,D", "C/D").
 // La clasele cu velă (A/B) vechiul sistem emitea automat și diploma S.
 export function defaultCategoriesForClass(classCaa: string | null | undefined): DiplomaCategory[] {
