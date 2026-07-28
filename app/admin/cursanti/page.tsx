@@ -13,6 +13,7 @@ const portalMap: Record<string, { label: string; color: string; icon: any }> = {
 export default function CursantiPage() {
   const [students, setStudents] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
+  const [loadError, setLoadError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [filterStatus, setFilterStatus] = useState('all')
   const [filterSession, setFilterSession] = useState('all') // 'all' | 'absent' | session_id
@@ -23,13 +24,20 @@ export default function CursantiPage() {
 
   useEffect(() => {
     async function load() {
-      const [{ data: sts }, { data: sess }] = await Promise.all([
-        supabase.from('students').select('*').order('full_name'),
+      const [{ data: sts, error: stsErr }, { data: sess, error: sessErr }] = await Promise.all([
+        // DOAR coloanele folosite în listă: `select('*')` aducea și imaginile CI
+        // (base64) — ~41 MB pentru toți cursanții, ceea ce bloca încărcarea paginii.
+        supabase.from('students')
+          .select('id, full_name, cnp, ci_series, ci_number, email, class_caa, portal_status, session_id, original_session_id')
+          .order('full_name'),
         supabase.from('sessions')
           .select('id, session_date, session_type, parent_session_id, locations(name, county), boats(name), access_code, status')
           .order('session_date', { ascending: true })
           .order('created_at', { ascending: true }),
       ])
+
+      // fără asta, o eroare de încărcare arăta identic cu „baza de date e goală"
+      setLoadError(stsErr?.message || sessErr?.message || null)
 
       const sessMap: Record<string, any> = {}
       for (const s of (sess || [])) sessMap[s.id] = s
@@ -294,6 +302,12 @@ export default function CursantiPage() {
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         {loading ? (
           <div className="p-12 text-center text-gray-400">Se încarcă...</div>
+        ) : loadError ? (
+          <div className="p-12 text-center">
+            <p className="text-red-600 font-medium mb-1">Nu am putut încărca cursanții.</p>
+            <p className="text-xs text-gray-500 mb-3">{loadError}</p>
+            <button onClick={() => location.reload()} className="text-blue-600 hover:underline text-sm">Reîncearcă →</button>
+          </div>
         ) : filtered.length === 0 ? (
           <div className="p-12 text-center text-gray-400">
             {students.length === 0
