@@ -57,7 +57,15 @@ export default function AdminDashboard() {
   const [msStatus, setMsStatus] = useState<Record<string, { status: 'done' | 'anulat'; stamped_at: string }>>({})
 
   async function load() {
-    const [{ data: sessions }, { data: allSts }, { data: tlMs }, { data: msSt }] = await Promise.all([
+    // Verificarea „sesiune pe focus" pleacă odată cu restul (nu în serie, ca să nu
+    // coste nimic în cazul obișnuit), dar o așteptăm prima: dacă există focus,
+    // plecăm imediat spre sesiune fără să mai așteptăm datele dashboard-ului,
+    // care oricum s-ar arunca.
+    const focusP = supabase.from('sessions')
+      .select('id').eq('status', 'focus').eq('session_type', 'principal')
+      .limit(1).maybeSingle()
+
+    const restP = Promise.all([
       supabase.from('sessions')
         .select('*, locations(name, county), instructors(full_name), boats(name), evaluators(full_name)')
         .order('session_date', { ascending: true })
@@ -67,19 +75,23 @@ export default function AdminDashboard() {
       supabase.from('students').select('session_id, sessions!session_id(session_type)'),
       supabase.from('timeline_milestones').select('*').order('order_index'),
       supabase.from('milestone_status').select('*'),
-    ])
+    ]).catch(() => null)
+
+    const { data: focus } = await focusP
+    if (focus?.id) {
+      router.replace(`/admin/sesiuni/${focus.id}`)
+      return
+    }
+
+    const rest = await restP
+    if (!rest) { setLoading(false); return }
+    const [{ data: sessions }, { data: allSts }, { data: tlMs }, { data: msSt }] = rest
+
     setMilestones(tlMs || [])
     setMsStatus(Object.fromEntries((msSt || []).map((r: any) => [`${r.session_id}:${r.milestone_id}`, { status: r.status, stamped_at: r.stamped_at }])))
 
     const all = sessions || []
     const sts = allSts || []
-
-    // Redirect la sesiunea Focus daca exista
-    const focusSess = all.find((s:any) => s.status === 'focus' && s.session_type === 'principal')
-    if (focusSess) {
-      router.replace(`/admin/sesiuni/${focusSess.id}`)
-      return
-    }
 
     const counts: Record<string,number> = {}
     for (const st of sts) counts[st.session_id] = (counts[st.session_id]||0) + 1
