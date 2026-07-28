@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import { Calendar, Users, CheckCircle, Clock, Plus, ExternalLink, GitBranch, UserX, ArrowRight, Bell } from 'lucide-react'
+import { Calendar, Users, CheckCircle, Clock, Plus, ExternalLink, GitBranch, UserX, ArrowRight, Bell, X } from 'lucide-react'
 import Link from 'next/link'
 import { resolveColor, DEFAULT_GLOBAL_DAY, DEFAULT_GLOBAL_WEEKEND } from '@/lib/timeline-colors'
 import { scopeForSession, timelineScopeShort } from '@/lib/timeline-scope'
@@ -51,6 +51,7 @@ export default function AdminDashboard() {
   const [filter, setFilter]         = useState<'active'|'all'>('active')
   const [moving, setMoving]         = useState<string|null>(null)
   const [moveMenuId, setMoveMenuId] = useState<string|null>(null)
+  const [showAbsent, setShowAbsent] = useState(false)
 
   const [milestones, setMilestones] = useState<any[]>([])
   const [msStatus, setMsStatus] = useState<Record<string, { status: 'done' | 'anulat'; stamped_at: string }>>({})
@@ -440,16 +441,32 @@ export default function AdminDashboard() {
         )}
       </div>
 
-      {/* Sectiunea Absenti */}
+      {/* Absenți — doar eticheta; lista se deschide în modal */}
       {!loading && absentGroups.length > 0 && (
-        <div className="bg-white rounded-xl shadow-sm border border-red-100">
-          <div className="p-5 border-b border-red-100 flex items-center gap-2">
-            <UserX size={16} className="text-red-400"/>
-            <h2 className="font-semibold text-red-700">
-              Absenți în așteptare ({absentStudents.length})
-            </h2>
-          </div>
-          <div className="divide-y divide-red-50">
+        <button onClick={() => setShowAbsent(true)}
+          className="w-full flex items-center gap-2 bg-white rounded-xl shadow-sm border border-red-100 px-5 py-3 hover:bg-red-50/50 transition-colors text-left">
+          <UserX size={16} className="text-red-400" />
+          <span className="font-semibold text-red-700">Absenți în așteptare</span>
+          <span className="px-2 py-0.5 rounded-full bg-red-100 text-red-700 text-xs font-bold">
+            {absentStudents.length} {absentStudents.length === 1 ? 'cursant' : 'cursanți'}
+          </span>
+          <span className="ml-auto text-xs text-red-400">Vezi lista →</span>
+        </button>
+      )}
+
+      {/* Modal absenți */}
+      {showAbsent && (
+        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4" onClick={() => { setShowAbsent(false); setMoveMenuId(null) }}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-3xl max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="p-5 border-b border-red-100 flex items-center gap-2">
+              <UserX size={16} className="text-red-400"/>
+              <h2 className="font-semibold text-red-700">
+                Absenți în așteptare ({absentStudents.length})
+              </h2>
+              <button onClick={() => { setShowAbsent(false); setMoveMenuId(null) }}
+                className="ml-auto p-1 rounded hover:bg-gray-100 text-gray-400"><X size={18} /></button>
+            </div>
+            <div className="flex-1 overflow-y-auto divide-y divide-red-50">
             {absentGroups.map(({ sess, students: grpSts }) => (
               <div key={sess.id} className="p-4">
                 <div className="text-xs font-medium text-red-500 mb-2">
@@ -462,7 +479,8 @@ export default function AdminDashboard() {
                       : null
 
                     return (
-                      <div key={st.id} className="flex items-center justify-between bg-red-50 rounded-lg px-3 py-2">
+                      <div key={st.id}>
+                      <div className="flex items-center justify-between bg-red-50 rounded-lg px-3 py-2">
                         <div>
                           <span className="text-sm font-medium text-gray-900">{st.full_name}</span>
                           {st.allocated_session_id && st.session_id !== (allSessions.find((s:any)=>s.session_type==='absent'&&s.id===st.session_id)?.id) && (() => {
@@ -474,39 +492,42 @@ export default function AdminDashboard() {
                             ) : null
                           })()}
                         </div>
-                        <div className="relative" onClick={e=>e.stopPropagation()}>
+                        <div onClick={e=>e.stopPropagation()}>
                           <button
                             onClick={() => setMoveMenuId(moveMenuId===st.id?null:st.id)}
                             disabled={moving===st.id}
                             className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg border border-red-200 text-red-500 hover:bg-red-100 transition-colors text-xs font-medium">
                             <ArrowRight size={12}/> Alocă
                           </button>
-                          {moveMenuId===st.id && (
-                            <div className="absolute right-0 top-8 z-50 bg-white rounded-xl shadow-xl border border-gray-100 min-w-56 py-1">
-                              <div className="px-3 py-1.5 text-xs text-gray-400 border-b border-gray-50">Alocă la sesiunea:</div>
-                              {allocatableSessions.map((ts:any) => (
-                                <button key={ts.id} onClick={()=>allocateToSession(st, ts.id)}
-                                  className="w-full text-left px-3 py-2 text-xs hover:bg-gray-50 transition-colors">
-                                  <div className="font-medium text-gray-900 flex items-center gap-1">
-                                    {ts.session_type==='clone'&&<span className="text-blue-400">⎇</span>}
-                                    {new Date(ts.session_date).toLocaleDateString('ro-RO',{day:'2-digit',month:'long',year:'numeric'})}
-                                    <span className="px-1.5 py-0.5 rounded-full text-xs ml-1" style={{background:statusMap[ts.status]?.color+'20',color:statusMap[ts.status]?.color}}>{statusMap[ts.status]?.label}</span>
-                                  </div>
-                                  <div className="text-gray-400">{ts.locations?.name} · {ts.boats?.name} · {ts.instructors?.full_name}</div>
-                                </button>
-                              ))}
-                            </div>
-                          )}
                         </div>
+                      </div>
+                      {/* lista de alocare se desfășoară inline (în modal, un dropdown absolut ar fi tăiat) */}
+                      {moveMenuId===st.id && (
+                        <div className="mt-1 ml-3 bg-white rounded-xl shadow-sm border border-gray-100 py-1">
+                          <div className="px-3 py-1.5 text-xs text-gray-400 border-b border-gray-50">Alocă la sesiunea:</div>
+                          {allocatableSessions.map((ts:any) => (
+                            <button key={ts.id} onClick={()=>allocateToSession(st, ts.id)}
+                              className="w-full text-left px-3 py-2 text-xs hover:bg-gray-50 transition-colors">
+                              <div className="font-medium text-gray-900 flex items-center gap-1">
+                                {ts.session_type==='clone'&&<span className="text-blue-400">⎇</span>}
+                                {new Date(ts.session_date).toLocaleDateString('ro-RO',{day:'2-digit',month:'long',year:'numeric'})}
+                                <span className="px-1.5 py-0.5 rounded-full text-xs ml-1" style={{background:statusMap[ts.status]?.color+'20',color:statusMap[ts.status]?.color}}>{statusMap[ts.status]?.label}</span>
+                              </div>
+                              <div className="text-gray-400">{ts.locations?.name} · {ts.boats?.name} · {ts.instructors?.full_name}</div>
+                            </button>
+                          ))}
+                        </div>
+                      )}
                       </div>
                     )
                   })}
                 </div>
               </div>
             ))}
-          </div>
-          <div className="px-5 py-3 bg-red-50/50 rounded-b-xl border-t border-red-100">
-            <p className="text-xs text-red-400">Absenții dispar din această listă doar după ce sesiunea la care sunt alocați este finalizată cu ei pe listă.</p>
+            </div>
+            <div className="px-5 py-3 bg-red-50/50 rounded-b-2xl border-t border-red-100">
+              <p className="text-xs text-red-400">Absenții dispar din această listă doar după ce sesiunea la care sunt alocați este finalizată cu ei pe listă.</p>
+            </div>
           </div>
         </div>
       )}
