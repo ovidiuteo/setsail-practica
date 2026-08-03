@@ -49,6 +49,7 @@ export default function ImportCursantiPage() {
     updatedFields: {name: string, fields: string[]}[]
   } | null>(null)
   const [pasteText, setPasteText] = useState('')
+  const [parseNote, setParseNote] = useState<string | null>(null)
   const [mode, setMode] = useState<'paste' | 'file'>('paste')
 
   useEffect(() => {
@@ -88,19 +89,68 @@ export default function ImportCursantiPage() {
     return val.replace(/^[^0-9+]/, '').trim()
   }
 
+  // Recunoaste un rand de header si mapeaza coloanele DUPA NUME.
+  // Fara asta, formatele fara coloana "Nr" faceau ca toate campurile sa alunece
+  // cu o pozitie (adresa/localitatea/judetul se pierdeau).
+  function detectHeader(parts: string[]): Record<string, number> | null {
+    const map: Record<string, number> = {}
+    parts.forEach((p, i) => {
+      const v = p.toLowerCase().trim().replace(/\.$/, '')
+      if (!v) return
+      if (/^nr$/.test(v)) map.nr = i
+      else if (/cursant|nume/.test(v)) map.full_name ??= i
+      else if (/^cnp/.test(v)) map.cnp ??= i
+      else if (/na[sșş]ter/.test(v)) map.birth_date ??= i
+      else if (/e-?mail/.test(v)) map.email ??= i
+      else if (/telefon|^tel$|mobil/.test(v)) map.phone ??= i
+      else if (/adres/.test(v)) map.address ??= i
+      else if (/localitate|ora[sșş]|city/.test(v)) map.city ??= i
+      else if (/sector|jude[tțţ]/.test(v)) map.county ??= i
+      else if (/^ci$|serie/.test(v)) map.ci ??= i
+    })
+    // e header doar daca am recunoscut numele + inca cel putin 2 coloane
+    return (map.full_name !== undefined && Object.keys(map).length >= 3) ? map : null
+  }
+
   function parseText(text: string): StudentRow[] {
     const lines = text.trim().split('\n').filter(l => l.trim())
     const parsed: StudentRow[] = []
 
-    // Sari randurile de titlu si header
+    // Cauta randul de header in primele linii si mapeaza coloanele dupa nume
     let startIdx = 0
-    for (let hi = 0; hi < Math.min(3, lines.length); hi++) {
-      const hparts = lines[hi].split('\t').map(p => p.trim())
-      const h = lines[hi].toLowerCase()
-      if (h.includes('cursant') || h.includes('nr.') ||
-          (hparts[0].toLowerCase() === 'nr') ||
-          (hparts.filter(p=>p).length <= 2 && !hparts[1] && hparts[0].length > 3 && !/^\d/.test(hparts[0]))) {
-        startIdx = hi + 1
+    let colMap: Record<string, number> | null = null
+    for (let hi = 0; hi < Math.min(5, lines.length); hi++) {
+      const m = detectHeader(lines[hi].split('\t'))
+      if (m) { colMap = m; startIdx = hi + 1; break }
+    }
+
+    // Unele exporturi au in header coloana "Nr" dar randurile de date nu o contin
+    // (sau invers) -> toate campurile ar aluneca. Alegem deplasarea la care
+    // coloana de nume chiar contine nume.
+    if (colMap && colMap.full_name !== undefined) {
+      const looksLikeName = (v: string) => !!v && !/^\d+$/.test(v) && /[a-zA-ZăâîșțĂÂÎȘȚ]{2,}/.test(v)
+      const sample = lines.slice(startIdx, startIdx + 8)
+        .map(l => l.split('\t').map(p => p.trim()))
+        .filter(r => r.some(c => c))
+      if (sample.length) {
+        const score = (sh: number) => sample.filter(r => looksLikeName(r[colMap!.full_name + sh] || '')).length
+        let best = 0
+        for (const sh of [-1, 1]) if (score(sh) > score(best)) best = sh
+        if (best !== 0) {
+          for (const k of Object.keys(colMap)) colMap[k] += best
+          for (const k of Object.keys(colMap)) if (colMap[k] < 0) delete colMap[k]
+        }
+      }
+    }
+
+    // Fara header recunoscut: pastram vechea detectie de titlu (formate simple)
+    if (!colMap) {
+      for (let hi = 0; hi < Math.min(3, lines.length); hi++) {
+        const hparts = lines[hi].split('\t').map(p => p.trim())
+        const h = lines[hi].toLowerCase()
+        if (h.includes('cursant') || (hparts[0].toLowerCase() === 'nr')) {
+          startIdx = hi + 1
+        }
       }
     }
 
@@ -126,6 +176,40 @@ export default function ImportCursantiPage() {
       const firstIsNumber = /^\d+$/.test(trimmed[0])
       const hasCNPLabel = trimmed.some(p => p.startsWith('CNP:'))
       const firstIsEmpty = trimmed[0] === ''
+
+      // Cu header recunoscut citim campurile dupa pozitia din header (robust la
+      // lipsa coloanei "Nr" sau la alta ordine a coloanelor)
+      if (colMap) {
+        const at = (k: string) => (colMap![k] !== undefined ? (trimmed[colMap![k]] || '') : '')
+        const cursant = at('full_name')
+        if (!cursant) continue
+        let localitate = at('city')
+        let sectorJudet = at('county')
+        if (localitate && sectorJudet) {
+          if (isJudet(localitate) && !isJudet(sectorJudet)) {
+            ;[localitate, sectorJudet] = [sectorJudet, localitate]
+          }
+        } else if (localitate && !sectorJudet && isJudet(localitate)) {
+          sectorJudet = localitate; localitate = ''
+        }
+        const ci = at('ci').trim()
+        const ciM = /^([A-Za-zĂÂÎȘȚăâîșț]{1,3})\s*([0-9]{5,9})$/.exec(ci)
+        parsed.push({
+          ...EMPTY_ROW,
+          full_name: invertName(cursant),
+          cnp: at('cnp').replace(/\.0$/, ''),
+          birth_date: at('birth_date'),
+          email: at('email'),
+          phone: cleanPhone(at('phone')),
+          address: at('address'),
+          city: localitate,
+          county: cleanCounty(sectorJudet),
+          ci_series: ciM ? ciM[1].toUpperCase() : '',
+          ci_number: ciM ? ciM[2] : '',
+          class_caa: defaultClass,
+        })
+        continue
+      }
 
       if ((firstIsNumber || firstIsEmpty) && trimmed[1] && trimmed[1] !== '') {
         // FORMAT: [Nr/gol] | Cursant | CNP | DataNasterii | Email | Telefon | Adresa | Localitate | Sector/Judet | CI
@@ -180,6 +264,12 @@ export default function ImportCursantiPage() {
   function handlePaste() {
     const parsed = parseText(pasteText)
     if (parsed.length === 0) return
+    // Cate randuri negoale am primit vs. cate am reusit sa interpretam — fara asta,
+    // cursantii pierduti la parsare treceau complet neobservati.
+    const dataLines = pasteText.trim().split('\n').filter(l => l.trim()).length
+    setParseNote(parsed.length < dataLines - 1
+      ? `Am interpretat ${parsed.length} cursanți din ${dataLines} linii lipite. Verifică dacă lipsește cineva — un rând poate fi rupt de un enter din interiorul unei celule (ex. adresa).`
+      : null)
     setRows(parsed)
   }
 
@@ -584,6 +674,12 @@ export default function ImportCursantiPage() {
                 )}
               </div>
             </div>
+
+            {parseNote && (
+              <div className="mx-4 mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                {parseNote}
+              </div>
+            )}
 
             {rows.length === 0 ? (
               <div className="p-12 text-center text-gray-400">
