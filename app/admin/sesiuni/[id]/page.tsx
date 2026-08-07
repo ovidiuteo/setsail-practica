@@ -3640,15 +3640,38 @@ export default function SessionDetailPage() {
       setSavingSession(false)
       return
     }
-    // Nr. instiintare ANR setat pe principala se propaga la clone
+    // Modificarile de pe principala se propaga la clone, DAR numai pentru campurile
+    // in care clona avea aceeasi valoare ca principala (adica nu a fost personalizata
+    // separat pentru grupa respectiva).
     const editedSess = sessions.find(s => s.id === sid)
-    if (editedSess?.session_type === 'principal' && payload.nr_instiintare_anr) {
-      await supabase.from('sessions')
-        .update({ nr_instiintare_anr: payload.nr_instiintare_anr })
-        .eq('parent_session_id', sid).eq('session_type', 'clone')
-      setSessions(prev => prev.map(s =>
-        (s.parent_session_id === sid && s.session_type === 'clone')
-          ? { ...s, nr_instiintare_anr: payload.nr_instiintare_anr } as Session : s))
+    if (editedSess?.session_type === 'principal') {
+      const INHERITABLE = [
+        'course_start_date', 'practice_start_date', 'practice_start_time', 'session_date',
+        'location_id', 'location_detail', 'class_caa', 'evaluator_id',
+        'boat_id', 'boat_id_2', 'boat_id_3',
+        'instructor_id', 'instructor_id_2', 'instructor_id_3',
+        'timeline_scope', 'nr_instiintare_anr',
+      ]
+      const changed = INHERITABLE.filter(k => k in payload && payload[k] !== (editedSess as any)[k])
+      if (changed.length) {
+        const { data: clones } = await supabase.from('sessions').select('*')
+          .eq('parent_session_id', sid).eq('session_type', 'clone')
+        const applied: Record<string, any> = {}
+        for (const c of clones || []) {
+          const upd: any = {}
+          for (const k of changed) {
+            const cv = (c as any)[k], pv = (editedSess as any)[k]
+            if (cv === pv || (!cv && !pv)) upd[k] = payload[k]   // nedivergent -> mostenit
+          }
+          if (Object.keys(upd).length) {
+            await supabase.from('sessions').update(upd).eq('id', c.id)
+            applied[c.id] = upd
+          }
+        }
+        if (Object.keys(applied).length) {
+          setSessions(prev => prev.map(s => applied[s.id] ? ({ ...s, ...applied[s.id] } as Session) : s))
+        }
+      }
     }
     // Reload session data
     const { data: updated } = await supabase.from('sessions').select('*, locations(*), boats(*), evaluators(*), instructors(*)').eq('id', sid).single()
@@ -3905,6 +3928,12 @@ export default function SessionDetailPage() {
           {!isAbsent && (
             <span className="px-2 py-0.5 rounded-full text-xs font-medium ml-1"
               style={{background:stMap.bg, color:stMap.color}}>{stMap.label}</span>
+          )}
+          {!isAbsent && (
+            <button onClick={()=>startEditSession(sess)} title="Editează sesiunea"
+              className="flex items-center gap-1 ml-1 px-2 py-0.5 rounded-full text-xs font-medium border border-blue-200 text-blue-600 bg-white hover:bg-blue-50">
+              <Pencil size={11}/> Editează sesiunea
+            </button>
           )}
         </div>
         <div className="flex-1 border-t-2 border-dashed" style={{borderColor: border}}/>

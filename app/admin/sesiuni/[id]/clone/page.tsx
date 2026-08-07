@@ -26,6 +26,12 @@ export default function CloneSessionPage() {
     notes: '',
     location_detail: '',
     nr_instiintare_anr: '',
+    // Datele de curs/practică se moștenesc de la principală (clona = altă grupă,
+    // aceleași date de desfășurare)
+    course_start_date: '',
+    practice_start_date: '',
+    practice_start_time: '',
+    timeline_scope: '',
   })
 
   // Cursanți din sesiunea originală
@@ -69,6 +75,10 @@ export default function CloneSessionPage() {
           notes: s.notes || '',
           location_detail: s.location_detail || '',
           nr_instiintare_anr: s.nr_instiintare_anr || '',
+          course_start_date: s.course_start_date || '',
+          practice_start_date: s.practice_start_date || '',
+          practice_start_time: s.practice_start_time || '',
+          timeline_scope: s.timeline_scope || '',
         })
       }
       setLoading(false)
@@ -105,7 +115,7 @@ export default function CloneSessionPage() {
 
     // Postgres respinge '' pentru coloane date/uuid — convertim la null.
     const cleanForm: any = { ...form }
-    for (const col of ['session_date','location_id','boat_id','boat_id_2','boat_id_3','evaluator_id','instructor_id','instructor_id_2','instructor_id_3','nr_instiintare_anr']) {
+    for (const col of ['session_date','location_id','boat_id','boat_id_2','boat_id_3','evaluator_id','instructor_id','instructor_id_2','instructor_id_3','nr_instiintare_anr','course_start_date','practice_start_date','practice_start_time','timeline_scope']) {
       if (cleanForm[col] === '') cleanForm[col] = null
     }
     const { data: newSession, error } = await supabase.from('sessions').insert({
