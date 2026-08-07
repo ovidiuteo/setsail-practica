@@ -2908,31 +2908,60 @@ function AttendanceCard({ sess }: { sess: any }) {
     }
     return out.length ? out : ['Luni', 'Marți', 'Miercuri', 'Joi']
   }
-  const d1 = csd ? String(new Date(csd).getDate()) : ''
-  const d2 = sd ? String(new Date(sd).getDate()) : ''
-  const luna = dRo(sd, { month: 'long' })
-  const an = sd ? String(new Date(sd).getFullYear()) : ''
-  const [titlu, setTitlu] = useState(`Prezență ${d1 && d2 ? d1 + '-' + d2 + ' ' : ''}${luna} ${an}`.replace(/\s+/g, ' ').trim())
+  // Titlul se compune din intervalul curs → practică al sesiunii
+  function buildTitlu(start: string, end: string): string {
+    const a = start ? String(new Date(start).getDate()) : ''
+    const b = end ? String(new Date(end).getDate()) : ''
+    const l = dRo(end, { month: 'long' })
+    const y = end ? String(new Date(end).getFullYear()) : ''
+    return `Prezență ${a && b ? a + '-' + b + ' ' : ''}${l} ${y}`.replace(/\s+/g, ' ').trim()
+  }
+  const [titlu, setTitlu] = useState(buildTitlu(csd, sd))
   const [grupa, setGrupa] = useState('Grupa 1')
   const [zileStr, setZileStr] = useState(deriveZile().join(', '))
 
   useEffect(() => {
     if (!open) return
     ;(async () => {
-      // Toți cursanții sesiunii, inclusiv cei de la sailing (intră și ei la prezență)
-      const { data } = await supabase.from('students').select('full_name').eq('session_id', sess.id)
-      const list = (data || [])
+      const ro = (a: string, b: string) => a.localeCompare(b, 'ro', { sensitivity: 'base' })
+      const nume = (arr: any[]) => (arr || [])
         .filter((s: any) => (s.full_name || '').trim())
         .map((s: any) => titleCaseRo(s.full_name))
-        .sort((a: string, b: string) => a.localeCompare(b, 'ro', { sensitivity: 'base' }))
-      setNames(list)
+      const parentId = sess.parent_session_id || null
+
       // Grupa: sesiunea principală = Grupa 1; clonele = Grupa 2, 3, ... (după ordinea creării)
-      if (!sess.parent_session_id) setGrupa('Grupa 1')
-      else {
+      let grupaNr = 1
+      if (parentId) {
         const { data: cl } = await supabase.from('sessions').select('id, created_at')
-          .eq('parent_session_id', sess.parent_session_id).eq('session_type', 'clone').order('created_at')
+          .eq('parent_session_id', parentId).eq('session_type', 'clone').order('created_at')
         const idx = (cl || []).findIndex((x: any) => x.id === sess.id)
-        setGrupa('Grupa ' + (idx >= 0 ? idx + 2 : 2))
+        grupaNr = idx >= 0 ? idx + 2 : 2
+      }
+      setGrupa('Grupa ' + grupaNr)
+
+      // Cursanții proprii ai listei (fără sailing), în ordinea listei
+      const { data: own } = await supabase.from('students')
+        .select('full_name, order_in_session')
+        .eq('session_id', sess.id).eq('only_sailing', false)
+        .order('order_in_session')
+      const ownNames = nume(own)
+
+      if (grupaNr === 2) {
+        // Lista 2 = cursanții ei (în ordinea listei) + cei de la sailing (alfabetic, la final).
+        // Cursanții de sailing sunt înregistrați pe sesiunea principală.
+        const { data: sail } = await supabase.from('students')
+          .select('full_name').eq('session_id', parentId).eq('only_sailing', true)
+        setNames([...ownNames, ...nume(sail).sort(ro)])
+      } else {
+        // Lista 1 (și restul grupelor): strict cursanții listei, alfabetic
+        setNames([...ownNames].sort(ro))
+      }
+
+      // Titlul listei 2 e cel al listei 1 (clona poate să nu aibă dată de start curs)
+      if (parentId) {
+        const { data: p } = await supabase.from('sessions')
+          .select('session_date, course_start_date, practice_start_date').eq('id', parentId).maybeSingle()
+        if (p) setTitlu(buildTitlu((p as any).course_start_date || (p as any).practice_start_date || p.session_date, p.session_date))
       }
     })()
   }, [open, sess.id])
