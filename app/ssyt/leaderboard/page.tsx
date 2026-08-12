@@ -153,7 +153,7 @@ export default async function LeaderboardPage() {
                               <td key={t.team_id} className="px-3 py-3 text-center">
                                 {result ? (
                                   <div>
-                                    <div className="font-bold text-sm" style={{ color: '#0a1628' }}>{result.ssyt_internal_place || '—'}</div>
+                                    <div className="font-bold text-sm" style={{ color: result.ssyt_internal_place === 1 ? '#FF6B35' : '#0a1628' }}>{result.ssyt_internal_place || '—'}</div>
                                     <div className="text-[10px] text-gray-400">{Number(result.ssyt_internal_points) || 0}p</div>
                                   </div>
                                 ) : (
