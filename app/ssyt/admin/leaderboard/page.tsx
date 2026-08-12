@@ -49,9 +49,9 @@ export default async function AdminLeaderboardPage() {
       </div>
 
       {/* Notice scoring */}
-      <div className="rounded-lg p-4 mb-6 text-sm" style={{ background: 'rgba(245,158,11,0.08)', color: '#92400E', border: '1px solid rgba(245,158,11,0.2)' }}>
+      <div className="rounded-lg p-4 mb-6 text-sm" style={{ background: 'rgba(16,185,129,0.08)', color: '#065F46', border: '1px solid rgba(16,185,129,0.2)' }}>
         <Settings size={14} className="inline mr-1.5" />
-        <strong>Sistemul de punctaj</strong> nu este încă configurat. Pentru moment, punctele se introduc manual la fiecare rezultat (câmpul <code className="text-xs bg-white px-1 rounded">ssyt_internal_points</code>). Formula automată va fi adăugată într-un sprint viitor.
+        <strong>Punctaj SetSail</strong>: locul între bărcile noastre în fiecare regatta → 1, 2, 3, 4 puncte, însumate pe sezon (mai puține = mai bine). La egalitate câștigă echipa cu mai multe locuri 1 (apoi 2, apoi 3). Punctele se calculează automat la import.
       </div>
 
       {/* Clasament curent */}

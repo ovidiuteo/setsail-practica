@@ -10,9 +10,9 @@ function escapeRegex(s: string) {
 }
 
 // Punctaj SetSail intern: locul între bărcile noastre → puncte (low-point, mai puține = mai bine)
-const SETSAIL_POINTS = [1, 3, 5, 8]
+const SETSAIL_POINTS = [1, 2, 3, 4]
 function setSailFor(rank: number): number {
-  return SETSAIL_POINTS[rank - 1] ?? (8 + (rank - 4) * 3)
+  return SETSAIL_POINTS[rank - 1] ?? rank
 }
 
 // Adaugă rang (după Net, cu egalități) + puncte SetSail pe rândurile bărcilor noastre
@@ -378,7 +378,7 @@ function OurBoatsClassification({ results }: { results: any[] }) {
         </table>
       </div>
       <div className="px-5 py-2 text-[11px] text-gray-400" style={{ borderTop: '1px solid #f3f4f6' }}>
-        Rang după <strong>puncte SetSail</strong> (locul între bărcile noastre → 1, 3, 5, 8; mai puține = mai bine).
+        Rang după <strong>puncte SetSail</strong> (locul între bărcile noastre → 1, 2, 3, 4; mai puține = mai bine).
         Net = scorul din curse. „Loc flotă" = poziția în clasamentul general complet.
       </div>
     </div>

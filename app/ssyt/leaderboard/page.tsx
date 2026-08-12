@@ -172,8 +172,9 @@ export default async function LeaderboardPage() {
           )}
 
           <p className="mt-6 text-xs text-gray-500 leading-relaxed">
-            <strong>Notă</strong>: Punctaj SetSail — în fiecare regatta, locul între bărcile noastre dă puncte (1, 3, 5, 8),
-            însumate pe sezon. Sistem low-point: <strong>mai puține puncte = mai bine</strong>. Separat de clasamentul oficial.
+            <strong>Notă</strong>: Punctaj SetSail — în fiecare regatta, locul între bărcile noastre dă puncte (1, 2, 3, 4),
+            însumate pe sezon. Sistem low-point: <strong>mai puține puncte = mai bine</strong>. La egalitate câștigă echipa cu
+            mai multe locuri 1 (apoi 2, apoi 3). Separat de clasamentul oficial.
           </p>
         </>
       )}
