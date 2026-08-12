@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { Trophy, Anchor, Users } from 'lucide-react'
 import { supabase, getActiveSeason, getSeasonLeaderboard } from '@/lib/ssyt/supabase'
+import { effectiveRegattaStatus, regattaStatusColor } from '@/lib/ssyt/regatta-status'
 
 export const revalidate = 60
 
@@ -18,6 +19,18 @@ export default async function LeaderboardPage() {
     .select('id', { count: 'exact', head: true })
     .eq('season_id', season.id)
     .eq('status', 'completed')
+
+  // Regate + rezultate pentru matricea per regatta (fără draft / admin)
+  const { data: matrixRegattas } = await supabase
+    .from('ssyt_regattas')
+    .select(`
+      id, name, slug, status, start_date, end_date, visibility,
+      results:ssyt_results(team_id, ssyt_internal_place, ssyt_internal_points)
+    `)
+    .eq('season_id', season.id)
+    .neq('status', 'draft')
+    .order('start_date')
+  const visibleRegattas = (matrixRegattas || []).filter((r: any) => r.visibility !== 'admin')
 
   return (
     <div className="max-w-5xl mx-auto px-6 py-12">
@@ -94,6 +107,69 @@ export default async function LeaderboardPage() {
               </tbody>
             </table>
           </div>
+
+          {/* Matrice rezultate per regatta */}
+          {visibleRegattas.length > 0 && (
+            <div className="rounded-xl overflow-hidden mt-8" style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
+              <div className="px-5 py-3 text-xs font-medium uppercase tracking-wider text-gray-500" style={{ background: '#f8f9fa', borderBottom: '1px solid #e5e7eb' }}>
+                <Anchor size={12} className="inline mr-1.5" /> Rezultate per regatta (loc & puncte SetSail)
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead style={{ background: '#fff', borderBottom: '1px solid #e5e7eb' }}>
+                    <tr>
+                      <th className="text-left px-5 py-3 text-xs font-medium uppercase tracking-wider text-gray-500">Regatta</th>
+                      <th className="text-center px-3 py-3 text-xs font-medium uppercase tracking-wider text-gray-500">Status</th>
+                      {leaderboard.map((t: any) => (
+                        <th key={t.team_id} className="text-center px-3 py-3">
+                          <Link href={`/ssyt/teams/${t.team_id}`} className="inline-flex flex-col items-center hover:opacity-80">
+                            <span className="w-6 h-6 rounded flex items-center justify-center text-white text-xs font-bold" style={{ background: t.color_primary || '#4A5568' }}>
+                              {t.team_name?.replace('Team ', '').charAt(0)}
+                            </span>
+                            <span className="text-[10px] text-gray-500 mt-1">{t.team_name?.replace('Team ', '')}</span>
+                          </Link>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {visibleRegattas.map((r: any) => {
+                      const eff = effectiveRegattaStatus(r)
+                      const effColor = regattaStatusColor(eff)
+                      return (
+                        <tr key={r.id} style={{ borderTop: '1px solid #e5e7eb' }}>
+                          <td className="px-5 py-3">
+                            <Link href={`/ssyt/regattas/${r.slug || r.id}`} className="font-medium hover:underline text-sm" style={{ color: '#0a1628' }}>
+                              {r.name}
+                            </Link>
+                            <div className="text-xs text-gray-500">{new Date(r.start_date).toLocaleDateString('ro-RO', { day: 'numeric', month: 'short' })}</div>
+                          </td>
+                          <td className="px-3 py-3 text-center">
+                            <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: `${effColor}15`, color: effColor }}>{eff}</span>
+                          </td>
+                          {leaderboard.map((t: any) => {
+                            const result = (r.results || []).find((res: any) => res.team_id === t.team_id)
+                            return (
+                              <td key={t.team_id} className="px-3 py-3 text-center">
+                                {result ? (
+                                  <div>
+                                    <div className="font-bold text-sm" style={{ color: '#0a1628' }}>{result.ssyt_internal_place || '—'}</div>
+                                    <div className="text-[10px] text-gray-400">{Number(result.ssyt_internal_points) || 0}p</div>
+                                  </div>
+                                ) : (
+                                  <span className="text-gray-300 text-xs">—</span>
+                                )}
+                              </td>
+                            )
+                          })}
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
           <p className="mt-6 text-xs text-gray-500 leading-relaxed">
             <strong>Notă</strong>: Punctaj SetSail — în fiecare regatta, locul între bărcile noastre dă puncte (1, 3, 5, 8),
