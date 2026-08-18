@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
+import { parseStudentsText } from '@/lib/import-parse'
 
 type Row = {
   id: string; full_name: string; cnp: string; birth_date: string
@@ -103,6 +104,7 @@ export default function RosterPage() {
   const [ciFor, setCiFor] = useState<Row | null>(null)
   const [tab, setTab] = useState<'list' | 'verify'>('list')
   const [docsVisible, setDocsVisible] = useState(false)
+  const [addOpen, setAddOpen] = useState<null | 'manual' | 'paste'>(null)
 
   const load = useCallback(async () => {
     const r = await fetch(`/api/roster?session_id=${id}&token=${encodeURIComponent(token)}`)
@@ -158,11 +160,23 @@ export default function RosterPage() {
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-8">
       <div className="max-w-6xl mx-auto">
-        <div className="mb-4">
-          <h1 className="text-xl font-bold text-gray-900">Cursanți — sesiune</h1>
-          <p className="text-sm text-gray-500 mt-1">
-            Click pe o celulă pentru a edita, apoi confirmă cu ✓ (sau Enter). Apasă „CI" pentru imagini și date.
-          </p>
+        <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-xl font-bold text-gray-900">Cursanți — sesiune</h1>
+            <p className="text-sm text-gray-500 mt-1">
+              Click pe o celulă pentru a edita, apoi confirmă cu ✓ (sau Enter). Apasă „CI" pentru imagini și date.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <button onClick={() => setAddOpen('manual')}
+              className="px-3 py-2 rounded-lg text-sm font-medium text-white hover:opacity-90" style={{ background: '#0a1628' }}>
+              + Adaugă cursant
+            </button>
+            <button onClick={() => setAddOpen('paste')}
+              className="px-3 py-2 rounded-lg text-sm font-medium border border-gray-200 bg-white text-gray-700 hover:bg-gray-50">
+              Importă din tabel
+            </button>
+          </div>
         </div>
 
         {/* Checkbox-uri verificare listă */}
@@ -255,6 +269,157 @@ export default function RosterPage() {
           onClose={() => setCiFor(null)}
           onRowUpdate={rowUpdate} />
       )}
+
+      {addOpen && (
+        <AddStudentsModal sessionId={id} token={token} mode={addOpen}
+          onClose={() => setAddOpen(null)}
+          onSaved={() => { setAddOpen(null); load() }} />
+      )}
+    </div>
+  )
+}
+
+// ── Modal: adaugă cursanți (manual, unul sau mai mulți) sau import din tabel ──
+type NewRow = { full_name: string; cnp: string; birth_date: string; address: string; city: string; county: string; obtinere_prelungire: string }
+const BLANK_NEW: NewRow = { full_name: '', cnp: '', birth_date: '', address: '', city: '', county: '', obtinere_prelungire: '' }
+const NEW_FIELDS: { key: keyof NewRow; label: string; w: string }[] = [
+  { key: 'full_name', label: 'Nume și prenume', w: 'min-w-[190px]' },
+  { key: 'cnp', label: 'CNP', w: 'min-w-[140px]' },
+  { key: 'birth_date', label: 'Data nașterii', w: 'min-w-[110px]' },
+  { key: 'address', label: 'Adresă', w: 'min-w-[200px]' },
+  { key: 'city', label: 'Localitate', w: 'min-w-[120px]' },
+  { key: 'county', label: 'Județ', w: 'min-w-[110px]' },
+]
+
+function AddStudentsModal({ sessionId, token, mode, onClose, onSaved }: {
+  sessionId: string; token: string; mode: 'manual' | 'paste'
+  onClose: () => void; onSaved: () => void
+}) {
+  const [step, setStep] = useState<'manual' | 'paste'>(mode)
+  const [rows, setRows] = useState<NewRow[]>([{ ...BLANK_NEW }])
+  const [paste, setPaste] = useState('')
+  const [note, setNote] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+
+  const set = (i: number, k: keyof NewRow, v: string) =>
+    setRows(rs => rs.map((r, idx) => idx === i ? { ...r, [k]: v } : r))
+  const addRow = () => setRows(rs => [...rs, { ...BLANK_NEW }])
+  const delRow = (i: number) => setRows(rs => rs.length > 1 ? rs.filter((_, idx) => idx !== i) : [{ ...BLANK_NEW }])
+
+  function doParse() {
+    const parsed = parseStudentsText(paste)
+    if (!parsed.length) { setNote('Nu am recunoscut niciun cursant în textul lipit.'); return }
+    const dataLines = paste.trim().split('\n').filter(l => l.trim()).length
+    setRows(parsed.map(p => ({
+      full_name: p.full_name, cnp: p.cnp, birth_date: p.birth_date,
+      address: p.address, city: p.city, county: p.county, obtinere_prelungire: '',
+    })))
+    setNote(parsed.length < dataLines - 1
+      ? `Am interpretat ${parsed.length} cursanți din ${dataLines} linii. Verifică dacă lipsește cineva.`
+      : `Am interpretat ${parsed.length} cursanți. Verifică datele, apoi salvează.`)
+    setStep('manual')
+  }
+
+  async function save() {
+    const valid = rows.filter(r => r.full_name.trim())
+    if (!valid.length) { setNote('Completează cel puțin numele unui cursant.'); return }
+    setSaving(true)
+    const r = await fetch('/api/roster', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId, token, students: valid }),
+    })
+    const j = await r.json().catch(() => ({}))
+    setSaving(false)
+    if (!r.ok) { setNote('Salvare eșuată: ' + (j.error || 'eroare')); return }
+    onSaved()
+  }
+
+  const cell = 'w-full px-2 py-1 rounded border border-gray-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-200'
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-5xl max-h-[92vh] flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+          <div>
+            <h3 className="font-semibold text-gray-900">Adaugă cursanți</h3>
+            <p className="text-xs text-gray-400 mt-0.5">Completează manual (unul sau mai mulți) sau lipește un tabel din Excel.</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
+        </div>
+
+        <div className="px-5 pt-3 flex gap-1 border-b border-gray-100">
+          {([['manual', 'Manual'], ['paste', 'Din tabel (copy/paste)']] as const).map(([k, lbl]) => (
+            <button key={k} onClick={() => setStep(k)}
+              className={`px-3 py-2 text-sm font-medium -mb-px border-b-2 ${step === k ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+              {lbl}
+            </button>
+          ))}
+        </div>
+
+        {note && <div className="mx-5 mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">{note}</div>}
+
+        <div className="flex-1 overflow-auto p-5">
+          {step === 'paste' ? (
+            <>
+              <p className="text-xs text-gray-500 mb-2">
+                Lipește tabelul cu tot cu rândul de titluri (Nume, CNP, Data nașterii, Adresă, Localitate, Sector/Județ…).
+                Coloanele sunt recunoscute după denumirea din titlu.
+              </p>
+              <textarea value={paste} onChange={e => setPaste(e.target.value)} rows={12}
+                placeholder="Lipește aici tabelul copiat din Excel…"
+                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-200" />
+              <button onClick={doParse} disabled={!paste.trim()}
+                className="mt-2 px-3 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50" style={{ background: '#1d4ed8' }}>
+                Interpretează tabelul
+              </button>
+            </>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm border-collapse">
+                <thead>
+                  <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase">
+                    <th className="px-2 py-2 w-8">#</th>
+                    {NEW_FIELDS.map(f => <th key={f.key} className={`px-2 py-2 ${f.w}`}>{f.label}</th>)}
+                    <th className="px-2 py-2 min-w-[150px]">Obținere / Prelungire</th>
+                    <th className="px-2 py-2 w-8"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {rows.map((r, i) => (
+                    <tr key={i} className="border-t border-gray-100">
+                      <td className="px-2 py-1 text-xs text-gray-400">{i + 1}</td>
+                      {NEW_FIELDS.map(f => (
+                        <td key={f.key} className="px-2 py-1">
+                          <input value={r[f.key]} onChange={e => set(i, f.key, e.target.value)} className={cell} />
+                        </td>
+                      ))}
+                      <td className="px-2 py-1">
+                        <select value={r.obtinere_prelungire} onChange={e => set(i, 'obtinere_prelungire', e.target.value)} className={cell + ' cursor-pointer'}>
+                          {LRC_OPTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                        </select>
+                      </td>
+                      <td className="px-2 py-1">
+                        <button onClick={() => delRow(i)} title="Șterge rândul" className="text-gray-300 hover:text-red-500">×</button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              <button onClick={addRow} className="mt-3 text-sm text-blue-600 hover:text-blue-800">+ încă un cursant</button>
+            </div>
+          )}
+        </div>
+
+        <div className="flex items-center justify-between gap-2 px-5 py-4 border-t border-gray-100">
+          <span className="text-xs text-gray-400">{rows.filter(r => r.full_name.trim()).length} cursanți de adăugat</span>
+          <div className="flex gap-2">
+            <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm border border-gray-200 text-gray-600 hover:bg-gray-50">Renunță</button>
+            <button onClick={save} disabled={saving || step === 'paste'}
+              className="px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50" style={{ background: '#0a1628' }}>
+              {saving ? 'Se salvează…' : 'Salvează cursanții'}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

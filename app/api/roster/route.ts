@@ -104,13 +104,67 @@ export async function PUT(req: NextRequest) {
   return NextResponse.json({ ok: true, verified: clean })
 }
 
+// Clasa CAA pentru un cursant nou, după obținere/prelungire (sesiuni radio)
+function classFromLrc(lrc: string, sessionClass: string): string {
+  if (lrc === 'obtinere') return 'Obtinere LRC'
+  if (lrc === 'prelungire') return 'Prelungire LRC'
+  return sessionClass || ''
+}
+
 // POST — upload imagine CI { session_id, token, student_id, side, imageData(dataURL) }
+//   sau adăugare cursanți { session_id, token, students: [{ full_name, cnp, ... }] }
 export async function POST(req: NextRequest) {
   const sb = svc()
   const body = await req.json().catch(() => ({}))
   const { session_id, token, student_id, side, imageData } = body || {}
   if (!(await authed(sb, session_id, token)))
     return NextResponse.json({ error: 'unauthorized' }, { status: 403 })
+
+  // ── Adăugare cursanți (manual sau din tabel lipit) ──
+  if (Array.isArray(body.students)) {
+    const incoming = body.students
+      .map((s: any) => ({
+        full_name: String(s?.full_name || '').trim(),
+        cnp: String(s?.cnp || '').trim(),
+        birth_date: String(s?.birth_date || '').trim(),
+        address: String(s?.address || '').trim(),
+        city: String(s?.city || '').trim(),
+        county: String(s?.county || '').trim(),
+        email: String(s?.email || '').trim(),
+        phone: String(s?.phone || '').trim(),
+        ci_series: String(s?.ci_series || '').trim(),
+        ci_number: String(s?.ci_number || '').trim(),
+        obtinere_prelungire: ['obtinere', 'prelungire'].includes(s?.obtinere_prelungire) ? s.obtinere_prelungire : '',
+      }))
+      .filter((s: any) => s.full_name)
+    if (!incoming.length) return NextResponse.json({ error: 'Niciun cursant valid (numele e obligatoriu).' }, { status: 400 })
+    if (incoming.length > 200) return NextResponse.json({ error: 'Prea mulți cursanți într-o singură operație.' }, { status: 400 })
+
+    const [{ data: sessRow }, { data: last }] = await Promise.all([
+      sb.from('sessions').select('class_caa').eq('id', session_id).maybeSingle(),
+      sb.from('students').select('order_in_session').eq('session_id', session_id)
+        .order('order_in_session', { ascending: false }).limit(1).maybeSingle(),
+    ])
+    const sessionClass = (sessRow as any)?.class_caa || ''
+    let order = (last as any)?.order_in_session || 0
+
+    const rows = incoming.map((s: any) => ({
+      session_id,
+      full_name: s.full_name,
+      cnp: s.cnp, birth_date: s.birth_date,
+      address: s.address, city: s.city, county: s.county,
+      email: s.email, phone: s.phone,
+      ci_series: s.ci_series, ci_number: s.ci_number,
+      obtinere_prelungire: s.obtinere_prelungire,
+      class_caa: classFromLrc(s.obtinere_prelungire, sessionClass),
+      order_in_session: ++order,
+      only_sailing: false,
+      portal_status: 'pending',
+    }))
+    const { data: inserted, error } = await sb.from('students').insert(rows).select('id')
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ ok: true, added: inserted?.length || 0 })
+  }
   if (!student_id || typeof imageData !== 'string' || !imageData.startsWith('data:image/'))
     return NextResponse.json({ error: 'imagine invalidă' }, { status: 400 })
   if (imageData.length > MAX_IMG)
