@@ -29,6 +29,9 @@ export default function PortalPage() {
   const [versoStatus, setVersoStatus] = useState<'idle' | 'saving' | 'done'>('idle')
   const [adevStatus, setAdevStatus] = useState<'idle' | 'saving' | 'done'>('idle')
   const [certNasStatus, setCertNasStatus] = useState<'idle' | 'saving' | 'done'>('idle')
+  // Certificat LRC — doar la prelungire (sesiuni radio)
+  const [lrcStatus, setLrcStatus] = useState<'idle' | 'saving' | 'scanning' | 'done' | 'error'>('idle')
+  const [lrc, setLrc] = useState({ numar: '', emis_la: '', expira_la: '' })
 
   // Verifica daca acest cursant a finalizat deja examenul (status submitted/graded)
   useEffect(() => {
@@ -89,6 +92,8 @@ export default function PortalPage() {
   const addressAbove = docType === 'ci_nou' || docType === 'pasaport' || docType === 'ci_strain'
   // Certificatul de naștere e necesar pentru CNP la documentele străine / pașaport
   const needsCertNastere = docType === 'ci_strain' || docType === 'pasaport'
+  // Certificatul LRC existent se cere doar la prelungirea valabilității (sesiuni radio)
+  const needsLrcCert = examScope === 'radio_lrc' && /prelungire/i.test(classCaa)
 
   // Sunt toate datele din "Date completate" completate? (pt. culoarea dropdownului)
   const detailVals = [
@@ -208,6 +213,8 @@ export default function PortalPage() {
     setVersoStatus(st.ci_verso_data ? 'done' : 'idle')
     setAdevStatus(st.adeverinta_adresa_data ? 'done' : 'idle')
     setCertNasStatus(st.certificat_nastere_data ? 'done' : 'idle')
+    setLrcStatus(st.lrc_certificat_data ? 'done' : 'idle')
+    setLrc({ numar: st.lrc_numar || '', emis_la: st.lrc_emis_la || '', expira_la: st.lrc_expira_la || '' })
     try {
       localStorage.setItem(
         `setsail_portal_${code.toUpperCase().trim()}`,
@@ -320,6 +327,58 @@ export default function PortalPage() {
     if (!student?.id) return
     await supabase.from('students').update({ class_caa: value }).eq('id', student.id)
     setStudent((prev: any) => prev ? { ...prev, class_caa: value } : prev)
+  }
+
+  // Salveaza un camp al certificatului LRC (editabil manual de cursant)
+  async function saveLrcField(field: 'numar' | 'emis_la' | 'expira_la', value: string) {
+    setLrc(v => ({ ...v, [field]: value }))
+    if (student?.id) await supabase.from('students').update({ ['lrc_' + field]: value }).eq('id', student.id)
+  }
+
+  // Upload certificat LRC: comprima, salveaza, apoi incearca sa citeasca nr./datele prin OCR
+  async function handleLrcUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file || !student?.id) return
+    setLrcStatus('saving')
+    try {
+      const dataUrl: string = await new Promise((res, rej) => {
+        const fr = new FileReader()
+        fr.onerror = () => rej(new Error('citire eșuată'))
+        fr.onload = () => res(String(fr.result))
+        fr.readAsDataURL(file)
+      })
+      const compressed = await compressImage(dataUrl)
+      await supabase.from('students').update({ lrc_certificat_data: compressed }).eq('id', student.id)
+      setStudent((s: any) => ({ ...s, lrc_certificat_data: compressed }))
+
+      // OCR pe imaginea originala (necomprimata) — mai lizibila
+      setLrcStatus('scanning')
+      const r = await fetch('/api/ocr-lrc', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ imageData: dataUrl, mediaType: file.type || 'image/jpeg' }),
+      })
+      const j = await r.json().catch(() => null)
+      if (r.ok && j?.success && j.data) {
+        const d = j.data
+        // completam doar campurile pe care OCR-ul chiar le-a gasit
+        const upd: any = {}
+        if (d.numar) upd.lrc_numar = d.numar
+        if (d.emis_la) upd.lrc_emis_la = d.emis_la
+        if (d.expira_la) upd.lrc_expira_la = d.expira_la
+        if (Object.keys(upd).length) {
+          await supabase.from('students').update(upd).eq('id', student.id)
+          setLrc(v => ({
+            numar: d.numar || v.numar,
+            emis_la: d.emis_la || v.emis_la,
+            expira_la: d.expira_la || v.expira_la,
+          }))
+        }
+      }
+      setLrcStatus('done')
+    } catch {
+      setLrcStatus('error')
+    }
   }
 
   // Upload simplu (verso CI / adeverinta adresa / certificat nastere) — comprima + salveaza in coloana
@@ -941,6 +1000,60 @@ export default function PortalPage() {
                 )}
               </div>
             </div>
+
+            {/* ── Certificat LRC existent — doar la prelungirea valabilității ── */}
+            {needsLrcCert && (
+              <div className="bg-white rounded-2xl p-6 shadow-2xl">
+                <h2 className="font-bold text-gray-900 mb-1">Certificat LRC actual</h2>
+                <p className="text-xs text-gray-400 mb-4">
+                  Pentru prelungirea valabilității avem nevoie de certificatul dumneavoastră GMDSS/LRC existent.
+                  Numărul și datele se completează automat din scanare — verificați-le și corectați dacă e cazul.
+                </p>
+
+                <label className={`flex items-center justify-center gap-3 w-full px-4 py-3.5 rounded-xl border-2 border-dashed cursor-pointer transition-all mb-4 ${
+                  lrcStatus === 'done' ? 'border-green-400 bg-green-50' :
+                  lrcStatus === 'error' ? 'border-red-300 bg-red-50' :
+                  (lrcStatus === 'saving' || lrcStatus === 'scanning') ? 'border-blue-300 bg-blue-50' :
+                  'border-gray-200 hover:border-blue-300 hover:bg-blue-50/50'}`}>
+                  {lrcStatus === 'saving' ? <><Loader2 size={16} className="text-blue-500 animate-spin"/><span className="text-sm text-blue-600 font-medium">Se salvează...</span></>
+                   : lrcStatus === 'scanning' ? <><Loader2 size={16} className="text-blue-500 animate-spin"/><span className="text-sm text-blue-600 font-medium">Se citesc datele de pe certificat...</span></>
+                   : lrcStatus === 'done' ? <><CheckCircle size={16} className="text-green-600"/><span className="text-sm text-green-700 font-medium">Certificat LRC încărcat ✓ (apăsați pentru a înlocui)</span></>
+                   : lrcStatus === 'error' ? <><Upload size={16} className="text-red-400"/><span className="text-sm text-red-600 font-medium">Încărcare eșuată — încercați din nou</span></>
+                   : <><Upload size={16} className="text-gray-400"/><span className="text-sm text-gray-600 font-medium">Apăsați pentru a încărca/scana CERTIFICATUL LRC</span></>}
+                  <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleLrcUpload} />
+                </label>
+
+                <div className="grid sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className={labelCls}>Nr. certificat</label>
+                    <input value={lrc.numar} onChange={e => setLrc(v => ({ ...v, numar: e.target.value }))}
+                      onBlur={e => saveLrcField('numar', e.target.value)}
+                      placeholder="ex. 12345"
+                      className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200" />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Emis la</label>
+                    <input value={lrc.emis_la} onChange={e => setLrc(v => ({ ...v, emis_la: e.target.value }))}
+                      onBlur={e => saveLrcField('emis_la', e.target.value)}
+                      placeholder="zz.ll.aaaa"
+                      className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200" />
+                  </div>
+                  <div>
+                    <label className={labelCls}>Expiră la</label>
+                    <input value={lrc.expira_la} onChange={e => setLrc(v => ({ ...v, expira_la: e.target.value }))}
+                      onBlur={e => saveLrcField('expira_la', e.target.value)}
+                      placeholder="zz.ll.aaaa"
+                      className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200" />
+                  </div>
+                </div>
+
+                {student?.lrc_certificat_data && (
+                  <div className="mt-4 rounded-xl border border-gray-200 overflow-hidden bg-gray-50">
+                    <img src={student.lrc_certificat_data} alt="Certificat LRC" className="w-full max-h-64 object-contain" />
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Semnătură */}
             <div className="bg-white rounded-2xl p-6 shadow-2xl">
