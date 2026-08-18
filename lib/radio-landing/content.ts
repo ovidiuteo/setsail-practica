@@ -22,7 +22,7 @@ export const DEFAULT_CONTENT = {
     titleAccent: 'Navighează legal.',
     subtitle:
       'Certificat GMDSS / LRC — obligatoriu pentru a folosi stația de la bord și pentru charter în străinătate. 100% online, pe Zoom.',
-    ctaPrimary: 'Rezervă loc · 15–17 iunie',
+    ctaPrimary: 'Rezervă loc · {{data_curs}}',
     ctaSecondary: 'Vezi programul',
     stats: [
       { value: '3', label: 'seri · 18–21' },
@@ -40,7 +40,7 @@ export const DEFAULT_CONTENT = {
   },
   examHighlight: {
     title: 'Examen de certificat',
-    detail: '17 iunie · 20:00–21:00 · online Zoom',
+    detail: '{{data_examen}} · 20:00–21:00 · online Zoom',
     note: 'Brevetul radio îl ridici de la sediul SetSail sau indici o adresă de expediere prin curier.',
   },
   coverage: {
@@ -91,8 +91,8 @@ export const DEFAULT_CONTENT = {
   },
   enroll: {
     eyebrow: 'URMĂTOAREA SESIUNE',
-    dateBig: '15 – 17\nIUNIE',
-    dateSub: 'Luni – Miercuri · 18:00–21:00 · pe Zoom',
+    dateBig: '{{data_curs_mare}}',
+    dateSub: '{{zile_curs}} · 18:00–21:00 · pe Zoom',
     points: ['3 seri intensive online', 'Certificat valabil 5 ani', 'Locuri limitate'],
     examNote: 'Examen VHF — online, live',
     cardTitle: 'Curs radio GMDSS / LRC',
@@ -117,7 +117,7 @@ export const DEFAULT_CONTENT = {
     ],
   },
   finalCta: {
-    eyebrow: 'ULTIMELE LOCURI · 15–17 IUNIE',
+    eyebrow: 'ULTIMELE LOCURI · {{data_curs_caps}}',
     title: 'Rezervă locul tău acum',
     subtitle: 'Obține certificatul radio obligatoriu și pleacă în larg pregătit. Locuri limitate pentru sesiunea online.',
     ctaLabel: 'REZERVĂ LOCUL ACUM',
@@ -138,7 +138,7 @@ export const DEFAULT_CONTENT = {
   },
   leadForm: {
     title: 'Rezervă-ți locul',
-    subtitle: 'Completează formularul și te contactăm pentru confirmarea locului la cursul radio 15–17 iunie.',
+    subtitle: 'Completează formularul și te contactăm pentru confirmarea locului la cursul radio {{data_curs}}.',
     nameLabel: 'Nume și prenume',
     emailLabel: 'Email',
     phoneLabel: 'Telefon',

@@ -122,6 +122,22 @@ function ContentEditor({ draft, update }: { draft: any; update: (p: Path, v: any
   const T = (p: Path, label: string, opts?: { rec?: number; area?: boolean }) => <Txt label={label} value={g(p)} rec={opts?.rec} area={opts?.area} onChange={(v) => update(p, v)} />
   return (
     <div>
+      <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+        <p className="font-semibold mb-1">Datele cursului se completează automat</p>
+        <p className="text-[13px] leading-relaxed">
+          În orice text poți folosi, în loc de date scrise de mână, aceste coduri — se înlocuiesc cu
+          datele următoarei serii de radio din aplicație (din prima zi de curs se trece automat la seria următoare;
+          dacă nu există una viitoare, apare „next session"):
+        </p>
+        <ul className="mt-2 space-y-0.5 text-[13px] font-mono">
+          <li><b>{'{{data_curs}}'}</b> — 5–7 octombrie</li>
+          <li><b>{'{{data_curs_caps}}'}</b> — 5–7 OCTOMBRIE</li>
+          <li><b>{'{{data_curs_mare}}'}</b> — 5 – 7 / OCTOMBRIE (pe două rânduri)</li>
+          <li><b>{'{{data_examen}}'}</b> — 7 octombrie</li>
+          <li><b>{'{{zile_curs}}'}</b> — Luni – Miercuri</li>
+        </ul>
+      </div>
+
       <Card title="Bara de sus (navigație)">
         <div className="grid sm:grid-cols-2 gap-4">{T(['nav', 'brandTitle'], 'Nume brand', { rec: 16 })}{T(['nav', 'brandSubtitle'], 'Subtitlu brand', { rec: 20 })}</div>
         <div className="grid sm:grid-cols-4 gap-3">{(g(['nav', 'links']) || []).map((l: any, i: number) => <Txt key={i} label={`Meniu #${i + 1}`} value={l.label} rec={16} onChange={(v) => update(['nav', 'links', i, 'label'], v)} />)}</div>
