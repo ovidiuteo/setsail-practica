@@ -4,7 +4,7 @@ import { useParams, useSearchParams } from 'next/navigation'
 import { parseStudentsText } from '@/lib/import-parse'
 
 type Row = {
-  id: string; full_name: string; cnp: string; birth_date: string
+  id: string; full_name: string; email: string; cnp: string; birth_date: string
   address: string; city: string; county: string; obtinere_prelungire: string
   has_ci: boolean; has_verso: boolean
 }
@@ -31,6 +31,7 @@ type Verified = { corina: boolean; paula: boolean; ruxandra: boolean }
 
 const FIELDS: { key: keyof Row; label: string; w?: string }[] = [
   { key: 'full_name', label: 'Nume și prenume', w: 'min-w-[180px]' },
+  { key: 'email', label: 'Email', w: 'min-w-[200px]' },
   { key: 'cnp', label: 'CNP', w: 'min-w-[140px]' },
   { key: 'birth_date', label: 'Data nașterii', w: 'min-w-[110px]' },
   { key: 'address', label: 'Adresă', w: 'min-w-[200px]' },

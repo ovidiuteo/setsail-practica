@@ -12,7 +12,7 @@ function svc() {
 }
 
 // Câmpuri editabile de pe pagina gated
-const EDITABLE = new Set(['full_name', 'cnp', 'birth_date', 'address', 'city', 'county', 'obtinere_prelungire'])
+const EDITABLE = new Set(['full_name', 'email', 'cnp', 'birth_date', 'address', 'city', 'county', 'obtinere_prelungire'])
 const MAX_IMG = 8 * 1024 * 1024 // ~8MB data URL
 
 // Validează (session_id, token) și întoarce true dacă tokenul corespunde
@@ -51,11 +51,11 @@ export async function GET(req: NextRequest) {
   }
 
   const { data, error } = await sb.from('students')
-    .select('id, full_name, cnp, birth_date, address, city, county, class_caa, obtinere_prelungire, ci_image_data, ci_verso_data')
+    .select('id, full_name, email, cnp, birth_date, address, city, county, class_caa, obtinere_prelungire, ci_image_data, ci_verso_data')
     .eq('session_id', sessionId)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   const rows = (data || []).map((r: any) => ({
-    id: r.id, full_name: r.full_name, cnp: r.cnp, birth_date: r.birth_date,
+    id: r.id, full_name: r.full_name, email: r.email, cnp: r.cnp, birth_date: r.birth_date,
     address: r.address, city: r.city, county: r.county,
     // Informația vine din clasă (sursa de adevăr); valoarea stocată e doar fallback dacă clasa nu o conține
     obtinere_prelungire: lrcFromClass(r.class_caa) || r.obtinere_prelungire || '',
