@@ -61,14 +61,13 @@ export async function cererePdf(s: any, opts: CerereOpts): Promise<Buffer> {
   const doc = newDoc()
   const cw = doc.page.width - MARGIN * 2
 
-  // Antet: durata (stânga) + nr. de înregistrare (dreapta), dacă a fost alocat
-  const yTop = doc.y
-  doc.fontSize(8).fillColor('#666').text('Durata medie de completare: 4 minute', MARGIN, yTop, { align: 'left' })
+  // Antet: nr. de înregistrare (dreapta), dacă a fost alocat
   if (cerereNr) {
     doc.font('B').fontSize(10).fillColor('#000')
-      .text(`Nr. ${cerereNr} / ${cerereDate}`, MARGIN, yTop - 2, { width: cw, align: 'right' })
+      .text(`Nr. ${cerereNr} / ${cerereDate}`, MARGIN, doc.y, { width: cw, align: 'right' })
+    doc.moveDown(0.6)
   }
-  doc.moveDown(0.6).fillColor('#000')
+  doc.fillColor('#000')
   doc.font('B').fontSize(13).text(isPrelungire ? 'CERERE DE PRELUNGIRE A VALABILITĂȚII' : 'CERERE DE EXAMINARE OPERATORI RADIO', { align: 'center' })
   doc.moveDown(0.4)
   doc.font('B').fontSize(11).text('Domnule Președinte,', { align: 'center' })

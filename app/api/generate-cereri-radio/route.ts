@@ -86,7 +86,6 @@ export async function POST(req: NextRequest) {
              localitatea ${F('București','80px')}, sectorul/județul ${F('1','20px')}.`
 
         return `<div class="page">
-          <div style="font-size:8pt;color:#666;margin-bottom:10px;">Durata medie de completare: 4 minute</div>
           <h2>${isPrelungire ? 'CERERE DE PRELUNGIRE A VALABILITĂȚII' : 'CERERE DE EXAMINARE OPERATORI RADIO'}</h2>
           <h3>Domnule Președinte,</h3>
           <p class="body">${body}</p>
@@ -180,9 +179,6 @@ export async function POST(req: NextRequest) {
       // Titlu
       allChildren.push(
         new Paragraph({ alignment: AlignmentType.CENTER as any, spacing: { before: 0, after: 80 }, children: [
-          t('Durata medie de completare: 4 minute', false, 20)
-        ]}),
-        new Paragraph({ alignment: AlignmentType.CENTER as any, spacing: { before: 80, after: 80 }, children: [
           new TextRun({ text: isPrelungire ? 'CERERE DE PRELUNGIRE A VALABILITĂȚII' : 'CERERE DE EXAMINARE OPERATORI RADIO', bold: true, size: 28, font: 'Tahoma', allCaps: true })
         ]}),
         new Paragraph({ alignment: AlignmentType.CENTER as any, spacing: { before: 80, after: 200 }, children: [
