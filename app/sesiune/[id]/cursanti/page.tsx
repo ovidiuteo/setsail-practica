@@ -727,7 +727,8 @@ function VerifyTab({ sessionId, token, rows, onRowUpdate }: {
   // La schimbarea cursantului: reîncarcă formularul + imaginea
   useEffect(() => {
     const c = rows[index]; if (!c) return
-    setForm({ full_name: c.full_name || '', cnp: c.cnp || '', birth_date: c.birth_date || '', address: c.address || '', city: c.city || '', county: c.county || '' })
+    // din FIELDS, ca formularul să nu rămână în urmă când se adaugă o coloană
+    setForm(Object.fromEntries(FIELDS.map(f => [f.key, (c[f.key] as string) || ''])))
     setDirty(false); fetchCi(c.id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index])
