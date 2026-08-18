@@ -281,8 +281,6 @@ export default function ConfigurarePage() {
       {/* Numere cerere examen radio - registru independent, alocat per cursant */}
       <CerereNumbersSection />
 
-      {/* Link unic catre toate seriile de radio in lucru */}
-      <RadioIndexSection />
 
       {/* Tipuri de fisiere necesare per categorie (ANCOM / ANR) */}
       <SessionFileTypesSection />
@@ -708,16 +706,37 @@ function RadioTokenSection() {
   const [token, setToken] = useState<string>('')
   const [loading, setLoading] = useState(true)
   const [regenerating, setRegenerating] = useState(false)
-  const [copied, setCopied] = useState<'token' | 'link' | null>(null)
-  const editorUrl = token ? `${typeof window !== 'undefined' ? window.location.origin : ''}/curs-radio-gmdss-lrc/admin?token=${token}` : ''
+  const [copied, setCopied] = useState<'token' | 'link' | 'serii' | null>(null)
+  // Linkul listei de serii de radio — token separat, ținut în setsail_info
+  const [seriiToken, setSeriiToken] = useState('')
+  const origin = typeof window !== 'undefined' ? window.location.origin : ''
+  const editorUrl = token ? `${origin}/curs-radio-gmdss-lrc/admin?token=${token}` : ''
+  const seriiUrl = seriiToken ? `${origin}/serii-radio?token=${seriiToken}` : ''
 
   async function load() {
     setLoading(true)
     const json = await fetch('/api/radio-landing/token').then(r => r.json()).catch(() => null)
     setToken(json?.token || '')
+    const { data } = await supabase.from('setsail_info').select('value').eq('key', 'radio_index_token').maybeSingle()
+    setSeriiToken(String(data?.value || ''))
     setLoading(false)
   }
   useEffect(() => { load() }, [])
+
+  // Se generează la prima folosire; rămâne același când se adaugă serii noi
+  async function ensureSerii(): Promise<string> {
+    if (seriiToken) return seriiToken
+    const a = new Uint8Array(12); crypto.getRandomValues(a)
+    const t = Array.from(a).map(b => b.toString(16).padStart(2, '0')).join('')
+    await supabase.from('setsail_info').upsert({ key: 'radio_index_token', value: t }, { onConflict: 'key' })
+    setSeriiToken(t)
+    return t
+  }
+  async function copySerii() {
+    const t = await ensureSerii()
+    navigator.clipboard.writeText(`${origin}/serii-radio?token=${t}`)
+    setCopied('serii'); setTimeout(() => setCopied(null), 1500)
+  }
 
   async function regenerate() {
     if (!confirm('Regenerezi token-ul? Link-urile vechi de editare nu vor mai funcționa.')) return
@@ -762,6 +781,24 @@ function RadioTokenSection() {
             <button onClick={() => copy('link')} disabled={!token} className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-sm text-gray-600 transition-colors disabled:opacity-50">{copied === 'link' ? <Check size={15} className="text-green-600" /> : <Copy size={15} />} {copied === 'link' ? 'Copiat' : 'Copiază'}</button>
           </div>
           <p className="text-xs text-gray-400 mt-2">Oricine are acest link poate edita pagina radio. Regenerează token-ul pentru a revoca accesul.</p>
+        </div>
+        <div className="pt-4 border-t border-gray-100">
+          <label className="text-xs font-medium text-gray-500">Link listă serii radio (cu token)</label>
+          <div className="flex gap-2 mt-1">
+            <input readOnly value={loading ? '' : seriiUrl} placeholder="Se generează la prima copiere"
+              className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-600 bg-gray-50 truncate" />
+            <button onClick={copySerii} className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-sm text-gray-600 transition-colors">
+              {copied === 'serii' ? <Check size={15} className="text-green-600" /> : <Copy size={15} />} {copied === 'serii' ? 'Copiat' : 'Copiază'}
+            </button>
+            <a href={seriiUrl || '#'} target="_blank" rel="noreferrer"
+              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm transition-colors ${seriiToken ? 'border-[#2ea8d8] text-[#103a66] hover:bg-blue-50' : 'border-gray-200 text-gray-300 pointer-events-none'}`}>
+              <ExternalLink size={15} /> Deschide
+            </a>
+          </div>
+          <p className="text-xs text-gray-400 mt-2">
+            Toate seriile de radio în lucru (focus, active, ciorne), de unde se intră în listele de cursanți.
+            Seriile noi apar automat — linkul rămâne același.
+          </p>
         </div>
       </div>
     </div>
@@ -826,72 +863,6 @@ function LeadsDashboardTokenSection() {
 
 // Registru INDEPENDENT de numere pentru cererile de examen radio.
 // Se alocă per cursant, când acesta își descarcă cererea din portal.
-// Link unic (cu token) către pagina cu toate seriile de radio în lucru.
-// Tokenul e unul singur — seriile noi apar automat, fără link nou.
-function RadioIndexSection() {
-  const KEY = 'radio_index_token'
-  const [token, setToken] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [copied, setCopied] = useState(false)
-  const origin = typeof window !== 'undefined' ? window.location.origin : ''
-  const link = token ? `${origin}/serii-radio?token=${token}` : ''
-
-  useEffect(() => {
-    supabase.from('setsail_info').select('value').eq('key', KEY).maybeSingle()
-      .then(({ data }) => setToken(String(data?.value || '')))
-  }, [])
-
-  function gen(): string {
-    const a = new Uint8Array(12); crypto.getRandomValues(a)
-    return Array.from(a).map(b => b.toString(16).padStart(2, '0')).join('')
-  }
-  async function save(t: string) {
-    setBusy(true)
-    await supabase.from('setsail_info').upsert({ key: KEY, value: t }, { onConflict: 'key' })
-    setToken(t); setBusy(false)
-  }
-  async function copy() {
-    let t = token
-    if (!t) { t = gen(); await save(t) }
-    navigator.clipboard.writeText(`${origin}/serii-radio?token=${t}`)
-    setCopied(true); setTimeout(() => setCopied(false), 2000)
-  }
-
-  return (
-    <div className="mt-8 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-      <div className="px-6 py-4 border-b border-gray-100">
-        <h2 className="font-semibold text-gray-900">Link serii radio</h2>
-        <p className="text-xs text-gray-400 mt-0.5">
-          O singură pagină cu toate seriile de radio în lucru (focus, active, ciorne), de unde se intră în listele de
-          cursanți. Seriile noi apar automat — linkul nu trebuie schimbat.
-        </p>
-      </div>
-      <div className="px-6 py-4 flex flex-wrap items-center gap-2">
-        {token
-          ? <code className="px-2 py-1 rounded bg-gray-50 border border-gray-200 text-xs text-gray-700 break-all">{link}</code>
-          : <span className="text-xs text-gray-400">Niciun link generat încă.</span>}
-        <button onClick={copy} disabled={busy}
-          className="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50">
-          {copied ? 'Copiat ✓' : token ? 'Copy link' : 'Generează link'}
-        </button>
-        {token && (
-          <>
-            <a href={link} target="_blank" rel="noopener noreferrer"
-              className="px-3 py-1.5 rounded-lg text-xs font-medium border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100">
-              Deschide
-            </a>
-            <button onClick={() => { if (confirm('Generezi un token nou? Linkul vechi nu va mai funcționa.')) save(gen()) }}
-              disabled={busy}
-              className="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-50">
-              Token nou
-            </button>
-          </>
-        )}
-      </div>
-    </div>
-  )
-}
-
 function CerereNumbersSection() {
   const [rows, setRows] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
