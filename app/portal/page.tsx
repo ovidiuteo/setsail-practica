@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Ship, RotateCcw, Check, Upload, Loader2, CheckCircle, AlertCircle, Camera, ChevronDown, ChevronUp, FileText } from 'lucide-react'
+import { Ship, RotateCcw, Check, Upload, Loader2, CheckCircle, AlertCircle, Camera, ChevronDown, ChevronUp, FileText, RadioTower, AlertTriangle } from 'lucide-react'
 import CIImageEditor from '@/components/CIImageEditor'
 import { scopeForSession } from '@/lib/timeline-scope'
 
@@ -102,6 +102,25 @@ export default function PortalPage() {
   const needsLrcCert = examScope === 'radio_lrc' && /prelungire/i.test(classCaa)
   // La radio nu se semnează pe ecran: se semnează cererea de examen
   const isRadioSession = examScope === 'radio_lrc'
+  // Datele pe care le cere textul cererii de examen. Fără ele documentul ar ieși
+  // cu linii punctate, așa că blocăm descărcarea până sunt completate.
+  const cerereMissing: string[] = (() => {
+    if (!isRadioSession) return []
+    const out: string[] = []
+    const need: [keyof typeof form, string][] = [
+      ['full_name', 'nume și prenume'], ['address', 'adresă'], ['city', 'localitate'],
+      ['county', 'sector/județ'], ['phone', 'telefon'], ['email', 'email'],
+    ]
+    for (const [k, label] of need) if (!String(form[k] || '').trim()) out.push(label)
+    if (/prelungire/i.test(classCaa)) {
+      if (!form.ci_series.trim()) out.push('serie CI')
+      if (!form.ci_number.trim()) out.push('număr CI')
+      if (!form.cnp.trim()) out.push('CNP')
+      if (!lrc.numar.trim()) out.push('nr. certificat LRC')
+      if (!lrc.emis_la.trim()) out.push('data emiterii certificatului LRC')
+    }
+    return out
+  })()
 
   // Sunt toate datele din "Date completate" completate? (pt. culoarea dropdownului)
   const detailVals = [
@@ -742,10 +761,14 @@ export default function PortalPage() {
         {/* Logo */}
         <div className="text-center mb-6">
           <div className="inline-flex items-center justify-center w-14 h-14 rounded-2xl mb-3" style={{ background: '#f5c842' }}>
-            <Ship size={28} style={{ color: '#0a1628' }} />
+            {isRadioSession
+              ? <RadioTower size={28} style={{ color: '#0a1628' }} />
+              : <Ship size={28} style={{ color: '#0a1628' }} />}
           </div>
           <h1 className="text-2xl font-bold text-white" style={{ fontFamily: 'Georgia, serif' }}>SetSail</h1>
-          <p className="text-white/50 text-sm mt-1">Portal examen practic</p>
+          <p className="text-white/50 text-sm mt-1">
+            {isRadioSession ? 'Portal curs GMDSS/LRC' : 'Portal examen practic'}
+          </p>
         </div>
 
         {/* ── LOGIN ── */}
@@ -1186,9 +1209,21 @@ export default function PortalPage() {
                   o poză cu semnătura dumneavoastră pe hârtie — o așezăm noi pe cerere.
                 </p>
 
+                {/* Avertisment: fără datele de mai sus cererea ar ieși cu linii punctate */}
+                {cerereMissing.length > 0 && (
+                  <div className="mb-3 rounded-xl border-2 border-amber-400 bg-amber-50 px-4 py-3">
+                    <p className="text-sm font-semibold text-amber-800 flex items-center gap-2">
+                      <AlertTriangle size={15} /> Sunt necesare datele personale completate
+                    </p>
+                    <p className="text-xs text-amber-700 mt-1">
+                      Completați mai sus: <b>{cerereMissing.join(', ')}</b>. Cererea nu poate fi generată fără aceste date.
+                    </p>
+                  </div>
+                )}
+
                 {/* 1. Descarcă */}
-                <button onClick={downloadCerere} disabled={cerereBusy}
-                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold text-white disabled:opacity-60 mb-2"
+                <button onClick={downloadCerere} disabled={cerereBusy || cerereMissing.length > 0}
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed mb-2"
                   style={{ background: '#0a1628' }}>
                   {cerereBusy ? <><Loader2 size={15} className="animate-spin" /> Se pregătește cererea…</>
                     : <><FileText size={15} /> 1. Descarcă cererea de examen</>}
