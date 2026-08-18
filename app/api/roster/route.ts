@@ -105,16 +105,47 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ image: (data as any)?.[col] || null })
   }
 
-  const { data, error } = await sb.from('students')
-    .select('id, full_name, email, cnp, birth_date, address, city, county, class_caa, obtinere_prelungire, ci_image_data, ci_verso_data')
-    .eq('session_id', sessionId)
+  // Documentele sunt base64 de câțiva MB → nu le aducem în listă, ci întrebăm
+  // doar CINE are fiecare document (interogări care întorc numai id-uri).
+  const DOC_COLS = {
+    has_ci: 'ci_image_data',
+    has_verso: 'ci_verso_data',
+    has_adeverinta: 'adeverinta_adresa_data',
+    has_cert_nastere: 'certificat_nastere_data',
+    has_signature: 'signature_data',
+    has_cerere: 'cerere_semnata_data',
+  } as const
+  type DocKey = keyof typeof DOC_COLS
+
+  const [{ data, error }, docSets, { data: cereri }] = await Promise.all([
+    sb.from('students')
+      .select('id, full_name, email, cnp, birth_date, address, city, county, class_caa, obtinere_prelungire, doc_type')
+      .eq('session_id', sessionId),
+    Promise.all((Object.entries(DOC_COLS) as [DocKey, string][]).map(async ([key, col]) => {
+      const { data: ids } = await sb.from('students').select('id')
+        .eq('session_id', sessionId).not(col, 'is', null).neq(col, '')
+      return [key, new Set((ids || []).map((r: any) => r.id))] as [DocKey, Set<string>]
+    })),
+    sb.from('cerere_numbers').select('student_id, numar, data_cerere').eq('session_id', sessionId),
+  ])
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  const has = Object.fromEntries(docSets) as Record<DocKey, Set<string>>
+  const cerereBy = new Map<string, { numar: number; data_cerere: string }>()
+  for (const c of cereri || []) cerereBy.set((c as any).student_id, c as any)
+
   const rows = (data || []).map((r: any) => ({
     id: r.id, full_name: r.full_name, email: r.email, cnp: r.cnp, birth_date: r.birth_date,
     address: r.address, city: r.city, county: r.county,
     // Informația vine din clasă (sursa de adevăr); valoarea stocată e doar fallback dacă clasa nu o conține
     obtinere_prelungire: lrcFromClass(r.class_caa) || r.obtinere_prelungire || '',
-    has_ci: !!r.ci_image_data, has_verso: !!r.ci_verso_data,
+    doc_type: r.doc_type || '',
+    has_ci: has.has_ci.has(r.id), has_verso: has.has_verso.has(r.id),
+    has_adeverinta: has.has_adeverinta.has(r.id),
+    has_cert_nastere: has.has_cert_nastere.has(r.id),
+    has_signature: has.has_signature.has(r.id),
+    has_cerere: has.has_cerere.has(r.id),
+    cerere_nr: cerereBy.get(r.id)?.numar ?? null,
+    cerere_data: cerereBy.get(r.id)?.data_cerere ?? null,
   }))
   rows.sort((a, b) => (a.full_name || '').localeCompare(b.full_name || '', 'ro', { sensitivity: 'base' }))
   const verified: Record<string, boolean> = {}

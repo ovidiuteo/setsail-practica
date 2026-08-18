@@ -7,7 +7,18 @@ type Row = {
   id: string; full_name: string; email: string; cnp: string; birth_date: string
   address: string; city: string; county: string; obtinere_prelungire: string
   has_ci: boolean; has_verso: boolean
+  doc_type: string
+  has_adeverinta: boolean; has_cert_nastere: boolean
+  has_signature: boolean; has_cerere: boolean
+  cerere_nr: number | null; cerere_data: string | null
 }
+
+const DOC_LABEL: Record<string, string> = {
+  ci_vechi: 'CI vechi', ci_nou: 'CI nou', ci_strain: 'CI străin', pasaport: 'Pașaport',
+}
+// Bifă verde / liniuță gri, pentru coloanele de documente
+const Mark = ({ on }: { on: boolean }) =>
+  on ? <span className="text-green-600 font-semibold">✓</span> : <span className="text-gray-300">—</span>
 
 const LRC_OPTS: [string, string][] = [['', '—'], ['obtinere', 'Obținere LRC'], ['prelungire', 'Prelungire LRC']]
 const lrcLabel = (v: string) => LRC_OPTS.find(o => o[0] === v)?.[1] || '—'
@@ -38,6 +49,11 @@ const FIELDS: { key: keyof Row; label: string; w?: string }[] = [
   { key: 'city', label: 'Localitate', w: 'min-w-[120px]' },
   { key: 'county', label: 'Județ', w: 'min-w-[110px]' },
 ]
+// Tabul „Lista cursanți" — doar identificarea persoanei; restul coloanelor sunt stări de documente
+const PERSON_FIELDS = FIELDS.filter(f => ['full_name', 'email', 'cnp'].includes(f.key as string))
+
+const roDate = (d: string | null) => d ? new Date(d).toLocaleDateString('ro-RO') : ''
+
 const VERIFIERS: { key: keyof Verified; label: string }[] = [
   { key: 'corina', label: 'Corina' }, { key: 'paula', label: 'Paula' }, { key: 'ruxandra', label: 'Ruxandra' },
 ]
@@ -120,7 +136,7 @@ export default function RosterPage() {
   const [draft, setDraft] = useState('')
   const [saving, setSaving] = useState(false)
   const [ciFor, setCiFor] = useState<Row | null>(null)
-  const [tab, setTab] = useState<'list' | 'verify'>('list')
+  const [tab, setTab] = useState<'cursanti' | 'adrese' | 'verify'>('cursanti')
   const [docsVisible, setDocsVisible] = useState(false)
   const [addOpen, setAddOpen] = useState<null | 'manual' | 'paste'>(null)
   const [title, setTitle] = useState('Cursanți — sesiune')
@@ -256,7 +272,7 @@ export default function RosterPage() {
 
         {/* Taburi */}
         <div className="mb-4 flex gap-1 border-b border-gray-200">
-          {([['list', 'Listă'], ['verify', 'Verify by ID']] as const).map(([k, lbl]) => (
+          {([['cursanti', 'Lista cursanți'], ['adrese', 'Lista verificare adrese'], ['verify', 'Verify by ID']] as const).map(([k, lbl]) => (
             <button key={k} onClick={() => setTab(k)}
               className={`px-4 py-2 text-sm font-medium -mb-px border-b-2 ${tab === k ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
               {lbl}
@@ -276,9 +292,18 @@ export default function RosterPage() {
               <thead>
                 <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
                   <th className="px-3 py-2.5 w-8">#</th>
-                  {FIELDS.map(f => <th key={f.key} className={`px-3 py-2.5 ${f.w || ''}`}>{f.label}</th>)}
+                  {(tab === 'cursanti' ? PERSON_FIELDS : FIELDS).map(f => <th key={f.key} className={`px-3 py-2.5 ${f.w || ''}`}>{f.label}</th>)}
                   <th className="px-3 py-2.5 text-center">CI</th>
                   <th className="px-3 py-2.5 min-w-[150px]">Obținere / Prelungire LRC</th>
+                  {tab === 'cursanti' && <>
+                    <th className="px-3 py-2.5 min-w-[110px]">Cerere nr. / data</th>
+                    <th className="px-3 py-2.5 text-center">Semnătură</th>
+                    <th className="px-3 py-2.5 text-center">Cerere încărcată</th>
+                    <th className="px-3 py-2.5 min-w-[90px]">Tip document</th>
+                    <th className="px-3 py-2.5 text-center">Verso CI</th>
+                    <th className="px-3 py-2.5 text-center">Domiciliu</th>
+                    <th className="px-3 py-2.5 text-center">Certif. naștere</th>
+                  </>}
                   <th className="px-3 py-2.5 w-10"></th>
                 </tr>
               </thead>
@@ -286,7 +311,7 @@ export default function RosterPage() {
                 {rows.map((row, i) => (
                   <tr key={row.id} className="hover:bg-gray-50/60">
                     <td className="px-3 py-2 text-gray-300 text-xs">{i + 1}</td>
-                    {FIELDS.map(f => {
+                    {(tab === 'cursanti' ? PERSON_FIELDS : FIELDS).map(f => {
                       const editing = edit?.id === row.id && edit?.field === f.key
                       return (
                         <td key={f.key} className="px-3 py-2 align-middle">
@@ -318,6 +343,21 @@ export default function RosterPage() {
                     <td className="px-3 py-2">
                       <LrcSelect value={row.obtinere_prelungire} onConfirm={v => saveLrc(row.id, v)} />
                     </td>
+                    {tab === 'cursanti' && <>
+                      <td className="px-3 py-2 whitespace-nowrap">
+                        {row.cerere_nr
+                          ? <span className="text-gray-800">{row.cerere_nr}<span className="text-gray-400"> / {roDate(row.cerere_data)}</span></span>
+                          : <span className="text-gray-300">—</span>}
+                      </td>
+                      <td className="px-3 py-2 text-center"><Mark on={row.has_signature} /></td>
+                      <td className="px-3 py-2 text-center"><Mark on={row.has_cerere} /></td>
+                      <td className="px-3 py-2 text-gray-700">
+                        {DOC_LABEL[row.doc_type] || <span className="text-gray-300">—</span>}
+                      </td>
+                      <td className="px-3 py-2 text-center"><Mark on={row.has_verso} /></td>
+                      <td className="px-3 py-2 text-center"><Mark on={row.has_adeverinta} /></td>
+                      <td className="px-3 py-2 text-center"><Mark on={row.has_cert_nastere} /></td>
+                    </>}
                     <td className="px-3 py-2 text-center">
                       <button onClick={() => removeRow(row)} disabled={deleting === row.id}
                         title="Șterge cursantul din serie"
