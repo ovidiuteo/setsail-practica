@@ -278,6 +278,9 @@ export default function ConfigurarePage() {
       {/* Numere notificari - sectiune separata full-width */}
       <NotificationNumbersSection />
 
+      {/* Numere cerere examen radio - registru independent, alocat per cursant */}
+      <CerereNumbersSection />
+
       {/* Tipuri de fisiere necesare per categorie (ANCOM / ANR) */}
       <SessionFileTypesSection />
 
@@ -814,6 +817,120 @@ function LeadsDashboardTokenSection() {
           <p className="text-xs text-gray-400 mt-2">Oricine are acest link vede toate lead-urile. Regenerează token-ul pentru a revoca accesul.</p>
         </div>
       </div>
+    </div>
+  )
+}
+
+// Registru INDEPENDENT de numere pentru cererile de examen radio.
+// Se alocă per cursant, când acesta își descarcă cererea din portal.
+function CerereNumbersSection() {
+  const [rows, setRows] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [next, setNext] = useState<number | null>(null)
+  const [startNr, setStartNr] = useState('')
+  const [savingStart, setSavingStart] = useState(false)
+
+  async function load() {
+    setLoading(true)
+    const r = await fetch('/api/cerere-numbers')
+    const j = await r.json().catch(() => ({}))
+    setRows(j.numbers || [])
+    setStartNr(String(j.start_number ?? ''))
+    setNext(j.next ?? null)
+    setLoading(false)
+  }
+  useEffect(() => { load() }, [])
+
+  async function saveStart() {
+    setSavingStart(true)
+    await fetch('/api/cerere-numbers', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ start_number: startNr }),
+    })
+    setSavingStart(false)
+    load()
+  }
+
+  async function remove(id: string, numar: number) {
+    if (!confirm(`Ștergi numărul ${numar}? Cursantul va primi alt număr la următoarea descărcare.`)) return
+    await fetch('/api/cerere-numbers', {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }),
+    })
+    setRows(r => r.filter(x => x.id !== id))
+  }
+
+  return (
+    <div className="mt-8 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-wrap gap-3">
+        <div>
+          <h2 className="font-semibold text-gray-900">📻 Numere cerere examen radio alocate</h2>
+          <p className="text-xs text-gray-400 mt-0.5">
+            {rows.length} alocate · registru independent, câte un număr per cursant
+            {next !== null && <> · următorul: <b className="text-gray-600">{next}</b></>}
+          </p>
+        </div>
+        <div className="flex items-end gap-2">
+          <label className="block">
+            <span className="block text-xs text-gray-400 mb-1">Numărul de pornire</span>
+            <input value={startNr} onChange={e => setStartNr(e.target.value.replace(/\D/g, ''))}
+              placeholder="ex. 1"
+              className="w-28 px-3 py-1.5 rounded-lg border border-gray-200 text-sm" />
+          </label>
+          <button onClick={saveStart} disabled={savingStart}
+            className="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 text-gray-700 hover:bg-gray-100 disabled:opacity-50">
+            {savingStart ? 'Se salvează…' : 'Salvează'}
+          </button>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="text-center text-gray-400 py-8">Se încarcă...</div>
+      ) : rows.length === 0 ? (
+        <div className="text-center text-gray-400 py-8">
+          Niciun număr alocat încă. Se alocă automat când un cursant își descarcă cererea de examen.
+        </div>
+      ) : (
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-50 text-xs text-gray-400 font-medium">
+              <th className="text-left px-6 py-3">Nr. cerere</th>
+              <th className="text-left px-4 py-3">Cursant</th>
+              <th className="text-left px-4 py-3">Tip</th>
+              <th className="text-left px-4 py-3">Data cererii</th>
+              <th className="text-left px-4 py-3">Sesiune</th>
+              <th className="px-4 py-3"></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {rows.map(r => (
+              <tr key={r.id} className="hover:bg-gray-50 transition-colors">
+                <td className="px-6 py-3 font-bold text-gray-900">{r.numar}</td>
+                <td className="px-4 py-3 text-gray-700">{r.students?.full_name || r.student_nume || '—'}</td>
+                <td className="px-4 py-3">
+                  <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                    r.tip === 'prelungire' ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
+                    {r.tip === 'prelungire' ? 'Prelungire' : 'Obținere'}
+                  </span>
+                </td>
+                <td className="px-4 py-3 text-gray-500">
+                  {r.data_cerere ? new Date(r.data_cerere).toLocaleDateString('ro-RO') : '—'}
+                </td>
+                <td className="px-4 py-3 text-gray-400 text-xs">
+                  {r.sessions?.session_date
+                    ? new Date(r.sessions.session_date).toLocaleDateString('ro-RO') + ' · ' + (r.sessions.class_caa || '')
+                    : '—'}
+                </td>
+                <td className="px-4 py-3 text-right">
+                  <button onClick={() => remove(r.id, r.numar)}
+                    className="p-1.5 rounded-lg hover:bg-red-50 text-gray-300 hover:text-red-500 transition-colors">
+                    <Trash2 size={14}/>
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
     </div>
   )
 }
