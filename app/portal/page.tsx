@@ -18,6 +18,8 @@ export default function PortalPage() {
   const [ocrLoading, setOcrLoading] = useState(false)
   const [ocrStatus, setOcrStatus] = useState<'idle' | 'loading' | 'done' | 'error'>('idle')
   const [pendingFile, setPendingFile] = useState<File|null>(null)
+  // Cererea semnată / poza semnăturii trec prin același editor ca actele de identitate
+  const [editFile, setEditFile] = useState<{ file: File; kind: 'cerere' | 'semnatura' } | null>(null)
   const [signatureSaved, setSignatureSaved] = useState(false)
   const [existingSignature, setExistingSignature] = useState<string | null>(null)
   const [scannedFields, setScannedFields] = useState<Set<string>>(new Set())
@@ -448,18 +450,10 @@ export default function PortalPage() {
 
   // Poza cu semnatura de pe hartie -> curatata -> salvata ca semnatura oficiala,
   // deci apare automat pe cerere la urmatoarea descarcare.
-  async function handleSignaturePhoto(e: React.ChangeEvent<HTMLInputElement>) {
-    const file = e.target.files?.[0]
-    e.target.value = ''
-    if (!file || !student?.id) return
+  async function saveSignatureFromDataUrl(dataUrl: string) {
+    if (!student?.id) return
     setSigPhotoStatus('saving')
     try {
-      const dataUrl: string = await new Promise((res, rej) => {
-        const fr = new FileReader()
-        fr.onerror = () => rej(new Error('citire eșuată'))
-        fr.onload = () => res(String(fr.result))
-        fr.readAsDataURL(file)
-      })
       const cleaned = await cleanSignaturePhoto(dataUrl)
       await supabase.from('students').update({ signature_data: cleaned }).eq('id', student.id)
       setExistingSignature(cleaned)
@@ -520,6 +514,25 @@ export default function PortalPage() {
       setLrcStatus('done')
     } catch {
       setLrcStatus('error')
+    }
+  }
+
+  // Salveaza o imagine deja editata (decupata/rotita) intr-o coloana de document
+  async function saveExtraFromDataUrl(
+    dataUrl: string,
+    column: 'ci_verso_data' | 'adeverinta_adresa_data' | 'certificat_nastere_data' | 'cerere_semnata_data',
+    setStatus: (s: 'idle' | 'saving' | 'done') => void
+  ) {
+    if (!student?.id) return
+    setStatus('saving')
+    try {
+      const compressed = await compressImage(dataUrl)
+      await supabase.from('students').update({ [column]: compressed }).eq('id', student.id)
+      setStudent((prev: any) => prev ? { ...prev, [column]: compressed } : prev)
+      setStatus('done')
+    } catch (err) {
+      console.error('Upload error:', err)
+      setStatus('idle')
     }
   }
 
@@ -751,6 +764,25 @@ export default function PortalPage() {
         processImageForOCR(dataUrl, mediaType)
       }}
       onCancel={() => setPendingFile(null)}
+    />
+  )
+
+  // Același editor (rotire + decupare + previzualizare) pentru cererea semnată și semnătură
+  if (editFile) return (
+    <CIImageEditor
+      file={editFile.file}
+      title={editFile.kind === 'cerere' ? 'Cererea semnată' : 'Poza semnăturii'}
+      hint={editFile.kind === 'cerere'
+        ? <>Rotiți și decupați cererea → <b>Apply Crop</b> → <b>Salvează</b></>
+        : <>Decupați strict semnătura, fără marginile foii → <b>Apply Crop</b> → <b>Salvează</b></>}
+      confirmLabel="Salvează"
+      onConfirm={dataUrl => {
+        const kind = editFile.kind
+        setEditFile(null)
+        if (kind === 'cerere') saveExtraFromDataUrl(dataUrl, 'cerere_semnata_data', setCerereSemnStatus)
+        else saveSignatureFromDataUrl(dataUrl)
+      }}
+      onCancel={() => setEditFile(null)}
     />
   )
 
@@ -1257,17 +1289,24 @@ export default function PortalPage() {
                 )}
                 {!cerereNr && <div className="mb-4" />}
 
-                {/* 2a. Cererea semnată, scanată */}
-                <label className={`flex items-center justify-center gap-3 w-full px-4 py-3.5 rounded-xl border-2 border-dashed cursor-pointer transition-all mb-3 ${
-                  cerereSemnStatus === 'done' ? 'border-green-400 bg-green-50' :
-                  cerereSemnStatus === 'saving' ? 'border-blue-300 bg-blue-50' :
-                  'border-gray-200 hover:border-blue-300 hover:bg-blue-50/50'}`}>
-                  {cerereSemnStatus === 'saving' ? <><Loader2 size={16} className="text-blue-500 animate-spin"/><span className="text-sm text-blue-600 font-medium">Se salvează...</span></>
-                   : cerereSemnStatus === 'done' ? <><CheckCircle size={16} className="text-green-600"/><span className="text-sm text-green-700 font-medium">Cerere semnată încărcată ✓ (apăsați pentru a înlocui)</span></>
-                   : <><Upload size={16} className="text-gray-400"/><span className="text-sm text-gray-600 font-medium">2. Încărcați cererea SEMNATĂ (poză sau scan)</span></>}
-                  <input type="file" accept="image/*" capture="environment" className="hidden"
-                    onChange={e => handleExtraUpload(e, 'cerere_semnata_data', setCerereSemnStatus)} />
-                </label>
+                {/* 2a. Cererea semnată, scanată — dropzone + previzualizare, ca la actele de identitate */}
+                <div className="flex gap-3 mb-3">
+                  <label className={`flex flex-col items-center justify-center text-center gap-2 flex-1 p-3 rounded-xl border-2 border-dashed cursor-pointer transition-all aspect-[210/297] ${
+                    cerereSemnStatus === 'done' ? 'border-green-400 bg-green-50' :
+                    cerereSemnStatus === 'saving' ? 'border-blue-300 bg-blue-50' :
+                    'border-gray-200 hover:border-blue-300 hover:bg-blue-50/50'}`}>
+                    {cerereSemnStatus === 'saving' ? <><Loader2 size={20} className="text-blue-500 animate-spin"/><span className="text-xs text-blue-600 font-medium">Se salvează...</span></>
+                     : cerereSemnStatus === 'done' ? <><CheckCircle size={22} className="text-green-600"/><span className="text-xs text-green-700 font-medium">Cerere semnată încărcată ✓<br/>(apăsați pentru a înlocui)</span></>
+                     : <><Upload size={22} className="text-gray-400"/><span className="text-xs text-gray-600 font-medium">2. Încărcați cererea SEMNATĂ (poză sau scan)</span></>}
+                    <input type="file" accept="image/*" capture="environment" className="hidden"
+                      onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) setEditFile({ file: f, kind: 'cerere' }) }} />
+                  </label>
+                  <div className="flex-1 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 aspect-[210/297] overflow-hidden flex items-center justify-center">
+                    {student?.cerere_semnata_data
+                      ? <img src={student.cerere_semnata_data} alt="Cererea semnată" className="w-full h-full object-contain" />
+                      : <span className="text-xs text-gray-300 px-2 text-center">Previzualizare cerere</span>}
+                  </div>
+                </div>
 
                 <div className="flex items-center gap-3 my-3">
                   <div className="flex-1 h-px bg-gray-200" />
@@ -1276,34 +1315,37 @@ export default function PortalPage() {
                 </div>
 
                 {/* 2b. Doar semnătura, pe care o așezăm noi pe cerere */}
-                <label className={`flex items-center justify-center gap-3 w-full px-4 py-3.5 rounded-xl border-2 border-dashed cursor-pointer transition-all ${
-                  sigPhotoStatus === 'done' ? 'border-green-400 bg-green-50' :
-                  sigPhotoStatus === 'saving' ? 'border-blue-300 bg-blue-50' :
-                  'border-gray-200 hover:border-blue-300 hover:bg-blue-50/50'}`}>
-                  {sigPhotoStatus === 'saving' ? <><Loader2 size={16} className="text-blue-500 animate-spin"/><span className="text-sm text-blue-600 font-medium">Se procesează...</span></>
-                   : sigPhotoStatus === 'done' ? <><CheckCircle size={16} className="text-green-600"/><span className="text-sm text-green-700 font-medium">Semnătură încărcată ✓ — redescărcați cererea, e semnată</span></>
-                   : <><Upload size={16} className="text-gray-400"/><span className="text-sm text-gray-600 font-medium">Încărcați o POZĂ cu semnătura de pe hârtie</span></>}
-                  <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleSignaturePhoto} />
-                </label>
+                <div className="flex gap-3">
+                  <label className={`flex flex-col items-center justify-center text-center gap-2 flex-1 p-3 rounded-xl border-2 border-dashed cursor-pointer transition-all aspect-[3/1] ${
+                    sigPhotoStatus === 'done' ? 'border-green-400 bg-green-50' :
+                    sigPhotoStatus === 'saving' ? 'border-blue-300 bg-blue-50' :
+                    'border-gray-200 hover:border-blue-300 hover:bg-blue-50/50'}`}>
+                    {sigPhotoStatus === 'saving' ? <><Loader2 size={18} className="text-blue-500 animate-spin"/><span className="text-xs text-blue-600 font-medium">Se procesează...</span></>
+                     : sigPhotoStatus === 'done' ? <><CheckCircle size={18} className="text-green-600"/><span className="text-xs text-green-700 font-medium">Semnătură încărcată ✓<br/>(apăsați pentru a înlocui)</span></>
+                     : <><Upload size={18} className="text-gray-400"/><span className="text-xs text-gray-600 font-medium">Încărcați o POZĂ cu semnătura de pe hârtie</span></>}
+                    <input type="file" accept="image/*" capture="environment" className="hidden"
+                      onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) setEditFile({ file: f, kind: 'semnatura' }) }} />
+                  </label>
+                  <div className="flex-1 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 aspect-[3/1] overflow-hidden flex items-center justify-center p-1">
+                    {existingSignature
+                      ? <img src={existingSignature} alt="Semnătura înregistrată" className="w-full h-full object-contain" />
+                      : <span className="text-xs text-gray-300 px-2 text-center">Previzualizare semnătură</span>}
+                  </div>
+                </div>
 
                 {/* Reîncărcare explicită — dacă semnătura a ieșit prost la procesare */}
                 {sigPhotoStatus === 'done' && (
                   <label className="mt-2 flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-xl border-2 border-amber-400 text-amber-700 bg-amber-50/50 hover:bg-amber-50 cursor-pointer transition-all">
                     <RotateCcw size={14} />
                     <span className="text-sm font-medium">Înlocuiește semnătura</span>
-                    <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleSignaturePhoto} />
+                    <input type="file" accept="image/*" capture="environment" className="hidden"
+                      onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) setEditFile({ file: f, kind: 'semnatura' }) }} />
                   </label>
                 )}
                 <p className="text-xs text-gray-400 mt-2">
-                  Semnați cu pixul pe o foaie albă și fotografiați doar semnătura. O curățăm automat și o așezăm pe cerere, sub numele dumneavoastră.
+                  Semnați cu pixul pe o foaie albă și fotografiați doar semnătura. Decupați-o în editor, o curățăm automat
+                  și o așezăm pe cerere, sub numele dumneavoastră.
                 </p>
-
-                {existingSignature && (
-                  <div className="mt-3 rounded-xl border border-gray-200 bg-white p-2">
-                    <p className="text-xs text-gray-400 mb-1">Semnătura înregistrată:</p>
-                    <img src={existingSignature} alt="Semnătura" className="h-16 object-contain mx-auto" />
-                  </div>
-                )}
               </div>
             )}
 

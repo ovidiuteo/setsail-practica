@@ -6,11 +6,16 @@ type Props = {
   file: File
   onConfirm: (processedDataUrl: string, mediaType: string) => void
   onCancel: () => void
+  // Etichete — implicit cele pentru scanarea CI, dar editorul e folosit și
+  // pentru cererea semnată / poza semnăturii, unde nu se face OCR.
+  title?: string
+  hint?: React.ReactNode
+  confirmLabel?: string
 }
 
 type Handle = 'tl'|'t'|'tr'|'r'|'br'|'b'|'bl'|'l'
 
-export default function CIImageEditor({ file, onConfirm, onCancel }: Props) {
+export default function CIImageEditor({ file, onConfirm, onCancel, title, hint, confirmLabel }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const imgRef = useRef<HTMLImageElement | null>(null)
   const originalImgRef = useRef<HTMLImageElement | null>(null)
@@ -257,8 +262,10 @@ export default function CIImageEditor({ file, onConfirm, onCancel }: Props) {
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100 shrink-0">
           <div>
-            <h3 className="font-semibold text-gray-900 text-sm">{isPDF ? (pdfTotalPages > 0 ? `Document PDF — ${pdfTotalPages} pagini` : 'Document PDF') : 'Editare document'}</h3>
-            <p className="text-xs text-gray-400 mt-0.5">Rotiți și decupați → <b>Apply Crop</b> → <b>Save & Scan OCR</b></p>
+            <h3 className="font-semibold text-gray-900 text-sm">{isPDF ? (pdfTotalPages > 0 ? `Document PDF — ${pdfTotalPages} pagini` : 'Document PDF') : (title || 'Editare document')}</h3>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {hint || <>Rotiți și decupați → <b>Apply Crop</b> → <b>Save &amp; Scan OCR</b></>}
+            </p>
           </div>
           <button onClick={onCancel} className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-400"><X size={16}/></button>
         </div>
@@ -349,12 +356,12 @@ export default function CIImageEditor({ file, onConfirm, onCancel }: Props) {
               disabled={!isCropDefault}
               className={`flex items-center justify-center gap-1.5 py-2.5 rounded-lg text-xs font-medium transition-colors flex-1 ${!isCropDefault?'bg-gray-200 text-gray-400 cursor-not-allowed':'text-white'}`}
               style={isCropDefault?{background:'#0a1628'}:{}}>
-              <Check size={13}/> Save & Scan OCR
+              <Check size={13}/> {confirmLabel || 'Save & Scan OCR'}
             </button>
           </div>
           {cropApplied && (
             <p className="text-xs text-green-600 mt-2 flex items-center gap-1">
-              <Check size={11}/> Crop aplicat. Apasă <b className="mx-0.5">Save & Scan OCR</b>.
+              <Check size={11}/> Crop aplicat. Apasă <b className="mx-0.5">{confirmLabel || 'Save & Scan OCR'}</b>.
             </p>
           )}
         </div>
