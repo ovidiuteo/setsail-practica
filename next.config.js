@@ -6,6 +6,7 @@ const nextConfig = {
     // Asigură includerea fonturilor TTF în bundle-ul serverless al rutei (pdfkit)
     outputFileTracingIncludes: {
       '/api/verificare-ancom': ['./app/api/verificare-ancom/fonts/*.ttf'],
+      '/api/cerere-examen': ['./app/api/verificare-ancom/fonts/*.ttf'],
     },
   },
   async headers() {

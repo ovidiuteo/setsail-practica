@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Ship, RotateCcw, Check, Upload, Loader2, CheckCircle, AlertCircle, Camera, ChevronDown, ChevronUp } from 'lucide-react'
+import { Ship, RotateCcw, Check, Upload, Loader2, CheckCircle, AlertCircle, Camera, ChevronDown, ChevronUp, FileText } from 'lucide-react'
 import CIImageEditor from '@/components/CIImageEditor'
 import { scopeForSession } from '@/lib/timeline-scope'
 
@@ -32,6 +32,12 @@ export default function PortalPage() {
   // Certificat LRC — doar la prelungire (sesiuni radio)
   const [lrcStatus, setLrcStatus] = useState<'idle' | 'saving' | 'scanning' | 'done' | 'error'>('idle')
   const [lrc, setLrc] = useState({ numar: '', emis_la: '', expira_la: '' })
+  // Cerere de examen (radio) — înlocuiește semnătura cu pixul
+  const [cerereBusy, setCerereBusy] = useState(false)
+  const [cerereNr, setCerereNr] = useState('')
+  const [cerereData, setCerereData] = useState('')
+  const [cerereSemnStatus, setCerereSemnStatus] = useState<'idle' | 'saving' | 'done'>('idle')
+  const [sigPhotoStatus, setSigPhotoStatus] = useState<'idle' | 'saving' | 'done'>('idle')
 
   // Verifica daca acest cursant a finalizat deja examenul (status submitted/graded)
   useEffect(() => {
@@ -94,6 +100,8 @@ export default function PortalPage() {
   const needsCertNastere = docType === 'ci_strain' || docType === 'pasaport'
   // Certificatul LRC existent se cere doar la prelungirea valabilității (sesiuni radio)
   const needsLrcCert = examScope === 'radio_lrc' && /prelungire/i.test(classCaa)
+  // La radio nu se semnează pe ecran: se semnează cererea de examen
+  const isRadioSession = examScope === 'radio_lrc'
 
   // Sunt toate datele din "Date completate" completate? (pt. culoarea dropdownului)
   const detailVals = [
@@ -215,6 +223,16 @@ export default function PortalPage() {
     setCertNasStatus(st.certificat_nastere_data ? 'done' : 'idle')
     setLrcStatus(st.lrc_certificat_data ? 'done' : 'idle')
     setLrc({ numar: st.lrc_numar || '', emis_la: st.lrc_emis_la || '', expira_la: st.lrc_expira_la || '' })
+    setCerereSemnStatus(st.cerere_semnata_data ? 'done' : 'idle')
+    setSigPhotoStatus(st.signature_data ? 'done' : 'idle')
+    // numarul de cerere deja alocat (ca sa-l vada si cand revine in portal)
+    supabase.from('cerere_numbers').select('numar, data_cerere').eq('student_id', st.id).maybeSingle()
+      .then(({ data: cn }: any) => {
+        if (!cn) return
+        setCerereNr(String(cn.numar))
+        const d = new Date(cn.data_cerere)
+        setCerereData(`${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`)
+      })
     try {
       localStorage.setItem(
         `setsail_portal_${code.toUpperCase().trim()}`,
@@ -329,6 +347,93 @@ export default function PortalPage() {
     setStudent((prev: any) => prev ? { ...prev, class_caa: value } : prev)
   }
 
+  // Descarca cererea de examen; la prima descarcare se aloca numarul de cerere
+  async function downloadCerere() {
+    if (!student?.id || !session?.access_code) return
+    setCerereBusy(true)
+    try {
+      const r = await fetch('/api/cerere-examen', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ student_id: student.id, access_code: session.access_code }),
+      })
+      if (!r.ok) {
+        const j = await r.json().catch(() => ({}))
+        alert('Nu am putut genera cererea: ' + (j.error || 'eroare'))
+        return
+      }
+      setCerereNr(r.headers.get('X-Cerere-Nr') || '')
+      setCerereData(r.headers.get('X-Cerere-Data') || '')
+      const blob = await r.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `Cerere examen radio - ${(form.full_name || 'cursant').trim()}.pdf`
+      a.click()
+      setTimeout(() => URL.revokeObjectURL(url), 5000)
+    } catch (e: any) {
+      alert('Eroare: ' + (e?.message || e))
+    }
+    setCerereBusy(false)
+  }
+
+  // Curata o poza de semnatura facuta pe hartie: prag adaptiv -> trasee inchise
+  // pe fundal alb curat, exact ca semnatura desenata pe canvas (asa functioneaza
+  // si recolorarea in albastru de pe documentele oficiale).
+  function cleanSignaturePhoto(dataUrl: string): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const img = new Image()
+      img.onerror = () => reject(new Error('imagine invalidă'))
+      img.onload = () => {
+        const max = 900
+        let { width, height } = img
+        if (width > max) { height = Math.round(height * max / width); width = max }
+        const c = document.createElement('canvas'); c.width = width; c.height = height
+        const ctx = c.getContext('2d')!
+        ctx.drawImage(img, 0, 0, width, height)
+        const im = ctx.getImageData(0, 0, width, height)
+        const d = im.data
+        let sum = 0
+        for (let i = 0; i < d.length; i += 4) sum += 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]
+        const avg = sum / (d.length / 4)
+        const thr = avg * 0.75   // prag relativ: merge si pe hartie galbuie sau in umbra
+        for (let i = 0; i < d.length; i += 4) {
+          const lum = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]
+          const ink = lum < thr
+          d[i] = d[i + 1] = d[i + 2] = ink ? 20 : 255
+          d[i + 3] = 255
+        }
+        ctx.putImageData(im, 0, 0)
+        resolve(c.toDataURL('image/png'))
+      }
+      img.src = dataUrl
+    })
+  }
+
+  // Poza cu semnatura de pe hartie -> curatata -> salvata ca semnatura oficiala,
+  // deci apare automat pe cerere la urmatoarea descarcare.
+  async function handleSignaturePhoto(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    e.target.value = ''
+    if (!file || !student?.id) return
+    setSigPhotoStatus('saving')
+    try {
+      const dataUrl: string = await new Promise((res, rej) => {
+        const fr = new FileReader()
+        fr.onerror = () => rej(new Error('citire eșuată'))
+        fr.onload = () => res(String(fr.result))
+        fr.readAsDataURL(file)
+      })
+      const cleaned = await cleanSignaturePhoto(dataUrl)
+      await supabase.from('students').update({ signature_data: cleaned }).eq('id', student.id)
+      setExistingSignature(cleaned)
+      setSignatureSaved(true)
+      setSigPhotoStatus('done')
+    } catch {
+      setSigPhotoStatus('idle')
+      alert('Nu am putut procesa poza. Încercați din nou.')
+    }
+  }
+
   // Salveaza un camp al certificatului LRC (editabil manual de cursant)
   async function saveLrcField(field: 'numar' | 'emis_la' | 'expira_la', value: string) {
     setLrc(v => ({ ...v, [field]: value }))
@@ -384,7 +489,7 @@ export default function PortalPage() {
   // Upload simplu (verso CI / adeverinta adresa / certificat nastere) — comprima + salveaza in coloana
   async function handleExtraUpload(
     e: React.ChangeEvent<HTMLInputElement>,
-    column: 'ci_verso_data' | 'adeverinta_adresa_data' | 'certificat_nastere_data',
+    column: 'ci_verso_data' | 'adeverinta_adresa_data' | 'certificat_nastere_data' | 'cerere_semnata_data',
     setStatus: (s: 'idle' | 'saving' | 'done') => void
   ) {
     const file = e.target.files?.[0]
@@ -1055,7 +1160,72 @@ export default function PortalPage() {
               </div>
             )}
 
-            {/* Semnătură */}
+            {/* ── Radio: cerere de examen în locul semnăturii cu pixul ── */}
+            {isRadioSession && (
+              <div className="bg-white rounded-2xl p-6 shadow-2xl">
+                <h2 className="font-bold text-gray-900 mb-1">Cererea de examen</h2>
+                <p className="text-xs text-gray-400 mb-4">
+                  Descărcați cererea, semnați-o, apoi încărcați-o înapoi. Alternativ, puteți încărca doar
+                  o poză cu semnătura dumneavoastră pe hârtie — o așezăm noi pe cerere.
+                </p>
+
+                {/* 1. Descarcă */}
+                <button onClick={downloadCerere} disabled={cerereBusy}
+                  className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold text-white disabled:opacity-60 mb-2"
+                  style={{ background: '#0a1628' }}>
+                  {cerereBusy ? <><Loader2 size={15} className="animate-spin" /> Se pregătește cererea…</>
+                    : <><FileText size={15} /> 1. Descarcă cererea de examen</>}
+                </button>
+                {cerereNr && (
+                  <p className="text-xs text-green-700 text-center mb-4 flex items-center justify-center gap-1">
+                    <CheckCircle size={11} /> Cererea dumneavoastră: <b>nr. {cerereNr}</b> din {cerereData}
+                  </p>
+                )}
+                {!cerereNr && <div className="mb-4" />}
+
+                {/* 2a. Cererea semnată, scanată */}
+                <label className={`flex items-center justify-center gap-3 w-full px-4 py-3.5 rounded-xl border-2 border-dashed cursor-pointer transition-all mb-3 ${
+                  cerereSemnStatus === 'done' ? 'border-green-400 bg-green-50' :
+                  cerereSemnStatus === 'saving' ? 'border-blue-300 bg-blue-50' :
+                  'border-gray-200 hover:border-blue-300 hover:bg-blue-50/50'}`}>
+                  {cerereSemnStatus === 'saving' ? <><Loader2 size={16} className="text-blue-500 animate-spin"/><span className="text-sm text-blue-600 font-medium">Se salvează...</span></>
+                   : cerereSemnStatus === 'done' ? <><CheckCircle size={16} className="text-green-600"/><span className="text-sm text-green-700 font-medium">Cerere semnată încărcată ✓ (apăsați pentru a înlocui)</span></>
+                   : <><Upload size={16} className="text-gray-400"/><span className="text-sm text-gray-600 font-medium">2. Încărcați cererea SEMNATĂ (poză sau scan)</span></>}
+                  <input type="file" accept="image/*" capture="environment" className="hidden"
+                    onChange={e => handleExtraUpload(e, 'cerere_semnata_data', setCerereSemnStatus)} />
+                </label>
+
+                <div className="flex items-center gap-3 my-3">
+                  <div className="flex-1 h-px bg-gray-200" />
+                  <span className="text-xs text-gray-400">sau</span>
+                  <div className="flex-1 h-px bg-gray-200" />
+                </div>
+
+                {/* 2b. Doar semnătura, pe care o așezăm noi pe cerere */}
+                <label className={`flex items-center justify-center gap-3 w-full px-4 py-3.5 rounded-xl border-2 border-dashed cursor-pointer transition-all ${
+                  sigPhotoStatus === 'done' ? 'border-green-400 bg-green-50' :
+                  sigPhotoStatus === 'saving' ? 'border-blue-300 bg-blue-50' :
+                  'border-gray-200 hover:border-blue-300 hover:bg-blue-50/50'}`}>
+                  {sigPhotoStatus === 'saving' ? <><Loader2 size={16} className="text-blue-500 animate-spin"/><span className="text-sm text-blue-600 font-medium">Se procesează...</span></>
+                   : sigPhotoStatus === 'done' ? <><CheckCircle size={16} className="text-green-600"/><span className="text-sm text-green-700 font-medium">Semnătură încărcată ✓ — redescărcați cererea, e semnată</span></>
+                   : <><Upload size={16} className="text-gray-400"/><span className="text-sm text-gray-600 font-medium">Încărcați o POZĂ cu semnătura de pe hârtie</span></>}
+                  <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleSignaturePhoto} />
+                </label>
+                <p className="text-xs text-gray-400 mt-2">
+                  Semnați cu pixul pe o foaie albă și fotografiați doar semnătura. O curățăm automat și o așezăm pe cerere, sub numele dumneavoastră.
+                </p>
+
+                {existingSignature && (
+                  <div className="mt-3 rounded-xl border border-gray-200 bg-white p-2">
+                    <p className="text-xs text-gray-400 mb-1">Semnătura înregistrată:</p>
+                    <img src={existingSignature} alt="Semnătura" className="h-16 object-contain mx-auto" />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Semnătură (canvas) — nu la radio, unde se semnează pe cerere */}
+            {!isRadioSession && (
             <div className="bg-white rounded-2xl p-6 shadow-2xl">
               <h2 className="font-bold text-gray-900 mb-1">Semnătură</h2>
               <p className="text-xs text-gray-400 mb-3">Semnați în zona de mai jos cu degetul sau mouse-ul</p>
@@ -1092,6 +1262,7 @@ export default function PortalPage() {
                 </p>
               )}
             </div>
+            )}
 
             {/* Confirmă telefon / email + finalizare */}
             <div className="bg-white rounded-2xl p-6 shadow-2xl">
