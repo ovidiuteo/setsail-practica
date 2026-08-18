@@ -118,6 +118,19 @@ export default function PortalPage() {
     ]
     for (const [k, label] of need) if (!String(form[k] || '').trim()) out.push(label)
     if (!lrcChosen) out.push('obținere sau prelungire LRC (sus, la „Clasa CAA")')
+
+    // Actele de identitate — ce anume e obligatoriu depinde de tipul actului ales
+    if (!docType) out.push('tipul actului de identitate')
+    else {
+      if (!student?.ci_image_data) out.push(docType === 'pasaport' ? 'poza pașaportului' : 'poza actului de identitate')
+      if (docType === 'ci_nou') {
+        if (!student?.ci_verso_data) out.push('verso CI')
+        if (!student?.adeverinta_adresa_data) out.push('adeverință domiciliu')
+      }
+      if (docType === 'ci_strain' || docType === 'pasaport') {
+        if (!student?.certificat_nastere_data) out.push('certificat de naștere')
+      }
+    }
     if (/prelungire/i.test(classCaa)) {
       if (!form.ci_series.trim()) out.push('serie CI')
       if (!form.ci_number.trim()) out.push('număr CI')
