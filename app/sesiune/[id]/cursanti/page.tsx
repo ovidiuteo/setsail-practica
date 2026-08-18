@@ -280,10 +280,26 @@ export default function RosterPage() {
 }
 
 // ── Modal: adaugă cursanți (manual, unul sau mai mulți) sau import din tabel ──
-type NewRow = { full_name: string; cnp: string; birth_date: string; address: string; city: string; county: string; obtinere_prelungire: string }
-const BLANK_NEW: NewRow = { full_name: '', cnp: '', birth_date: '', address: '', city: '', county: '', obtinere_prelungire: '' }
-const NEW_FIELDS: { key: keyof NewRow; label: string; w: string }[] = [
+type NewRow = {
+  last_name: string; first_name: string   // doar la adăugarea manuală
+  full_name: string                        // vine din import / se compune la salvare
+  email: string; cnp: string; birth_date: string
+  address: string; city: string; county: string; obtinere_prelungire: string
+}
+const BLANK_NEW: NewRow = {
+  last_name: '', first_name: '', full_name: '', email: '',
+  cnp: '', birth_date: '', address: '', city: '', county: '', obtinere_prelungire: '',
+}
+// Adăugare manuală: strictul necesar
+const MANUAL_FIELDS: { key: keyof NewRow; label: string; w: string }[] = [
+  { key: 'last_name', label: 'Nume', w: 'min-w-[150px]' },
+  { key: 'first_name', label: 'Prenume', w: 'min-w-[150px]' },
+  { key: 'email', label: 'Email', w: 'min-w-[220px]' },
+]
+// Verificarea listei importate: toate coloanele recunoscute
+const REVIEW_FIELDS: { key: keyof NewRow; label: string; w: string }[] = [
   { key: 'full_name', label: 'Nume și prenume', w: 'min-w-[190px]' },
+  { key: 'email', label: 'Email', w: 'min-w-[200px]' },
   { key: 'cnp', label: 'CNP', w: 'min-w-[140px]' },
   { key: 'birth_date', label: 'Data nașterii', w: 'min-w-[110px]' },
   { key: 'address', label: 'Adresă', w: 'min-w-[200px]' },
@@ -295,7 +311,8 @@ function AddStudentsModal({ sessionId, token, mode, onClose, onSaved }: {
   sessionId: string; token: string; mode: 'manual' | 'paste'
   onClose: () => void; onSaved: () => void
 }) {
-  const [step, setStep] = useState<'manual' | 'paste'>(mode)
+  // 'manual' = formular simplu; 'paste' = lipire tabel; 'review' = verificarea listei importate
+  const [step, setStep] = useState<'manual' | 'paste' | 'review'>(mode)
   const [rows, setRows] = useState<NewRow[]>([{ ...BLANK_NEW }])
   const [paste, setPaste] = useState('')
   const [note, setNote] = useState<string | null>(null)
@@ -306,27 +323,36 @@ function AddStudentsModal({ sessionId, token, mode, onClose, onSaved }: {
   const addRow = () => setRows(rs => [...rs, { ...BLANK_NEW }])
   const delRow = (i: number) => setRows(rs => rs.length > 1 ? rs.filter((_, idx) => idx !== i) : [{ ...BLANK_NEW }])
 
+  // Numele final: din import vine întreg, la adăugarea manuală se compune „NUME PRENUME"
+  const nameOf = (r: NewRow) =>
+    (r.full_name.trim() || `${r.last_name.trim()} ${r.first_name.trim()}`.trim()).toUpperCase()
+  const validRows = rows.filter(r => nameOf(r))
+
   function doParse() {
     const parsed = parseStudentsText(paste)
     if (!parsed.length) { setNote('Nu am recunoscut niciun cursant în textul lipit.'); return }
     const dataLines = paste.trim().split('\n').filter(l => l.trim()).length
     setRows(parsed.map(p => ({
-      full_name: p.full_name, cnp: p.cnp, birth_date: p.birth_date,
-      address: p.address, city: p.city, county: p.county, obtinere_prelungire: '',
+      ...BLANK_NEW,
+      full_name: p.full_name, email: p.email, cnp: p.cnp, birth_date: p.birth_date,
+      address: p.address, city: p.city, county: p.county,
     })))
-    setNote(parsed.length < dataLines - 1
-      ? `Am interpretat ${parsed.length} cursanți din ${dataLines} linii. Verifică dacă lipsește cineva.`
-      : `Am interpretat ${parsed.length} cursanți. Verifică datele, apoi salvează.`)
-    setStep('manual')
+    const faraEmail = parsed.filter(p => !p.email).length
+    setNote([
+      `Am interpretat ${parsed.length} cursanți`,
+      parsed.length < dataLines - 1 ? ` din ${dataLines} linii — verifică dacă lipsește cineva` : '',
+      faraEmail ? `. Atenție: ${faraEmail} fără email.` : '. Verifică datele, apoi salvează.',
+    ].join(''))
+    setStep('review')
   }
 
   async function save() {
-    const valid = rows.filter(r => r.full_name.trim())
-    if (!valid.length) { setNote('Completează cel puțin numele unui cursant.'); return }
+    if (!validRows.length) { setNote('Completează cel puțin numele unui cursant.'); return }
     setSaving(true)
+    const payload = validRows.map(r => ({ ...r, full_name: nameOf(r) }))
     const r = await fetch('/api/roster', {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_id: sessionId, token, students: valid }),
+      body: JSON.stringify({ session_id: sessionId, token, students: payload }),
     })
     const j = await r.json().catch(() => ({}))
     setSaving(false)
@@ -348,8 +374,8 @@ function AddStudentsModal({ sessionId, token, mode, onClose, onSaved }: {
 
         <div className="px-5 pt-3 flex gap-1 border-b border-gray-100">
           {([['manual', 'Manual'], ['paste', 'Din tabel (copy/paste)']] as const).map(([k, lbl]) => (
-            <button key={k} onClick={() => setStep(k)}
-              className={`px-3 py-2 text-sm font-medium -mb-px border-b-2 ${step === k ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
+            <button key={k} onClick={() => { setStep(k); setNote(null); if (k === 'manual') setRows([{ ...BLANK_NEW }]) }}
+              className={`px-3 py-2 text-sm font-medium -mb-px border-b-2 ${(step === k || (step === 'review' && k === 'paste')) ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
               {lbl}
             </button>
           ))}
@@ -361,8 +387,8 @@ function AddStudentsModal({ sessionId, token, mode, onClose, onSaved }: {
           {step === 'paste' ? (
             <>
               <p className="text-xs text-gray-500 mb-2">
-                Lipește tabelul cu tot cu rândul de titluri (Nume, CNP, Data nașterii, Adresă, Localitate, Sector/Județ…).
-                Coloanele sunt recunoscute după denumirea din titlu.
+                Lipește tabelul cu tot cu rândul de titluri (Nume, <b>Email</b>, CNP, Data nașterii, Adresă, Localitate, Sector/Județ…).
+                Coloanele sunt recunoscute după denumirea din titlu, în orice ordine.
               </p>
               <textarea value={paste} onChange={e => setPaste(e.target.value)} rows={12}
                 placeholder="Lipește aici tabelul copiat din Excel…"
@@ -373,44 +399,55 @@ function AddStudentsModal({ sessionId, token, mode, onClose, onSaved }: {
               </button>
             </>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm border-collapse">
-                <thead>
-                  <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase">
-                    <th className="px-2 py-2 w-8">#</th>
-                    {NEW_FIELDS.map(f => <th key={f.key} className={`px-2 py-2 ${f.w}`}>{f.label}</th>)}
-                    <th className="px-2 py-2 min-w-[150px]">Obținere / Prelungire</th>
-                    <th className="px-2 py-2 w-8"></th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {rows.map((r, i) => (
-                    <tr key={i} className="border-t border-gray-100">
-                      <td className="px-2 py-1 text-xs text-gray-400">{i + 1}</td>
-                      {NEW_FIELDS.map(f => (
-                        <td key={f.key} className="px-2 py-1">
-                          <input value={r[f.key]} onChange={e => set(i, f.key, e.target.value)} className={cell} />
-                        </td>
+            (() => {
+              const cols = step === 'manual' ? MANUAL_FIELDS : REVIEW_FIELDS
+              return (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm border-collapse">
+                    <thead>
+                      <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase">
+                        <th className="px-2 py-2 w-8">#</th>
+                        {cols.map(f => <th key={f.key} className={`px-2 py-2 ${f.w}`}>{f.label}</th>)}
+                        <th className="px-2 py-2 min-w-[150px]">Obținere / Prelungire</th>
+                        <th className="px-2 py-2 w-8"></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {rows.map((r, i) => (
+                        <tr key={i} className="border-t border-gray-100">
+                          <td className="px-2 py-1 text-xs text-gray-400">{i + 1}</td>
+                          {cols.map(f => (
+                            <td key={f.key} className="px-2 py-1">
+                              <input value={r[f.key]} onChange={e => set(i, f.key, e.target.value)}
+                                type={f.key === 'email' ? 'email' : 'text'}
+                                className={`${cell}${f.key === 'email' && !r.email ? ' border-amber-300 bg-amber-50' : ''}`} />
+                            </td>
+                          ))}
+                          <td className="px-2 py-1">
+                            <select value={r.obtinere_prelungire} onChange={e => set(i, 'obtinere_prelungire', e.target.value)} className={cell + ' cursor-pointer'}>
+                              {LRC_OPTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                            </select>
+                          </td>
+                          <td className="px-2 py-1">
+                            <button onClick={() => delRow(i)} title="Șterge rândul" className="text-gray-300 hover:text-red-500">×</button>
+                          </td>
+                        </tr>
                       ))}
-                      <td className="px-2 py-1">
-                        <select value={r.obtinere_prelungire} onChange={e => set(i, 'obtinere_prelungire', e.target.value)} className={cell + ' cursor-pointer'}>
-                          {LRC_OPTS.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                        </select>
-                      </td>
-                      <td className="px-2 py-1">
-                        <button onClick={() => delRow(i)} title="Șterge rândul" className="text-gray-300 hover:text-red-500">×</button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-              <button onClick={addRow} className="mt-3 text-sm text-blue-600 hover:text-blue-800">+ încă un cursant</button>
-            </div>
+                    </tbody>
+                  </table>
+                  <button onClick={addRow} className="mt-3 text-sm text-blue-600 hover:text-blue-800">+ încă un cursant</button>
+                </div>
+              )
+            })()
           )}
         </div>
 
         <div className="flex items-center justify-between gap-2 px-5 py-4 border-t border-gray-100">
-          <span className="text-xs text-gray-400">{rows.filter(r => r.full_name.trim()).length} cursanți de adăugat</span>
+          <span className="text-xs text-gray-400">
+            {validRows.length} cursanți de adăugat
+            {validRows.filter(r => !r.email.trim()).length > 0 && step !== 'paste' &&
+              <span className="text-amber-600"> · {validRows.filter(r => !r.email.trim()).length} fără email</span>}
+          </span>
           <div className="flex gap-2">
             <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm border border-gray-200 text-gray-600 hover:bg-gray-50">Renunță</button>
             <button onClick={save} disabled={saving || step === 'paste'}
