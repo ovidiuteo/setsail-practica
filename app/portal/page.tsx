@@ -126,6 +126,7 @@ export default function PortalPage() {
   const detailVals = [
     form.full_name, form.cnp, form.birth_date, form.address, form.city,
     form.county, form.country, form.expiry_date, form.nationality, form.ci_series, form.ci_number,
+    form.phone, form.email,
   ]
   const detailsComplete = detailVals.every(v => String(v || '').trim() !== '')
 
@@ -1134,6 +1135,27 @@ export default function PortalPage() {
                       <input className={fieldCls('nationality')} value={form.nationality} placeholder="ROU"
                         onChange={e => { setForm(f=>({...f,nationality:e.target.value.toUpperCase()})); setScannedFields(s=>{const n=new Set(s);n.delete('nationality');return n}) }} />
                     </div>
+
+                    {/* Telefon + Email — aceleași câmpuri ca la „Confirmă telefon și email";
+                        folosesc aceeași stare, deci se sincronizează în timp real */}
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className={labelCls}>Telefon</label>
+                        <input className={fieldCls('phone')} type="tel" value={form.phone} placeholder="07XX XXX XXX"
+                          onChange={e => { setForm(f=>({...f,phone:e.target.value})); setScannedFields(s=>{const n=new Set(s);n.delete('phone');return n}) }} />
+                      </div>
+                      <div>
+                        <label className={labelCls}>Email</label>
+                        <input className={fieldCls('email')} type="email" value={form.email}
+                          onChange={e => { setForm(f=>({...f,email:e.target.value})); setScannedFields(s=>{const n=new Set(s);n.delete('email');return n}) }} />
+                      </div>
+                    </div>
+                    {emailChanged && (
+                      <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-800 flex gap-2">
+                        <AlertCircle size={14} className="shrink-0 mt-0.5" />
+                        <span>Modificarea adresei de email <strong>va duce la modificarea datelor de accesare portal</strong> (veți folosi noul email la următoarea autentificare).</span>
+                      </div>
+                    )}
 
                     <div className="flex justify-end">
                       <button onClick={async () => { await autoSave(); }}
