@@ -61,6 +61,30 @@ const CARRY_FIELDS = [
   'signature_data', 'lrc_certificat_data', 'lrc_numar', 'lrc_emis_la', 'lrc_expira_la',
 ]
 
+// Vizitele pe landing-ul de radio: azi + totalul de la ultimul examen încoace.
+// Ziua examenului seriei precedente e momentul din care vizitele „aparțin"
+// cursului următor, deci de acolo repornește totalul.
+async function landingVisits(sb: ReturnType<typeof svc>) {
+  const today = new Date()
+  const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+
+  const { data: sessions } = await sb.from('sessions')
+    .select('session_date, class_caa, timeline_scope, session_type, is_clone')
+    .lte('session_date', iso)
+    .order('session_date', { ascending: false })
+  const prev = (sessions || []).find((s: any) =>
+    /radio|lrc/i.test(String(s.timeline_scope || s.class_caa || '')) && s.session_type === 'principal' && !s.is_clone)
+  const from = prev?.session_date ? String(prev.session_date).slice(0, 10) : null
+
+  const { data: days } = await sb.from('radio_visit_stats').select('day, count')
+  const rows = (days || []) as { day: string; count: number }[]
+  return {
+    today: rows.find(r => r.day === iso)?.count || 0,
+    overall: rows.filter(r => !from || r.day >= from).reduce((a, r) => a + (r.count || 0), 0),
+    since: from,
+  }
+}
+
 // Derivă obținere/prelungire din clasă (ex. "Obtinere LRC", "Prelungire LRC")
 function lrcFromClass(cls: string): string {
   const c = (cls || '').toLowerCase()
@@ -97,6 +121,13 @@ export async function GET(req: NextRequest) {
         class_caa: o.sessions?.class_caa || o.class_caa || null,
       })),
     })
+  }
+
+  // Leadurile de pe landing-ul de radio (fără cele arhivate), pentru tabul din pagină
+  if (sp.get('action') === 'leads') {
+    const { data } = await sb.from('radio_leads').select('*').order('created_at', { ascending: false })
+    const leads = (data || []).filter((l: any) => l.status !== 'arhivat')
+    return NextResponse.json({ leads })
   }
 
   if (studentId) {
@@ -150,8 +181,12 @@ export async function GET(req: NextRequest) {
   rows.sort((a, b) => (a.full_name || '').localeCompare(b.full_name || '', 'ro', { sensitivity: 'base' }))
   const verified: Record<string, boolean> = {}
   for (const v of VERIFIERS) verified[v] = !!(sess.roster_verified as any)?.[v]
+  // Vizitele pe landing-ul de radio. „Overall" repornește în ziua examenului
+  // seriei precedente — de atunci încolo vizitele sunt pentru cursul următor.
+  const visits = await landingVisits(sb)
+
   return NextResponse.json({
-    students: rows, verified, docs_visible: !!sess.roster_docs_visible,
+    students: rows, verified, docs_visible: !!sess.roster_docs_visible, visits,
     // pentru titlul paginii/tab-ului (ex. „Curs Radio 5-7 oct")
     session: { class_caa: sess.class_caa, session_date: sess.session_date, course_start_date: sess.course_start_date },
     // codul sesiunii — pentru linkul portalului cursantului

@@ -149,13 +149,18 @@ export default function RosterPage() {
   const [draft, setDraft] = useState('')
   const [saving, setSaving] = useState(false)
   const [ciFor, setCiFor] = useState<Row | null>(null)
-  const [tab, setTab] = useState<'cursanti' | 'adrese' | 'verify'>('cursanti')
+  const [tab, setTab] = useState<'cursanti' | 'adrese' | 'verify' | 'leaduri'>('cursanti')
   const [docsVisible, setDocsVisible] = useState(false)
   const [addOpen, setAddOpen] = useState<null | 'manual' | 'paste'>(null)
   const [title, setTitle] = useState('Cursanți — sesiune')
   const [notice, setNotice] = useState<string | null>(null)
   const [accessCode, setAccessCode] = useState('')
   const [copied, setCopied] = useState(false)
+  const [copiedLanding, setCopiedLanding] = useState(false)
+  const [visits, setVisits] = useState<{ today: number; overall: number; since: string | null } | null>(null)
+  // originea se știe doar în browser — ținută în state ca să nu difere de HTML-ul de pe server
+  const [origin, setOrigin] = useState('')
+  useEffect(() => { setOrigin(window.location.origin) }, [])
   const [deleting, setDeleting] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -166,6 +171,7 @@ export default function RosterPage() {
     if (j.verified) setVerified(j.verified)
     setDocsVisible(!!j.docs_visible)
     setAccessCode(j.access_code || '')
+    setVisits(j.visits || null)
     if (j.session) {
       const t = sessionTitle(j.session)
       setTitle(t)
@@ -230,9 +236,8 @@ export default function RosterPage() {
 
   // Linkul portalului: fără email = cel general al sesiunii; cu email = direct al cursantului
   const portalLink = (email?: string) => {
-    const base = typeof window === 'undefined' ? '' : window.location.origin
     const q = email ? `&email=${encodeURIComponent(email)}` : ''
-    return `${base}/portal?cod=${accessCode}${q}`
+    return `${origin}/portal?cod=${accessCode}${q}`
   }
   async function copyPortalLink() {
     try {
@@ -240,6 +245,16 @@ export default function RosterPage() {
       setCopied(true)
       setTimeout(() => setCopied(false), 1800)
     } catch { alert(portalLink()) }
+  }
+
+  // Landing-ul de curs radio — datele lui se iau automat din seria care urmează
+  const landingLink = () => `${origin}/curs-radio-gmdss-lrc`
+  async function copyLandingLink() {
+    try {
+      await navigator.clipboard.writeText(landingLink())
+      setCopiedLanding(true)
+      setTimeout(() => setCopiedLanding(false), 1800)
+    } catch { alert(landingLink()) }
   }
 
   async function toggleVerif(key: keyof Verified) {
@@ -280,6 +295,24 @@ export default function RosterPage() {
                 </a>
               </div>
             )}
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <span className="text-xs text-gray-400">Landing page:</span>
+              <code className="px-2 py-1 rounded bg-gray-100 border border-gray-200 text-xs text-gray-700 break-all">{landingLink()}</code>
+              {visits && (
+                <span title={visits.since ? `Totalul repornește în ziua examenului seriei precedente (${new Date(visits.since).toLocaleDateString('ro-RO')})` : 'Toate vizitele'}
+                  className="px-2 py-1 rounded-lg text-xs border border-emerald-200 bg-emerald-50 text-emerald-800 whitespace-nowrap">
+                  Azi <b>{visits.today}</b> · Total <b>{visits.overall}</b>
+                </span>
+              )}
+              <button onClick={copyLandingLink}
+                className="px-2.5 py-1 rounded-lg text-xs font-medium border border-gray-200 bg-white text-gray-700 hover:bg-gray-50">
+                {copiedLanding ? 'Copiat ✓' : 'Copy link'}
+              </button>
+              <a href={landingLink()} target="_blank" rel="noopener noreferrer"
+                className="px-2.5 py-1 rounded-lg text-xs font-medium border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100">
+                Deschide landing page
+              </a>
+            </div>
           </div>
           <div className="flex gap-2">
             <button onClick={() => setAddOpen('manual')}
@@ -316,7 +349,7 @@ export default function RosterPage() {
 
         {/* Taburi */}
         <div className="mb-4 flex gap-1 border-b border-gray-200">
-          {([['cursanti', 'Lista cursanți'], ['adrese', 'Lista verificare adrese'], ['verify', 'Verify by ID']] as const).map(([k, lbl]) => (
+          {([['cursanti', 'Lista cursanți'], ['adrese', 'Lista verificare adrese'], ['verify', 'Verify by ID'], ['leaduri', 'Leaduri radio']] as const).map(([k, lbl]) => (
             <button key={k} onClick={() => setTab(k)}
               className={`px-4 py-2 text-sm font-medium -mb-px border-b-2 ${tab === k ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
               {lbl}
@@ -324,7 +357,9 @@ export default function RosterPage() {
           ))}
         </div>
 
-        {rows === null ? (
+        {tab === 'leaduri' ? (
+          <LeaduriTab sessionId={id} token={token} />
+        ) : rows === null ? (
           <div className="text-center text-gray-400 py-16">Se încarcă…</div>
         ) : rows.length === 0 ? (
           <div className="text-center text-gray-400 py-16">Niciun cursant în sesiune.</div>
@@ -701,6 +736,58 @@ function DocBtn({ label, onClick, busy, variant }: { label: string; onClick: () 
       style={{ background: bg }}>
       {busy ? '...' : label}
     </button>
+  )
+}
+
+// Leadurile de pe landing-ul de radio — aceeași listă ca „Toate" din editorul
+// landing-ului, fără cele arhivate. Doar pentru citire.
+const LEAD_STATUS_STYLE: Record<string, string> = {
+  nou: 'bg-blue-50 text-blue-700', contactat: 'bg-amber-50 text-amber-700',
+  inscris: 'bg-emerald-50 text-emerald-700', respins: 'bg-gray-100 text-gray-500',
+}
+function LeaduriTab({ sessionId, token }: { sessionId: string; token: string }) {
+  const [leads, setLeads] = useState<any[] | null>(null)
+  useEffect(() => {
+    fetch(`/api/roster?session_id=${sessionId}&token=${encodeURIComponent(token)}&action=leads`)
+      .then(r => r.json()).then(j => setLeads(j.leads || [])).catch(() => setLeads([]))
+  }, [sessionId, token])
+
+  if (leads === null) return <div className="text-center text-gray-400 py-16">Se încarcă…</div>
+  if (!leads.length) return <div className="text-center text-gray-400 py-16">Niciun lead.</div>
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
+      <table className="w-full text-sm border-collapse">
+        <thead>
+          <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+            <th className="px-3 py-2.5 w-8">#</th>
+            <th className="px-3 py-2.5">Data</th>
+            <th className="px-3 py-2.5">Nume</th>
+            <th className="px-3 py-2.5">Tip</th>
+            <th className="px-3 py-2.5">Contact</th>
+            <th className="px-3 py-2.5">Mesaj</th>
+            <th className="px-3 py-2.5">Status</th>
+          </tr>
+        </thead>
+        <tbody className="divide-y divide-gray-50">
+          {leads.map((l, i) => (
+            <tr key={l.id} className="hover:bg-gray-50/60 align-top">
+              <td className="px-3 py-2 text-gray-300 text-xs">{i + 1}</td>
+              <td className="px-3 py-2 text-gray-400 text-xs whitespace-nowrap">{new Date(l.created_at).toLocaleDateString('ro-RO')}</td>
+              <td className="px-3 py-2 font-medium text-gray-800 whitespace-nowrap">{l.name || '—'}</td>
+              <td className="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">{l.lead_type || '—'}</td>
+              <td className="px-3 py-2 text-xs text-gray-600">
+                {l.phone && <div><a href={`tel:${l.phone}`} className="hover:text-blue-600">{l.phone}</a></div>}
+                {l.email && <div><a href={`mailto:${l.email}`} className="hover:text-blue-600">{l.email}</a></div>}
+              </td>
+              <td className="px-3 py-2 text-xs text-gray-500 max-w-[240px]">{l.message || '—'}</td>
+              <td className="px-3 py-2">
+                <span className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${LEAD_STATUS_STYLE[l.status] || 'bg-gray-100 text-gray-600'}`}>{l.status}</span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   )
 }
 

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { Loader2, Save, Trash2, RefreshCw, FileText, Users, ShieldAlert, Eye, CalendarDays, TrendingUp, CheckCircle2, XCircle } from 'lucide-react'
+import { Loader2, Save, Trash2, RefreshCw, FileText, Users, ShieldAlert, Eye, CalendarDays, TrendingUp, CheckCircle2, XCircle, Archive, ArchiveRestore } from 'lucide-react'
 
 const API = '/api/radio-landing'
 
@@ -242,26 +242,45 @@ function ContentEditor({ draft, update }: { draft: any; update: (p: Path, v: any
   )
 }
 
-const STATUSES = ['nou', 'contactat', 'inscris', 'respins'] as const
-const STATUS_STYLE: Record<string, string> = { nou: 'bg-blue-50 text-blue-700', contactat: 'bg-amber-50 text-amber-700', inscris: 'bg-emerald-50 text-emerald-700', respins: 'bg-slate-100 text-slate-500' }
+// „arhivat" e ținut separat: nu apare în „Toate", ci doar în tabul lui
+const STATUSES = ['nou', 'contactat', 'inscris', 'respins', 'arhivat'] as const
+const ACTIVE_STATUSES = STATUSES.filter(s => s !== 'arhivat')
+const STATUS_STYLE: Record<string, string> = { nou: 'bg-blue-50 text-blue-700', contactat: 'bg-amber-50 text-amber-700', inscris: 'bg-emerald-50 text-emerald-700', respins: 'bg-slate-100 text-slate-500', arhivat: 'bg-slate-200 text-slate-600' }
+
+type SessionOpt = { id: string; label: string; group: 'next' | 'past' | 'future' }
+const GROUP_LABEL: Record<SessionOpt['group'], string> = {
+  next: 'Următoarea serie', past: 'Serii trecute', future: 'Serii viitoare',
+}
 
 function LeadsTab({ token }: { token: string }) {
   const [leads, setLeads] = useState<any[] | null>(null)
+  const [sessions, setSessions] = useState<SessionOpt[]>([])
   const [filter, setFilter] = useState('all')
   const [stats, setStats] = useState<{ total: number; today: number; last7: number } | null>(null)
 
   const load = useCallback(async () => {
     const json = await fetch(`${API}/leads?token=${encodeURIComponent(token)}`).then((r) => r.json()).catch(() => null)
     setLeads(json?.leads || [])
+    setSessions(json?.sessions || [])
     const s = await fetch(`${API}/stats?token=${encodeURIComponent(token)}`).then((r) => r.json()).catch(() => null)
     if (s && typeof s.total === 'number') setStats(s)
   }, [token])
   useEffect(() => { load() }, [load])
 
-  async function setStatus(id: string, status: string) {
-    setLeads((ls) => (ls || []).map((l) => (l.id === id ? { ...l, status } : l)))
-    await fetch(`${API}/leads`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token, id, status }) })
+  const nextSession = sessions.find((s) => s.group === 'next')
+
+  async function patch(id: string, body: any) {
+    setLeads((ls) => (ls || []).map((l) => (l.id === id ? { ...l, ...body } : l)))
+    await fetch(`${API}/leads`, { method: 'PATCH', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ token, id, ...body }) })
   }
+  async function setStatus(id: string, status: string) {
+    const lead = (leads || []).find((l) => l.id === id)
+    // „înscris" înseamnă că vine la seria care urmează — dacă nu i s-a ales deja alta
+    const autoSession = status === 'inscris' && nextSession && !lead?.participare_session_id
+      ? { participare_session_id: nextSession.id } : {}
+    await patch(id, { status, ...autoSession })
+  }
+  const setParticipare = (id: string, sid: string) => patch(id, { participare_session_id: sid || null })
   async function remove(id: string) {
     if (!confirm('Ștergi acest lead?')) return
     setLeads((ls) => (ls || []).filter((l) => l.id !== id))
@@ -269,7 +288,9 @@ function LeadsTab({ token }: { token: string }) {
   }
 
   if (leads === null) return <div className="text-center text-slate-400 py-16"><Loader2 className="w-6 h-6 animate-spin mx-auto" /></div>
-  const shown = filter === 'all' ? leads : leads.filter((l) => l.status === filter)
+  // „Toate" nu include arhivatele — ele au tabul lor
+  const active = leads.filter((l) => l.status !== 'arhivat')
+  const shown = filter === 'all' ? active : leads.filter((l) => l.status === filter)
   const counts = STATUSES.reduce((a, s) => ({ ...a, [s]: leads.filter((l) => l.status === s).length }), {} as Record<string, number>)
   const visitCards = [
     { icon: Eye, label: 'Total vizite', value: stats?.total, hint: 'de la lansare' },
@@ -290,8 +311,9 @@ function LeadsTab({ token }: { token: string }) {
 
       <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
         <div className="flex gap-2 flex-wrap">
-          <button onClick={() => setFilter('all')} className={`px-3 py-1.5 rounded-full text-xs font-medium ${filter === 'all' ? 'bg-[#0a2a4e] text-white' : 'bg-white border border-slate-200 text-slate-600'}`}>Toate ({leads.length})</button>
-          {STATUSES.map((s) => <button key={s} onClick={() => setFilter(s)} className={`px-3 py-1.5 rounded-full text-xs font-medium capitalize ${filter === s ? 'bg-[#0a2a4e] text-white' : 'bg-white border border-slate-200 text-slate-600'}`}>{s} ({counts[s]})</button>)}
+          <button onClick={() => setFilter('all')} className={`px-3 py-1.5 rounded-full text-xs font-medium ${filter === 'all' ? 'bg-[#0a2a4e] text-white' : 'bg-white border border-slate-200 text-slate-600'}`}>Toate ({active.length})</button>
+          {ACTIVE_STATUSES.map((s) => <button key={s} onClick={() => setFilter(s)} className={`px-3 py-1.5 rounded-full text-xs font-medium capitalize ${filter === s ? 'bg-[#0a2a4e] text-white' : 'bg-white border border-slate-200 text-slate-600'}`}>{s} ({counts[s]})</button>)}
+          <button onClick={() => setFilter('arhivat')} className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium ${filter === 'arhivat' ? 'bg-[#0a2a4e] text-white' : 'bg-white border border-slate-200 text-slate-500'}`}><Archive size={12} /> Arhivat ({counts['arhivat']})</button>
         </div>
         <button onClick={load} className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-slate-200 hover:bg-slate-50"><RefreshCw size={13} /> Reîncarcă</button>
       </div>
@@ -301,7 +323,7 @@ function LeadsTab({ token }: { token: string }) {
       ) : (
         <div className="bg-white rounded-xl border border-slate-200 overflow-hidden">
           <table className="w-full text-sm">
-            <thead><tr className="bg-slate-50 text-xs text-slate-400 text-left"><th className="px-4 py-3">Data</th><th className="px-4 py-3">Nume</th><th className="px-4 py-3">Tip</th><th className="px-4 py-3">Contact</th><th className="px-4 py-3">Voucher</th><th className="px-4 py-3">Mesaj</th><th className="px-4 py-3">Status</th><th className="px-4 py-3"></th></tr></thead>
+            <thead><tr className="bg-slate-50 text-xs text-slate-400 text-left"><th className="px-4 py-3">Data</th><th className="px-4 py-3">Nume</th><th className="px-4 py-3">Tip</th><th className="px-4 py-3">Contact</th><th className="px-4 py-3">Voucher</th><th className="px-4 py-3">Mesaj</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Participare</th><th className="px-4 py-3"></th></tr></thead>
             <tbody className="divide-y divide-slate-50">
               {shown.map((l) => (
                 <tr key={l.id} className="hover:bg-slate-50 align-top">
@@ -319,7 +341,21 @@ function LeadsTab({ token }: { token: string }) {
                   ) : <span className="text-slate-300">—</span>}</td>
                   <td className="px-4 py-3 text-slate-500 text-xs max-w-[200px]">{l.message || '—'}</td>
                   <td className="px-4 py-3"><select value={l.status} onChange={(e) => setStatus(l.id, e.target.value)} className={`text-xs font-medium rounded-full px-2.5 py-1 border-0 cursor-pointer ${STATUS_STYLE[l.status] || ''}`}>{STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}</select></td>
+                  <td className="px-4 py-3">
+                    <select value={l.participare_session_id || ''} onChange={(e) => setParticipare(l.id, e.target.value)}
+                      className="text-xs rounded-lg border border-slate-200 px-2 py-1 bg-white cursor-pointer max-w-[220px]">
+                      <option value="">— fără —</option>
+                      {(['next', 'past', 'future'] as const).map((g) => {
+                        const opts = sessions.filter((s) => s.group === g)
+                        if (!opts.length) return null
+                        return <optgroup key={g} label={GROUP_LABEL[g]}>{opts.map((s) => <option key={s.id} value={s.id}>{s.label}</option>)}</optgroup>
+                      })}
+                    </select>
+                  </td>
                   <td className="px-4 py-3 text-right whitespace-nowrap">
+                    {l.status !== 'arhivat'
+                      ? <button onClick={() => setStatus(l.id, 'arhivat')} title="Arhivează" className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-300 hover:text-slate-600 transition"><Archive size={15} /></button>
+                      : <button onClick={() => setStatus(l.id, 'nou')} title="Scoate din arhivă" className="p-1.5 rounded-lg hover:bg-blue-50 text-slate-300 hover:text-blue-600 transition"><ArchiveRestore size={15} /></button>}
                     {l.voucher_code && l.status !== 'inscris' && l.status !== 'respins' && (
                       <>
                         <button onClick={() => setStatus(l.id, 'inscris')} title="Validează (înscris)" className="p-1.5 rounded-lg hover:bg-emerald-50 text-slate-300 hover:text-emerald-600 transition"><CheckCircle2 size={15} /></button>

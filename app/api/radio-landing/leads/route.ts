@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { listLeads, insertLead, updateLead, deleteLead, isEditor } from '@/lib/radio-landing/server'
+import { listLeads, insertLead, updateLead, deleteLead, isEditor, listRadioSessions } from '@/lib/radio-landing/server'
 import { notifyNewLead } from '@/lib/mail'
 
 export const dynamic = 'force-dynamic'
@@ -22,14 +22,18 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get('token')
   if (!(await isEditor(token))) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
-  return NextResponse.json({ leads: await listLeads() })
+  const [leads, sessions] = await Promise.all([listLeads(), listRadioSessions()])
+  return NextResponse.json({ leads, sessions })
 }
 
 export async function PATCH(req: NextRequest) {
   const body = await req.json().catch(() => ({}))
   if (!(await isEditor(body?.token))) return NextResponse.json({ ok: false, error: 'unauthorized' }, { status: 401 })
   if (!body?.id) return NextResponse.json({ ok: false, error: 'id lipsă' }, { status: 400 })
-  const res = await updateLead(body.id, { status: body.status, notes: body.notes })
+  const res = await updateLead(body.id, {
+    status: body.status, notes: body.notes,
+    participareSessionId: body.participare_session_id,
+  })
   if (!res.ok) return NextResponse.json({ ok: false, error: res.error }, { status: 500 })
   return NextResponse.json({ ok: true })
 }

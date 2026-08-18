@@ -9,9 +9,11 @@ import { randomBytes } from 'node:crypto'
 import { mergeContent, type RadioContent } from './content'
 import { verifyToken as verifyAdminCookieToken, ADMIN_COOKIE_NAME } from '@/lib/admin-auth'
 import { verifyVoucher } from '@/lib/voucher'
+import { scopeForSession } from '@/lib/timeline-scope'
 
 const URL = process.env.NEXT_PUBLIC_SUPABASE_URL!
-const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+// pe Vercel cheia e SUPABASE_SERVICE_ROLE_KEY, local e SUPABASE_SERVICE_KEY
+const SERVICE = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
 const CONTENT_TAG = 'radio-landing-content'
 export const RADIO_PATH = '/curs-radio-gmdss-lrc'
 
@@ -103,6 +105,7 @@ export type Lead = {
   id: string; created_at: string; name: string | null; email: string | null
   phone: string | null; message: string | null; source: string; status: string; notes: string | null
   voucher_code: string | null; voucher_valid: boolean
+  participare_session_id: string | null
 }
 export async function listLeads(): Promise<Lead[]> {
   const sb = radioServiceClient()
@@ -123,13 +126,52 @@ export async function insertLead(p: { name?: string; email?: string; phone?: str
   })
   return { ok: !error, error: error?.message }
 }
-export async function updateLead(id: string, patch: { status?: string; notes?: string }) {
+export async function updateLead(id: string, patch: { status?: string; notes?: string; participareSessionId?: string | null }) {
   const sb = radioServiceClient()
   const upd: any = {}
   if (patch.status) upd.status = patch.status
   if (patch.notes !== undefined) upd.notes = patch.notes
+  if (patch.participareSessionId !== undefined) upd.participare_session_id = patch.participareSessionId || null
   const { error } = await sb.from('radio_leads').update(upd).eq('id', id)
   return { ok: !error, error: error?.message }
+}
+
+// Seriile de radio pentru dropdownul „Participare”, în ordinea cerută:
+// întâi seria care urmează, apoi cele trecute (cea mai recentă prima),
+// apoi eventualele serii de după cea următoare.
+export type RadioSessionOption = {
+  id: string; label: string; session_date: string | null; course_start_date: string | null; group: 'next' | 'past' | 'future'
+}
+export async function listRadioSessions(): Promise<RadioSessionOption[]> {
+  const sb = radioServiceClient()
+  const { data } = await sb.from('sessions')
+    .select('id, class_caa, session_date, course_start_date, status, timeline_scope, session_type, is_clone, locations(name)')
+    .order('session_date', { ascending: true })
+
+  const today = new Date()
+  const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+  const radio = (data || []).filter((s: any) =>
+    scopeForSession(s) === 'radio_lrc' && s.session_type === 'principal' && !s.is_clone)
+
+  const startOf = (s: any) => String(s.course_start_date || s.session_date || '').slice(0, 10)
+  const upcoming = radio.filter((s: any) => startOf(s) > iso)          // nu au început încă
+  const past = radio.filter((s: any) => startOf(s) <= iso).reverse()   // cea mai recentă prima
+
+  const label = (s: any) => {
+    const end = s.session_date ? new Date(s.session_date) : null
+    const d = end ? end.toLocaleDateString('ro-RO', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'
+    const loc = (s.locations as any)?.name
+    return `${(s.class_caa || 'Radio').trim()} · ${d}${loc ? ` · ${loc}` : ''}`
+  }
+  const map = (s: any, group: RadioSessionOption['group']) => ({
+    id: s.id, label: label(s), session_date: s.session_date, course_start_date: s.course_start_date, group,
+  })
+
+  return [
+    ...upcoming.slice(0, 1).map((s: any) => map(s, 'next')),
+    ...past.map((s: any) => map(s, 'past')),
+    ...upcoming.slice(1).map((s: any) => map(s, 'future')),
+  ]
 }
 export async function deleteLead(id: string) {
   const sb = radioServiceClient()
