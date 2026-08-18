@@ -35,9 +35,15 @@ export async function GET(req: NextRequest) {
   if (!token || !setting?.value || String(setting.value) !== token)
     return NextResponse.json({ error: 'unauthorized' }, { status: 403 })
 
+  // Seriile încheiate nu mai apar: nici cele marcate „Finalizată", nici cele cu
+  // examenul deja trecut (o ciornă veche rămasă nemarcată e tot o serie încheiată).
+  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+
   const { data, error } = await sb.from('sessions')
     .select('id, class_caa, session_date, course_start_date, status, timeline_scope, is_clone, roster_token, locations(name)')
     .in('status', LIVE)
+    .gte('session_date', todayIso)
     .order('session_date', { ascending: true })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
