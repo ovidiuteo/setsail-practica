@@ -124,6 +124,8 @@ export default function RosterPage() {
   const [docsVisible, setDocsVisible] = useState(false)
   const [addOpen, setAddOpen] = useState<null | 'manual' | 'paste'>(null)
   const [title, setTitle] = useState('Cursanți — sesiune')
+  const [notice, setNotice] = useState<string | null>(null)
+  const [deleting, setDeleting] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     const r = await fetch(`/api/roster?session_id=${id}&token=${encodeURIComponent(token)}`)
@@ -166,6 +168,34 @@ export default function RosterPage() {
     rowUpdate(sid, { obtinere_prelungire: v } as Partial<Row>)
   }
 
+  // Ștergere: întâi aflăm dacă persoana mai e înscrisă și în alte serii, ca să
+  // spunem în confirmare exact ce urmează să se întâmple.
+  async function removeRow(row: Row) {
+    setDeleting(row.id)
+    try {
+      const u = await fetch(`/api/roster?session_id=${id}&token=${encodeURIComponent(token)}&student_id=${row.id}&action=usage`)
+      const usage = u.ok ? await u.json() : { other_count: 0, other_sessions: [] }
+      const alte: { session_date?: string | null; class_caa?: string | null }[] = usage.other_sessions || []
+      const lista = alte.map(s => `• ${s.class_caa || 'sesiune'}${s.session_date ? ' — ' + new Date(s.session_date).toLocaleDateString('ro-RO') : ''}`).join('\n')
+      const msg = usage.other_count > 0
+        ? `${row.full_name} este înscris(ă) și în ${usage.other_count} altă/alte serii:\n${lista}\n\nSe șterge DOAR din această serie. Restul rămân neatinse. Continui?`
+        : `${row.full_name} este doar în această serie.\n\nȘtergerea îl/o scoate COMPLET din sistem, împreună cu documentele încărcate. Continui?`
+      if (!confirm(msg)) return
+
+      const r = await fetch('/api/roster', {
+        method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: id, token, student_id: row.id }),
+      })
+      if (!r.ok) { alert('Ștergere eșuată.'); return }
+      setRows(rs => (rs || []).filter(x => x.id !== row.id))
+      setNotice(usage.other_count > 0
+        ? `${row.full_name} a fost scos(ă) din această serie (rămâne în ${usage.other_count} altă/alte serii).`
+        : `${row.full_name} a fost șters(ă) complet din sistem.`)
+    } finally {
+      setDeleting(null)
+    }
+  }
+
   async function toggleVerif(key: keyof Verified) {
     const next = { ...verified, [key]: !verified[key] }
     setVerified(next)
@@ -202,6 +232,13 @@ export default function RosterPage() {
             </button>
           </div>
         </div>
+
+        {notice && (
+          <div className="mb-4 flex items-start gap-2 px-3 py-2 rounded-lg border border-blue-200 bg-blue-50 text-sm text-blue-900">
+            <span className="flex-1 whitespace-pre-line">{notice}</span>
+            <button onClick={() => setNotice(null)} className="text-blue-400 hover:text-blue-700 leading-none">×</button>
+          </div>
+        )}
 
         {/* Checkbox-uri verificare listă */}
         <div className="mb-5 flex flex-wrap gap-2">
@@ -242,6 +279,7 @@ export default function RosterPage() {
                   {FIELDS.map(f => <th key={f.key} className={`px-3 py-2.5 ${f.w || ''}`}>{f.label}</th>)}
                   <th className="px-3 py-2.5 text-center">CI</th>
                   <th className="px-3 py-2.5 min-w-[150px]">Obținere / Prelungire LRC</th>
+                  <th className="px-3 py-2.5 w-10"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -280,6 +318,13 @@ export default function RosterPage() {
                     <td className="px-3 py-2">
                       <LrcSelect value={row.obtinere_prelungire} onConfirm={v => saveLrc(row.id, v)} />
                     </td>
+                    <td className="px-3 py-2 text-center">
+                      <button onClick={() => removeRow(row)} disabled={deleting === row.id}
+                        title="Șterge cursantul din serie"
+                        className="w-7 h-7 rounded-lg text-gray-300 hover:text-red-600 hover:bg-red-50 disabled:opacity-40">
+                        🗑
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -297,7 +342,15 @@ export default function RosterPage() {
       {addOpen && (
         <AddStudentsModal sessionId={id} token={token} mode={addOpen}
           onClose={() => setAddOpen(null)}
-          onSaved={() => { setAddOpen(null); load() }} />
+          onSaved={info => {
+            setAddOpen(null)
+            const msgs = [
+              info?.reused?.length && `Am preluat datele și documentele din sistem pentru: ${info.reused.join(', ')}.`,
+              info?.skipped?.length && `Deja în această serie, nu au fost adăugați din nou: ${info.skipped.join(', ')}.`,
+            ].filter(Boolean) as string[]
+            setNotice(msgs.length ? msgs.join('\n') : null)
+            load()
+          }} />
       )}
     </div>
   )
@@ -333,7 +386,7 @@ const REVIEW_FIELDS: { key: keyof NewRow; label: string; w: string }[] = [
 
 function AddStudentsModal({ sessionId, token, mode, onClose, onSaved }: {
   sessionId: string; token: string; mode: 'manual' | 'paste'
-  onClose: () => void; onSaved: () => void
+  onClose: () => void; onSaved: (info?: { reused?: string[]; skipped?: string[] }) => void
 }) {
   // 'manual' = formular simplu; 'paste' = lipire tabel; 'review' = verificarea listei importate
   const [step, setStep] = useState<'manual' | 'paste' | 'review'>(mode)
@@ -381,7 +434,7 @@ function AddStudentsModal({ sessionId, token, mode, onClose, onSaved }: {
     const j = await r.json().catch(() => ({}))
     setSaving(false)
     if (!r.ok) { setNote('Salvare eșuată: ' + (j.error || 'eroare')); return }
-    onSaved()
+    onSaved({ reused: j.reused || [], skipped: j.skipped || [] })
   }
 
   const cell = 'w-full px-2 py-1 rounded border border-gray-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-200'
