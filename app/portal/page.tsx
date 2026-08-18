@@ -389,17 +389,34 @@ export default function PortalPage() {
         if (width > max) { height = Math.round(height * max / width); width = max }
         const c = document.createElement('canvas'); c.width = width; c.height = height
         const ctx = c.getContext('2d')!
+        // fundal alb inainte de desenare: imaginile cu transparenta ar da altfel pixeli negri
+        ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, width, height)
         ctx.drawImage(img, 0, 0, width, height)
         const im = ctx.getImageData(0, 0, width, height)
         const d = im.data
+        const n = width * height
+        const lum = new Float32Array(n)
         let sum = 0
-        for (let i = 0; i < d.length; i += 4) sum += 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]
-        const avg = sum / (d.length / 4)
-        const thr = avg * 0.75   // prag relativ: merge si pe hartie galbuie sau in umbra
-        for (let i = 0; i < d.length; i += 4) {
-          const lum = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]
-          const ink = lum < thr
-          d[i] = d[i + 1] = d[i + 2] = ink ? 20 : 255
+        for (let p = 0; p < n; p++) {
+          const i = p * 4
+          const l = 0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]
+          lum[p] = l; sum += l
+        }
+        const avg = sum / n
+        // Praguri relative (merg si pe hartie galbuie sau in umbra), calculate in
+        // ambele polaritati: semnatura poate fi inchisa pe fond deschis SAU invers
+        // (poze in negativ). Cerneala e intotdeauna MINORITARA — o alegem pe aceea.
+        const darkThr = avg * 0.75, lightThr = avg * 1.25
+        let darkCount = 0, lightCount = 0
+        for (let p = 0; p < n; p++) {
+          if (lum[p] < darkThr) darkCount++
+          else if (lum[p] > lightThr) lightCount++
+        }
+        const inkIsLight = lightCount > 0 && lightCount < darkCount
+        for (let p = 0; p < n; p++) {
+          const isInk = inkIsLight ? lum[p] > lightThr : lum[p] < darkThr
+          const i = p * 4
+          d[i] = d[i + 1] = d[i + 2] = isInk ? 20 : 255
           d[i + 3] = 255
         }
         ctx.putImageData(im, 0, 0)
@@ -1211,6 +1228,15 @@ export default function PortalPage() {
                    : <><Upload size={16} className="text-gray-400"/><span className="text-sm text-gray-600 font-medium">Încărcați o POZĂ cu semnătura de pe hârtie</span></>}
                   <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleSignaturePhoto} />
                 </label>
+
+                {/* Reîncărcare explicită — dacă semnătura a ieșit prost la procesare */}
+                {sigPhotoStatus === 'done' && (
+                  <label className="mt-2 flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-xl border-2 border-amber-400 text-amber-700 bg-amber-50/50 hover:bg-amber-50 cursor-pointer transition-all">
+                    <RotateCcw size={14} />
+                    <span className="text-sm font-medium">Înlocuiește semnătura</span>
+                    <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleSignaturePhoto} />
+                  </label>
+                )}
                 <p className="text-xs text-gray-400 mt-2">
                   Semnați cu pixul pe o foaie albă și fotografiați doar semnătura. O curățăm automat și o așezăm pe cerere, sub numele dumneavoastră.
                 </p>

@@ -116,18 +116,20 @@ export async function cererePdf(s: any, opts: CerereOpts): Promise<Buffer> {
   doc.font('B').fontSize(11).text(`Data ${cerereDate}`, MARGIN, yBlock, { align: 'left' })
   doc.font('R').fontSize(11).text('Semnătura,', MARGIN, yBlock, { align: 'right' })
 
-  // Semnătura recolorată albastru, dacă există
+  // Semnătura recolorată albastru, dacă există.
+  // Când NU există, lăsăm exact aceeași înălțime liberă, ca să încapă semnătura
+  // de mână pe cererea tipărită — altfel linia punctată venea lipită de nume.
   const sigSrc = s.signature_data || s.signature_random
+  const SIG_W = 150, SIG_H = 50
   let sigY = doc.y + 4
   if (sigSrc) {
     try {
       const tinted = await tintSignatureToBlue(sigSrc)
       const sigBuf = tinted || Buffer.from(sigSrc.includes(',') ? sigSrc.split(',')[1] : sigSrc, 'base64')
-      const sw = 150, sh = 50
-      doc.image(sigBuf, doc.page.width - MARGIN - sw, sigY, { width: sw, height: sh })
-      sigY += sh + 2
-    } catch { /* fallback la linie */ }
+      doc.image(sigBuf, doc.page.width - MARGIN - SIG_W, sigY, { width: SIG_W, height: SIG_H })
+    } catch { /* fallback la spațiu gol */ }
   }
+  sigY += SIG_H + 2   // aceeași distanță, semnată sau nu
   doc.font('R').fontSize(11).text('..................................', MARGIN, sigY, { align: 'right' })
 
   // Linie + note de subsol
