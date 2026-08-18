@@ -41,14 +41,16 @@ export async function GET(req: NextRequest) {
   const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
 
   const { data, error } = await sb.from('sessions')
-    .select('id, class_caa, session_date, course_start_date, status, timeline_scope, is_clone, roster_token, locations(name)')
+    .select('id, class_caa, session_date, course_start_date, status, timeline_scope, is_clone, session_type, roster_token, locations(name)')
     .in('status', LIVE)
     .gte('session_date', todayIso)
     .order('session_date', { ascending: true })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Doar seriile de radio, fără clone (clonele nu au listă proprie de cursanți)
-  const radio = (data || []).filter((s: any) => scopeForSession(s) === 'radio_lrc' && !s.is_clone)
+  // Doar seriile propriu-zise de radio: fără clone și fără sesiunile de absenți
+  // (acelea atârnă de o serie principală, n-au durată și dublau lista).
+  const radio = (data || []).filter((s: any) =>
+    scopeForSession(s) === 'radio_lrc' && s.session_type === 'principal' && !s.is_clone)
 
   // Seriile noi n-au încă token de listă — îl generăm acum, ca linkul să meargă din prima
   for (const s of radio as any[]) {
