@@ -60,12 +60,13 @@ REGULI COMUNE:
 DETECTAREA TIPULUI (doc_type) — foarte important:
 - "ci_vechi" = Carte de Identitate model VECHI: are ADRESA tipărită pe față, numărul are 6 cifre, emitentul ("issued_by") e vizibil pe față
 - "ci_nou"   = Carte de Identitate model NOU (CEI, cu cip): pe FAȚĂ NU apare adresa, NU apare emitentul și NU apare banda MRZ de jos (toate sunt pe verso); numărul are 7 cifre
-- "pasaport" = pașaport românesc
-Deci dacă e CI și pe față LIPSESC adresa + issued_by + banda MRZ de jos → doc_type = "ci_nou". Dacă e CI și adresa e prezentă pe față → doc_type = "ci_vechi".
+- "pasaport"  = pașaport românesc
+- "ci_strain" = act de identitate emis de ALT STAT (nu România): text în altă limbă, alt format, fără CNP românesc de 13 cifre. Dacă documentul e străin, întoarce "ci_strain" chiar dacă seamănă cu o carte de identitate.
+Deci dacă e CI românească și pe față LIPSESC adresa + issued_by + banda MRZ de jos → doc_type = "ci_nou". Dacă e CI românească și adresa e prezentă pe față → doc_type = "ci_vechi".
 
 Returnează DOAR JSON (fără markdown):
 {
-  "doc_type": "ci_vechi" sau "ci_nou" sau "pasaport",
+  "doc_type": "ci_vechi" sau "ci_nou" sau "ci_strain" sau "pasaport",
   "ci_series": "2 litere pentru CI, sau PP pentru pașaport",
   "ci_number": "6-7 cifre pentru CI, sau numărul pașaportului",
   "cnp": "exact 13 cifre",

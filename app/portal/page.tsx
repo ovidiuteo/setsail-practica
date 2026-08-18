@@ -23,11 +23,12 @@ export default function PortalPage() {
   const [scannedFields, setScannedFields] = useState<Set<string>>(new Set())
   const [examSubmitted, setExamSubmitted] = useState(false)
   // Tip act detectat din OCR: ci_vechi | ci_nou | pasaport
-  const [docType, setDocType] = useState<'' | 'ci_vechi' | 'ci_nou' | 'pasaport'>('')
+  const [docType, setDocType] = useState<'' | 'ci_vechi' | 'ci_nou' | 'ci_strain' | 'pasaport'>('')
   const [showDetails, setShowDetails] = useState(false)   // dropdown "Date completate"
   const [classCaa, setClassCaa] = useState('')            // Clasa CAA editabila
   const [versoStatus, setVersoStatus] = useState<'idle' | 'saving' | 'done'>('idle')
   const [adevStatus, setAdevStatus] = useState<'idle' | 'saving' | 'done'>('idle')
+  const [certNasStatus, setCertNasStatus] = useState<'idle' | 'saving' | 'done'>('idle')
 
   // Verifica daca acest cursant a finalizat deja examenul (status submitted/graded)
   useEffect(() => {
@@ -84,7 +85,10 @@ export default function PortalPage() {
       ? [{ value: 'B', label: 'B' }, { value: 'A', label: 'A' }]
       : [{ value: 'C', label: 'C' }, { value: 'D', label: 'D' }, { value: 'B', label: 'B' }, { value: 'C,D', label: 'C+D' }]
   // Pentru CI nou / pasaport adresa nu vine din scan → o cerem explicit sus
-  const addressAbove = docType === 'ci_nou' || docType === 'pasaport'
+  // Documentele fără adresă pe față: adresa se completează manual, deasupra
+  const addressAbove = docType === 'ci_nou' || docType === 'pasaport' || docType === 'ci_strain'
+  // Certificatul de naștere e necesar pentru CNP la documentele străine / pașaport
+  const needsCertNastere = docType === 'ci_strain' || docType === 'pasaport'
 
   // Sunt toate datele din "Date completate" completate? (pt. culoarea dropdownului)
   const detailVals = [
@@ -203,6 +207,7 @@ export default function PortalPage() {
     setClassCaa(st.class_caa || '')
     setVersoStatus(st.ci_verso_data ? 'done' : 'idle')
     setAdevStatus(st.adeverinta_adresa_data ? 'done' : 'idle')
+    setCertNasStatus(st.certificat_nastere_data ? 'done' : 'idle')
     try {
       localStorage.setItem(
         `setsail_portal_${code.toUpperCase().trim()}`,
@@ -317,10 +322,10 @@ export default function PortalPage() {
     setStudent((prev: any) => prev ? { ...prev, class_caa: value } : prev)
   }
 
-  // Upload simplu (verso CI / adeverinta adresa) — comprima + salveaza in coloana data
+  // Upload simplu (verso CI / adeverinta adresa / certificat nastere) — comprima + salveaza in coloana
   async function handleExtraUpload(
     e: React.ChangeEvent<HTMLInputElement>,
-    column: 'ci_verso_data' | 'adeverinta_adresa_data',
+    column: 'ci_verso_data' | 'adeverinta_adresa_data' | 'certificat_nastere_data',
     setStatus: (s: 'idle' | 'saving' | 'done') => void
   ) {
     const file = e.target.files?.[0]
@@ -408,11 +413,15 @@ export default function PortalPage() {
       if (!res.ok || !json.success) { setOcrStatus('error'); return }
       const d = json.data
       // Detectam tipul actului: preferam ce zice OCR-ul, altfel heuristica
-      let detected: 'ci_vechi' | 'ci_nou' | 'pasaport'
-      if (d.doc_type === 'ci_vechi' || d.doc_type === 'ci_nou' || d.doc_type === 'pasaport') {
+      let detected: 'ci_vechi' | 'ci_nou' | 'ci_strain' | 'pasaport'
+      if (['ci_vechi', 'ci_nou', 'ci_strain', 'pasaport'].includes(d.doc_type)) {
         detected = d.doc_type
       } else if (d.ci_series === 'PP' || /pasaport|passport/i.test(String(d.doc_type || ''))) {
         detected = 'pasaport'
+      } else if (/strain|străin|foreign/i.test(String(d.doc_type || ''))
+        || (d.country && !/^(romania|românia|rou|ro)$/i.test(String(d.country).trim()))) {
+        // act emis de alt stat — CNP-ul românesc lipsește, se ia din certificatul de naștere
+        detected = 'ci_strain'
       } else {
         // CI fara adresa pe fata => model nou (adresa e pe verso)
         detected = d.address ? 'ci_vechi' : 'ci_nou'
@@ -712,6 +721,49 @@ export default function PortalPage() {
                   </button>
                 )}
               </div>
+
+              {/* ── Tipul documentului: detectat la scanare, dar corectabil manual ── */}
+              <div className="mb-5">
+                <label className={labelCls}>Tipul actului de identitate</label>
+                <select
+                  value={docType}
+                  onChange={async e => {
+                    const v = e.target.value as typeof docType
+                    setDocType(v)
+                    if (student?.id) await supabase.from('students').update({ doc_type: v || null }).eq('id', student.id)
+                  }}
+                  className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-200">
+                  <option value="">— alegeți tipul —</option>
+                  <option value="ci_vechi">Carte de identitate (model vechi)</option>
+                  <option value="ci_nou">Carte de identitate (model nou)</option>
+                  <option value="ci_strain">Act de identitate străin</option>
+                  <option value="pasaport">Pașaport românesc</option>
+                </select>
+                <p className="text-xs text-gray-400 mt-1">
+                  Se completează automat la scanare. Dacă nu e corect, alegeți dumneavoastră — de el depind documentele cerute mai jos.
+                </p>
+              </div>
+
+              {/* ── Certificat de naștere (act străin / pașaport — pentru CNP) ── */}
+              {needsCertNastere && (
+                <div className="space-y-3 mb-5">
+                  <p className="text-xs text-gray-500">
+                    {docType === 'ci_strain'
+                      ? 'Actul de identitate străin nu conține CNP-ul românesc. Încărcați certificatul de naștere.'
+                      : 'Pașaportul nu conține CNP-ul complet. Încărcați certificatul de naștere.'}
+                  </p>
+                  <label className={`flex items-center justify-center gap-3 w-full px-4 py-3.5 rounded-xl border-2 border-dashed cursor-pointer transition-all ${
+                    certNasStatus === 'done' ? 'border-green-400 bg-green-50' :
+                    certNasStatus === 'saving' ? 'border-blue-300 bg-blue-50' :
+                    'border-gray-200 hover:border-blue-300 hover:bg-blue-50/50'}`}>
+                    {certNasStatus === 'saving' ? <><Loader2 size={16} className="text-blue-500 animate-spin"/><span className="text-sm text-blue-600 font-medium">Se salvează...</span></>
+                     : certNasStatus === 'done' ? <><CheckCircle size={16} className="text-green-600"/><span className="text-sm text-green-700 font-medium">Certificat de naștere încărcat ✓ (apăsați pentru a înlocui)</span></>
+                     : <><Upload size={16} className="text-gray-400"/><span className="text-sm text-gray-600 font-medium">Apăsați pentru a încărca/poza CERTIFICATUL DE NAȘTERE</span></>}
+                    <input type="file" accept="image/*" capture="environment" className="hidden"
+                      onChange={e => handleExtraUpload(e, 'certificat_nastere_data', setCertNasStatus)} />
+                  </label>
+                </div>
+              )}
 
               {/* ── Verso CI + adeverință (doar pentru CI nou) ── */}
               {docType === 'ci_nou' && (
