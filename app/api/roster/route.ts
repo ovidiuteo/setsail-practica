@@ -61,6 +61,32 @@ const CARRY_FIELDS = [
   'signature_data', 'lrc_certificat_data', 'lrc_numar', 'lrc_emis_la', 'lrc_expira_la',
 ]
 
+// Seriile de radio pentru dropdownul „Înscris la": întâi seria care urmează,
+// apoi cele trecute (cea mai recentă prima), apoi eventualele serii de după.
+async function radioSessionOptions(sb: ReturnType<typeof svc>) {
+  const today = new Date()
+  const iso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+  const { data } = await sb.from('sessions')
+    .select('id, class_caa, session_date, course_start_date, timeline_scope, session_type, is_clone, locations(name)')
+    .order('session_date', { ascending: true })
+
+  const radio = (data || []).filter((s: any) =>
+    /radio|lrc/i.test(String(s.timeline_scope || s.class_caa || '')) && s.session_type === 'principal' && !s.is_clone)
+  const startOf = (s: any) => String(s.course_start_date || s.session_date || '').slice(0, 10)
+  const upcoming = radio.filter((s: any) => startOf(s) > iso)
+  const past = radio.filter((s: any) => startOf(s) <= iso).reverse()
+
+  const opt = (s: any, group: 'next' | 'past' | 'future') => ({
+    id: s.id, group,
+    label: `${(s.class_caa || 'Radio').trim()} · ${s.session_date ? new Date(s.session_date).toLocaleDateString('ro-RO', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}`,
+  })
+  return [
+    ...upcoming.slice(0, 1).map((s: any) => opt(s, 'next')),
+    ...past.map((s: any) => opt(s, 'past')),
+    ...upcoming.slice(1).map((s: any) => opt(s, 'future')),
+  ]
+}
+
 // Vizitele pe landing-ul de radio: azi + totalul de la ultimul examen încoace.
 // Ziua examenului seriei precedente e momentul din care vizitele „aparțin"
 // cursului următor, deci de acolo repornește totalul.
@@ -123,11 +149,18 @@ export async function GET(req: NextRequest) {
     })
   }
 
-  // Leadurile de pe landing-ul de radio (fără cele arhivate), pentru tabul din pagină
+  // Leadurile de pe landing-ul de radio (fără arhivate și fără cei deja înscriși
+  // în această serie — după email), plus seriile pentru dropdownul de participare
   if (sp.get('action') === 'leads') {
-    const { data } = await sb.from('radio_leads').select('*').order('created_at', { ascending: false })
-    const leads = (data || []).filter((l: any) => l.status !== 'arhivat')
-    return NextResponse.json({ leads })
+    const [{ data }, { data: enrolled }, sessions] = await Promise.all([
+      sb.from('radio_leads').select('*').order('created_at', { ascending: false }),
+      sb.from('students').select('email').eq('session_id', sessionId),
+      radioSessionOptions(sb),
+    ])
+    const taken = new Set((enrolled || []).map((s: any) => String(s.email || '').trim().toLowerCase()).filter(Boolean))
+    const leads = (data || []).filter((l: any) =>
+      l.status !== 'arhivat' && !taken.has(String(l.email || '').trim().toLowerCase()))
+    return NextResponse.json({ leads, sessions })
   }
 
   if (studentId) {
@@ -202,6 +235,16 @@ export async function PATCH(req: NextRequest) {
   const { session_id, token, student_id, field, value, fields } = body || {}
   if (!(await authed(sb, session_id, token)))
     return NextResponse.json({ error: 'unauthorized' }, { status: 403 })
+  // Editarea unui lead de pe landing (status / seria la care e înscris)
+  if (body?.lead_id) {
+    const upd: Record<string, any> = {}
+    if (typeof body.status === 'string') upd.status = body.status
+    if ('participare_session_id' in body) upd.participare_session_id = body.participare_session_id || null
+    if (!Object.keys(upd).length) return NextResponse.json({ error: 'câmp invalid' }, { status: 400 })
+    const { error } = await sb.from('radio_leads').update(upd).eq('id', body.lead_id)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ ok: true })
+  }
   if (!student_id) return NextResponse.json({ error: 'lipsește cursantul' }, { status: 400 })
 
   const updates: Record<string, any> = {}
@@ -246,6 +289,48 @@ export async function POST(req: NextRequest) {
   const { session_id, token, student_id, side, imageData } = body || {}
   if (!(await authed(sb, session_id, token)))
     return NextResponse.json({ error: 'unauthorized' }, { status: 403 })
+
+  // ── Înscrie un lead ca cursant în această serie ──
+  // Trece prin aceeași cale ca adăugarea manuală, deci moștenește datele și
+  // documentele dacă persoana mai e în sistem din altă serie.
+  if (body?.enroll_lead_id) {
+    const { data: lead } = await sb.from('radio_leads').select('*').eq('id', body.enroll_lead_id).maybeSingle()
+    if (!lead) return NextResponse.json({ error: 'lead inexistent' }, { status: 404 })
+
+    const email = String((lead as any).email || '').trim()
+    if (email) {
+      const { data: dup } = await sb.from('students').select('id').eq('session_id', session_id).ilike('email', email)
+      if (dup?.length) return NextResponse.json({ error: 'Cursantul e deja în această serie.' }, { status: 409 })
+    }
+
+    const [{ data: sessRow }, { data: last }] = await Promise.all([
+      sb.from('sessions').select('class_caa').eq('id', session_id).maybeSingle(),
+      sb.from('students').select('order_in_session').eq('session_id', session_id)
+        .order('order_in_session', { ascending: false }).limit(1).maybeSingle(),
+    ])
+    const person = {
+      full_name: String((lead as any).name || '').trim().toUpperCase(),
+      email, phone: String((lead as any).phone || '').trim(),
+    }
+    const base: any = {
+      session_id, ...person,
+      // „Reînnoire" pe landing = prelungirea valabilității certificatului
+      obtinere_prelungire: /re[iî]n/i.test(String((lead as any).lead_type || '')) ? 'prelungire' : 'obtinere',
+      order_in_session: ((last as any)?.order_in_session || 0) + 1,
+      only_sailing: false, portal_status: 'pending',
+    }
+    base.class_caa = classFromLrc(base.obtinere_prelungire, (sessRow as any)?.class_caa || '')
+    const prevRows = await findPersonRows(sb, person)
+    if (prevRows.length) {
+      const prev: any = prevRows.sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))[0]
+      for (const f of CARRY_FIELDS) if (!String(base[f] ?? '').trim() && String(prev[f] ?? '').trim()) base[f] = prev[f]
+    }
+    const { error } = await sb.from('students').insert(base)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    await sb.from('radio_leads')
+      .update({ status: 'inscris', participare_session_id: session_id }).eq('id', body.enroll_lead_id)
+    return NextResponse.json({ ok: true, reused: prevRows.length > 0 })
+  }
 
   // ── Adăugare cursanți (manual sau din tabel lipit) ──
   if (Array.isArray(body.students)) {
@@ -332,9 +417,15 @@ export async function POST(req: NextRequest) {
 // alte serii, acelea rămân neatinse; dacă asta era singura, dispare din sistem.
 export async function DELETE(req: NextRequest) {
   const sb = svc()
-  const { session_id, token, student_id } = await req.json().catch(() => ({}))
+  const { session_id, token, student_id, lead_id } = await req.json().catch(() => ({}))
   if (!(await authed(sb, session_id, token)))
     return NextResponse.json({ error: 'unauthorized' }, { status: 403 })
+
+  if (lead_id) {
+    const { error } = await sb.from('radio_leads').delete().eq('id', lead_id)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ ok: true })
+  }
   if (!student_id) return NextResponse.json({ error: 'lipsește cursantul' }, { status: 400 })
 
   const { data: st } = await sb.from('students')

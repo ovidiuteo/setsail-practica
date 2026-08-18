@@ -159,6 +159,7 @@ export default function RosterPage() {
   const [copiedLanding, setCopiedLanding] = useState(false)
   const [visits, setVisits] = useState<{ today: number; overall: number; since: string | null } | null>(null)
   // originea se știe doar în browser — ținută în state ca să nu difere de HTML-ul de pe server
+  const [leadsRefresh, setLeadsRefresh] = useState(0)
   const [origin, setOrigin] = useState('')
   useEffect(() => { setOrigin(window.location.origin) }, [])
   const [deleting, setDeleting] = useState<string | null>(null)
@@ -358,7 +359,7 @@ export default function RosterPage() {
         </div>
 
         {tab === 'leaduri' ? (
-          <LeaduriTab sessionId={id} token={token} />
+          <LeaduriTab key={`f-${leadsRefresh}`} sessionId={id} token={token} onEnrolled={() => { load(); setLeadsRefresh(n => n + 1) }} />
         ) : rows === null ? (
           <div className="text-center text-gray-400 py-16">Se încarcă…</div>
         ) : rows.length === 0 ? (
@@ -456,6 +457,19 @@ export default function RosterPage() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {/* Leadurile de pe landing, sub lista de cursanți — cei înscriși deja
+            (după email) nu mai apar aici */}
+        {tab === 'cursanti' && (
+          <div className="mt-8">
+            <h2 className="text-sm font-semibold text-gray-700 mb-1">Leaduri de pe landing</h2>
+            <p className="text-xs text-gray-400 mb-3">
+              Solicitări de pe pagina de curs care nu sunt încă în listă. Apasă „Înscrie" ca să treacă în serie.
+            </p>
+            <LeaduriTab key={`c-${leadsRefresh}`} sessionId={id} token={token} variant="compact"
+              onEnrolled={() => { load(); setLeadsRefresh(n => n + 1) }} />
           </div>
         )}
       </div>
@@ -745,15 +759,59 @@ const LEAD_STATUS_STYLE: Record<string, string> = {
   nou: 'bg-blue-50 text-blue-700', contactat: 'bg-amber-50 text-amber-700',
   inscris: 'bg-emerald-50 text-emerald-700', respins: 'bg-gray-100 text-gray-500',
 }
-function LeaduriTab({ sessionId, token }: { sessionId: string; token: string }) {
-  const [leads, setLeads] = useState<any[] | null>(null)
-  useEffect(() => {
-    fetch(`/api/roster?session_id=${sessionId}&token=${encodeURIComponent(token)}&action=leads`)
-      .then(r => r.json()).then(j => setLeads(j.leads || [])).catch(() => setLeads([]))
-  }, [sessionId, token])
+const LEAD_STATUSES = ['nou', 'contactat', 'inscris', 'respins', 'arhivat']
+const GROUP_LABEL: Record<string, string> = { next: 'Următoarea serie', past: 'Serii trecute', future: 'Serii viitoare' }
+type SessionOpt = { id: string; label: string; group: string }
 
-  if (leads === null) return <div className="text-center text-gray-400 py-16">Se încarcă…</div>
-  if (!leads.length) return <div className="text-center text-gray-400 py-16">Niciun lead.</div>
+function LeaduriTab({ sessionId, token, variant = 'full', onEnrolled }: {
+  sessionId: string; token: string
+  variant?: 'full' | 'compact'   // sub lista de cursanți arătăm doar esențialul
+  onEnrolled?: () => void
+}) {
+  const [leads, setLeads] = useState<any[] | null>(null)
+  const [sessions, setSessions] = useState<SessionOpt[]>([])
+  const [busy, setBusy] = useState<string | null>(null)
+
+  const load = useCallback(async () => {
+    const j = await fetch(`/api/roster?session_id=${sessionId}&token=${encodeURIComponent(token)}&action=leads`)
+      .then(r => r.json()).catch(() => null)
+    setLeads(j?.leads || [])
+    setSessions(j?.sessions || [])
+  }, [sessionId, token])
+  useEffect(() => { load() }, [load])
+
+  async function patchLead(id: string, body: any) {
+    setLeads(ls => (ls || []).map(l => l.id === id ? { ...l, ...body } : l))
+    await fetch('/api/roster', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId, token, lead_id: id, ...body }),
+    })
+  }
+  async function enroll(l: any) {
+    if (!confirm(`Îl înscrii pe „${l.name || l.email}" în această serie?`)) return
+    setBusy(l.id)
+    const r = await fetch('/api/roster', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId, token, enroll_lead_id: l.id }),
+    })
+    setBusy(null)
+    if (!r.ok) { const j = await r.json().catch(() => ({})); alert('Înscriere eșuată: ' + (j.error || 'eroare')); return }
+    await load()
+    onEnrolled?.()
+  }
+  async function removeLead(l: any) {
+    if (!confirm(`Ștergi definitiv leadul „${l.name || l.email}"?`)) return
+    setLeads(ls => (ls || []).filter(x => x.id !== l.id))
+    await fetch('/api/roster', {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId, token, lead_id: l.id }),
+    })
+  }
+
+  if (leads === null) return <div className="text-center text-gray-400 py-8">Se încarcă…</div>
+  if (!leads.length) return <div className="text-center text-gray-400 py-8">Niciun lead neînscris.</div>
+  const full = variant === 'full'
+
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
       <table className="w-full text-sm border-collapse">
@@ -764,24 +822,56 @@ function LeaduriTab({ sessionId, token }: { sessionId: string; token: string }) 
             <th className="px-3 py-2.5">Nume</th>
             <th className="px-3 py-2.5">Tip</th>
             <th className="px-3 py-2.5">Contact</th>
-            <th className="px-3 py-2.5">Mesaj</th>
+            {full && <th className="px-3 py-2.5">Mesaj</th>}
             <th className="px-3 py-2.5">Status</th>
+            {full && <th className="px-3 py-2.5 min-w-[170px]">Înscris la</th>}
+            <th className="px-3 py-2.5"></th>
           </tr>
         </thead>
         <tbody className="divide-y divide-gray-50">
           {leads.map((l, i) => (
-            <tr key={l.id} className="hover:bg-gray-50/60 align-top">
+            <tr key={l.id} className="hover:bg-gray-50/60 align-middle">
               <td className="px-3 py-2 text-gray-300 text-xs">{i + 1}</td>
               <td className="px-3 py-2 text-gray-400 text-xs whitespace-nowrap">{new Date(l.created_at).toLocaleDateString('ro-RO')}</td>
               <td className="px-3 py-2 font-medium text-gray-800 whitespace-nowrap">{l.name || '—'}</td>
               <td className="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">{l.lead_type || '—'}</td>
-              <td className="px-3 py-2 text-xs text-gray-600">
+              <td className="px-3 py-2 text-xs text-gray-600 whitespace-nowrap">
                 {l.phone && <div><a href={`tel:${l.phone}`} className="hover:text-blue-600">{l.phone}</a></div>}
                 {l.email && <div><a href={`mailto:${l.email}`} className="hover:text-blue-600">{l.email}</a></div>}
               </td>
-              <td className="px-3 py-2 text-xs text-gray-500 max-w-[240px]">{l.message || '—'}</td>
+              {full && <td className="px-3 py-2 text-xs text-gray-500 max-w-[220px]">{l.message || '—'}</td>}
               <td className="px-3 py-2">
-                <span className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${LEAD_STATUS_STYLE[l.status] || 'bg-gray-100 text-gray-600'}`}>{l.status}</span>
+                {full ? (
+                  <select value={l.status || 'nou'} onChange={e => patchLead(l.id, { status: e.target.value })}
+                    className={`text-xs font-medium rounded-full px-2.5 py-1 border-0 cursor-pointer capitalize ${LEAD_STATUS_STYLE[l.status] || 'bg-gray-100 text-gray-600'}`}>
+                    {LEAD_STATUSES.map(s => <option key={s} value={s} className="bg-white text-gray-800">{s}</option>)}
+                  </select>
+                ) : (
+                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${LEAD_STATUS_STYLE[l.status] || 'bg-gray-100 text-gray-600'}`}>{l.status}</span>
+                )}
+              </td>
+              {full && (
+                <td className="px-3 py-2">
+                  <select value={l.participare_session_id || ''} onChange={e => patchLead(l.id, { participare_session_id: e.target.value || null })}
+                    className="text-xs rounded-lg border border-gray-200 px-2 py-1 bg-white cursor-pointer max-w-[190px]">
+                    <option value="">— fără —</option>
+                    {['next', 'past', 'future'].map(g => {
+                      const opts = sessions.filter(s => s.group === g)
+                      if (!opts.length) return null
+                      return <optgroup key={g} label={GROUP_LABEL[g]}>{opts.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</optgroup>
+                    })}
+                  </select>
+                </td>
+              )}
+              <td className="px-3 py-2 text-right whitespace-nowrap">
+                <button onClick={() => enroll(l)} disabled={busy === l.id}
+                  className="px-2.5 py-1 rounded-lg text-xs font-medium border border-green-300 bg-green-50 text-green-700 hover:bg-green-100 disabled:opacity-50">
+                  {busy === l.id ? '…' : 'Înscrie'}
+                </button>
+                {full && (
+                  <button onClick={() => removeLead(l)} title="Șterge leadul"
+                    className="ml-1 w-7 h-7 rounded-lg text-red-300 hover:text-red-600 hover:bg-red-50">🗑</button>
+                )}
               </td>
             </tr>
           ))}
