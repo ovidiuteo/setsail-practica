@@ -38,7 +38,9 @@ export async function GET(req: NextRequest) {
   const sp = req.nextUrl.searchParams
   const sessionId = sp.get('session_id') || ''
   const token = sp.get('token') || ''
-  const { data: sess } = await sb.from('sessions').select('roster_token, roster_verified, roster_docs_visible').eq('id', sessionId).maybeSingle()
+  const { data: sess } = await sb.from('sessions')
+    .select('roster_token, roster_verified, roster_docs_visible, class_caa, session_date, course_start_date')
+    .eq('id', sessionId).maybeSingle()
   if (!sessionId || !token || !sess?.roster_token || sess.roster_token !== token)
     return NextResponse.json({ error: 'unauthorized' }, { status: 403 })
 
@@ -64,7 +66,11 @@ export async function GET(req: NextRequest) {
   rows.sort((a, b) => (a.full_name || '').localeCompare(b.full_name || '', 'ro', { sensitivity: 'base' }))
   const verified: Record<string, boolean> = {}
   for (const v of VERIFIERS) verified[v] = !!(sess.roster_verified as any)?.[v]
-  return NextResponse.json({ students: rows, verified, docs_visible: !!sess.roster_docs_visible })
+  return NextResponse.json({
+    students: rows, verified, docs_visible: !!sess.roster_docs_visible,
+    // pentru titlul paginii/tab-ului (ex. „Curs Radio 5-7 oct")
+    session: { class_caa: sess.class_caa, session_date: sess.session_date, course_start_date: sess.course_start_date },
+  })
 }
 
 // PATCH — modifică câmpuri ale unui cursant

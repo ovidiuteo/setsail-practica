@@ -42,6 +42,23 @@ const VERIFIERS: { key: keyof Verified; label: string }[] = [
   { key: 'corina', label: 'Corina' }, { key: 'paula', label: 'Paula' }, { key: 'ruxandra', label: 'Ruxandra' },
 ]
 
+// Titlul paginii/tab-ului: „Curs Radio 5-7 oct" (din clasa și datele sesiunii)
+function sessionTitle(s: { class_caa?: string | null; session_date?: string | null; course_start_date?: string | null } | null): string {
+  if (!s?.session_date) return 'Cursanți — sesiune'
+  const luna = (d: Date) => d.toLocaleDateString('ro-RO', { month: 'short' }).replace('.', '')
+  const end = new Date(s.session_date)
+  const start = s.course_start_date ? new Date(s.course_start_date) : null
+  let interval: string
+  if (start && !isNaN(+start) && +start !== +end) {
+    interval = start.getMonth() === end.getMonth()
+      ? `${start.getDate()}-${end.getDate()} ${luna(end)}`
+      : `${start.getDate()} ${luna(start)}-${end.getDate()} ${luna(end)}`
+  } else {
+    interval = `${end.getDate()} ${luna(end)}`
+  }
+  return `Curs ${(s.class_caa || '').trim()} ${interval}`.replace(/\s+/g, ' ').trim()
+}
+
 // Reduce o imagine la max 1800px lățime, JPEG 0.85
 function downscale(file: File): Promise<string> {
   return new Promise((resolve, reject) => {
@@ -106,6 +123,7 @@ export default function RosterPage() {
   const [tab, setTab] = useState<'list' | 'verify'>('list')
   const [docsVisible, setDocsVisible] = useState(false)
   const [addOpen, setAddOpen] = useState<null | 'manual' | 'paste'>(null)
+  const [title, setTitle] = useState('Cursanți — sesiune')
 
   const load = useCallback(async () => {
     const r = await fetch(`/api/roster?session_id=${id}&token=${encodeURIComponent(token)}`)
@@ -114,6 +132,11 @@ export default function RosterPage() {
     setRows(j.students || [])
     if (j.verified) setVerified(j.verified)
     setDocsVisible(!!j.docs_visible)
+    if (j.session) {
+      const t = sessionTitle(j.session)
+      setTitle(t)
+      document.title = t
+    }
   }, [id, token])
   useEffect(() => { load() }, [load])
 
@@ -163,7 +186,7 @@ export default function RosterPage() {
       <div className="max-w-6xl mx-auto">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="text-xl font-bold text-gray-900">Cursanți — sesiune</h1>
+            <h1 className="text-xl font-bold text-gray-900">{title}</h1>
             <p className="text-sm text-gray-500 mt-1">
               Click pe o celulă pentru a edita, apoi confirmă cu ✓ (sau Enter). Apasă „CI" pentru imagini și date.
             </p>
