@@ -141,6 +141,8 @@ export default function RosterPage() {
   const [addOpen, setAddOpen] = useState<null | 'manual' | 'paste'>(null)
   const [title, setTitle] = useState('Cursanți — sesiune')
   const [notice, setNotice] = useState<string | null>(null)
+  const [accessCode, setAccessCode] = useState('')
+  const [copied, setCopied] = useState(false)
   const [deleting, setDeleting] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -150,6 +152,7 @@ export default function RosterPage() {
     setRows(j.students || [])
     if (j.verified) setVerified(j.verified)
     setDocsVisible(!!j.docs_visible)
+    setAccessCode(j.access_code || '')
     if (j.session) {
       const t = sessionTitle(j.session)
       setTitle(t)
@@ -212,6 +215,20 @@ export default function RosterPage() {
     }
   }
 
+  // Linkul portalului: fără email = cel general al sesiunii; cu email = direct al cursantului
+  const portalLink = (email?: string) => {
+    const base = typeof window === 'undefined' ? '' : window.location.origin
+    const q = email ? `&email=${encodeURIComponent(email)}` : ''
+    return `${base}/portal?cod=${accessCode}${q}`
+  }
+  async function copyPortalLink() {
+    try {
+      await navigator.clipboard.writeText(portalLink())
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1800)
+    } catch { alert(portalLink()) }
+  }
+
   async function toggleVerif(key: keyof Verified) {
     const next = { ...verified, [key]: !verified[key] }
     setVerified(next)
@@ -236,6 +253,20 @@ export default function RosterPage() {
             <p className="text-sm text-gray-500 mt-1">
               Click pe o celulă pentru a edita, apoi confirmă cu ✓ (sau Enter). Apasă „CI" pentru imagini și date.
             </p>
+            {accessCode && (
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <span className="text-xs text-gray-400">Portal cursant:</span>
+                <code className="px-2 py-1 rounded bg-gray-100 border border-gray-200 text-xs text-gray-700 break-all">{portalLink()}</code>
+                <button onClick={copyPortalLink}
+                  className="px-2.5 py-1 rounded-lg text-xs font-medium border border-gray-200 bg-white text-gray-700 hover:bg-gray-50">
+                  {copied ? 'Copiat ✓' : 'Copy link'}
+                </button>
+                <a href={portalLink()} target="_blank" rel="noopener noreferrer"
+                  className="px-2.5 py-1 rounded-lg text-xs font-medium border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100">
+                  Deschide portal
+                </a>
+              </div>
+            )}
           </div>
           <div className="flex gap-2">
             <button onClick={() => setAddOpen('manual')}
@@ -305,6 +336,7 @@ export default function RosterPage() {
                     <th className="px-3 py-2.5 text-center">Certif. naștere</th>
                   </>}
                   <th className="px-3 py-2.5 w-10"></th>
+                  <th className="px-3 py-2.5 w-10"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
@@ -358,6 +390,13 @@ export default function RosterPage() {
                       <td className="px-3 py-2 text-center"><Mark on={row.has_adeverinta} /></td>
                       <td className="px-3 py-2 text-center"><Mark on={row.has_cert_nastere} /></td>
                     </>}
+                    <td className="px-3 py-2 text-center">
+                      <a href={portalLink(row.email)} target="_blank" rel="noopener noreferrer"
+                        title="Deschide portalul cursantului"
+                        className="inline-flex items-center justify-center w-7 h-7 rounded-lg text-gray-300 hover:text-blue-600 hover:bg-blue-50">
+                        ↗
+                      </a>
+                    </td>
                     <td className="px-3 py-2 text-center">
                       <button onClick={() => removeRow(row)} disabled={deleting === row.id}
                         title="Șterge cursantul din serie"

@@ -76,7 +76,7 @@ export async function GET(req: NextRequest) {
   const sessionId = sp.get('session_id') || ''
   const token = sp.get('token') || ''
   const { data: sess } = await sb.from('sessions')
-    .select('roster_token, roster_verified, roster_docs_visible, class_caa, session_date, course_start_date')
+    .select('roster_token, roster_verified, roster_docs_visible, class_caa, session_date, course_start_date, access_code')
     .eq('id', sessionId).maybeSingle()
   if (!sessionId || !token || !sess?.roster_token || sess.roster_token !== token)
     return NextResponse.json({ error: 'unauthorized' }, { status: 403 })
@@ -154,6 +154,8 @@ export async function GET(req: NextRequest) {
     students: rows, verified, docs_visible: !!sess.roster_docs_visible,
     // pentru titlul paginii/tab-ului (ex. „Curs Radio 5-7 oct")
     session: { class_caa: sess.class_caa, session_date: sess.session_date, course_start_date: sess.course_start_date },
+    // codul sesiunii — pentru linkul portalului cursantului
+    access_code: sess.access_code || '',
   })
 }
 
