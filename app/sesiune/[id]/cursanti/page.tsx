@@ -18,7 +18,16 @@ const DOC_LABEL: Record<string, string> = {
 }
 // Bifă verde / liniuță gri, pentru coloanele de documente
 const Mark = ({ on }: { on: boolean }) =>
-  on ? <span className="text-green-600 font-semibold">✓</span> : <span className="text-gray-300">—</span>
+  on ? <span className="text-green-600 font-semibold">✓</span> : <span className="text-gray-300">–</span>
+
+// Coloanele care sunt doar o bifă — antet scurt și îngust, denumirea completă în tooltip
+const CHECK_COLS: { key: 'has_signature' | 'has_cerere' | 'has_verso' | 'has_adeverinta' | 'has_cert_nastere'; short: string; full: string }[] = [
+  { key: 'has_signature', short: 'Semn', full: 'Semnătură încărcată' },
+  { key: 'has_cerere', short: 'Cerere', full: 'Cerere semnată încărcată' },
+  { key: 'has_verso', short: 'Verso', full: 'Verso CI nou' },
+  { key: 'has_adeverinta', short: 'Domic', full: 'Adeverință domiciliu (CI nou)' },
+  { key: 'has_cert_nastere', short: 'C.naș', full: 'Certificat de naștere' },
+]
 
 const LRC_OPTS: [string, string][] = [['', '—'], ['obtinere', 'Obținere LRC'], ['prelungire', 'Prelungire LRC']]
 const lrcLabel = (v: string) => LRC_OPTS.find(o => o[0] === v)?.[1] || '—'
@@ -50,7 +59,11 @@ const FIELDS: { key: keyof Row; label: string; w?: string }[] = [
   { key: 'county', label: 'Județ', w: 'min-w-[110px]' },
 ]
 // Tabul „Lista cursanți" — doar identificarea persoanei; restul coloanelor sunt stări de documente
-const PERSON_FIELDS = FIELDS.filter(f => ['full_name', 'email', 'cnp'].includes(f.key as string))
+const PERSON_FIELDS = FIELDS
+  .filter(f => ['full_name', 'email', 'cnp'].includes(f.key as string))
+  // fără lățimi minime: coloanele se strâng la conținut, iar numele/emailul nu se rup
+  // pe două rânduri (rânduri de aceeași înălțime, tabelul scrollează pe orizontală)
+  .map(f => ({ ...f, w: 'whitespace-nowrap' }))
 
 const roDate = (d: string | null) => d ? new Date(d).toLocaleDateString('ro-RO') : ''
 
@@ -246,7 +259,7 @@ export default function RosterPage() {
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-8">
-      <div className="max-w-6xl mx-auto">
+      <div className="max-w-7xl mx-auto">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
             <h1 className="text-xl font-bold text-gray-900">{title}</h1>
@@ -324,29 +337,31 @@ export default function RosterPage() {
                 <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
                   <th className="px-3 py-2.5 w-8">#</th>
                   {(tab === 'cursanti' ? PERSON_FIELDS : FIELDS).map(f => <th key={f.key} className={`px-3 py-2.5 ${f.w || ''}`}>{f.label}</th>)}
-                  <th className="px-3 py-2.5 text-center">CI</th>
-                  <th className="px-3 py-2.5 min-w-[150px]">Obținere / Prelungire LRC</th>
+                  <th className="px-2 py-2.5 text-center">CI</th>
+                  <th className={`px-2 py-2.5 ${tab === 'cursanti' ? 'whitespace-nowrap' : 'min-w-[150px]'}`}>
+                    {tab === 'cursanti' ? 'Obț. / Prel.' : 'Obținere / Prelungire LRC'}
+                  </th>
                   {tab === 'cursanti' && <>
-                    <th className="px-3 py-2.5 min-w-[110px]">Cerere nr. / data</th>
-                    <th className="px-3 py-2.5 text-center">Semnătură</th>
-                    <th className="px-3 py-2.5 text-center">Cerere încărcată</th>
-                    <th className="px-3 py-2.5 min-w-[90px]">Tip document</th>
-                    <th className="px-3 py-2.5 text-center">Verso CI</th>
-                    <th className="px-3 py-2.5 text-center">Domiciliu</th>
-                    <th className="px-3 py-2.5 text-center">Certif. naștere</th>
+                    <th className="px-2 py-2.5 whitespace-nowrap">Cerere nr./data</th>
+                    <th className="px-2 py-2.5 whitespace-nowrap">Tip doc.</th>
+                    {CHECK_COLS.map(c => (
+                      <th key={c.key} title={c.full} className="px-1 py-2.5 text-center text-[10px] w-12 normal-case tracking-normal">
+                        {c.short}
+                      </th>
+                    ))}
                   </>}
-                  <th className="px-3 py-2.5 w-10"></th>
-                  <th className="px-3 py-2.5 w-10"></th>
+                  <th className="px-1 py-2.5 w-9"></th>
+                  <th className="px-1 py-2.5 w-9"></th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {rows.map((row, i) => (
-                  <tr key={row.id} className="hover:bg-gray-50/60">
+                  <tr key={row.id} className={`hover:bg-gray-50/60 ${tab === 'cursanti' ? '[&>td]:py-1' : ''}`}>
                     <td className="px-3 py-2 text-gray-300 text-xs">{i + 1}</td>
                     {(tab === 'cursanti' ? PERSON_FIELDS : FIELDS).map(f => {
                       const editing = edit?.id === row.id && edit?.field === f.key
                       return (
-                        <td key={f.key} className="px-3 py-2 align-middle">
+                        <td key={f.key} className={`${tab === 'cursanti' ? 'px-2 whitespace-nowrap' : 'px-3'} py-2 align-middle`}>
                           {editing ? (
                             <div className="flex items-center gap-1">
                               <input autoFocus value={draft} onChange={e => setDraft(e.target.value)}
@@ -366,38 +381,36 @@ export default function RosterPage() {
                         </td>
                       )
                     })}
-                    <td className="px-3 py-2 text-center">
+                    <td className="px-2 py-2 text-center">
                       <button onClick={() => setCiFor(row)}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-medium border ${row.has_ci || row.has_verso ? 'border-green-200 text-green-700 bg-green-50 hover:bg-green-100' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
+                        className={`px-2.5 py-1 rounded-lg text-xs font-medium border whitespace-nowrap ${row.has_ci || row.has_verso ? 'border-green-200 text-green-700 bg-green-50 hover:bg-green-100' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
                         {row.has_ci || row.has_verso ? 'CI ✓' : 'CI +'}
                       </button>
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-2 py-2">
                       <LrcSelect value={row.obtinere_prelungire} onConfirm={v => saveLrc(row.id, v)} />
                     </td>
                     {tab === 'cursanti' && <>
-                      <td className="px-3 py-2 whitespace-nowrap">
+                      <td className="px-2 py-2 whitespace-nowrap text-xs">
                         {row.cerere_nr
                           ? <span className="text-gray-800">{row.cerere_nr}<span className="text-gray-400"> / {roDate(row.cerere_data)}</span></span>
-                          : <span className="text-gray-300">—</span>}
+                          : <span className="text-gray-300">–</span>}
                       </td>
-                      <td className="px-3 py-2 text-center"><Mark on={row.has_signature} /></td>
-                      <td className="px-3 py-2 text-center"><Mark on={row.has_cerere} /></td>
-                      <td className="px-3 py-2 text-gray-700">
-                        {DOC_LABEL[row.doc_type] || <span className="text-gray-300">—</span>}
+                      <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-700">
+                        {DOC_LABEL[row.doc_type] || <span className="text-gray-300">–</span>}
                       </td>
-                      <td className="px-3 py-2 text-center"><Mark on={row.has_verso} /></td>
-                      <td className="px-3 py-2 text-center"><Mark on={row.has_adeverinta} /></td>
-                      <td className="px-3 py-2 text-center"><Mark on={row.has_cert_nastere} /></td>
+                      {CHECK_COLS.map(c => (
+                        <td key={c.key} className="px-1 py-2 text-center"><Mark on={row[c.key]} /></td>
+                      ))}
                     </>}
-                    <td className="px-3 py-2 text-center">
+                    <td className="px-1 py-2 text-center">
                       <a href={portalLink(row.email)} target="_blank" rel="noopener noreferrer"
                         title="Deschide portalul cursantului"
                         className="inline-flex items-center justify-center w-7 h-7 rounded-lg text-gray-300 hover:text-blue-600 hover:bg-blue-50">
                         ↗
                       </a>
                     </td>
-                    <td className="px-3 py-2 text-center">
+                    <td className="px-1 py-2 text-center">
                       <button onClick={() => removeRow(row)} disabled={deleting === row.id}
                         title="Șterge cursantul din serie"
                         className="w-7 h-7 rounded-lg text-gray-300 hover:text-red-600 hover:bg-red-50 disabled:opacity-40">
