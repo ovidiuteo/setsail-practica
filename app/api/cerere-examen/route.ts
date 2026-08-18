@@ -51,6 +51,9 @@ export async function POST(req: NextRequest) {
   if (existing) {
     numar = existing.numar
     dataCerere = existing.data_cerere
+    // dacă între timp cursantul a schimbat obținere ↔ prelungire, registrul urmează alegerea
+    const tip = isPrelungire ? 'prelungire' : 'obtinere'
+    if (existing.tip !== tip) await sb.from('cerere_numbers').update({ tip }).eq('numar', existing.numar)
   } else {
     for (let i = 0; i < 5 && numar === null; i++) {
       const candidate = await nextNumber(sb)

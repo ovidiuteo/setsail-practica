@@ -104,6 +104,9 @@ export default function PortalPage() {
   const needsLrcCert = examScope === 'radio_lrc' && /prelungire/i.test(classCaa)
   // La radio nu se semnează pe ecran: se semnează cererea de examen
   const isRadioSession = examScope === 'radio_lrc'
+  // Cursantul a ales între obținere și prelungire? (dacă nu, clasa e doar „Radio")
+  // De asta depinde tipul cererii, deci fără alegere nu se poate genera.
+  const lrcChosen = /obtinere|obținere|prelungire/i.test(classCaa)
   // Datele pe care le cere textul cererii de examen. Fără ele documentul ar ieși
   // cu linii punctate, așa că blocăm descărcarea până sunt completate.
   const cerereMissing: string[] = (() => {
@@ -114,6 +117,7 @@ export default function PortalPage() {
       ['county', 'sector/județ'], ['phone', 'telefon'], ['email', 'email'],
     ]
     for (const [k, label] of need) if (!String(form[k] || '').trim()) out.push(label)
+    if (!lrcChosen) out.push('obținere sau prelungire LRC (sus, la „Clasa CAA")')
     if (/prelungire/i.test(classCaa)) {
       if (!form.ci_series.trim()) out.push('serie CI')
       if (!form.ci_number.trim()) out.push('număr CI')
@@ -879,14 +883,24 @@ export default function PortalPage() {
                 )}
                 <div className="flex justify-between items-center">
                   <span className="text-xs text-gray-400">Clasa CAA</span>
+                  {/* La radio, de această alegere depinde tipul cererii de examen:
+                      roz cât timp e nealeasă (clasa e doar „Radio"), verde după alegere */}
                   <select
                     value={classOptions.some(o => o.value === classCaa) ? classCaa : ''}
                     onChange={e => updateClass(e.target.value)}
-                    className="text-xs font-medium text-gray-800 bg-white border border-gray-300 rounded-lg px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-400 cursor-pointer">
+                    className={`text-xs font-medium rounded-lg px-2 py-1 border focus:outline-none focus:ring-2 cursor-pointer transition-colors ${
+                      !isRadioSession ? 'text-gray-800 bg-white border-gray-300 focus:ring-blue-400'
+                      : lrcChosen ? 'text-green-800 bg-green-50 border-green-400 focus:ring-green-300'
+                      : 'text-pink-800 bg-pink-100 border-pink-400 focus:ring-pink-300'}`}>
                     <option value="" disabled>{classCaa || 'Alege…'}</option>
                     {classOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                   </select>
                 </div>
+                {isRadioSession && !lrcChosen && (
+                  <p className="text-[11px] text-pink-700 text-right -mt-1">
+                    Alegeți obținere sau prelungire — de asta depinde cererea de examen.
+                  </p>
+                )}
                 <div className="flex justify-between items-center">
                   <span className="text-xs text-gray-400">Sesiune</span>
                   <span className="text-xs text-gray-700">
