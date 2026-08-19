@@ -522,11 +522,12 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
     if (!normChanges) return
     setNormBusy(true)
     for (const ch of normChanges) {
-      await supabase.from('students').update({ address: ch.address_after, county: ch.county_after }).eq('id', ch.id)
+      await supabase.from('students')
+        .update({ address: ch.address_after, city: ch.city_after, county: ch.county_after }).eq('id', ch.id)
     }
     setStudents(students.map(s => {
       const ch = normChanges.find(c => c.id === s.id)
-      return ch ? { ...s, address: ch.address_after, county: ch.county_after } : s
+      return ch ? { ...s, address: ch.address_after, city: ch.city_after, county: ch.county_after } : s
     }))
     setNormBusy(false)
     setNormChanges(null)
@@ -605,7 +606,7 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
           <div className="bg-white rounded-xl shadow-xl max-w-3xl w-full max-h-[80vh] flex flex-col" onClick={e => e.stopPropagation()}>
             <div className="px-5 py-4 border-b border-gray-100">
               <h3 className="font-semibold text-sm text-gray-900">Normalizare adrese — {normChanges.length} cursanți de modificat</h3>
-              <p className="text-xs text-gray-500">Județ → „jud. X" / „Sector N"; orașul/județul duplicat e scos din adresă. Verifică și aplică.</p>
+              <p className="text-xs text-gray-500">Județ → „jud. X" / „Sector N"; localitatea cu majusculă și diacritice; orașul/județul duplicat e scos din adresă. Verifică și aplică.</p>
             </div>
             <div className="overflow-auto px-5 py-3 flex-1">
               <table className="w-full text-xs">
@@ -613,6 +614,7 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
                   <tr className="text-left text-[10px] uppercase text-gray-400 border-b border-gray-100">
                     <th className="py-2 pr-3">Cursant</th>
                     <th className="py-2 pr-3">Adresă</th>
+                    <th className="py-2 pr-3">Localitate</th>
                     <th className="py-2">Județ</th>
                   </tr>
                 </thead>
@@ -627,6 +629,14 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
                             <div className="text-emerald-700">{ch.address_after || '—'}</div>
                           </>
                         ) : <span className="text-gray-400">{ch.address_before || '—'}</span>}
+                      </td>
+                      <td className="py-2 pr-3">
+                        {ch.city_before !== ch.city_after ? (
+                          <>
+                            <div className="text-red-500 line-through">{ch.city_before || '—'}</div>
+                            <div className="text-emerald-700">{ch.city_after || '—'}</div>
+                          </>
+                        ) : <span className="text-gray-400">{ch.city_before || '—'}</span>}
                       </td>
                       <td className="py-2">
                         {ch.county_before !== ch.county_after ? (
