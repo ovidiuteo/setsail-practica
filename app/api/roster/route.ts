@@ -32,11 +32,13 @@ const DOC_COLS: Record<string, string> = {
   cert_nastere: 'certificat_nastere_data',
   semnatura: 'signature_data',
   cerere: 'cerere_semnata_data',
+  vhf: 'lrc_certificat_data',   // carnetul VHF/LRC existent, la prelungire
 }
 const docColumn = (key: string | null | undefined) => DOC_COLS[String(key || '')] || DOC_COLS.recto
 const docFlag: Record<string, string> = {
   recto: 'has_ci', verso: 'has_verso', domiciliu: 'has_adeverinta',
   cert_nastere: 'has_cert_nastere', semnatura: 'has_signature', cerere: 'has_cerere',
+  vhf: 'has_vhf',
 }
 
 // Găsește celelalte fișe ale ACELEIAȘI persoane (fiecare rând din `students` e o
@@ -193,6 +195,7 @@ export async function GET(req: NextRequest) {
     has_cert_nastere: 'certificat_nastere_data',
     has_signature: 'signature_data',
     has_cerere: 'cerere_semnata_data',
+    has_vhf: 'lrc_certificat_data',
   } as const
   type DocKey = keyof typeof DOC_COLS
 
@@ -223,6 +226,7 @@ export async function GET(req: NextRequest) {
     has_cert_nastere: has.has_cert_nastere.has(r.id),
     has_signature: has.has_signature.has(r.id),
     has_cerere: has.has_cerere.has(r.id),
+    has_vhf: has.has_vhf.has(r.id),
     cerere_nr: cerereBy.get(r.id)?.numar ?? null,
     cerere_data: cerereBy.get(r.id)?.data_cerere ?? null,
   }))

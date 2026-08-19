@@ -9,19 +9,20 @@ type Row = {
   has_ci: boolean; has_verso: boolean
   doc_type: string
   has_adeverinta: boolean; has_cert_nastere: boolean
-  has_signature: boolean; has_cerere: boolean
+  has_signature: boolean; has_cerere: boolean; has_vhf: boolean
   cerere_nr: number | null; cerere_data: string | null
 }
 
 // Documentele unui cursant, adresabile după cheie (recto = fața actului)
-type DocKey = 'recto' | 'verso' | 'domiciliu' | 'cert_nastere' | 'semnatura' | 'cerere'
+type DocKey = 'recto' | 'verso' | 'domiciliu' | 'cert_nastere' | 'vhf' | 'semnatura' | 'cerere'
 const DOC_FLAG: Record<DocKey, keyof Row> = {
   recto: 'has_ci', verso: 'has_verso', domiciliu: 'has_adeverinta',
-  cert_nastere: 'has_cert_nastere', semnatura: 'has_signature', cerere: 'has_cerere',
+  cert_nastere: 'has_cert_nastere', vhf: 'has_vhf', semnatura: 'has_signature', cerere: 'has_cerere',
 }
 const DOC_LABEL_FULL: Record<DocKey, string> = {
   recto: 'Act de identitate', verso: 'Verso CI nou', domiciliu: 'Adeverință domiciliu',
-  cert_nastere: 'Certificat de naștere', semnatura: 'Semnătură', cerere: 'Cerere semnată',
+  cert_nastere: 'Certificat de naștere', vhf: 'Carnet VHF/LRC existent',
+  semnatura: 'Semnătură', cerere: 'Cerere semnată',
 }
 // Eticheta scurtă din celula CI, după tipul actului ales de cursant
 const DOC_SHORT: Record<string, string> = {
@@ -31,10 +32,14 @@ const DOC_SHORT: Record<string, string> = {
 const CHECK_COLS: { key: DocKey; short: string; full: string }[] = [
   { key: 'verso', short: 'Verso', full: 'Verso CI nou' },
   { key: 'domiciliu', short: 'Domic', full: 'Adeverință domiciliu (CI nou)' },
-  { key: 'cert_nastere', short: 'C.naș', full: 'Certificat de naștere' },
+  { key: 'cert_nastere', short: 'Nașt', full: 'Certificat de naștere' },
+  { key: 'vhf', short: 'VHF', full: 'Carnetul VHF/LRC existent (la prelungire)' },
   { key: 'semnatura', short: 'Semnat', full: 'Semnătură încărcată' },
-  { key: 'cerere', short: 'Cer upld.', full: 'Cerere semnată încărcată' },
+  { key: 'cerere', short: 'Cerere', full: 'Cerere semnată încărcată' },
 ]
+// primele = documente de identitate, ultimele două = semnătura / cererea
+const DOC_COLS_ID = CHECK_COLS.slice(0, 4)
+const DOC_COLS_END = CHECK_COLS.slice(4)
 
 // Starea unei coloane de document pentru un cursant:
 //   ok = încărcat · lipsa = necesar dar lipsește · na = nu e cazul · unknown = tipul actului nu e ales
@@ -45,11 +50,22 @@ function docState(row: Row, key: DocKey): DocState {
   if (key === 'semnatura') return row.has_cerere ? 'na' : 'lipsa'   // cererea semnată ține loc de semnătură
   if (key === 'cerere') return row.has_signature ? 'na' : 'lipsa'   // și invers
   if (key === 'recto') return 'lipsa'
+  // carnetul VHF/LRC se cere doar la prelungirea valabilității
+  if (key === 'vhf') return row.obtinere_prelungire === 'prelungire' ? 'lipsa'
+    : row.obtinere_prelungire ? 'na' : 'unknown'
   if (!t) return 'unknown'
   if (key === 'verso' || key === 'domiciliu') return t === 'ci_nou' ? 'lipsa' : 'na'
   if (key === 'cert_nastere') return (t === 'ci_strain' || t === 'pasaport') ? 'lipsa' : 'na'
   return 'na'
 }
+// Cursantul e „în regulă" când are CNP și niciun document necesar nu lipsește
+// (bifat sau N/A peste tot) — atunci coloanele de la CNP încolo se colorează verde.
+function rowComplete(row: Row): boolean {
+  if (!String(row.cnp || '').trim()) return false
+  const keys: DocKey[] = ['recto', ...CHECK_COLS.map(c => c.key)]
+  return keys.every(k => { const s = docState(row, k); return s === 'ok' || s === 'na' })
+}
+
 const DocCell = ({ state }: { state: DocState }) =>
   state === 'ok' ? <span className="text-green-600 font-semibold">✓</span>
   : state === 'na' ? <span className="text-green-600 text-[10px] font-semibold">N/A</span>
@@ -402,12 +418,12 @@ export default function RosterPage() {
                   {(tab === 'cursanti' ? PERSON_FIELDS : FIELDS).map(f => <th key={f.key} className={`px-3 py-2.5 ${f.w || ''}`}>{f.label}</th>)}
                   <th className="px-2 py-2.5 text-center whitespace-nowrap">CI</th>
                   {tab === 'cursanti' ? <>
-                    {CHECK_COLS.slice(0, 3).map(c => (
+                    {DOC_COLS_ID.map(c => (
                       <th key={c.key} title={c.full} className="px-1 py-2.5 text-center text-[10px] w-12 normal-case tracking-normal">{c.short}</th>
                     ))}
                     <th className="px-2 py-2.5 whitespace-nowrap">Obț. / Prel.</th>
                     <th className="px-2 py-2.5 whitespace-nowrap">Cerere nr./data</th>
-                    {CHECK_COLS.slice(3).map(c => (
+                    {DOC_COLS_END.map(c => (
                       <th key={c.key} title={c.full} className="px-1 py-2.5 text-center text-[10px] w-14 normal-case tracking-normal">{c.short}</th>
                     ))}
                   </> : (
@@ -418,13 +434,17 @@ export default function RosterPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {rows.map((row, i) => (
+                {rows.map((row, i) => {
+                  const ok = tab === 'cursanti' && rowComplete(row)
+                  return (
                   <tr key={row.id} className={`hover:bg-gray-50/60 ${tab === 'cursanti' ? '[&>td]:py-1' : ''}`}>
                     <td className="px-3 py-2 text-gray-300 text-xs">{i + 1}</td>
                     {(tab === 'cursanti' ? PERSON_FIELDS : FIELDS).map(f => {
                       const editing = edit?.id === row.id && edit?.field === f.key
+                      // de la CNP încolo, dacă e totul în regulă, fundal verde deschis
+                      const green = ok && f.key === 'cnp'
                       return (
-                        <td key={f.key} className={`${tab === 'cursanti' ? 'px-2 whitespace-nowrap' : 'px-3'} py-2 align-middle`}>
+                        <td key={f.key} className={`${tab === 'cursanti' ? 'px-2 whitespace-nowrap' : 'px-3'} py-2 align-middle ${green ? 'bg-green-50' : ''}`}>
                           {editing ? (
                             <div className="flex items-center gap-1">
                               <input autoFocus value={draft} onChange={e => setDraft(e.target.value)}
@@ -445,7 +465,7 @@ export default function RosterPage() {
                       )
                     })}
                     {/* Actul de identitate: eticheta arată tipul ales, culoarea dacă e încărcat */}
-                    <td className="px-2 py-2 text-center">
+                    <td className={`px-2 py-2 text-center ${ok ? 'bg-green-50' : ''}`}>
                       <button onClick={() => setCiFor({ row, doc: 'recto' })}
                         title={row.has_ci ? 'Vezi actul de identitate' : 'Încarcă actul de identitate'}
                         className={`px-2.5 py-1 rounded-lg text-xs font-medium border whitespace-nowrap ${row.has_ci ? 'border-green-200 text-green-700 bg-green-50 hover:bg-green-100' : 'border-red-200 text-red-600 bg-red-50 hover:bg-red-100'}`}>
@@ -453,24 +473,24 @@ export default function RosterPage() {
                       </button>
                     </td>
                     {tab === 'cursanti' ? <>
-                      {CHECK_COLS.slice(0, 3).map(c => (
-                        <td key={c.key} className="px-1 py-2 text-center">
+                      {DOC_COLS_ID.map(c => (
+                        <td key={c.key} className={`px-1 py-2 text-center ${ok ? 'bg-green-50' : ''}`}>
                           <button onClick={() => setCiFor({ row, doc: c.key })} title={c.full}
                             className="w-7 h-6 rounded hover:bg-gray-100">
                             <DocCell state={docState(row, c.key)} />
                           </button>
                         </td>
                       ))}
-                      <td className="px-2 py-2">
+                      <td className={`px-2 py-2 ${ok ? 'bg-green-50' : ''}`}>
                         <LrcSelect value={row.obtinere_prelungire} onConfirm={v => saveLrc(row.id, v)} />
                       </td>
-                      <td className="px-2 py-2 whitespace-nowrap text-xs">
+                      <td className={`px-2 py-2 whitespace-nowrap text-xs ${ok ? 'bg-green-50' : ''}`}>
                         {row.cerere_nr
                           ? <span className="text-gray-800">{row.cerere_nr}<span className="text-gray-400"> / {roDate(row.cerere_data)}</span></span>
                           : <span className="text-gray-300">–</span>}
                       </td>
-                      {CHECK_COLS.slice(3).map(c => (
-                        <td key={c.key} className="px-1 py-2 text-center">
+                      {DOC_COLS_END.map(c => (
+                        <td key={c.key} className={`px-1 py-2 text-center ${ok ? 'bg-green-50' : ''}`}>
                           <button onClick={() => setCiFor({ row, doc: c.key })} title={c.full}
                             className="w-8 h-6 rounded hover:bg-gray-100">
                             <DocCell state={docState(row, c.key)} />
@@ -497,7 +517,7 @@ export default function RosterPage() {
                       </button>
                     </td>
                   </tr>
-                ))}
+                )})}
               </tbody>
             </table>
           </div>
