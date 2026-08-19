@@ -5,9 +5,10 @@ import Link from 'next/link'
 import { supabase } from '@/lib/supabase'
 import {
   ArrowLeft, Save, ScanLine, Loader2, CheckCircle,
-  AlertCircle, ExternalLink, Trash2, Copy, Check, X, FileText
+  AlertCircle, ExternalLink, Trash2, Copy, Check, X, FileText, Upload
 } from 'lucide-react'
 import CIImageEditor from '@/components/CIImageEditor'
+import DocEditorModal, { STUDENT_DOCS, type DocDef } from '@/components/DocEditorModal'
 import { DIPLOMA_CATEGORIES, DiplomaCategory } from '@/lib/diplomas'
 import DiplomaIssueModal from '@/app/admin/diplome/DiplomaIssueModal'
 
@@ -24,6 +25,7 @@ type Student = {
   original_session_id: string; allocated_session_id: string
   signature_pool: boolean; signature_random: string
   ci_verso_data: string; adeverinta_adresa_data: string; doc_type: string
+  certificat_nastere_data: string; lrc_certificat_data: string; cerere_semnata_data: string
 }
 
 type Session = {
@@ -60,6 +62,7 @@ export default function CursantAdminPage() {
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [pendingFile, setPendingFile] = useState<File | null>(null)
+  const [docFor, setDocFor] = useState<DocDef | null>(null)   // documentul deschis în editor
   const [scanning, setScanning] = useState(false)
   const [scanStatus, setScanStatus] = useState<'idle' | 'ok' | 'error'>('idle')
   const [copied, setCopied] = useState<string | null>(null)
@@ -302,6 +305,15 @@ export default function CursantAdminPage() {
       <input ref={ciInputRef} type="file" accept="image/*,application/pdf" className="hidden"
         onChange={e => { if (e.target.files?.[0]) { setPendingFile(e.target.files[0]); e.target.value = '' } }}
       />
+
+      {docFor && student && (
+        <DocEditorModal
+          studentId={student.id} studentName={student.full_name} doc={docFor}
+          initial={(student as any)[docFor.column] || null}
+          onSaved={v => setStudent(s => s ? ({ ...s, [docFor.column]: v } as Student) : s)}
+          onClose={() => setDocFor(null)}
+        />
+      )}
 
       {/* Modal RE-OCR CI */}
       {reocrOpen && (
@@ -560,31 +572,41 @@ export default function CursantAdminPage() {
               </div>
             )}
 
-            {student.ci_verso_data && (
-              <div className="mt-3">
-                <p className="text-xs font-medium text-gray-500 mb-1">Verso CI</p>
-                <div className="relative group rounded-xl overflow-hidden border border-gray-100 cursor-pointer"
-                  onClick={() => { const w = window.open('', '_blank'); w?.document.write(`<img src="${student.ci_verso_data}" style="max-width:100%;"/>`) }}>
-                  <img src={student.ci_verso_data} alt="Verso CI" className="w-full object-cover" style={{ maxHeight: 160 }}/>
-                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all flex items-center justify-center">
-                    <ExternalLink size={20} className="text-white opacity-0 group-hover:opacity-100 transition-all"/>
-                  </div>
-                </div>
-              </div>
-            )}
+          </div>
 
-            {student.adeverinta_adresa_data && (
-              <div className="mt-3">
-                <p className="text-xs font-medium text-gray-500 mb-1">Adeverință adresă</p>
-                <div className="relative group rounded-xl overflow-hidden border border-gray-100 cursor-pointer"
-                  onClick={() => { const w = window.open('', '_blank'); w?.document.write(`<img src="${student.adeverinta_adresa_data}" style="max-width:100%;"/>`) }}>
-                  <img src={student.adeverinta_adresa_data} alt="Adeverință adresă" className="w-full object-cover" style={{ maxHeight: 160 }}/>
-                  <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all flex items-center justify-center">
-                    <ExternalLink size={20} className="text-white opacity-0 group-hover:opacity-100 transition-all"/>
-                  </div>
-                </div>
-              </div>
-            )}
+          {/* Toate documentele cursantului — click pe imagine deschide editorul */}
+          <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
+            <div className="flex items-center justify-between mb-1">
+              <h3 className="font-semibold text-gray-900 text-sm">Documente</h3>
+              <span className="text-xs text-gray-400">
+                {STUDENT_DOCS.filter(d => (student as any)[d.column]).length} / {STUDENT_DOCS.length}
+              </span>
+            </div>
+            <p className="text-xs text-gray-400 mb-4">Click pe un document pentru mărire, decupare, înlocuire sau ștergere.</p>
+            <div className="grid grid-cols-2 gap-3">
+              {STUDENT_DOCS.map(d => {
+                const src = (student as any)[d.column] as string | null
+                return (
+                  <button key={d.column} onClick={() => setDocFor(d)} className="text-left group">
+                    <p className="text-xs font-medium text-gray-500 mb-1 truncate" title={d.label}>{d.label}</p>
+                    {src ? (
+                      <div className="relative rounded-xl overflow-hidden border border-gray-100 bg-gray-50">
+                        <img src={src} alt={d.label} className="w-full object-contain" style={{ height: 110 }} />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-all flex items-center justify-center">
+                          <ExternalLink size={18} className="text-white opacity-0 group-hover:opacity-100 transition-all" />
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="rounded-xl border-2 border-dashed border-gray-200 group-hover:border-blue-300 group-hover:bg-blue-50/30 transition-colors flex flex-col items-center justify-center text-gray-300 group-hover:text-blue-400"
+                        style={{ height: 110 }}>
+                        <Upload size={18} />
+                        <span className="text-xs mt-1">Încarcă</span>
+                      </div>
+                    )}
+                  </button>
+                )
+              })}
+            </div>
           </div>
 
           {/* Semnatura */}
