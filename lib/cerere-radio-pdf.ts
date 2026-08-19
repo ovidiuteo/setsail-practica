@@ -98,8 +98,10 @@ export async function cererePdf(s: any, opts: CerereOpts): Promise<Buffer> {
         { t: ', vă rog a-mi aproba susținerea examenului pentru obținerea certificatului ' },
         { t: 'GMDSS-LRC¹', b: true }, { t: ' de operator radio în serviciul ' }, { t: 'SMMS²', b: true },
         { t: ' în data de: ' }, { t: sessionDate, b: true },
-        { t: ' la sediul ' }, { t: 'SC SETSAIL ADVERTISING SRL', b: true },
-        { t: ' din localitatea ' }, { t: 'București', b: true }, { t: ', sectorul/județul ' }, { t: '1', b: true }, { t: '.' },
+        // spațiu insecabil în interiorul textului bold: nu poate fi pierdut la
+        // justificare / la capăt de rând, deci nu mai iese „SRLdin"
+        { t: ' la sediul ' }, { t: 'SC SET SAIL ADVERTISING SRL ', b: true },
+        { t: 'din localitatea ' }, { t: 'București', b: true }, { t: ', sectorul/județul ' }, { t: '1', b: true }, { t: '.' },
       ]
   para(doc, body, { indent: 24, size: 11, lineGap: 4 })
   doc.moveDown(0.6)

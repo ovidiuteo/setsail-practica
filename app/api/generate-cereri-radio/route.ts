@@ -82,7 +82,7 @@ export async function POST(req: NextRequest) {
              e-mail: ${F(s.email, '160px')}, vă rog a-mi aproba susținerea examenului pentru
              obținerea certificatului <strong>GMDSS-LRC</strong>¹ de operator radio în serviciul
              <strong>SMMS</strong>² în data de: ${F(sessionDate,'80px')}
-             la sediul ${F('SC SETSAIL ADVERTISING SRL','180px')} din
+             la sediul ${F('SC SET SAIL ADVERTISING SRL','180px')}&nbsp;din
              localitatea ${F('București','80px')}, sectorul/județul ${F('1','20px')}.`
 
         return `<div class="page">
@@ -219,8 +219,8 @@ export async function POST(req: NextRequest) {
             tb('SMMS'),
             new TextRun({ text: '2', size: 20, font: 'Tahoma', superScript: true }),
             t(' în data de: '), tb(sessionDate),
-            t(' la sediul '), tb('SC SETSAIL ADVERTISING SRL'),
-            t(' din localitatea '), tb('București'), t(', sectorul/județul '), tb('1'), t('.'),
+            t(' la sediul '), tb('SC SET SAIL ADVERTISING SRL'+' '),
+            t('din localitatea '), tb('București'), t(', sectorul/județul '), tb('1'), t('.'),
           ]}),
         )
       }
