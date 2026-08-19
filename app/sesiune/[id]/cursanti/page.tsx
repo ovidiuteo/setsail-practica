@@ -37,8 +37,9 @@ const CHECK_COLS: { key: DocKey; short: string; full: string }[] = [
   { key: 'semnatura', short: 'Semnat', full: 'Semnătură încărcată' },
   { key: 'cerere', short: 'Cerere', full: 'Cerere semnată încărcată' },
 ]
-// primele = documente de identitate, ultimele două = semnătura / cererea
-const DOC_COLS_ID = CHECK_COLS.slice(0, 4)
+// documentele de identitate · VHF (după obținere/prelungire) · semnătura / cererea
+const DOC_COLS_ID = CHECK_COLS.slice(0, 3)
+const VHF_COL = CHECK_COLS[3]
 const DOC_COLS_END = CHECK_COLS.slice(4)
 
 // Starea unei coloane de document pentru un cursant:
@@ -422,6 +423,7 @@ export default function RosterPage() {
                       <th key={c.key} title={c.full} className="px-1 py-2.5 text-center text-[10px] w-12 normal-case tracking-normal">{c.short}</th>
                     ))}
                     <th className="px-2 py-2.5 whitespace-nowrap">Obț. / Prel.</th>
+                    <th title={VHF_COL.full} className="px-1 py-2.5 text-center text-[10px] w-12 normal-case tracking-normal">{VHF_COL.short}</th>
                     <th className="px-2 py-2.5 whitespace-nowrap">Cerere nr./data</th>
                     {DOC_COLS_END.map(c => (
                       <th key={c.key} title={c.full} className="px-1 py-2.5 text-center text-[10px] w-14 normal-case tracking-normal">{c.short}</th>
@@ -483,6 +485,12 @@ export default function RosterPage() {
                       ))}
                       <td className={`px-2 py-2 ${ok ? 'bg-green-50' : ''}`}>
                         <LrcSelect value={row.obtinere_prelungire} onConfirm={v => saveLrc(row.id, v)} />
+                      </td>
+                      <td className={`px-1 py-2 text-center ${ok ? 'bg-green-50' : ''}`}>
+                        <button onClick={() => setCiFor({ row, doc: VHF_COL.key })} title={VHF_COL.full}
+                          className="w-7 h-6 rounded hover:bg-gray-100">
+                          <DocCell state={docState(row, VHF_COL.key)} />
+                        </button>
                       </td>
                       <td className={`px-2 py-2 whitespace-nowrap text-xs ${ok ? 'bg-green-50' : ''}`}>
                         {row.cerere_nr
