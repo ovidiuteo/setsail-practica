@@ -24,6 +24,21 @@ async function authed(sb: ReturnType<typeof svc>, sessionId: string, token: stri
 
 const VERIFIERS = ['corina', 'paula', 'ruxandra'] as const
 
+// Documentele unui cursant, adresabile din pagină după cheie (recto = fața CI)
+const DOC_COLS: Record<string, string> = {
+  recto: 'ci_image_data',
+  verso: 'ci_verso_data',
+  domiciliu: 'adeverinta_adresa_data',
+  cert_nastere: 'certificat_nastere_data',
+  semnatura: 'signature_data',
+  cerere: 'cerere_semnata_data',
+}
+const docColumn = (key: string | null | undefined) => DOC_COLS[String(key || '')] || DOC_COLS.recto
+const docFlag: Record<string, string> = {
+  recto: 'has_ci', verso: 'has_verso', domiciliu: 'has_adeverinta',
+  cert_nastere: 'has_cert_nastere', semnatura: 'has_signature', cerere: 'has_cerere',
+}
+
 // Găsește celelalte fișe ale ACELEIAȘI persoane (fiecare rând din `students` e o
 // înscriere per sesiune). Potrivire în ordinea încrederii: CNP → email → nume.
 async function findPersonRows(
@@ -164,7 +179,7 @@ export async function GET(req: NextRequest) {
   }
 
   if (studentId) {
-    const col = side === 'verso' ? 'ci_verso_data' : 'ci_image_data'
+    const col = docColumn(side)
     const { data } = await sb.from('students').select(`${col}`).eq('id', studentId).eq('session_id', sessionId).maybeSingle()
     return NextResponse.json({ image: (data as any)?.[col] || null })
   }
@@ -405,11 +420,11 @@ export async function POST(req: NextRequest) {
   if (imageData.length > MAX_IMG)
     return NextResponse.json({ error: 'Imaginea e prea mare (max ~6MB).' }, { status: 400 })
 
-  const col = side === 'verso' ? 'ci_verso_data' : 'ci_image_data'
+  const col = docColumn(side)
   const { error } = await sb.from('students')
     .update({ [col]: imageData }).eq('id', student_id).eq('session_id', session_id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ ok: true })
+  return NextResponse.json({ ok: true, flag: docFlag[String(side || 'recto')] || 'has_ci' })
 }
 
 // DELETE — scoate cursantul din ACEASTĂ serie.
@@ -417,9 +432,18 @@ export async function POST(req: NextRequest) {
 // alte serii, acelea rămân neatinse; dacă asta era singura, dispare din sistem.
 export async function DELETE(req: NextRequest) {
   const sb = svc()
-  const { session_id, token, student_id, lead_id } = await req.json().catch(() => ({}))
+  const { session_id, token, student_id, lead_id, doc } = await req.json().catch(() => ({}))
   if (!(await authed(sb, session_id, token)))
     return NextResponse.json({ error: 'unauthorized' }, { status: 403 })
+
+  // Ștergerea unui singur document al cursantului (nu a cursantului)
+  if (student_id && doc) {
+    const col = docColumn(doc)
+    const { error } = await sb.from('students')
+      .update({ [col]: null }).eq('id', student_id).eq('session_id', session_id)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ ok: true, flag: docFlag[String(doc)] || '' })
+  }
 
   if (lead_id) {
     const { error } = await sb.from('radio_leads').delete().eq('id', lead_id)

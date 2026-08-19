@@ -13,21 +13,48 @@ type Row = {
   cerere_nr: number | null; cerere_data: string | null
 }
 
-const DOC_LABEL: Record<string, string> = {
-  ci_vechi: 'CI vechi', ci_nou: 'CI nou', ci_strain: 'CI străin', pasaport: 'Pașaport',
+// Documentele unui cursant, adresabile după cheie (recto = fața actului)
+type DocKey = 'recto' | 'verso' | 'domiciliu' | 'cert_nastere' | 'semnatura' | 'cerere'
+const DOC_FLAG: Record<DocKey, keyof Row> = {
+  recto: 'has_ci', verso: 'has_verso', domiciliu: 'has_adeverinta',
+  cert_nastere: 'has_cert_nastere', semnatura: 'has_signature', cerere: 'has_cerere',
 }
-// Bifă verde / liniuță gri, pentru coloanele de documente
-const Mark = ({ on }: { on: boolean }) =>
-  on ? <span className="text-green-600 font-semibold">✓</span> : <span className="text-gray-300">–</span>
-
-// Coloanele care sunt doar o bifă — antet scurt și îngust, denumirea completă în tooltip
-const CHECK_COLS: { key: 'has_signature' | 'has_cerere' | 'has_verso' | 'has_adeverinta' | 'has_cert_nastere'; short: string; full: string }[] = [
-  { key: 'has_signature', short: 'Semn', full: 'Semnătură încărcată' },
-  { key: 'has_cerere', short: 'Cerere', full: 'Cerere semnată încărcată' },
-  { key: 'has_verso', short: 'Verso', full: 'Verso CI nou' },
-  { key: 'has_adeverinta', short: 'Domic', full: 'Adeverință domiciliu (CI nou)' },
-  { key: 'has_cert_nastere', short: 'C.naș', full: 'Certificat de naștere' },
+const DOC_LABEL_FULL: Record<DocKey, string> = {
+  recto: 'Act de identitate', verso: 'Verso CI nou', domiciliu: 'Adeverință domiciliu',
+  cert_nastere: 'Certificat de naștere', semnatura: 'Semnătură', cerere: 'Cerere semnată',
+}
+// Eticheta scurtă din celula CI, după tipul actului ales de cursant
+const DOC_SHORT: Record<string, string> = {
+  ci_vechi: 'CI vechi', ci_nou: 'CI nou', ci_strain: 'ID străin', pasaport: 'Pass.',
+}
+// Coloanele care sunt doar o bifă — antet scurt, denumirea completă în tooltip
+const CHECK_COLS: { key: DocKey; short: string; full: string }[] = [
+  { key: 'verso', short: 'Verso', full: 'Verso CI nou' },
+  { key: 'domiciliu', short: 'Domic', full: 'Adeverință domiciliu (CI nou)' },
+  { key: 'cert_nastere', short: 'C.naș', full: 'Certificat de naștere' },
+  { key: 'semnatura', short: 'Semnat', full: 'Semnătură încărcată' },
+  { key: 'cerere', short: 'Cer upld.', full: 'Cerere semnată încărcată' },
 ]
+
+// Starea unei coloane de document pentru un cursant:
+//   ok = încărcat · lipsa = necesar dar lipsește · na = nu e cazul · unknown = tipul actului nu e ales
+type DocState = 'ok' | 'lipsa' | 'na' | 'unknown'
+function docState(row: Row, key: DocKey): DocState {
+  if (row[DOC_FLAG[key]]) return 'ok'          // încărcat, chiar dacă n-ar fi obligatoriu
+  const t = row.doc_type
+  if (key === 'semnatura') return row.has_cerere ? 'na' : 'lipsa'   // cererea semnată ține loc de semnătură
+  if (key === 'cerere') return row.has_signature ? 'na' : 'lipsa'   // și invers
+  if (key === 'recto') return 'lipsa'
+  if (!t) return 'unknown'
+  if (key === 'verso' || key === 'domiciliu') return t === 'ci_nou' ? 'lipsa' : 'na'
+  if (key === 'cert_nastere') return (t === 'ci_strain' || t === 'pasaport') ? 'lipsa' : 'na'
+  return 'na'
+}
+const DocCell = ({ state }: { state: DocState }) =>
+  state === 'ok' ? <span className="text-green-600 font-semibold">✓</span>
+  : state === 'na' ? <span className="text-green-600 text-[10px] font-semibold">N/A</span>
+  : state === 'lipsa' ? <span className="text-red-500 font-bold">!</span>
+  : <span className="text-gray-300">–</span>
 
 const LRC_OPTS: [string, string][] = [['', '—'], ['obtinere', 'Obținere LRC'], ['prelungire', 'Prelungire LRC']]
 const lrcLabel = (v: string) => LRC_OPTS.find(o => o[0] === v)?.[1] || '—'
@@ -148,7 +175,7 @@ export default function RosterPage() {
   const [edit, setEdit] = useState<{ id: string; field: keyof Row } | null>(null)
   const [draft, setDraft] = useState('')
   const [saving, setSaving] = useState(false)
-  const [ciFor, setCiFor] = useState<Row | null>(null)
+  const [ciFor, setCiFor] = useState<{ row: Row; doc: DocKey } | null>(null)
   const [tab, setTab] = useState<'cursanti' | 'adrese' | 'verify' | 'leaduri'>('cursanti')
   const [docsVisible, setDocsVisible] = useState(false)
   const [addOpen, setAddOpen] = useState<null | 'manual' | 'paste'>(null)
@@ -373,19 +400,19 @@ export default function RosterPage() {
                 <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
                   <th className="px-3 py-2.5 w-8">#</th>
                   {(tab === 'cursanti' ? PERSON_FIELDS : FIELDS).map(f => <th key={f.key} className={`px-3 py-2.5 ${f.w || ''}`}>{f.label}</th>)}
-                  <th className="px-2 py-2.5 text-center">CI</th>
-                  <th className={`px-2 py-2.5 ${tab === 'cursanti' ? 'whitespace-nowrap' : 'min-w-[150px]'}`}>
-                    {tab === 'cursanti' ? 'Obț. / Prel.' : 'Obținere / Prelungire LRC'}
-                  </th>
-                  {tab === 'cursanti' && <>
-                    <th className="px-2 py-2.5 whitespace-nowrap">Cerere nr./data</th>
-                    <th className="px-2 py-2.5 whitespace-nowrap">Tip doc.</th>
-                    {CHECK_COLS.map(c => (
-                      <th key={c.key} title={c.full} className="px-1 py-2.5 text-center text-[10px] w-12 normal-case tracking-normal">
-                        {c.short}
-                      </th>
+                  <th className="px-2 py-2.5 text-center whitespace-nowrap">CI</th>
+                  {tab === 'cursanti' ? <>
+                    {CHECK_COLS.slice(0, 3).map(c => (
+                      <th key={c.key} title={c.full} className="px-1 py-2.5 text-center text-[10px] w-12 normal-case tracking-normal">{c.short}</th>
                     ))}
-                  </>}
+                    <th className="px-2 py-2.5 whitespace-nowrap">Obț. / Prel.</th>
+                    <th className="px-2 py-2.5 whitespace-nowrap">Cerere nr./data</th>
+                    {CHECK_COLS.slice(3).map(c => (
+                      <th key={c.key} title={c.full} className="px-1 py-2.5 text-center text-[10px] w-14 normal-case tracking-normal">{c.short}</th>
+                    ))}
+                  </> : (
+                    <th className="px-2 py-2.5 min-w-[150px]">Obținere / Prelungire LRC</th>
+                  )}
                   <th className="px-1 py-2.5 w-9"></th>
                   <th className="px-1 py-2.5 w-9"></th>
                 </tr>
@@ -417,28 +444,44 @@ export default function RosterPage() {
                         </td>
                       )
                     })}
+                    {/* Actul de identitate: eticheta arată tipul ales, culoarea dacă e încărcat */}
                     <td className="px-2 py-2 text-center">
-                      <button onClick={() => setCiFor(row)}
-                        className={`px-2.5 py-1 rounded-lg text-xs font-medium border whitespace-nowrap ${row.has_ci || row.has_verso ? 'border-green-200 text-green-700 bg-green-50 hover:bg-green-100' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
-                        {row.has_ci || row.has_verso ? 'CI ✓' : 'CI +'}
+                      <button onClick={() => setCiFor({ row, doc: 'recto' })}
+                        title={row.has_ci ? 'Vezi actul de identitate' : 'Încarcă actul de identitate'}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-medium border whitespace-nowrap ${row.has_ci ? 'border-green-200 text-green-700 bg-green-50 hover:bg-green-100' : 'border-red-200 text-red-600 bg-red-50 hover:bg-red-100'}`}>
+                        {DOC_SHORT[row.doc_type] || (row.has_ci ? 'CI ✓' : 'CI +')}
                       </button>
                     </td>
-                    <td className="px-2 py-2">
-                      <LrcSelect value={row.obtinere_prelungire} onConfirm={v => saveLrc(row.id, v)} />
-                    </td>
-                    {tab === 'cursanti' && <>
+                    {tab === 'cursanti' ? <>
+                      {CHECK_COLS.slice(0, 3).map(c => (
+                        <td key={c.key} className="px-1 py-2 text-center">
+                          <button onClick={() => setCiFor({ row, doc: c.key })} title={c.full}
+                            className="w-7 h-6 rounded hover:bg-gray-100">
+                            <DocCell state={docState(row, c.key)} />
+                          </button>
+                        </td>
+                      ))}
+                      <td className="px-2 py-2">
+                        <LrcSelect value={row.obtinere_prelungire} onConfirm={v => saveLrc(row.id, v)} />
+                      </td>
                       <td className="px-2 py-2 whitespace-nowrap text-xs">
                         {row.cerere_nr
                           ? <span className="text-gray-800">{row.cerere_nr}<span className="text-gray-400"> / {roDate(row.cerere_data)}</span></span>
                           : <span className="text-gray-300">–</span>}
                       </td>
-                      <td className="px-2 py-2 whitespace-nowrap text-xs text-gray-700">
-                        {DOC_LABEL[row.doc_type] || <span className="text-gray-300">–</span>}
-                      </td>
-                      {CHECK_COLS.map(c => (
-                        <td key={c.key} className="px-1 py-2 text-center"><Mark on={row[c.key]} /></td>
+                      {CHECK_COLS.slice(3).map(c => (
+                        <td key={c.key} className="px-1 py-2 text-center">
+                          <button onClick={() => setCiFor({ row, doc: c.key })} title={c.full}
+                            className="w-8 h-6 rounded hover:bg-gray-100">
+                            <DocCell state={docState(row, c.key)} />
+                          </button>
+                        </td>
                       ))}
-                    </>}
+                    </> : (
+                      <td className="px-2 py-2">
+                        <LrcSelect value={row.obtinere_prelungire} onConfirm={v => saveLrc(row.id, v)} />
+                      </td>
+                    )}
                     <td className="px-1 py-2 text-center">
                       <a href={portalLink(row.email)} target="_blank" rel="noopener noreferrer"
                         title="Deschide portalul cursantului"
@@ -475,7 +518,7 @@ export default function RosterPage() {
       </div>
 
       {ciFor && (
-        <CiModal sessionId={id} token={token} row={ciFor}
+        <CiModal sessionId={id} token={token} row={ciFor.row} doc={ciFor.doc}
           onClose={() => setCiFor(null)}
           onRowUpdate={rowUpdate} />
       )}
@@ -1033,11 +1076,13 @@ function VerifyTab({ sessionId, token, rows, onRowUpdate }: {
   )
 }
 
-function CiModal({ sessionId, token, row, onClose, onRowUpdate }: {
+function CiModal({ sessionId, token, row, doc, onClose, onRowUpdate }: {
   sessionId: string; token: string; row: Row
+  doc?: DocKey                 // fără doc = actul de identitate, cu taburi față/verso
   onClose: () => void; onRowUpdate: (id: string, partial: Partial<Row>) => void
 }) {
-  const [side, setSide] = useState<'recto' | 'verso'>('recto')
+  const [side, setSide] = useState<DocKey>(doc || 'recto')
+  const isCi = !doc || doc === 'recto'
   const [img, setImg] = useState<string | null | undefined>(undefined) // undefined=loading, null=none
   const [zoom, setZoom] = useState(1)
   const [busy, setBusy] = useState(false)
@@ -1052,7 +1097,7 @@ function CiModal({ sessionId, token, row, onClose, onRowUpdate }: {
   const [form, setForm] = useState<Record<string, string>>({})
   const [savingF, setSavingF] = useState(false)
 
-  const fetchImg = useCallback(async (s: 'recto' | 'verso') => {
+  const fetchImg = useCallback(async (s: DocKey) => {
     setImg(undefined); setZoom(1); setDirty(false); setCropMode(false); setSel(null)
     const r = await fetch(`/api/roster?session_id=${sessionId}&token=${encodeURIComponent(token)}&student_id=${row.id}&side=${s}`)
     const j = await r.json()
@@ -1072,9 +1117,21 @@ function CiModal({ sessionId, token, row, onClose, onRowUpdate }: {
       })
       if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.error || 'eroare') }
       setImg(dataUrl); setDirty(false); setZoom(1)
-      onRowUpdate(row.id, side === 'verso' ? { has_verso: true } : { has_ci: true })
+      onRowUpdate(row.id, { [DOC_FLAG[side]]: true } as Partial<Row>)
     } catch (e: any) { alert('Salvare imagine eșuată: ' + e.message) }
     setBusy(false)
+  }
+  async function removeDoc() {
+    if (!confirm(`Ștergi documentul „${DOC_LABEL_FULL[side]}" al cursantului ${row.full_name}?`)) return
+    setBusy(true)
+    const r = await fetch('/api/roster', {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId, token, student_id: row.id, doc: side }),
+    })
+    setBusy(false)
+    if (!r.ok) { alert('Ștergere eșuată.'); return }
+    setImg(null); setDirty(false)
+    onRowUpdate(row.id, { [DOC_FLAG[side]]: false } as Partial<Row>)
   }
   async function onPick(file: File) {
     setBusy(true)
@@ -1121,10 +1178,14 @@ function CiModal({ sessionId, token, row, onClose, onRowUpdate }: {
       <div onClick={e => e.stopPropagation()} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-gray-900 text-gray-100">
         <div className="flex items-center gap-2 min-w-0">
           <span className="font-medium truncate max-w-[40vw]">{row.full_name}</span>
-          <div className="flex rounded-lg overflow-hidden border border-gray-700 ml-1">
-            <button onClick={() => setSide('recto')} className={`px-3 py-1 text-xs ${side === 'recto' ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-800'}`}>Față</button>
-            <button onClick={() => setSide('verso')} className={`px-3 py-1 text-xs ${side === 'verso' ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-800'}`}>Verso</button>
-          </div>
+          {isCi ? (
+            <div className="flex rounded-lg overflow-hidden border border-gray-700 ml-1">
+              <button onClick={() => setSide('recto')} className={`px-3 py-1 text-xs ${side === 'recto' ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-800'}`}>Față</button>
+              <button onClick={() => setSide('verso')} className={`px-3 py-1 text-xs ${side === 'verso' ? 'bg-blue-600 text-white' : 'text-gray-300 hover:bg-gray-800'}`}>Verso</button>
+            </div>
+          ) : (
+            <span className="ml-1 px-2 py-1 rounded-lg bg-gray-800 text-xs text-gray-300">{DOC_LABEL_FULL[side]}</span>
+          )}
         </div>
         <div className="flex items-center gap-1.5 flex-wrap">
           {/* rotate + crop */}
@@ -1150,6 +1211,7 @@ function CiModal({ sessionId, token, row, onClose, onRowUpdate }: {
             onChange={e => { const f = e.target.files?.[0]; if (f) onPick(f); e.target.value = '' }} />
           <button onClick={() => fileRef.current?.click()} disabled={busy} className="px-3 h-8 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-xs disabled:opacity-50">{img ? 'Înlocuiește' : 'Încarcă'}</button>
           {dirty && <button onClick={() => img && persistImage(img)} disabled={busy} className="px-3 h-8 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs disabled:opacity-50">{busy ? 'Se salvează…' : 'Salvează imaginea'}</button>}
+          {img && !dirty && <button onClick={removeDoc} disabled={busy} title="Șterge documentul" className="px-3 h-8 rounded-lg bg-red-700 hover:bg-red-600 text-white text-xs disabled:opacity-50">Șterge</button>}
           <button onClick={onClose} className="w-8 h-8 rounded-lg bg-gray-800 hover:bg-gray-700 text-lg ml-1">✕</button>
         </div>
       </div>
@@ -1160,7 +1222,7 @@ function CiModal({ sessionId, token, row, onClose, onRowUpdate }: {
           <div className="text-gray-400 mt-20">Se încarcă…</div>
         ) : img === null ? (
           <div className="text-gray-400 mt-20 text-center">
-            <p className="mb-3">Nicio imagine {side === 'verso' ? 'verso' : 'față'}.</p>
+            <p className="mb-3">Nu e încărcat: {DOC_LABEL_FULL[side].toLowerCase()}.</p>
             <button onClick={() => fileRef.current?.click()} className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm">Încarcă imagine</button>
           </div>
         ) : cropMode ? (
