@@ -4,6 +4,7 @@ import CIImageEditor from '@/components/CIImageEditor'
 import { supabase } from '@/lib/supabase'
 import { TIMELINE_SCOPES, timelineScopeLabel, scopeForSession } from '@/lib/timeline-scope'
 import { computeAddressChanges, AddressChange } from '@/lib/normalize-address'
+import { samePerson, mergeCarry, fillGaps } from '@/lib/student-merge'
 import { applyMailTemplate } from '@/lib/mail-template'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
@@ -557,16 +558,53 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
     const full = [last, first].filter(Boolean).join(' ')
     const maxOrder = students.reduce((m,s) => Math.max(m, s.order_in_session||0), 0)
     const { last_name, first_name, ...rest } = newSt
+    const incoming: any = { ...rest, full_name: full }
+
+    // Persoana e deja în ACEASTĂ sesiune? Nu dublăm rândul — completăm ce lipsește.
+    const inSession = students.find(s => samePerson(s as any, incoming))
+    if (inSession) {
+      const gaps = fillGaps(inSession as any, incoming)
+      const n = Object.keys(gaps).length
+      if (!confirm(`${inSession.full_name} este deja în această serie.\n\n` +
+        (n ? `Completez datele lipsă (${Object.keys(gaps).join(', ')}) pe fișa existentă?`
+           : 'Fișa existentă are deja toate datele. Nu se schimbă nimic.'))) {
+        setAdding(false); return
+      }
+      if (n) {
+        await supabase.from('students').update(gaps).eq('id', inSession.id)
+        setStudents(students.map(s => s.id === inSession.id ? { ...s, ...gaps } : s))
+      }
+      setNewSt(EMPTY_ST); setShowAdd(false); setAdding(false)
+      return
+    }
+
+    // Persoana există din altă sesiune? Îi preluăm datele și documentele.
+    const prev = await findPreviousRecord(incoming)
+    const row = prev ? mergeCarry(incoming, prev) : incoming
     const { data } = await supabase.from('students').insert({
-      ...rest, full_name: full,
+      ...row, full_name: full,
       session_id: sess.id, original_session_id: sess.id,
       order_in_session: maxOrder+1, portal_status: 'pending'
     }).select().single()
     if (data) {
       await writeNameSplit(data.id, last, first) // tolerant (coloanele noi)
       setStudents([...students, { ...(data as Student), last_name: last, first_name: first }])
+      if (prev) alert(`${full} mai era în sistem — am preluat datele și documentele de pe fișa anterioară.`)
     }
     setNewSt(EMPTY_ST); setShowAdd(false); setAdding(false)
+  }
+
+  // Cea mai recentă fișă a aceleiași persoane din alte sesiuni (CNP → email → nume)
+  async function findPreviousRecord(p: { cnp?: string; email?: string; full_name?: string }) {
+    const cnp = String(p.cnp || '').trim()
+    const email = String(p.email || '').trim()
+    const name = String(p.full_name || '').trim()
+    const q = () => supabase.from('students').select('*').neq('session_id', sess.id)
+      .order('created_at', { ascending: false }).limit(1)
+    if (cnp.length > 5) { const { data } = await q().eq('cnp', cnp); if (data?.length) return data[0] }
+    if (email) { const { data } = await q().ilike('email', email); if (data?.length) return data[0] }
+    if (name) { const { data } = await q().ilike('full_name', name); if (data?.length) return data[0] }
+    return null
   }
 
   const inCls = "border border-blue-100 rounded px-2 py-1 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400 bg-white w-full"

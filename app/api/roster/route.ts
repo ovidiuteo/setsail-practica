@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { CARRY_FIELDS } from '@/lib/student-merge'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -69,14 +70,7 @@ async function findPersonRows(
   return rows.filter(r => r.id !== excludeId)
 }
 
-// Câmpurile care se moștenesc de la o fișă existentă a aceleiași persoane:
-// date personale + documentele deja încărcate și verificate.
-const CARRY_FIELDS = [
-  'cnp', 'birth_date', 'address', 'city', 'county', 'country', 'phone',
-  'ci_series', 'ci_number', 'expiry_date', 'nationality', 'doc_type',
-  'ci_image_data', 'ci_verso_data', 'adeverinta_adresa_data', 'certificat_nastere_data',
-  'signature_data', 'lrc_certificat_data', 'lrc_numar', 'lrc_emis_la', 'lrc_expira_la',
-]
+// CARRY_FIELDS vine din lib/student-merge (aceleași reguli ca în pagina sesiunii)
 
 // Seriile de radio pentru dropdownul „Înscris la": întâi seria care urmează,
 // apoi cele trecute (cea mai recentă prima), apoi eventualele serii de după.
