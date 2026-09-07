@@ -2,7 +2,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Plus, Pencil, Trash2, X, Check, Eye, Code, Mail, Tag, ChevronDown, ChevronUp, Copy } from 'lucide-react'
-import { MAIL_VAR_GROUPS, mailVarValues } from '@/lib/mail-template'
+import { MAIL_VAR_GROUPS, mailVarValues, applyMailTemplate } from '@/lib/mail-template'
 
 type Template = {
   id: string
@@ -84,6 +84,14 @@ export default function MailTemplatesPage() {
   const [aiBusy, setAiBusy] = useState(false)
   const [aiErr, setAiErr] = useState<string | null>(null)
   const [aiNote, setAiNote] = useState<string | null>(null)
+  // Simulare: cum arată template-ul pe o serie reală și un cursant real
+  const [simSessions, setSimSessions] = useState<any[]>([])
+  const [simContacts, setSimContacts] = useState<any[]>([])
+  const [simInstructors, setSimInstructors] = useState<Record<string, string>>({})
+  const [simInfo, setSimInfo] = useState<Record<string, string>>({})
+  const [simSessionId, setSimSessionId] = useState('')
+  const [simStudents, setSimStudents] = useState<any[]>([])
+  const [simStudentId, setSimStudentId] = useState('')
   const [form, setForm] = useState<Partial<Template>>(EMPTY_TEMPLATE)
   const [saving, setSaving] = useState(false)
   const [activeTab, setActiveTab] = useState<'text' | 'html'>('text')
@@ -132,6 +140,39 @@ export default function MailTemplatesPage() {
   }
 
   useEffect(() => { load() }, [])
+
+  // Datele pentru simulare — seriile, contactele, instructorii, datele firmei
+  useEffect(() => {
+    supabase.from('sessions')
+      .select('id, class_caa, session_date, course_start_date, practice_start_date, practice_start_time, location_detail, access_code, contact_person_ids, instructor_id, instructor_id_2, instructor_id_3, status, boats(name), locations(name), evaluators(email_oficial, email_personal)')
+      .order('session_date', { ascending: true })
+      .then(({ data }) => {
+        const list = data || []
+        setSimSessions(list)
+        // implicit: seria care urmează (prima cu data de azi încolo), altfel ultima
+        const azi = new Date().toISOString().slice(0, 10)
+        const next = list.find((s: any) => String(s.session_date || '').slice(0, 10) >= azi)
+        setSimSessionId((next || list[list.length - 1])?.id || '')
+      })
+    supabase.from('contact_persons').select('*').eq('activ', true).order('full_name')
+      .then(({ data }) => setSimContacts(data || []))
+    supabase.from('instructors').select('id, full_name')
+      .then(({ data }) => setSimInstructors(Object.fromEntries((data || []).map((i: any) => [i.id, i.full_name]))))
+    supabase.from('setsail_info').select('key, value')
+      .then(({ data }) => setSimInfo(Object.fromEntries((data || []).map((r: any) => [r.key, r.value]))))
+  }, [])
+
+  // Cursanții seriei alese (primul e selectat implicit)
+  useEffect(() => {
+    if (!simSessionId) { setSimStudents([]); setSimStudentId(''); return }
+    supabase.from('students').select('id, full_name, email, phone').eq('session_id', simSessionId)
+      .order('order_in_session')
+      .then(({ data }) => {
+        const list = data || []
+        setSimStudents(list)
+        setSimStudentId(list[0]?.id || '')
+      })
+  }, [simSessionId])
 
   function startNew() {
     setForm({ ...EMPTY_TEMPLATE, variables: [] })
@@ -305,6 +346,33 @@ export default function MailTemplatesPage() {
     if (items.length > 0) acc[cat.value] = { ...cat, items }
     return acc
   }, {} as Record<string, any>)
+
+  // ── Simulare: template-ul completat cu datele seriei și ale cursantului ales ──
+  const sessionLabel = (s: any) => {
+    const d = s.session_date ? new Date(s.session_date).toLocaleDateString('ro-RO', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'
+    return `${(s.class_caa || '').replace(',', '+')} · ${d}${s.locations?.name ? ' · ' + s.locations.name : ''}`
+  }
+  const simSession = simSessions.find(s => s.id === simSessionId) || null
+  const simStudent = simStudents.find(s => s.id === simStudentId) || null
+  const simCtx = {
+    origin: typeof window !== 'undefined' ? window.location.origin : undefined,
+    sess: simSession,
+    contacts: simContacts,
+    instructors: [simSession?.instructor_id, simSession?.instructor_id_2, simSession?.instructor_id_3]
+      .filter(Boolean).map((id: string) => ({ full_name: simInstructors[id] || '' })),
+    setsailInfo: simInfo,
+  }
+  // variabilele cursantului nu sunt în catalogul de sesiune — le adăugăm aici
+  const withStudent = (t: string) => (t || '')
+    .split('{{cursant}}').join(simStudent?.full_name || '')
+    .split('{{email_cursant}}').join(simStudent?.email || '')
+    .split('{{telefon_cursant}}').join(simStudent?.phone || '')
+  const simSubject = simSession ? withStudent(applyMailTemplate(form.subject || '', simCtx)) : ''
+  const simBody = simSession ? withStudent(applyMailTemplate(form.body_text || '', simCtx)) : ''
+  // ce a rămas necompletat pe această serie
+  const simMissing = Array.from(new Set(
+    `${simSubject}\n${simBody}`.match(/\{\{(\w+)\}\}/g)?.map(v => v.replace(/[{}]/g, '')) || []
+  ))
 
   const inputCls = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white w-full"
   const textareaCls = "border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white w-full font-mono resize-none"
@@ -750,6 +818,49 @@ Folosește {{variabila}} pentru câmpuri dinamice."
                   <textarea className={textareaCls.replace('font-mono', '')} rows={4}
                     placeholder="Procedura care însoțește acest email (ex: după trimitere, atașează PV-ul semnat; sună persoana de contact; verifică BCC office@setsail.ro...)"
                     value={form.helper || ''} onChange={e => setForm(f => ({ ...f, helper: e.target.value }))} />
+                </div>
+
+                {/* Simulare pe date reale — serie + cursant */}
+                <div className="border-t border-gray-100 pt-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                    <label className="text-xs font-medium text-gray-500">
+                      👀 Simulare <span className="text-gray-400 font-normal">— cum arată pe o serie reală</span>
+                    </label>
+                    <div className="flex gap-2">
+                      <select value={simSessionId} onChange={e => setSimSessionId(e.target.value)}
+                        className="border border-gray-200 rounded-lg px-2 py-1 text-xs bg-white max-w-[190px]">
+                        {simSessions.map(s => <option key={s.id} value={s.id}>{sessionLabel(s)}</option>)}
+                      </select>
+                      <select value={simStudentId} onChange={e => setSimStudentId(e.target.value)}
+                        className="border border-gray-200 rounded-lg px-2 py-1 text-xs bg-white max-w-[190px]">
+                        {simStudents.length
+                          ? simStudents.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)
+                          : <option value="">— niciun cursant —</option>}
+                      </select>
+                    </div>
+                  </div>
+                  <div className="rounded-xl border border-gray-200 bg-gray-50 overflow-hidden">
+                    <div className="px-3 py-2 border-b border-gray-200 bg-white">
+                      <div className="text-[11px] text-gray-400">Către</div>
+                      <div className="text-xs text-gray-700">
+                        {simStudent
+                          ? <>{simStudent.full_name} <span className="text-gray-400">&lt;{simStudent.email || 'fără email'}&gt;</span></>
+                          : <span className="text-gray-300">— selectează un cursant —</span>}
+                      </div>
+                      <div className="text-[11px] text-gray-400 mt-1.5">Subiect</div>
+                      <div className="text-xs font-medium text-gray-900">
+                        {simSubject || <span className="text-gray-300">(gol)</span>}
+                      </div>
+                    </div>
+                    <div className="px-3 py-2 text-xs text-gray-700 whitespace-pre-wrap max-h-56 overflow-auto">
+                      {simBody || <span className="text-gray-300">(gol)</span>}
+                    </div>
+                  </div>
+                  {simMissing.length > 0 && (
+                    <p className="mt-1.5 text-[11px] text-amber-700">
+                      Fără valoare pe această serie: {simMissing.map(v => `{{${v}}}`).join(', ')}
+                    </p>
+                  )}
                 </div>
 
                 {/* Activ toggle */}
