@@ -1,5 +1,7 @@
 // Catalog unic de variabile pentru template-urile de email + funcția de aplicare.
 // Folosit atât la trimitere (pagina sesiunii) cât și la editor (picker cu exemple).
+import { buildSlots, configFromSession } from './practice-slots'
+import { scopeForSession } from './timeline-scope'
 
 export type MailVarCtx = {
   origin?: string
@@ -31,6 +33,8 @@ export const MAIL_VAR_GROUPS: MailVarGroup[] = [
       { key: 'zi_sapt_curs_3', label: 'Ziua săptămânii, ziua 3 de curs (ex: miercuri)' },
       { key: 'zz_llll_curs_2', label: 'Data zilei 2 de curs (ex: 15 septembrie)' },
       { key: 'zz_llll_curs_3', label: 'Data zilei 3 de curs (ex: 16 septembrie)' },
+      { key: 'ore_practica', label: 'Orele de practică (ex: 10:00, 12:00 sau 14:00)' },
+      { key: 'intervale_practica', label: 'Intervalele de practică (ex: 10:00–12:00, …)' },
       { key: 'zi_sapt_practica', label: 'Ziua săptămânii, practică (ex: joi)' },
       { key: 'zi_sapt_examen', label: 'Ziua săptămânii, examen (ex: vineri)' },
     ],
@@ -96,6 +100,23 @@ function localDay(d: string): Date | null {
   return y && m && dd ? new Date(y, m - 1, dd) : null
 }
 
+// Intervalele de practică definite pe sesiune (programarea C/D Snagov).
+// Se calculează pentru cursurile unde există programare pe ore — indiferent dacă
+// e deja deschisă cursanților; la restul sesiunilor rămân goale.
+function practiceSlots(sess: any): { ore: string; intervale: string } {
+  const areIntervale = sess?.practice_booking_enabled || scopeForSession(sess) === 'curs_cd_snagov'
+  if (!sess || !areIntervale) return { ore: '', intervale: '' }
+  const slots = buildSlots(configFromSession(sess))
+  if (!slots.length) return { ore: '', intervale: '' }
+  const join = (list: string[]) => list.length > 1
+    ? `${list.slice(0, -1).join(', ')} sau ${list[list.length - 1]}`
+    : list[0] || ''
+  return {
+    ore: join(slots.map(s => s.from)),
+    intervale: join(slots.map(s => `${s.from}–${s.to}`)),
+  }
+}
+
 // Ziua a n-a de curs (1 = ziua de start): ziua săptămânii și data scurtă
 function cursDay(csd: string, n: number): { zi: string; data: string } {
   const start = localDay(csd)
@@ -143,6 +164,9 @@ export function mailVarValues(ctx: MailVarCtx): Record<string, string> {
     zi_sapt_curs_3: cursDay(csd, 3).zi,
     zz_llll_curs_2: cursDay(csd, 2).data,
     zz_llll_curs_3: cursDay(csd, 3).data,
+    // Intervalele de programare la practică
+    ore_practica: practiceSlots(sess).ore,
+    intervale_practica: practiceSlots(sess).intervale,
     // Contact
     pers_cont_1: selected[0]?.full_name || '',
     pers_cont_2: selected[1]?.full_name || '',

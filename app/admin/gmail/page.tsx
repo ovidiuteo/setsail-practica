@@ -569,7 +569,7 @@ function LeadsTab() {
     supabase.from('mail_templates').select('*').eq('activ', true).order('categorie').order('label')
       .then(({ data }) => setMailTemplates(data || []))
     supabase.from('sessions')
-      .select('id, class_caa, session_date, course_start_date, practice_start_date, practice_start_time, location_detail, access_code, contact_person_ids, instructor_id, instructor_id_2, instructor_id_3, status, boats(name), locations(name), evaluators(email_oficial, email_personal)')
+      .select('id, class_caa, session_date, course_start_date, practice_start_date, practice_start_time, location_detail, access_code, contact_person_ids, instructor_id, instructor_id_2, instructor_id_3, status, practice_booking_enabled, practice_slot_minutes, practice_start_hour, practice_end_hour, practice_boats, practice_per_boat, practice_per_slot, boats(name), locations(name), evaluators(email_oficial, email_personal)')
       .order('session_date', { ascending: false })
       .then(({ data }) => setMailSessions(data || []))
     supabase.from('contact_persons').select('*').eq('activ', true).order('full_name')

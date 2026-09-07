@@ -52,6 +52,8 @@ const VARIABLES_INFO: Record<string, string> = {
   zz_llll_curs_3: 'Data zilei 3 de curs (ex: 16 septembrie)',
   zi_sapt_practica: 'Ziua săptămânii în care e practica (ex: joi)',
   zi_sapt_examen: 'Ziua săptămânii în care e examenul (ex: vineri)',
+  ore_practica: 'Orele de programare la practică (ex: 10:00, 12:00 sau 14:00)',
+  intervale_practica: 'Intervalele complete de practică (ex: 10:00–12:00, 12:00–14:00 sau 14:00–16:00)',
   pers_cont_1: 'Numele primei persoane de contact bifate',
   pers_cont_2: 'Numele celei de-a doua persoane de contact',
   pers_cont_3: 'Numele celei de-a treia persoane de contact',
@@ -165,7 +167,7 @@ export default function MailTemplatesPage() {
   // Datele pentru simulare — seriile, contactele, instructorii, datele firmei
   useEffect(() => {
     supabase.from('sessions')
-      .select('id, class_caa, session_date, course_start_date, practice_start_date, practice_start_time, location_detail, access_code, contact_person_ids, instructor_id, instructor_id_2, instructor_id_3, status, boats(name), locations(name), evaluators(email_oficial, email_personal)')
+      .select('id, class_caa, session_date, course_start_date, practice_start_date, practice_start_time, location_detail, access_code, contact_person_ids, instructor_id, instructor_id_2, instructor_id_3, status, practice_booking_enabled, practice_slot_minutes, practice_start_hour, practice_end_hour, practice_boats, practice_per_boat, practice_per_slot, boats(name), locations(name), evaluators(email_oficial, email_personal)')
       .order('session_date', { ascending: true })
       .then(({ data }) => {
         const list = data || []
