@@ -1438,6 +1438,12 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
         ? String(first) + '/' + dateFormatted
         : String(first) + '-' + String(lastNr) + '/' + dateFormatted
       await supabase.from('sessions').update({ request_number: nrDisplay }).eq('id', sess.id)
+      // La cursurile de practică, numărul înștiințării ANR e și numărul notificării.
+      // Dacă notificarea nu există încă, o va prelua din sesiune la creare.
+      if (!isRadioSession) {
+        const { data: n } = await supabase.from('notifications').select('id').eq('session_id', sess.id).maybeSingle()
+        if (n?.id) await supabase.from('notifications').update({ nr_notificare: nrDisplay }).eq('id', n.id)
+      }
     } else {
       const lastNr = first + tips.length - 1
       await supabase.from('sessions').update({ nr_document_ancom: String(first) + '-' + String(lastNr) }).eq('id', sess.id)
@@ -2226,7 +2232,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
 
                 <div>
                   <label className="text-xs font-medium text-gray-500 mb-1 block">
-                    Nr. notificare <span className="text-gray-300 font-normal">(dublu-click = editează sesiunea)</span>
+                    Nr. înștiințări / Nr. notificare <span className="text-gray-300 font-normal">(dublu-click = editează sesiunea)</span>
                   </label>
                   <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
                     value={notifForm.nr_notificare} placeholder="ex: 6/21.04.2026"
