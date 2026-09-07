@@ -1505,6 +1505,17 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
     }
     const setter = kind === 'iesire' ? setIesireNumbers : setDocNumbers
     setter(m => ({ ...m, [docTip]: { numar: docNrValue, data_notificare: docNrDate } }))
+
+    // Numărul înștiințării ANR e și „Nr. înștiințări" al sesiunii, și numărul
+    // notificării ANR — se completează în toate trei locurile dintr-o singură dată.
+    if (docTip === 'instiintare-anr' && kind === 'doc') {
+      const display = `${docNrValue}/${shortDate(docNrDate)}`
+      await supabase.from('sessions').update({ request_number: display }).eq('id', sess.id)
+      ;(sess as any).request_number = display
+      const { data: n } = await supabase.from('notifications').select('id').eq('session_id', sess.id).maybeSingle()
+      if (n?.id) await supabase.from('notifications').update({ nr_notificare: display }).eq('id', n.id)
+      setNotifForm(f => ({ ...f, nr_notificare: display }))
+    }
     setDocNrModal(null)
   }
 
@@ -1596,13 +1607,15 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
       : locName.includes('limanu') ? 'din Marina Limanu'
       : locName.includes('mangalia') ? 'din Marina Mangalia'
       : `din ${(sess as any).locations?.name || ''}`
+    // Valoarea de pe sesiune bate calculul implicit
+    const dinSesiune = (k: string) => String((sess as any)[k] || '').trim()
     return {
       nr_notificare: sess.request_number || '',
       ora_examinare: examTime(),
-      clasa: isClassB ? 'B/Manevra ambarcatiunii cu vele' : 'C/D/Manevra ambarcatiunii cu vele',
+      clasa: dinSesiune('notif_clasa') || (isClassB ? 'B/Manevra ambarcatiunii cu vele' : 'C/D/Manevra ambarcatiunii cu vele'),
       barci_selectate: isSnagov ? ['Trainer 1', 'Trainer 2'] : ['SetSail', 'Trainer 2'],
-      locatie_curs: locatieCurs,
-      locatie_examinare: locatieExaminare,
+      locatie_curs: dinSesiune('notif_locatie_curs') || locatieCurs,
+      locatie_examinare: dinSesiune('notif_locatie_examinare') || locatieExaminare,
     }
   }
 
@@ -2268,8 +2281,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                     value={notifForm.clasa} placeholder="C,D"
                     onChange={e=>setNotifForm(f=>({...f,clasa:e.target.value}))}
                     onDoubleClick={()=>{
-                      const isClassB = sess.class_caa?.includes('B')
-                      setNotifForm(f=>({...f, clasa: isClassB ? 'B/Manevra ambarcatiunii cu vele' : 'C/D/Manevra ambarcatiunii cu vele'}))
+                      setNotifForm(f=>({...f, clasa: calcNotifDefaults().clasa}))
                     }}
                     title="Dublu-click pentru a reseta la valoarea default"/>
                 </div>
@@ -2281,10 +2293,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                     value={notifForm.locatie_curs} placeholder="str. Virgiliu nr. 15.../Marina Limanu"
                     onChange={e=>setNotifForm(f=>({...f,locatie_curs:e.target.value}))}
                     onDoubleClick={()=>{
-                      const ln = ((sess as any).locations?.name||'').toLowerCase()
-                      const adr = 'str. Virgiliu nr. 15, etaj 3, Sector 1, București'
-                      const def = ln.includes('snagov') ? `${adr}/Lacul Snagov` : ln.includes('limanu') ? `${adr}/Marina Limanu` : ln.includes('mangalia') ? `${adr}/Marina Mangalia` : `${adr}/${(sess as any).locations?.name||''}`
-                      setNotifForm(f=>({...f,locatie_curs:def}))
+                      setNotifForm(f=>({...f, locatie_curs: calcNotifDefaults().locatie_curs}))
                     }}
                     title="Dublu-click pentru a reseta la valoarea default"/>
                 </div>
@@ -2296,9 +2305,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                     value={notifForm.locatie_examinare} placeholder="din Marina Limanu"
                     onChange={e=>setNotifForm(f=>({...f,locatie_examinare:e.target.value}))}
                     onDoubleClick={()=>{
-                      const ln = ((sess as any).locations?.name||'').toLowerCase()
-                      const def = ln.includes('snagov') ? 'de pe Lacul Snagov' : ln.includes('limanu') ? 'din Marina Limanu' : ln.includes('mangalia') ? 'din Marina Mangalia' : `din ${(sess as any).locations?.name||''}`
-                      setNotifForm(f=>({...f,locatie_examinare:def}))
+                      setNotifForm(f=>({...f, locatie_examinare: calcNotifDefaults().locatie_examinare}))
                     }}
                     title="Dublu-click pentru a reseta la valoarea default"/>
                 </div>
@@ -3697,6 +3704,9 @@ export default function SessionDetailPage() {
       nr_instiintare_anr: (sess as any).nr_instiintare_anr || '',
       request_number: sess.request_number || '',
       exam_time: (sess as any).exam_time || '',
+      notif_clasa: (sess as any).notif_clasa || '',
+      notif_locatie_curs: (sess as any).notif_locatie_curs || '',
+      notif_locatie_examinare: (sess as any).notif_locatie_examinare || '',
       nr_document_ancom: (sess as any).nr_document_ancom || '',
       location_detail: sess.location_detail || '',
       skipper_url: (sess as any).skipper_url || '',
@@ -4220,12 +4230,15 @@ export default function SessionDetailPage() {
                 ['Nr. înștiințări', 'request_number', 'text'],
                 ['Ora examinare', 'exam_time', 'text'],
                 ['Ora start practică', 'practice_start_time', 'text'],
+                ['Clasă (notificare ANR)', 'notif_clasa', 'text'],
+                ['Cursuri în locația aprobată din', 'notif_locatie_curs', 'text'],
+                ['Examinare practică în locația aprobată', 'notif_locatie_examinare', 'text'],
                 ['Locație detaliată', 'location_detail', 'text'],
                 ['Link skipper.setsail.ro', 'skipper_url', 'text'],
                 ['Categorie timeline', 'timeline_scope', 'select-scope'],
                 ['Clasa CAA', 'class_caa', 'select-class'],
               ].map(([label, key, type]) => (
-                <div key={key} className={(key==='location_detail'||key==='skipper_url'||key==='timeline_scope')?'col-span-2':''}>
+                <div key={key} className={(key==='location_detail'||key==='skipper_url'||key==='timeline_scope'||key==='notif_locatie_curs'||key==='notif_locatie_examinare')?'col-span-2':''}>
                   <div className={`text-xs mb-1 ${editFocusKey===key ? 'text-blue-600 font-medium' : 'text-gray-400'}`}>{label}</div>
                   {type==='select-class' ? (
                     <select className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs w-full focus:outline-none focus:ring-1 focus:ring-blue-400"
