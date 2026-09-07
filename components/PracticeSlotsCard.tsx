@@ -45,6 +45,15 @@ export default function PracticeSlotsCard({ sess, students }: { sess: any; stude
     setSaving(false)
   }
 
+  // Ziua practicii: goală = revine la implicit (ziua dinaintea examenului)
+  async function saveDate(d: string | null) {
+    setSaving(true)
+    await supabase.from('sessions').update({ practice_start_date: d }).eq('id', sess.id)
+    sess.practice_start_date = d
+    setCfg(configFromSession(sess))
+    setSaving(false)
+  }
+
   const sel = 'border border-gray-200 rounded-lg px-2 py-1 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-blue-200'
   const Row = ({ label, children }: { label: string; children: React.ReactNode }) => (
     <label className="flex items-center justify-between gap-3 text-xs text-gray-600">
@@ -64,11 +73,20 @@ export default function PracticeSlotsCard({ sess, students }: { sess: any; stude
           Deschisă cursanților
         </label>
       </div>
-      <p className="text-xs text-gray-400 mb-4">
-        Ziua: <b className="text-gray-600">{cfg.date ? slotDateLabel(cfg.date) : 'lipsește data'}</b>
-        {!sess.practice_start_date && cfg.date && <span className="text-gray-300"> (ziua dinaintea examenului)</span>}
-        {' · '}{capacity} {capacity === 1 ? 'loc' : 'locuri'} pe interval
-      </p>
+      <div className="flex flex-wrap items-center gap-2 text-xs text-gray-400 mb-4">
+        <span>Ziua practicii:</span>
+        <input type="date" value={cfg.date || ''} onChange={e => saveDate(e.target.value || null)}
+          className="border border-gray-200 rounded-lg px-2 py-1 text-xs text-gray-700 bg-white cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-200" />
+        <b className="text-gray-600">{cfg.date ? slotDateLabel(cfg.date) : 'nestabilită'}</b>
+        {!sess.practice_start_date && cfg.date
+          ? <span className="text-gray-300">(implicit: ziua dinaintea examenului)</span>
+          : sess.practice_start_date && (
+            <button onClick={() => saveDate(null)} className="text-gray-400 underline hover:text-gray-600">
+              revino la ziua dinaintea examenului
+            </button>
+          )}
+        <span>· {capacity} {capacity === 1 ? 'loc' : 'locuri'} pe interval</span>
+      </div>
 
       <div className="grid sm:grid-cols-2 gap-x-6 gap-y-2 mb-4">
         <Row label="Durata intervalului">

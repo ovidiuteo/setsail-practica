@@ -20,7 +20,7 @@ export const PER_BOAT = [1, 2, 3]
 export const PER_SLOT = [4, 5, 6]
 
 export const DEFAULT_SLOT_CONFIG: SlotConfig = {
-  enabled: false, date: null, minutes: 120, startHour: 12, endHour: 16,
+  enabled: false, date: null, minutes: 120, startHour: 10, endHour: 16,
   boats: 1, perBoat: 2, perSlot: 4,
 }
 
