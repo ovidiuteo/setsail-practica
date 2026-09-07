@@ -1275,8 +1275,16 @@ SetSail NauticSchool`,
   { label: 'Informații locație', subject: 'Informații locație examen practic', body: 'Stimate/Stimată cursant,\n\nVă transmitem detalii despre locația sesiunii de practică:\n\n[adresa locației]\n\nVă recomandăm să sosiți cu 15 minute înainte.\n\nCu stimă,\nEchipa SetSail' },
 ]
 
+// Ora examinării implicită, după tipul cursului și locație
+function defaultExamTimeFor(sess: any): string {
+  if (/radio|lrc/i.test(String(sess?.timeline_scope || sess?.class_caa || ''))) return '20:00'
+  const loc = String(sess?.locations?.name || '').toLowerCase()
+  if (loc.includes('snagov')) return '12:00'
+  return '10:00'   // Limanu, Mangalia și restul
+}
+
 function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions, allStudents, onEditSession }:
-  { sess: Session, students: Student[], allStatuses: string[], onStatusChange:(sid:string,status:string)=>void, allSessions: Session[], allStudents: Record<string,Student[]>, onEditSession:(s:Session)=>void }) {
+  { sess: Session, students: Student[], allStatuses: string[], onStatusChange:(sid:string,status:string)=>void, allSessions: Session[], allStudents: Record<string,Student[]>, onEditSession:(s:Session, focusKey?:string)=>void }) {
   const [dbTemplates, setDbTemplates] = useState<any[]>([])
   const [allContacts, setAllContacts] = useState<any[]>([])
   const [setsailInfo, setSetsailInfo] = useState<Record<string, string>>({})
@@ -1571,6 +1579,9 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
 
 
 
+  const defaultExamTime = () => defaultExamTimeFor(sess)
+  const examTime = () => String((sess as any).exam_time || '').trim() || defaultExamTime()
+
   function calcNotifDefaults() {
     const locName = ((sess as any).locations?.name || '').toLowerCase()
     const isSnagov = locName.includes('snagov')
@@ -1585,8 +1596,8 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
       : locName.includes('mangalia') ? 'din Marina Mangalia'
       : `din ${(sess as any).locations?.name || ''}`
     return {
-      nr_notificare: '',
-      ora_examinare: '10:00',
+      nr_notificare: sess.request_number || '',
+      ora_examinare: examTime(),
       clasa: isClassB ? 'B/Manevra ambarcatiunii cu vele' : 'C/D/Manevra ambarcatiunii cu vele',
       barci_selectate: isSnagov ? ['Trainer 1', 'Trainer 2'] : ['SetSail', 'Trainer 2'],
       locatie_curs: locatieCurs,
@@ -1605,7 +1616,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
       setNotif(existing)
       setNotifForm({
         nr_notificare: existing.nr_notificare || sess.request_number || '',
-        ora_examinare: existing.ora_examinare || (sess as any).practice_start_time || '10:00',
+        ora_examinare: existing.ora_examinare || examTime(),
         clasa: existing.clasa || '',
         barci_selectate: existing.barci_selectate || [],
         locatie_curs: existing.locatie_curs || '',
@@ -1624,8 +1635,8 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
     if (data) {
       setNotif(data)
       setNotifForm({
-        nr_notificare: data.nr_notificare || '',
-        ora_examinare: data.ora_examinare || '10:00',
+        nr_notificare: data.nr_notificare || sess.request_number || '',
+        ora_examinare: data.ora_examinare || examTime(),
         clasa: data.clasa || '',
         barci_selectate: data.barci_selectate || [],
         locatie_curs: data.locatie_curs || '',
@@ -2219,20 +2230,24 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                 })()}
 
                 <div>
-                  <label className="text-xs font-medium text-gray-500 mb-1 block">Nr. notificare</label>
+                  <label className="text-xs font-medium text-gray-500 mb-1 block">
+                    Nr. notificare <span className="text-gray-300 font-normal">(dublu-click = editează sesiunea)</span>
+                  </label>
                   <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
                     value={notifForm.nr_notificare} placeholder="ex: 6/21.04.2026"
-                    onChange={e=>setNotifForm(f=>({...f,nr_notificare:e.target.value}))}/>
+                    onChange={e=>setNotifForm(f=>({...f,nr_notificare:e.target.value}))}
+                    onDoubleClick={()=>onEditSession(sess, 'request_number')}
+                    title="Vine din «Nr. înștiințări» al sesiunii. Dublu-click pentru a-l edita acolo."/>
                 </div>
                 <div>
                   <label className="text-xs font-medium text-gray-500 mb-1 block">
-                    Ora examinare <span className="text-gray-300 font-normal">(dublu-click = reset)</span>
+                    Ora examinare <span className="text-gray-300 font-normal">(dublu-click = editează sesiunea)</span>
                   </label>
                   <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
-                    value={notifForm.ora_examinare} placeholder="10:00"
+                    value={notifForm.ora_examinare} placeholder={defaultExamTime()}
                     onChange={e=>setNotifForm(f=>({...f,ora_examinare:e.target.value}))}
-                    onDoubleClick={()=>setNotifForm(f=>({...f,ora_examinare:'10:00'}))}
-                    title="Dublu-click pentru a reseta la 10:00"/>
+                    onDoubleClick={()=>onEditSession(sess, 'exam_time')}
+                    title={`Vine din «Ora examinare» a sesiunii (implicit ${defaultExamTime()}). Dublu-click pentru a o edita acolo.`}/>
                 </div>
                 <div>
                   <label className="text-xs font-medium text-gray-500 mb-1 block">
@@ -3624,6 +3639,8 @@ export default function SessionDetailPage() {
   const [randomizing, setRandomizing] = useState(false)
   const [editingSession, setEditingSession] = useState<string|null>(null)
   const [editSessionValues, setEditSessionValues] = useState<any>({})
+  // câmpul pe care sărim când modalul e deschis dintr-un dublu-click
+  const [editFocusKey, setEditFocusKey] = useState<string|null>(null)
   const [savingSession, setSavingSession] = useState(false)
   const [refs, setRefs] = useState<any>({locations:[], boats:[], evaluators:[], instructors:[]})
 
@@ -3640,8 +3657,9 @@ export default function SessionDetailPage() {
     setStudentsMap(prev => ({...prev, [sessionId]: sts}))
   }
 
-  async function startEditSession(sess: Session) {
+  async function startEditSession(sess: Session, focusKey?: string) {
     setEditingSession(sess.id)
+    setEditFocusKey(focusKey || null)
     // Reîmprospătăm listele (instructori/bărci/etc.) ca cele adăugate recent să apară fără reload
     Promise.all([
       supabase.from('locations').select('*').order('name'),
@@ -3667,6 +3685,7 @@ export default function SessionDetailPage() {
       class_caa: sess.class_caa || 'C,D',
       nr_instiintare_anr: (sess as any).nr_instiintare_anr || '',
       request_number: sess.request_number || '',
+      exam_time: (sess as any).exam_time || '',
       nr_document_ancom: (sess as any).nr_document_ancom || '',
       location_detail: sess.location_detail || '',
       skipper_url: (sess as any).skipper_url || '',
@@ -3702,7 +3721,7 @@ export default function SessionDetailPage() {
         'location_id', 'location_detail', 'class_caa', 'evaluator_id',
         'boat_id', 'boat_id_2', 'boat_id_3',
         'instructor_id', 'instructor_id_2', 'instructor_id_3',
-        'timeline_scope', 'nr_instiintare_anr',
+        'timeline_scope', 'nr_instiintare_anr', 'exam_time',
       ]
       const changed = INHERITABLE.filter(k => k in payload && payload[k] !== (editedSess as any)[k])
       if (changed.length) {
@@ -3731,7 +3750,7 @@ export default function SessionDetailPage() {
       setSessions(prev => prev.map(s => s.id === sid ? {...s, ...updated} : s))
       if (sid === id) setMainSession(updated as Session)
     }
-    setEditingSession(null)
+    setEditingSession(null); setEditFocusKey(null)
     setSavingSession(false)
   }
 
@@ -4188,13 +4207,14 @@ export default function SessionDetailPage() {
                 ['Nr. documente PV', 'nr_document_ancom', 'text'],
                 ['Nr. înștiintare reg ANR', 'nr_instiintare_anr', 'text'],
                 ['Nr. înștiințări', 'request_number', 'text'],
+                ['Ora examinare', 'exam_time', 'text'],
                 ['Locație detaliată', 'location_detail', 'text'],
                 ['Link skipper.setsail.ro', 'skipper_url', 'text'],
                 ['Categorie timeline', 'timeline_scope', 'select-scope'],
                 ['Clasa CAA', 'class_caa', 'select-class'],
               ].map(([label, key, type]) => (
                 <div key={key} className={(key==='location_detail'||key==='skipper_url'||key==='timeline_scope')?'col-span-2':''}>
-                  <div className="text-xs text-gray-400 mb-1">{label}</div>
+                  <div className={`text-xs mb-1 ${editFocusKey===key ? 'text-blue-600 font-medium' : 'text-gray-400'}`}>{label}</div>
                   {type==='select-class' ? (
                     <select className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs w-full focus:outline-none focus:ring-1 focus:ring-blue-400"
                       value={editSessionValues[key]} onChange={e=>setEditSessionValues((v:any)=>({...v,[key]:e.target.value}))}>
@@ -4207,7 +4227,11 @@ export default function SessionDetailPage() {
                       {TIMELINE_SCOPES.map(sc=><option key={sc.value} value={sc.value}>{sc.label}</option>)}
                     </select>
                   ) : (
-                    <input type={type} className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs w-full focus:outline-none focus:ring-1 focus:ring-blue-400"
+                    <input type={type}
+                      autoFocus={editFocusKey===key}
+                      placeholder={key==='exam_time' ? defaultExamTimeFor(sessions.find(s=>s.id===editingSession) || mainSession) : undefined}
+                      className={`border rounded-lg px-2.5 py-1.5 text-xs w-full focus:outline-none focus:ring-1 focus:ring-blue-400 ${
+                        editFocusKey===key ? 'border-blue-400 ring-1 ring-blue-200' : 'border-gray-200'}`}
                       value={editSessionValues[key]||''} onChange={e=>setEditSessionValues((v:any)=>({...v,[key]:e.target.value}))}/>
                   )}
                 </div>
@@ -4233,7 +4257,7 @@ export default function SessionDetailPage() {
               ))}
             </div>
             <div className="flex justify-end gap-2 mt-4">
-              <button onClick={()=>setEditingSession(null)} className="px-4 py-2 rounded-lg text-xs border border-gray-200 text-gray-500 hover:bg-gray-50">Anulează</button>
+              <button onClick={()=>{setEditingSession(null); setEditFocusKey(null)}} className="px-4 py-2 rounded-lg text-xs border border-gray-200 text-gray-500 hover:bg-gray-50">Anulează</button>
               <button onClick={()=>saveEditSession(editingSession)} disabled={savingSession}
                 className="px-4 py-2 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#059669'}}>
                 {savingSession?'Se salvează...':'Salvează'}
