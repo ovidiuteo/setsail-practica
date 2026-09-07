@@ -108,24 +108,30 @@ export async function POST(req: NextRequest) {
       .from('notification_numbers')
       .select('numar, document_tip, data_notificare, tip')
       .eq('session_id', session_id)
-      .eq('document_tip', tip)
       .in('tip', ['instiintari_ancom', 'nr_iesire_ancom'])
       .order('numar', { ascending: false })
-    // dacă există ambele, cel din registrul înștiințărilor are prioritate
-    const iesire = (iesireRows || []).find((r: any) => r.tip === 'instiintari_ancom')
-      || (iesireRows || [])[0]
+    const iesirePentru = (t: string) => {
+      const ale = (iesireRows || []).filter((r: any) => r.document_tip === t)
+      return ale.find((r: any) => r.tip === 'instiintari_ancom') || ale[0]
+    }
 
-    const nrCurent = iesire ? String(iesire.numar)
-      : (nrMap[nrTipMap[tip]] ? String(nrMap[nrTipMap[tip]]) : '')
     const allRows = [...(nrRowsSession || []), ...(nrRowsAll || [])]
-    const dataNrRow = allRows.find((r: any) => r.document_tip === tip)
     const roData = (d: string) => {
       const [y, m, dd] = String(d || '').slice(0, 10).split('-').map(Number)
       return y && m && dd ? new Date(y, m - 1, dd).toLocaleDateString('ro-RO') : ''
     }
-    const dataNrFormatat = iesire ? roData(iesire.data_notificare)
-      : dataNrRow ? roData(dataNrRow.data_notificare)
-      : roData(session.session_date)
+    // Numărul și data afișate pentru un anumit document
+    const nrPentru = (t: string) => {
+      const ies = iesirePentru(t)
+      const vechi = allRows.find((r: any) => r.document_tip === t)
+      return {
+        nr: ies ? String(ies.numar) : (nrMap[nrTipMap[t]] ? String(nrMap[nrTipMap[t]]) : ''),
+        data: ies ? roData(ies.data_notificare)
+          : vechi ? roData(vechi.data_notificare)
+          : roData(session.session_date),
+      }
+    }
+    const { nr: nrCurent, data: dataNrFormatat } = nrPentru(tip)
 
     const sessionDate = new Date(session.session_date).toLocaleDateString('ro-RO', {
       day: '2-digit', month: 'long', year: 'numeric'
@@ -136,12 +142,14 @@ export async function POST(req: NextRequest) {
     const dateStr = session.session_date.replace(/-/g, '_')
     const dataCurenta = new Date(session.session_date).toLocaleDateString('ro-RO')
 
-    const isPrelungire = tip.includes('prelungire')
-    const isExamen = tip.includes('examen')
-
     const perioadaCurs = courseStartDate === sessionDate
       ? sessionDate
       : `${courseStartDate} - ${sessionDate}`
+
+    // Textele fiecărui tip de înștiințare — apelate o dată sau de patru ori
+    const textePentru = (tip: string) => {
+    const isPrelungire = tip.includes('prelungire')
+    const isExamen = tip.includes('examen')
 
     let subiect = ''
     let corpText = ''
@@ -164,6 +172,13 @@ export async function POST(req: NextRequest) {
       subiect = 'Înștiințare cu privire la data de desfășurare a examenului în vederea prelungirii valabilității certificatelor de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit de tip GMDSS-LRC'
       corpText = `Subscrisa SC SET SAIL ADVERTISING SRL, cu datele de identificare din antet, în baza pct. 3, lit. a) și c) din cadrul protocolului de colaborare dintre instituțiile noastre valabil până la data de ${protocolValabilPana}, vă înștiințăm că pe data de ${sessionDate}, orele 19.00, organizam o sesiune de examinare în vederea prelungirii valabilității certificatelor de operator radio, online.\n\nMembrii comisiei de examinare vor fi:\n- ${persContact1}, deținător al certificatului de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit GMDSS-LRC\n- ${persContact2}, deținător al certificatului de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit GMDSS-LRC`
     }
+    return { subiect, corpText, titluDoc }
+    }
+
+    // Cele patru înștiințări, în ordinea în care se depun
+    const TOATE_TIPURILE = ['curs-obtinere', 'examen-obtinere', 'curs-prelungire', 'examen-prelungire']
+    const tipuri: string[] = body.toate === true ? TOATE_TIPURILE : [tip]
+    const { subiect, corpText, titluDoc } = textePentru(tip)
 
     if (format === 'pdf') {
       const antetHtml = antetDoc?.file_data
@@ -178,7 +193,7 @@ export async function POST(req: NextRequest) {
           : `<div style="font-style:italic;color:#666;">Semnătură și ștampilă</div>`)
 
       // Construim paragrafele corpului
-      const paragraphs = corpText.split('\n').map(line => {
+      const paragrafe = (txt: string) => txt.split('\n').map(line => {
         if (!line.trim()) return `<p style="margin:6px 0;"></p>`
         if (line.startsWith('-')) {
           return `<p style="margin:4px 0 4px 30px;">${line}</p>`
@@ -191,7 +206,7 @@ export async function POST(req: NextRequest) {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>${titluDoc}</title>
+<title>${body.toate === true ? (cuStampila ? 'Instiintari ANCOM (4)' : 'Instiintari ANCOM (4) fara stampila') : titluDoc}</title>
 <style>
   @page { size: A4 portrait; margin: 4mm 20mm 20mm 20mm; }
   @media print {
@@ -241,11 +256,16 @@ export async function POST(req: NextRequest) {
 </head>
 <body>
 
+${tipuri.map((t, i) => {
+  const txt = textePentru(t)
+  const nrT = nrPentru(t)
+  return `
+  <div class="instiintare" style="${i < tipuri.length - 1 ? 'page-break-after:always;' : ''}">
   <!-- Antet -->
   <div class="antet">${antetHtml}</div>
 
   <!-- Nr si data -->
-  <div class="nr-data"><strong>Nr. ${nrCurent || '......'} / ${dataNrFormatat}</strong></div>
+  <div class="nr-data"><strong>Nr. ${nrT.nr || '......'} / ${nrT.data}</strong></div>
 
   <!-- Catre -->
   <div class="catre">
@@ -256,14 +276,14 @@ export async function POST(req: NextRequest) {
 
   <!-- Subiect -->
   <div class="subiect">
-    <span style="font-weight:bold;">Subiect: </span><em>${subiect}</em>
+    <span style="font-weight:bold;">Subiect: </span><em>${txt.subiect}</em>
   </div>
 
   <!-- Titlu -->
   <div class="titlu-centrat">Domnule Președinte,</div>
 
   <!-- Corp -->
-  <div class="corp">${paragraphs}</div>
+  <div class="corp">${paragrafe(txt.corpText)}</div>
 
   <!-- Semnatura -->
   <div class="semnatura-bloc">
@@ -274,6 +294,8 @@ export async function POST(req: NextRequest) {
       ${stampilaHtml}
     </div>
   </div>
+  </div>`
+}).join('\n')}
 
 </body>
 </html>`
@@ -327,6 +349,7 @@ export async function POST(req: NextRequest) {
     }
 
     // Corp paragraphs
+    const corpParagrafe = (corpText: string) => {
     const corpParas: any[] = []
     for (const line of corpText.split('\n')) {
       if (!line.trim()) {
@@ -353,45 +376,52 @@ export async function POST(req: NextRequest) {
         }))
       }
     }
+    return corpParas
+    }
 
+    // Conținutul unei înștiințări (o secțiune = o pagină nouă în Word)
+    const paginaPentru = (t: string) => {
+      const txt = textePentru(t)
+      const nrT = nrPentru(t)
+      return [
+        ...headerImg,
+        para([reg('Nr. ' + (nrT.nr || '......') + ' / ' + nrT.data)], AlignmentType.RIGHT as any, 200),
+        new Paragraph({ spacing: { before: 200, after: 60 }, children: [bold('Către,')] }),
+        new Paragraph({ spacing: { before: 0, after: 0 }, children: [reg('AUTORITATEA NAȚIONALĂ PENTRU ADMINISTRARE')] }),
+        new Paragraph({ spacing: { before: 0, after: 200 }, children: [reg('ȘI REGLEMENTARE ÎN COMUNICAȚII')] }),
+        new Paragraph({
+          spacing: { before: 200, after: 200 },
+          children: [bold('Subiect:   '), boldItal(txt.subiect)]
+        }),
+        para([bold('Domnule Președinte,', 26)], AlignmentType.CENTER as any, 300),
+        ...corpParagrafe(txt.corpText),
+        new Paragraph({ spacing: { before: 600, after: 0 }, alignment: AlignmentType.RIGHT as any, children: [reg('Cu stimă,')] }),
+        new Paragraph({ spacing: { before: 60, after: 0 }, alignment: AlignmentType.RIGHT as any, children: [bold('SC SET SAIL ADVERTISING SRL')] }),
+        new Paragraph({ spacing: { before: 60, after: 0 }, alignment: AlignmentType.RIGHT as any, children: [reg('director Cobianu Drugan Corina')] }),
+        ...stampilaImg,
+        new Paragraph({ spacing: { before: 200, after: 0 }, children: [] }),
+      ]
+    }
+
+    const pageProps = {
+      page: {
+        margin: {
+          top: convertMillimetersToTwip(20),
+          right: convertMillimetersToTwip(20),
+          bottom: convertMillimetersToTwip(20),
+          left: convertMillimetersToTwip(20),
+        }
+      }
+    }
     const doc = new Document({
-      sections: [{
-        properties: {
-          page: {
-            margin: {
-              top: convertMillimetersToTwip(20),
-              right: convertMillimetersToTwip(20),
-              bottom: convertMillimetersToTwip(20),
-              left: convertMillimetersToTwip(20),
-            }
-          }
-        },
-        children: [
-          ...headerImg,
-          para([reg('Nr. ' + (nrCurent || '......') + ' / ' + dataNrFormatat)], AlignmentType.RIGHT as any, 200),
-          new Paragraph({ spacing: { before: 200, after: 60 }, children: [bold('Către,')] }),
-          new Paragraph({ spacing: { before: 0, after: 0 }, children: [reg('AUTORITATEA NAȚIONALĂ PENTRU ADMINISTRARE')] }),
-          new Paragraph({ spacing: { before: 0, after: 200 }, children: [reg('ȘI REGLEMENTARE ÎN COMUNICAȚII')] }),
-          new Paragraph({
-            spacing: { before: 200, after: 200 },
-            children: [bold('Subiect:   '), boldItal(subiect)]
-          }),
-          para([bold('Domnule Președinte,', 26)], AlignmentType.CENTER as any, 300),
-          ...corpParas,
-          new Paragraph({ spacing: { before: 600, after: 0 }, alignment: AlignmentType.RIGHT as any, children: [reg('Cu stimă,')] }),
-          new Paragraph({ spacing: { before: 60, after: 0 }, alignment: AlignmentType.RIGHT as any, children: [bold('SC SET SAIL ADVERTISING SRL')] }),
-          new Paragraph({ spacing: { before: 60, after: 0 }, alignment: AlignmentType.RIGHT as any, children: [reg('director Cobianu Drugan Corina')] }),
-          ...stampilaImg,
-          new Paragraph({ spacing: { before: 200, after: 0 }, children: [] }),
-        ]
-      }]
+      sections: tipuri.map(t => ({ properties: pageProps, children: paginaPentru(t) })),
     })
 
     const buffer = await Packer.toBuffer(doc)
     return new NextResponse(buffer as unknown as BodyInit, {
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        'Content-Disposition': `attachment; filename="Instiintare_ANCOM_${tip}_${dateStr}.docx"`
+        'Content-Disposition': `attachment; filename="${body.toate === true ? `Instiintari_ANCOM_toate_${dateStr}` : `Instiintare_ANCOM_${tip}_${dateStr}`}.docx"`
       }
     })
 

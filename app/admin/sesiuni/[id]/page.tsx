@@ -1718,8 +1718,8 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
     const blob = await res.blob()
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click()
   }
-  async function generateDocRadio(endpoint: string, filename: string, tip: string, format: string) {
-    const res = await fetch(endpoint, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id, tip, format, stampila:stamp, semnatura:signs})})
+  async function generateDocRadio(endpoint: string, filename: string, tip: string, format: string, extra: Record<string, any> = {}) {
+    const res = await fetch(endpoint, {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id, tip, format, stampila:stamp, semnatura:signs, ...extra})})
     if (!res.ok) throw new Error(await res.text())
     const blob = await res.blob()
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click()
@@ -2023,6 +2023,28 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                   }catch(e:any){alert(e.message)}}}
                     className="flex-1 flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium text-white" style={{background:'#dc2626'}}>
                     <Download size={11}/>PDF Examen Prelungire
+                  </button>
+                </div>
+                {/* Toate 4 intr-un singur fisier, fiecare pe pagina ei */}
+                <div className="border-t border-gray-100 pt-2 mt-2 space-y-1.5">
+                  <div className="text-[10px] uppercase tracking-wide text-gray-400 font-medium">Toate 4 într-un fișier</div>
+                  <button onClick={async()=>{try{await generateDocRadio('/api/generate-instiintare-ancom',`Instiintari_ANCOM_toate_${sess.session_date}.docx`,'curs-obtinere','docx',{toate:true})}catch(e:any){alert(e.message)}}}
+                    className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium text-white" style={{background:'#1d4ed8'}}>
+                    <FileText size={11}/>DOCX · 4 înștiințări
+                  </button>
+                  <button onClick={async()=>{try{
+                    const res=await fetch('/api/generate-instiintare-ancom',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id,tip:'curs-obtinere',format:'pdf',toate:true})})
+                    const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>{w.document.title=w.document.querySelector('title')?.textContent||'Document';w.print()},800)}
+                  }catch(e:any){alert(e.message)}}}
+                    className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium text-white" style={{background:'#dc2626'}}>
+                    <Download size={11}/>PDF · 4 înștiințări (cu ștampilă)
+                  </button>
+                  <button onClick={async()=>{try{
+                    const res=await fetch('/api/generate-instiintare-ancom',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id,tip:'curs-obtinere',format:'pdf',toate:true,cu_stampila:false})})
+                    const html=await res.text();const w=window.open('','_blank');if(w){w.document.write(html);w.document.close();setTimeout(()=>{w.document.title=w.document.querySelector('title')?.textContent||'Document';w.print()},800)}
+                  }catch(e:any){alert(e.message)}}}
+                    className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs font-medium text-white" style={{background:'#7c3aed'}}>
+                    <Download size={11}/>PDF · 4 înștiințări (fără ștampilă)
                   </button>
                 </div>
               </div>
