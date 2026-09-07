@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { useRouter } from 'next/navigation'
 import { ArrowLeft, Upload } from 'lucide-react'
+import { sessionDefaults } from '@/lib/session-defaults'
 import Link from 'next/link'
 
 export default function NouaSesiunePage() {
@@ -85,6 +86,11 @@ export default function NouaSesiunePage() {
     for (const col of ['course_start_date','session_date','location_id','boat_id','boat_id_2','boat_id_3','evaluator_id','instructor_id','instructor_id_2','instructor_id_3']) {
       if (payload[col] === '') payload[col] = null
     }
+    // Ora examinării și textele notificării ANR se completează din start,
+    // după locația aleasă — pot fi schimbate oricând din „Editează sesiunea".
+    const locName = refs.locations.find((l: any) => l.id === payload.location_id)?.name || ''
+    Object.assign(payload, sessionDefaults({ ...payload, locations: { name: locName } }))
+
     const { data, error: err } = await supabase.from('sessions').insert(payload).select().single()
     if (err || !data) { setError(err?.message || 'Eroare la salvare.'); setSaving(false); return }
 

@@ -2,6 +2,7 @@
 // Folosit atât la trimitere (pagina sesiunii) cât și la editor (picker cu exemple).
 import { buildSlots, configFromSession } from './practice-slots'
 import { scopeForSession } from './timeline-scope'
+import { defaultExamTime } from './session-defaults'
 
 export type MailVarCtx = {
   origin?: string
@@ -101,14 +102,8 @@ function localDay(d: string): Date | null {
   return y && m && dd ? new Date(y, m - 1, dd) : null
 }
 
-// Ora examinării: cea salvată pe sesiune, altfel implicit după tip și locație.
-// Aceeași regulă e folosită și în cardul de notificare ANR din pagina sesiunii.
-export function defaultExamTime(sess: any): string {
-  if (/radio|lrc/i.test(String(sess?.timeline_scope || sess?.class_caa || ''))) return '20:00'
-  const loc = String(sess?.locations?.name || '').toLowerCase()
-  if (loc.includes('snagov')) return '12:00'
-  return '10:00'   // Limanu, Mangalia și restul
-}
+// Regulile implicite stau în lib/session-defaults, ca să fie una singură
+export { defaultExamTime } from './session-defaults'
 
 // Intervalele de practică definite pe sesiune (programarea C/D Snagov).
 // Se calculează pentru cursurile unde există programare pe ore — indiferent dacă

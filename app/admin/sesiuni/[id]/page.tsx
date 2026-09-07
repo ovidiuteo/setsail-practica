@@ -6,7 +6,8 @@ import { TIMELINE_SCOPES, timelineScopeLabel, scopeForSession } from '@/lib/time
 import { computeAddressChanges, AddressChange } from '@/lib/normalize-address'
 import { samePerson, mergeCarry, fillGaps } from '@/lib/student-merge'
 import PracticeSlotsCard from '@/components/PracticeSlotsCard'
-import { applyMailTemplate, defaultExamTime } from '@/lib/mail-template'
+import { applyMailTemplate } from '@/lib/mail-template'
+import { defaultExamTime, sessionDefaults } from '@/lib/session-defaults'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Download, FileText, Users, Copy, Plus, Trash2, Check, X, Pencil, GitBranch, ArrowRight, UserX, Mail, ChevronDown, Database } from 'lucide-react'
@@ -1594,28 +1595,19 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
   const defaultExamTime = () => defaultExamTimeFor(sess)
   const examTime = () => String((sess as any).exam_time || '').trim() || defaultExamTime()
 
+  // Notificarea oglindește sesiunea: ce e salvat pe sesiune are prioritate,
+  // altfel se folosesc valorile implicite după locație (aceleași reguli ca la creare)
   function calcNotifDefaults() {
-    const locName = ((sess as any).locations?.name || '').toLowerCase()
-    const isSnagov = locName.includes('snagov')
-    const isClassB = sess.class_caa?.includes('B')
-    const adr = 'str. Virgiliu nr. 15, etaj 3, Sector 1, București'
-    const locatieCurs = isSnagov ? `${adr}/Lacul Snagov`
-      : locName.includes('limanu') ? `${adr}/Marina Limanu`
-      : locName.includes('mangalia') ? `${adr}/Marina Mangalia`
-      : `${adr}/${(sess as any).locations?.name || ''}`
-    const locatieExaminare = isSnagov ? 'de pe Lacul Snagov'
-      : locName.includes('limanu') ? 'din Marina Limanu'
-      : locName.includes('mangalia') ? 'din Marina Mangalia'
-      : `din ${(sess as any).locations?.name || ''}`
-    // Valoarea de pe sesiune bate calculul implicit
+    const isSnagov = ((sess as any).locations?.name || '').toLowerCase().includes('snagov')
     const dinSesiune = (k: string) => String((sess as any)[k] || '').trim()
+    const impl = sessionDefaults(sess)
     return {
       nr_notificare: sess.request_number || '',
       ora_examinare: examTime(),
-      clasa: dinSesiune('notif_clasa') || (isClassB ? 'B/Manevra ambarcatiunii cu vele' : 'C/D/Manevra ambarcatiunii cu vele'),
+      clasa: dinSesiune('notif_clasa') || impl.notif_clasa,
       barci_selectate: isSnagov ? ['Trainer 1', 'Trainer 2'] : ['SetSail', 'Trainer 2'],
-      locatie_curs: dinSesiune('notif_locatie_curs') || locatieCurs,
-      locatie_examinare: dinSesiune('notif_locatie_examinare') || locatieExaminare,
+      locatie_curs: dinSesiune('notif_locatie_curs') || impl.notif_locatie_curs,
+      locatie_examinare: dinSesiune('notif_locatie_examinare') || impl.notif_locatie_examinare,
     }
   }
 
@@ -2275,39 +2267,39 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                 </div>
                 <div>
                   <label className="text-xs font-medium text-gray-500 mb-1 block">
-                    Clasă <span className="text-gray-300 font-normal">(dublu-click = reset)</span>
+                    Clasă <span className="text-gray-300 font-normal">(dublu-click = editează sesiunea)</span>
                   </label>
                   <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
                     value={notifForm.clasa} placeholder="C,D"
                     onChange={e=>setNotifForm(f=>({...f,clasa:e.target.value}))}
                     onDoubleClick={()=>{
-                      setNotifForm(f=>({...f, clasa: calcNotifDefaults().clasa}))
+                      onEditSession(sess, 'notif_clasa')
                     }}
-                    title="Dublu-click pentru a reseta la valoarea default"/>
+                    title="Vine din sesiune. Dublu-click pentru a o edita acolo."/>
                 </div>
                 <div>
                   <label className="text-xs font-medium text-gray-500 mb-1 block">
-                    Cursuri în locația aprobată din <span className="text-gray-300 font-normal">(dublu-click = reset)</span>
+                    Cursuri în locația aprobată din <span className="text-gray-300 font-normal">(dublu-click = editează sesiunea)</span>
                   </label>
                   <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
                     value={notifForm.locatie_curs} placeholder="str. Virgiliu nr. 15.../Marina Limanu"
                     onChange={e=>setNotifForm(f=>({...f,locatie_curs:e.target.value}))}
                     onDoubleClick={()=>{
-                      setNotifForm(f=>({...f, locatie_curs: calcNotifDefaults().locatie_curs}))
+                      onEditSession(sess, 'notif_locatie_curs')
                     }}
-                    title="Dublu-click pentru a reseta la valoarea default"/>
+                    title="Vine din sesiune. Dublu-click pentru a o edita acolo."/>
                 </div>
                 <div>
                   <label className="text-xs font-medium text-gray-500 mb-1 block">
-                    Examinare practică în locația aprobată <span className="text-gray-300 font-normal">(dublu-click = reset)</span>
+                    Examinare practică în locația aprobată <span className="text-gray-300 font-normal">(dublu-click = editează sesiunea)</span>
                   </label>
                   <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
                     value={notifForm.locatie_examinare} placeholder="din Marina Limanu"
                     onChange={e=>setNotifForm(f=>({...f,locatie_examinare:e.target.value}))}
                     onDoubleClick={()=>{
-                      setNotifForm(f=>({...f, locatie_examinare: calcNotifDefaults().locatie_examinare}))
+                      onEditSession(sess, 'notif_locatie_examinare')
                     }}
-                    title="Dublu-click pentru a reseta la valoarea default"/>
+                    title="Vine din sesiune. Dublu-click pentru a o edita acolo."/>
                 </div>
                 <div>
                   <label className="text-xs font-medium text-gray-500 mb-1 block">Ambarcațiuni</label>
