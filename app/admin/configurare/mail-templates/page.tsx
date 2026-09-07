@@ -77,6 +77,13 @@ export default function MailTemplatesPage() {
   const [loading, setLoading] = useState(true)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [isNew, setIsNew] = useState(false)
+  // Pasul de generare din email (AI) la „Template nou"
+  const [aiStep, setAiStep] = useState(false)
+  const [aiRaw, setAiRaw] = useState('')
+  const [aiSubject, setAiSubject] = useState('')
+  const [aiBusy, setAiBusy] = useState(false)
+  const [aiErr, setAiErr] = useState<string | null>(null)
+  const [aiNote, setAiNote] = useState<string | null>(null)
   const [form, setForm] = useState<Partial<Template>>(EMPTY_TEMPLATE)
   const [saving, setSaving] = useState(false)
   const [activeTab, setActiveTab] = useState<'text' | 'html'>('text')
@@ -132,6 +139,61 @@ export default function MailTemplatesPage() {
     setEditingId(null)
     setActiveTab('text')
     setPreviewMode(false)
+    // Template nou = pornim de la un email deja trimis, analizat de AI
+    setAiStep(true); setAiRaw(''); setAiSubject(''); setAiErr(null); setAiNote(null)
+  }
+
+  // Trimite emailul lipit la AI și completează formularul cu rezultatul
+  async function generateFromEmail() {
+    const raw = aiRaw.trim()
+    if (!raw) { setAiErr('Lipește mai întâi emailul.'); return }
+    setAiBusy(true); setAiErr(null)
+
+    // Dacă subiectul n-a fost pus separat, îl luăm dintr-un rând „Subiect: …"
+    let subject = aiSubject.trim()
+    let body = raw
+    const m = /^\s*(?:subiect|subject)\s*:\s*(.+)$/im.exec(raw)
+    if (!subject && m) { subject = m[1].trim(); body = raw.replace(m[0], '').trim() }
+
+    try {
+      const r = await fetch('/api/ai/mail-template', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          subject, body,
+          variables: Object.entries(VARIABLES_INFO).map(([key, label]) => ({ key, label })),
+          categories: CATEGORII.map(c => ({ value: c.value, label: c.label })),
+        }),
+      })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(j.error || 'Generarea a eșuat.')
+
+      const text = String(j.body || body)
+      const found = `${String(j.subject || '')}\n${text}`.match(/\{\{(\w+)\}\}/g) || []
+      const used: string[] = []
+      for (const v of found) {
+        const k = v.replace(/[{}]/g, '')
+        if (!used.includes(k)) used.push(k)
+      }
+      const label = String(j.label || '').trim()
+      const categorie = CATEGORII.some(c => c.value === j.categorie) ? j.categorie : 'general'
+
+      setForm(f => ({
+        ...f, label,
+        key: label ? label.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+          .replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) : '',
+        categorie,
+        subject: String(j.subject || subject),
+        body_text: text,
+        variables: used,
+      }))
+      setAiNote(used.length
+        ? `Completat din emailul lipit — ${used.length} ${used.length === 1 ? 'variabilă recunoscută' : 'variabile recunoscute'}. Verifică și salvează.`
+        : 'Completat din emailul lipit — nicio variabilă recunoscută. Verifică și salvează.')
+      setAiStep(false)
+    } catch (e: any) {
+      setAiErr(e.message || 'Generarea a eșuat.')
+    }
+    setAiBusy(false)
   }
 
   function startEdit(t: Template) {
@@ -387,14 +449,54 @@ export default function MailTemplatesPage() {
             <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
               <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gray-50">
                 <h3 className="font-semibold text-sm text-gray-900">
-                  {isNew ? '+ Template nou' : `Editare: ${form.label}`}
+                  {isNew ? (aiStep ? '✨ Template nou din email' : '+ Template nou') : `Editare: ${form.label}`}
                 </h3>
                 <button onClick={cancelEdit} className="p-1 rounded hover:bg-gray-200 text-gray-400">
                   <X size={16} />
                 </button>
               </div>
 
+              {/* Pasul 1: lipești un email deja trimis, AI îl transformă în template */}
+              {aiStep ? (
+                <div className="p-5 space-y-4">
+                  <p className="text-xs text-gray-500">
+                    Lipește mai jos un email pe care l-ai trimis deja. Îl analizăm, înlocuim datele concrete
+                    cu variabilele cunoscute ({`{{data_sesiune}}`}, {`{{ora_start}}`}…) și completăm formularul.
+                  </p>
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 mb-1 block">
+                      Subiect <span className="text-gray-300 font-normal">(opțional — îl deducem din text)</span>
+                    </label>
+                    <input className={inputCls} placeholder="Detalii practică navigație…"
+                      value={aiSubject} onChange={e => setAiSubject(e.target.value)} />
+                  </div>
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 mb-1 block">Emailul trimis *</label>
+                    <textarea className={textareaCls} rows={12} placeholder={'Bună ziua,\n\nPractica de navigație are loc pe 20 mai 2026, la Limanu, ora 9:30…'}
+                      value={aiRaw} onChange={e => setAiRaw(e.target.value)} />
+                  </div>
+                  {aiErr && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{aiErr}</p>}
+                  <div className="flex flex-wrap gap-2 justify-end">
+                    <button onClick={() => { setAiStep(false); setAiErr(null) }}
+                      className="px-3 py-2 rounded-xl text-sm border border-gray-200 text-gray-500 hover:bg-gray-50">
+                      Completez manual
+                    </button>
+                    <button onClick={generateFromEmail} disabled={aiBusy || !aiRaw.trim()}
+                      className="px-4 py-2 rounded-xl text-sm font-medium text-white disabled:opacity-50"
+                      style={{ background: '#0a1628' }}>
+                      {aiBusy ? 'Se analizează…' : '✨ Analizează și completează'}
+                    </button>
+                  </div>
+                </div>
+              ) : (
+
               <div className="p-5 space-y-4">
+                {aiNote && (
+                  <div className="flex items-start gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+                    <span className="flex-1">{aiNote}</span>
+                    <button onClick={() => setAiNote(null)} className="text-emerald-500 hover:text-emerald-700">×</button>
+                  </div>
+                )}
                 {/* Label + Categorie */}
                 <div className="grid grid-cols-2 gap-3">
                   <div>
@@ -675,6 +777,7 @@ Folosește {{variabila}} pentru câmpuri dinamice."
                   </button>
                 </div>
               </div>
+              )}
             </div>
           </div>
         ) : (

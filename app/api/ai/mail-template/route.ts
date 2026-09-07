@@ -8,7 +8,8 @@ export async function POST(req: NextRequest) {
   const KEY = process.env.ANTHROPIC_API_KEY
   if (!KEY) return NextResponse.json({ error: 'Lipsește ANTHROPIC_API_KEY (doar pe Vercel).' }, { status: 500 })
 
-  const { subject, body, variables } = await req.json().catch(() => ({}))
+  const { subject, body, variables, categories } = await req.json().catch(() => ({}))
+  const cats: { value: string; label: string }[] = Array.isArray(categories) ? categories : []
   const vars: { key: string; label: string; sample?: string }[] = Array.isArray(variables) ? variables : []
   if (!String(subject || '').trim() && !String(body || '').trim())
     return NextResponse.json({ error: 'Subiect și text goale.' }, { status: 400 })
@@ -28,8 +29,14 @@ export async function POST(req: NextRequest) {
     '- NU inventa variabile care nu sunt în listă. Detaliile specifice care nu au variabilă rămân ca text.',
     '- Păstrează exact tonul, formatarea, liniile și diacriticele textului.',
     '- Propune un nume intern scurt (label) pentru template (2-4 cuvinte).',
+    '- Dacă SUBIECTUL primit e gol, deduce-l din text: fie dintr-un rând de tip „Subiect:", fie propune unul scurt și potrivit.',
+    ...(cats.length ? [
+      `- Alege categoria potrivită din lista: ${cats.map(c => c.value).join(', ')}. Dacă niciuna nu se potrivește, folosește "general".`,
+    ] : []),
     'Răspunde DOAR cu JSON valid, fără markdown, fără explicații:',
-    '{"label":"...","subject":"...","body":"..."}',
+    cats.length
+      ? '{"label":"...","subject":"...","body":"...","categorie":"..."}'
+      : '{"label":"...","subject":"...","body":"..."}',
   ].join('\n')
 
   const user = `SUBIECT:\n${subject || ''}\n\nTEXT:\n${body || ''}`
