@@ -6,7 +6,7 @@ import { TIMELINE_SCOPES, timelineScopeLabel, scopeForSession } from '@/lib/time
 import { computeAddressChanges, AddressChange } from '@/lib/normalize-address'
 import { samePerson, mergeCarry, fillGaps } from '@/lib/student-merge'
 import PracticeSlotsCard from '@/components/PracticeSlotsCard'
-import { applyMailTemplate } from '@/lib/mail-template'
+import { applyMailTemplate, defaultExamTime } from '@/lib/mail-template'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Download, FileText, Users, Copy, Plus, Trash2, Check, X, Pencil, GitBranch, ArrowRight, UserX, Mail, ChevronDown, Database } from 'lucide-react'
@@ -1275,13 +1275,8 @@ SetSail NauticSchool`,
   { label: 'Informații locație', subject: 'Informații locație examen practic', body: 'Stimate/Stimată cursant,\n\nVă transmitem detalii despre locația sesiunii de practică:\n\n[adresa locației]\n\nVă recomandăm să sosiți cu 15 minute înainte.\n\nCu stimă,\nEchipa SetSail' },
 ]
 
-// Ora examinării implicită, după tipul cursului și locație
-function defaultExamTimeFor(sess: any): string {
-  if (/radio|lrc/i.test(String(sess?.timeline_scope || sess?.class_caa || ''))) return '20:00'
-  const loc = String(sess?.locations?.name || '').toLowerCase()
-  if (loc.includes('snagov')) return '12:00'
-  return '10:00'   // Limanu, Mangalia și restul
-}
+// Ora examinării implicită — aceeași regulă ca în variabila {{ora_examinare}}
+const defaultExamTimeFor = defaultExamTime
 
 function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions, allStudents, onEditSession }:
   { sess: Session, students: Student[], allStatuses: string[], onStatusChange:(sid:string,status:string)=>void, allSessions: Session[], allStudents: Record<string,Student[]>, onEditSession:(s:Session, focusKey?:string)=>void }) {
@@ -4208,6 +4203,7 @@ export default function SessionDetailPage() {
                 ['Nr. înștiintare reg ANR', 'nr_instiintare_anr', 'text'],
                 ['Nr. înștiințări', 'request_number', 'text'],
                 ['Ora examinare', 'exam_time', 'text'],
+                ['Ora start practică', 'practice_start_time', 'text'],
                 ['Locație detaliată', 'location_detail', 'text'],
                 ['Link skipper.setsail.ro', 'skipper_url', 'text'],
                 ['Categorie timeline', 'timeline_scope', 'select-scope'],

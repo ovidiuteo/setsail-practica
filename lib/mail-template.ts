@@ -23,6 +23,7 @@ export const MAIL_VAR_GROUPS: MailVarGroup[] = [
       { key: 'locatie', label: 'Locația' },
       { key: 'ambarcatiune', label: 'Ambarcațiunea' },
       { key: 'ora_start', label: 'Ora de start practică' },
+      { key: 'ora_examinare', label: 'Ora examinării (ex: 12:00)' },
       { key: 'data_start_curs', label: 'Data start curs (zi săpt, zz lună)' },
       { key: 'zz_data_start_practica', label: 'Ziua din data start practică' },
       { key: 'zz_llll_data_practica', label: 'Ziua și luna practicii' },
@@ -100,6 +101,15 @@ function localDay(d: string): Date | null {
   return y && m && dd ? new Date(y, m - 1, dd) : null
 }
 
+// Ora examinării: cea salvată pe sesiune, altfel implicit după tip și locație.
+// Aceeași regulă e folosită și în cardul de notificare ANR din pagina sesiunii.
+export function defaultExamTime(sess: any): string {
+  if (/radio|lrc/i.test(String(sess?.timeline_scope || sess?.class_caa || ''))) return '20:00'
+  const loc = String(sess?.locations?.name || '').toLowerCase()
+  if (loc.includes('snagov')) return '12:00'
+  return '10:00'   // Limanu, Mangalia și restul
+}
+
 // Intervalele de practică definite pe sesiune (programarea C/D Snagov).
 // Se calculează pentru cursurile unde există programare pe ore — indiferent dacă
 // e deja deschisă cursanților; la restul sesiunilor rămân goale.
@@ -151,6 +161,7 @@ export function mailVarValues(ctx: MailVarCtx): Record<string, string> {
     locatie: sess.location_detail || sess.locations?.name || '',
     ambarcatiune: sess.boats?.name || '',
     ora_start: sess.practice_start_time || '9:30',
+    ora_examinare: String(sess.exam_time || '').trim() || defaultExamTime(sess),
     data_start_curs: csd ? new Date(csd).toLocaleDateString('ro-RO', { weekday: 'long', day: 'numeric', month: 'long' }) : '',
     zz_data_start_practica: psd ? String(new Date(psd).getDate()) : '',
     zz_llll_data_practica: roDate(sd, { day: '2-digit', month: 'long' }),

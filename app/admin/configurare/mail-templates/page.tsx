@@ -41,7 +41,8 @@ const VARIABLES_INFO: Record<string, string> = {
   adresa_locatie: 'Adresa completă a locației',
   zz_data_start_practica: 'Ziua din data start practică (ex: 18)',
   zz_llll_data_practica: 'Ziua și luna din data practică (ex: 20 mai)',
-  ora_start: 'Ora de start a practicii (ex: 9:30)',
+  ora_start: 'Ora de start a practicii (ex: 9:30) — din „Ora start practică" a sesiunii',
+  ora_examinare: 'Ora examinării (ex: 12:00) — din „Ora examinare" a sesiunii',
   zz_data_start_curs: 'Ziua din data start curs (ex: 18)',
   zz_llll_aaaa_data_practica: 'Ziua, luna și anul din data practică (ex: 20 mai 2026)',
   data_start_curs: 'Data de început a cursului (ex: luni, 14 septembrie)',
@@ -167,7 +168,7 @@ export default function MailTemplatesPage() {
   // Datele pentru simulare — seriile, contactele, instructorii, datele firmei
   useEffect(() => {
     supabase.from('sessions')
-      .select('id, class_caa, session_date, course_start_date, practice_start_date, practice_start_time, location_detail, access_code, contact_person_ids, instructor_id, instructor_id_2, instructor_id_3, status, practice_booking_enabled, practice_slot_minutes, practice_start_hour, practice_end_hour, practice_boats, practice_per_boat, practice_per_slot, boats(name), locations(name), evaluators(email_oficial, email_personal)')
+      .select('id, class_caa, session_date, course_start_date, practice_start_date, practice_start_time, exam_time, location_detail, access_code, contact_person_ids, instructor_id, instructor_id_2, instructor_id_3, status, practice_booking_enabled, practice_slot_minutes, practice_start_hour, practice_end_hour, practice_boats, practice_per_boat, practice_per_slot, boats(name), locations(name), evaluators(email_oficial, email_personal)')
       .order('session_date', { ascending: true })
       .then(({ data }) => {
         const list = data || []
