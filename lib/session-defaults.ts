@@ -36,11 +36,10 @@ export function defaultLocatieExaminare(sess: any): string {
   return `din ${String(sess?.locations?.name || '')}`
 }
 
-// Clasa, așa cum apare în notificare
-export function defaultNotifClasa(sess: any): string {
-  return String(sess?.class_caa || '').includes('B')
-    ? 'B/Manevra ambarcatiunii cu vele'
-    : 'C/D/Manevra ambarcatiunii cu vele'
+// Clasa, așa cum apare în notificarea ANR. Aceeași pentru orice sesiune —
+// dacă e nevoie de altceva, se schimbă pe sesiune, din „Editează sesiunea".
+export function defaultNotifClasa(_sess?: any): string {
+  return 'C/D/Manevra ambarcatiunii cu vele'
 }
 
 // Toate valorile care se scriu pe sesiune la creare

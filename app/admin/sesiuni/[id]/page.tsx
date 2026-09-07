@@ -2270,7 +2270,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                     Clasă <span className="text-gray-300 font-normal">(dublu-click = editează sesiunea)</span>
                   </label>
                   <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
-                    value={notifForm.clasa} placeholder="C,D"
+                    value={notifForm.clasa} placeholder="C/D/Manevra ambarcatiunii cu vele"
                     onChange={e=>setNotifForm(f=>({...f,clasa:e.target.value}))}
                     onDoubleClick={()=>{
                       onEditSession(sess, 'notif_clasa')
