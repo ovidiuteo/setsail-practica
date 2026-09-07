@@ -57,6 +57,10 @@ const VARIABLES_INFO: Record<string, string> = {
   email_setsail: 'Email SetSail (office@setsail.ro)',
 }
 
+// Cheile pe care le poate propune generatorul — exact catalogul care se
+// înlocuiește și la trimiterea reală, ca să nu sugerăm variabile inexistente
+const ALL_VAR_KEYS = Object.keys(VARIABLES_INFO)
+
 const EMPTY_TEMPLATE: Partial<Template> = {
   key: '',
   label: '',
@@ -92,6 +96,15 @@ export default function MailTemplatesPage() {
   const [simSessionId, setSimSessionId] = useState('')
   const [simStudents, setSimStudents] = useState<any[]>([])
   const [simStudentId, setSimStudentId] = useState('')
+  // Generator de câmpuri variabile
+  const [varQuery, setVarQuery] = useState('')
+  const [varBusy, setVarBusy] = useState(false)
+  const [varFound, setVarFound] = useState<string | null>(null)
+  const [varWhy, setVarWhy] = useState('')
+  const [varAlt, setVarAlt] = useState<string[]>([])
+  const [varErr, setVarErr] = useState<string | null>(null)
+  const [varCopied, setVarCopied] = useState(false)
+  const [formulaOpen, setFormulaOpen] = useState(false)
   const [form, setForm] = useState<Partial<Template>>(EMPTY_TEMPLATE)
   const [saving, setSaving] = useState(false)
   const [activeTab, setActiveTab] = useState<'text' | 'html'>('text')
@@ -362,17 +375,47 @@ export default function MailTemplatesPage() {
       .filter(Boolean).map((id: string) => ({ full_name: simInstructors[id] || '' })),
     setsailInfo: simInfo,
   }
-  // variabilele cursantului nu sunt în catalogul de sesiune — le adăugăm aici
-  const withStudent = (t: string) => (t || '')
-    .split('{{cursant}}').join(simStudent?.full_name || '')
-    .split('{{email_cursant}}').join(simStudent?.email || '')
-    .split('{{telefon_cursant}}').join(simStudent?.phone || '')
-  const simSubject = simSession ? withStudent(applyMailTemplate(form.subject || '', simCtx)) : ''
-  const simBody = simSession ? withStudent(applyMailTemplate(form.body_text || '', simCtx)) : ''
+  const simSubject = simSession ? applyMailTemplate(form.subject || '', simCtx) : ''
+  const simBody = simSession ? applyMailTemplate(form.body_text || '', simCtx) : ''
   // ce a rămas necompletat pe această serie
   const simMissing = Array.from(new Set(
     `${simSubject}\n${simBody}`.match(/\{\{(\w+)\}\}/g)?.map(v => v.replace(/[{}]/g, '')) || []
   ))
+
+  // Valorile tuturor variabilelor pe seria selectată — folosite de generator și de preview
+  const simValues: Record<string, string> = simSession ? mailVarValues(simCtx) : {}
+
+  // ── Generator de câmpuri variabile: scrii „17 septembrie", primești formula ──
+  async function findVar() {
+    const q = varQuery.trim()
+    if (!q) return
+    setVarBusy(true); setVarErr(null); setVarFound(null); setVarAlt([])
+
+    // întâi potrivire directă pe valorile seriei (instant, exactă)
+    const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim()
+    const exact = Object.entries(simValues).find(([, v]) => v && norm(v) === norm(q))
+    if (exact) { setVarFound(exact[0]); setVarWhy('Coincide exact cu valoarea de pe seria selectată.'); setVarBusy(false); return }
+
+    try {
+      const r = await fetch('/api/ai/mail-var', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          query: q,
+          variables: ALL_VAR_KEYS.map(k => ({ key: k, label: VARIABLES_INFO[k] || k, value: simValues[k] || '' })),
+        }),
+      })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) throw new Error(j.error || 'Căutarea a eșuat.')
+      if (!j.key) { setVarErr('Nicio variabilă nu se potrivește. Încearcă altă formulare.'); setVarBusy(false); return }
+      setVarFound(j.key); setVarWhy(j.why || ''); setVarAlt(j.alternatives || [])
+    } catch (e: any) {
+      // dacă AI-ul nu e disponibil, încercăm o potrivire parțială pe valori
+      const partial = Object.entries(simValues).find(([, v]) => v && norm(v).includes(norm(q)))
+      if (partial) { setVarFound(partial[0]); setVarWhy('Găsit după valoarea de pe seria selectată.') }
+      else setVarErr(e.message || 'Căutarea a eșuat.')
+    }
+    setVarBusy(false)
+  }
 
   const inputCls = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white w-full"
   const textareaCls = "border border-gray-200 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-400 bg-white w-full font-mono resize-none"
@@ -389,11 +432,17 @@ export default function MailTemplatesPage() {
           </h1>
           <p className="text-sm text-gray-500 mt-1">{templates.length} template-uri • folosite în secțiunea Mailing din sesiuni</p>
         </div>
-        <button onClick={startNew}
-          className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-white shadow-sm hover:opacity-90 transition-opacity"
-          style={{ background: '#0a1628' }}>
-          <Plus size={15} /> Template nou
-        </button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => { setFormulaOpen(true); setVarErr(null) }}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors">
+            ⚡ Formulă câmp
+          </button>
+          <button onClick={startNew}
+            className="flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium text-white shadow-sm hover:opacity-90 transition-opacity"
+            style={{ background: '#0a1628' }}>
+            <Plus size={15} /> Template nou
+          </button>
+        </div>
       </div>
 
       {/* Filter */}
@@ -900,6 +949,83 @@ Folosește {{variabila}} pentru câmpuri dinamice."
           </div>
         )}
       </div>
+
+      {/* Generator de formule — independent de editarea unui template */}
+      {formulaOpen && (
+        <div onClick={() => setFormulaOpen(false)} className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div onClick={e => e.stopPropagation()} className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gray-50">
+              <div>
+                <h3 className="font-semibold text-sm text-gray-900">⚡ Formulă câmp variabil</h3>
+                <p className="text-xs text-gray-400 mt-0.5">Scrie valoarea sau ce vrei să apară — îți dăm formula</p>
+              </div>
+              <button onClick={() => setFormulaOpen(false)} className="p-1 rounded hover:bg-gray-200 text-gray-400"><X size={16} /></button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div className="flex gap-2">
+                <input className={inputCls} autoFocus placeholder="ex: 17 septembrie, Snagov, numele instructorului…"
+                  value={varQuery} onChange={e => setVarQuery(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') findVar() }} />
+                <button onClick={findVar} disabled={varBusy || !varQuery.trim()}
+                  className="px-4 py-2 rounded-lg text-sm font-medium text-white whitespace-nowrap disabled:opacity-50"
+                  style={{ background: '#0a1628' }}>
+                  {varBusy ? 'Caut…' : 'Găsește'}
+                </button>
+              </div>
+
+              <div className="text-xs text-gray-400">
+                Se compară cu seria: <b className="text-gray-600">{simSession ? sessionLabel(simSession) : '—'}</b>
+                <select value={simSessionId} onChange={e => setSimSessionId(e.target.value)}
+                  className="ml-2 border border-gray-200 rounded-lg px-2 py-1 text-xs bg-white max-w-[180px]">
+                  {simSessions.map(s => <option key={s.id} value={s.id}>{sessionLabel(s)}</option>)}
+                </select>
+              </div>
+
+              {varErr && <p className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{varErr}</p>}
+
+              {varFound && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 mb-1 block">Formula</label>
+                    <div className="flex gap-2">
+                      <input readOnly value={`{{${varFound}}}`}
+                        className={inputCls + ' font-mono text-xs bg-gray-50'} onFocus={e => e.currentTarget.select()} />
+                      <button onClick={() => { navigator.clipboard.writeText(`{{${varFound}}}`); setVarCopied(true); setTimeout(() => setVarCopied(false), 1500) }}
+                        className="flex items-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 hover:bg-gray-50 text-sm text-gray-600 whitespace-nowrap">
+                        {varCopied ? <Check size={15} className="text-green-600" /> : <Copy size={15} />} {varCopied ? 'Copiat' : 'Copiază'}
+                      </button>
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1">{VARIABLES_INFO[varFound] || ''}{varWhy ? ` — ${varWhy}` : ''}</p>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-medium text-gray-500 mb-1 block">Preview pe seria selectată</label>
+                    <div className="rounded-lg border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-800 min-h-[38px] break-all">
+                      {simValues[varFound] || <span className="text-gray-300">(gol pe această serie)</span>}
+                    </div>
+                  </div>
+
+                  {varAlt.length > 0 && (
+                    <div>
+                      <label className="text-xs font-medium text-gray-500 mb-1 block">Alte variante</label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {varAlt.map(k => (
+                          <button key={k} onClick={() => setVarFound(k)}
+                            className="px-2 py-1 rounded-lg border border-gray-200 bg-white text-xs font-mono text-gray-600 hover:bg-gray-50">
+                            {`{{${k}}}`}
+                            <span className="ml-1.5 font-sans text-gray-400">{simValues[k] || '—'}</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
