@@ -2232,13 +2232,23 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
 
                 <div>
                   <label className="text-xs font-medium text-gray-500 mb-1 block">
-                    Nr. înștiințări / Nr. notificare <span className="text-gray-300 font-normal">(dublu-click = editează sesiunea)</span>
+                    Nr. înștiințări / Nr. notificare{' '}
+                    <span className="text-gray-300 font-normal">
+                      (dublu-click = {!notifForm.nr_notificare.trim() && sess.request_number ? 'preia din sesiune' : 'editează sesiunea'})
+                    </span>
                   </label>
                   <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
                     value={notifForm.nr_notificare} placeholder="ex: 6/21.04.2026"
                     onChange={e=>setNotifForm(f=>({...f,nr_notificare:e.target.value}))}
-                    onDoubleClick={()=>onEditSession(sess, 'request_number')}
-                    title="Vine din «Nr. înștiințări» al sesiunii. Dublu-click pentru a-l edita acolo."/>
+                    onDoubleClick={()=>{
+                      // gol + există număr pe sesiune → îl preluăm; altfel mergem să-l edităm
+                      if (!notifForm.nr_notificare.trim() && sess.request_number)
+                        setNotifForm(f=>({...f, nr_notificare: sess.request_number || ''}))
+                      else onEditSession(sess, 'request_number')
+                    }}
+                    title={!notifForm.nr_notificare.trim() && sess.request_number
+                      ? `Dublu-click pentru a prelua «${sess.request_number}» din sesiune`
+                      : 'Vine din «Nr. înștiințări» al sesiunii. Dublu-click pentru a-l edita acolo.'}/>
                 </div>
                 <div>
                   <label className="text-xs font-medium text-gray-500 mb-1 block">
