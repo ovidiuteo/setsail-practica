@@ -102,12 +102,30 @@ export async function POST(req: NextRequest) {
       'examen-obtinere':  'examen-obtinere',
       'examen-prelungire':'examen-prelungire',
     }
-    const nrCurent = nrMap[nrTipMap[tip]] ? String(nrMap[nrTipMap[tip]]) : ''
+    // Numărul care apare pe înștiințare e cel din registrul „Înștiințări ANCOM"
+    // (numărul de ieșire). Vechile numere de „solicitare" rămân doar ca rezervă.
+    const { data: iesireRows } = await supabase
+      .from('notification_numbers')
+      .select('numar, document_tip, data_notificare, tip')
+      .eq('session_id', session_id)
+      .eq('document_tip', tip)
+      .in('tip', ['instiintari_ancom', 'nr_iesire_ancom'])
+      .order('numar', { ascending: false })
+    // dacă există ambele, cel din registrul înștiințărilor are prioritate
+    const iesire = (iesireRows || []).find((r: any) => r.tip === 'instiintari_ancom')
+      || (iesireRows || [])[0]
+
+    const nrCurent = iesire ? String(iesire.numar)
+      : (nrMap[nrTipMap[tip]] ? String(nrMap[nrTipMap[tip]]) : '')
     const allRows = [...(nrRowsSession || []), ...(nrRowsAll || [])]
     const dataNrRow = allRows.find((r: any) => r.document_tip === tip)
-    const dataNrFormatat = dataNrRow
-      ? new Date(dataNrRow.data_notificare).toLocaleDateString('ro-RO')
-      : new Date(session.session_date).toLocaleDateString('ro-RO')
+    const roData = (d: string) => {
+      const [y, m, dd] = String(d || '').slice(0, 10).split('-').map(Number)
+      return y && m && dd ? new Date(y, m - 1, dd).toLocaleDateString('ro-RO') : ''
+    }
+    const dataNrFormatat = iesire ? roData(iesire.data_notificare)
+      : dataNrRow ? roData(dataNrRow.data_notificare)
+      : roData(session.session_date)
 
     const sessionDate = new Date(session.session_date).toLocaleDateString('ro-RO', {
       day: '2-digit', month: 'long', year: 'numeric'

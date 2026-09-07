@@ -1359,11 +1359,10 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
     pv_ancom: 'PV ANCOM', instiintari_ancom: 'Înștiințări ANCOM', cereri_ancom: 'Cereri examen ANCOM',
     nr_iesire_ancom: 'Nr. ieșire ANCOM', instiintari_anr: 'Înștiințări ANR',
   }
-  // Documentele care primesc și Nr. ieșire ANCOM (înștiințări + PV + anexe; nu cererile)
-  const hasIesire = (docTip: string) => {
-    const r = DOC_DEFS[docTip]?.reg
-    return r === 'pv_ancom' || r === 'instiintari_ancom'
-  }
+  // Documentele care primesc și un Nr. ieșire ANCOM separat.
+  // Înștiințările NU: numărul lor din registru e chiar numărul de ieșire,
+  // cel care apare în colțul din dreapta al documentului.
+  const hasIesire = (docTip: string) => DOC_DEFS[docTip]?.reg === 'pv_ancom'
   // anexaOf = preia numărul PV-ului corespunzător (nu primește număr propriu)
   const DOC_DEFS: Record<string, { reg: string; label: string; anexaOf?: string }> = {
     'curs-obtinere':     { reg: 'instiintari_ancom', label: 'Înștiințare Curs Obținere LRC' },
@@ -1545,11 +1544,15 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
       const interact = opts.filled ? 'border border-gray-200 hover:bg-gray-100' : 'border border-dashed border-gray-300 hover:bg-gray-50'
       return <button type="button" onClick={opts.onClick} title={opts.title} className={`${base} ${color} ${interact}`}>{txt}</button>
     }
+    const esteInstiintare = DOC_DEFS[src]?.reg === 'instiintari_ancom'
     return (
       <div className="w-full order-last flex flex-col items-center gap-1 pt-1">
         {pill(
           (docRec ? `${docRec.numar} · ${shortDate(docRec.data_notificare)}` : (ro ? '—' : '+ nr')),
-          { filled: !!docRec, title: ro ? 'Preia nr. PV' : 'Nr. document — click pentru alocare',
+          { filled: !!docRec,
+            title: ro ? 'Preia nr. PV'
+              : esteInstiintare ? 'Nr. ieșire ANCOM — apare în colțul din dreapta al documentului'
+              : 'Nr. document — click pentru alocare',
             onClick: () => openDocNrModal(docTip, 'doc') }
         )}
         {hasIesire(docTip) && pill(
