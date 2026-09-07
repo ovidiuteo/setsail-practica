@@ -21,7 +21,8 @@ export const MAIL_VAR_GROUPS: MailVarGroup[] = [
     category: 'Sesiune practică', icon: '⛵', vars: [
       { key: 'link_portal', label: 'Link portal cursant' },
       { key: 'data_sesiune', label: 'Data sesiunii (zi lună an)' },
-      { key: 'locatie', label: 'Locația' },
+      { key: 'locatie', label: 'Locația (ex: Snagov, jud. Ilfov)' },
+      { key: 'locatie_scurta', label: 'Locația, doar numele (ex: Snagov)' },
       { key: 'ambarcatiune', label: 'Ambarcațiunea' },
       { key: 'ora_start', label: 'Ora de start practică' },
       { key: 'ora_examinare', label: 'Ora examinării (ex: 12:00)' },
@@ -154,6 +155,8 @@ export function mailVarValues(ctx: MailVarCtx): Record<string, string> {
     link_portal: origin + '/portal?cod=' + (sess.access_code || ''),
     data_sesiune: roDate(sd, { day: '2-digit', month: 'long', year: 'numeric' }),
     locatie: sess.location_detail || sess.locations?.name || '',
+    // doar numele localității: „Snagov", nu „Snagov, jud. Ilfov"
+    locatie_scurta: String(sess.locations?.name || String(sess.location_detail || '').split(',')[0] || '').trim(),
     ambarcatiune: sess.boats?.name || '',
     ora_start: sess.practice_start_time || '9:30',
     ora_examinare: String(sess.exam_time || '').trim() || defaultExamTime(sess),

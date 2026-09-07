@@ -35,7 +35,8 @@ const CATEGORII = [
 const VARIABLES_INFO: Record<string, string> = {
   link_portal: 'Link-ul portalului de practică al sesiunii',
   data_sesiune: 'Data sesiunii (ex: 18 mai 2026)',
-  locatie: 'Locația sesiunii (ex: Limanu)',
+  locatie: 'Locația sesiunii, cu județ (ex: Snagov, jud. Ilfov)',
+  locatie_scurta: 'Doar numele locației (ex: Snagov)',
   ambarcatiune: 'Numele ambarcațiunii (ex: SetSail)',
   data_noua: 'Noua dată (pentru modificări)',
   adresa_locatie: 'Adresa completă a locației',
