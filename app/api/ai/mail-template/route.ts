@@ -33,11 +33,24 @@ export async function POST(req: NextRequest) {
     ...(cats.length ? [
       `- Alege categoria potrivită din lista: ${cats.map(c => c.value).join(', ')}. Dacă niciuna nu se potrivește, folosește "general".`,
     ] : []),
-    'Răspunde DOAR cu JSON valid, fără markdown, fără explicații:',
-    cats.length
-      ? '{"label":"...","subject":"...","body":"...","categorie":"..."}'
-      : '{"label":"...","subject":"...","body":"..."}',
+    'Răspunde cu obiectul cerut: label, subject, body (și categorie, dacă e cazul).',
   ].join('\n')
+
+  // Schema de răspuns — API-ul garantează astfel JSON valid, indiferent de lungimea textului
+  const schema = {
+    type: 'object',
+    properties: {
+      label: { type: 'string', description: 'Nume scurt pentru template (2-4 cuvinte)' },
+      subject: { type: 'string', description: 'Subiectul, cu variabile acolo unde se potrivesc' },
+      body: { type: 'string', description: 'Textul emailului, cu variabile acolo unde se potrivesc' },
+      categorie: {
+        type: 'string',
+        description: cats.length ? `Una dintre: ${cats.map(c => c.value).join(', ')}` : 'Lasă gol',
+      },
+    },
+    required: ['label', 'subject', 'body', 'categorie'],
+    additionalProperties: false,
+  }
 
   const user = `SUBIECT:\n${subject || ''}\n\nTEXT:\n${body || ''}`
 
@@ -47,27 +60,40 @@ export async function POST(req: NextRequest) {
       headers: { 'Content-Type': 'application/json', 'x-api-key': KEY, 'anthropic-version': '2023-06-01' },
       body: JSON.stringify({
         model: 'claude-sonnet-5',
-        max_tokens: 2000,
+        // emailul se întoarce integral în răspuns — cu prea puține tokenuri ieșea trunchiat
+        max_tokens: 16000,
         system,
         messages: [{ role: 'user', content: user }],
+        output_config: { format: { type: 'json_schema', schema } },
       }),
     })
     const data = await res.json()
     if (!res.ok) return NextResponse.json({ error: data?.error?.message || 'Eroare API Claude' }, { status: 502 })
 
-    // Parsare defensivă: ia primul bloc text, curăță fences, izolează {...}
     const textBlock = (data.content || []).find((c: any) => c?.type === 'text')
-    let raw = String(textBlock?.text || '').replace(/```json/gi, '').replace(/```/g, '').trim()
-    const a = raw.indexOf('{'); const b = raw.lastIndexOf('}')
-    if (a >= 0 && b > a) raw = raw.slice(a, b + 1)
+    let raw = String(textBlock?.text || '').trim()
+    if (data.stop_reason === 'max_tokens')
+      return NextResponse.json({ error: 'Emailul e prea lung pentru o singură analiză. Încearcă doar partea de text a emailului.' }, { status: 502 })
+
+    // Schema garantează JSON valid; păstrăm curățarea ca plasă de siguranță
     let parsed: any
     try { parsed = JSON.parse(raw) } catch {
-      return NextResponse.json({ error: 'Răspuns AI neinterpretabil', raw: raw.slice(0, 300) }, { status: 502 })
+      raw = raw.replace(/```json/gi, '').replace(/```/g, '').trim()
+      const a = raw.indexOf('{'); const b = raw.lastIndexOf('}')
+      if (a >= 0 && b > a) raw = raw.slice(a, b + 1)
+      try { parsed = JSON.parse(raw) } catch {
+        return NextResponse.json({
+          error: 'Răspuns AI neinterpretabil',
+          raw: raw.slice(0, 300),
+          stop_reason: data.stop_reason || null,
+        }, { status: 502 })
+      }
     }
     return NextResponse.json({
       label: String(parsed.label || '').trim(),
       subject: String(parsed.subject ?? subject ?? ''),
       body: String(parsed.body ?? body ?? ''),
+      categorie: String(parsed.categorie || '').trim(),
     })
   } catch (e: any) {
     return NextResponse.json({ error: e?.message || 'eroare' }, { status: 500 })
