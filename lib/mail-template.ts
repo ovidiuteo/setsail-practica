@@ -26,6 +26,9 @@ export const MAIL_VAR_GROUPS: MailVarGroup[] = [
       { key: 'zz_llll_data_practica', label: 'Ziua și luna practicii' },
       { key: 'zz_data_start_curs', label: 'Ziua din data start curs' },
       { key: 'zz_llll_aaaa_data_practica', label: 'Ziua, luna, anul practicii' },
+      { key: 'zi_sapt_start_curs', label: 'Ziua săptămânii, start curs (ex: luni)' },
+      { key: 'zi_sapt_practica', label: 'Ziua săptămânii, practică (ex: joi)' },
+      { key: 'zi_sapt_examen', label: 'Ziua săptămânii, examen (ex: vineri)' },
     ],
   },
   {
@@ -75,6 +78,15 @@ function roDate(d: string, opts: Intl.DateTimeFormatOptions): string {
   return d ? new Date(d).toLocaleDateString('ro-RO', opts) : ''
 }
 
+// Ziua săptămânii în română („luni", „joi"). Data vine ca 'YYYY-MM-DD', deci o
+// citim pe componente — `new Date(iso)` ar da miezul nopții UTC și, la fusul
+// nostru, ar putea aluneca într-o altă zi.
+function roWeekday(d: string): string {
+  const [y, m, dd] = String(d || '').slice(0, 10).split('-').map(Number)
+  if (!y || !m || !dd) return ''
+  return new Date(y, m - 1, dd).toLocaleDateString('ro-RO', { weekday: 'long' })
+}
+
 // Calculează valorile tuturor variabilelor pentru un context
 export function mailVarValues(ctx: MailVarCtx): Record<string, string> {
   const sess = ctx.sess || {}
@@ -102,6 +114,9 @@ export function mailVarValues(ctx: MailVarCtx): Record<string, string> {
     zz_llll_data_practica: roDate(sd, { day: '2-digit', month: 'long' }),
     zz_data_start_curs: sess.course_start_date ? String(new Date(sess.course_start_date).getDate()) : '',
     zz_llll_aaaa_data_practica: roDate(sd, { day: '2-digit', month: 'long', year: 'numeric' }),
+    zi_sapt_start_curs: roWeekday(csd),
+    zi_sapt_practica: roWeekday(psd || sd),
+    zi_sapt_examen: roWeekday(sd),
     // Contact
     pers_cont_1: selected[0]?.full_name || '',
     pers_cont_2: selected[1]?.full_name || '',

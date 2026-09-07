@@ -44,6 +44,10 @@ const VARIABLES_INFO: Record<string, string> = {
   ora_start: 'Ora de start a practicii (ex: 9:30)',
   zz_data_start_curs: 'Ziua din data start curs (ex: 18)',
   zz_llll_aaaa_data_practica: 'Ziua, luna și anul din data practică (ex: 20 mai 2026)',
+  data_start_curs: 'Data de început a cursului (ex: luni, 14 septembrie)',
+  zi_sapt_start_curs: 'Ziua săptămânii în care începe cursul (ex: luni)',
+  zi_sapt_practica: 'Ziua săptămânii în care e practica (ex: joi)',
+  zi_sapt_examen: 'Ziua săptămânii în care e examenul (ex: vineri)',
   pers_cont_1: 'Numele primei persoane de contact bifate',
   pers_cont_2: 'Numele celei de-a doua persoane de contact',
   pers_cont_3: 'Numele celei de-a treia persoane de contact',
@@ -929,6 +933,11 @@ Folosește {{variabila}} pentru câmpuri dinamice."
                   <button onClick={cancelEdit}
                     className="flex-1 py-2 rounded-xl text-sm border border-gray-200 text-gray-500 hover:bg-gray-50 transition-colors">
                     Anulează
+                  </button>
+                  <button onClick={() => { setFormulaOpen(true); setVarErr(null) }}
+                    title="Găsește formula unui câmp variabil"
+                    className="px-3 py-2 rounded-xl text-sm border border-gray-200 text-gray-700 hover:bg-gray-50 transition-colors whitespace-nowrap">
+                    ⚡ Formulă
                   </button>
                   <button onClick={save} disabled={saving || !form.key || !form.label || !form.subject}
                     className="flex-1 py-2 rounded-xl text-sm font-medium text-white disabled:opacity-40 transition-opacity"
