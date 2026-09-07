@@ -15,7 +15,7 @@ type State = {
   date: string | null
   slots: Slot[]
   mine: { from: string; to: string } | null
-  myRequest: { id: string; from: string; to: string; status: string; date: string } | null
+  myRequest: { id: string; from: string; to: string; status: string; date: string; declined: number; waiting: number } | null
   incoming: Incoming | null
 }
 
@@ -93,6 +93,17 @@ export default function PracticeBooking({ studentId, accessCode }: { studentId: 
     setPicking(false); setSt(j)
   }
 
+  async function cancelRequest() {
+    setBusy('cancelreq'); setErr(null)
+    const r = await fetch('/api/practice-booking', {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ student_id: studentId, access_code: accessCode, action: 'cancel_request' }),
+    })
+    const j = await r.json().catch(() => ({}))
+    setBusy(null)
+    if (r.ok) setSt(j)
+  }
+
   async function cancel() {
     if (!confirm('Anulați programarea la practică?')) return
     setBusy('cancel'); setErr(null)
@@ -131,10 +142,23 @@ export default function PracticeBooking({ studentId, accessCode }: { studentId: 
         </div>
       )}
 
-      {/* Cererea mea de urgență, în așteptarea răspunsurilor */}
+      {/* Cererea mea de urgență, cu numărul de refuzuri și de răspunsuri așteptate */}
       {st.myRequest?.status === 'pending' && (
         <div className="mb-4 rounded-xl border border-amber-300 bg-amber-50 px-3 py-2.5 text-sm text-amber-900">
-          Cerere de urgență trimisă pentru <b>{st.myRequest.from}–{st.myRequest.to}</b>. Așteptăm răspunsul colegilor.
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span>Cerere de urgență trimisă pentru <b>{st.myRequest.from}–{st.myRequest.to}</b>.</span>
+            <span className="font-semibold">
+              {st.myRequest.declined} {st.myRequest.declined === 1 ? 'refuz' : 'refuzuri'} · {st.myRequest.waiting} pending
+            </span>
+            <button onClick={cancelRequest} disabled={busy === 'cancelreq'} className="underline text-amber-700 hover:text-amber-900 text-xs">
+              retrage cererea
+            </button>
+          </div>
+          {st.myRequest.waiting === 0 && (
+            <p className="mt-1 text-xs text-amber-800">
+              Toți colegii din interval au refuzat. Puteți retrage cererea și alege un interval liber.
+            </p>
+          )}
         </div>
       )}
       {st.myRequest?.status === 'accepted' && st.mine?.from === st.myRequest.from && (
@@ -189,11 +213,18 @@ export default function PracticeBooking({ studentId, accessCode }: { studentId: 
             </>
           )
 
-          // Interval plin: nu se poate rezerva, dar la hover apare „Urgență"
+          // Interval plin: nu se poate rezerva, dar la hover apare „Urgență".
+          // Dacă am deja o cerere trimisă pe el, în locul butonului stă eticheta „pending".
+          const asteapta = st.myRequest?.status === 'pending' && st.myRequest.from === s.from
           if (s.full && !mine) return (
             <div key={s.from} className="group relative rounded-xl border-2 border-red-400 bg-red-50/60 px-3 py-3">
               {linie}
-              {!picking && (
+              {asteapta ? (
+                <span title={`${st.myRequest!.declined} refuzuri · ${st.myRequest!.waiting} în așteptare`}
+                  className="absolute bottom-1.5 right-1.5 px-2 py-1 rounded-lg bg-amber-400 text-amber-950 text-[10px] font-bold uppercase tracking-wide">
+                  pending {st.myRequest!.waiting}
+                </span>
+              ) : !picking && (
                 <button onClick={() => { setUrgentFor(s); setErr(null) }}
                   className="absolute bottom-1.5 right-1.5 px-2 py-1 rounded-lg bg-red-600 text-white text-[10px] font-bold uppercase tracking-wide
                              opacity-0 group-hover:opacity-100 focus:opacity-100 transition-opacity hover:bg-red-700">

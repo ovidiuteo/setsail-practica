@@ -56,6 +56,19 @@ async function slotState(sb: any, sessionId: string, sess: any, studentId: strin
   const openForMe = all.filter(r =>
     r.status === 'pending' && r.requester_id !== studentId && mine && r.slot_from === mine.from)
 
+  // Câți colegi din interval au refuzat și de la câți mai așteptăm răspuns
+  let myCounts = { declined: 0, waiting: 0 }
+  if (myRequest && myRequest.status === 'pending') {
+    const colegi = (rows || []).filter((b: any) => b.slot_from === myRequest.slot_from && b.student_id !== studentId)
+    const { data: answers } = await sb.from('practice_swap_responses')
+      .select('student_id, answer').eq('request_id', myRequest.id)
+    const answered = new Set((answers || []).map((a: any) => a.student_id))
+    myCounts = {
+      declined: (answers || []).filter((a: any) => a.answer === 'no').length,
+      waiting: colegi.filter((b: any) => !answered.has(b.student_id)).length,
+    }
+  }
+
   let incoming: any = null
   if (openForMe.length) {
     const { data: answered } = await sb.from('practice_swap_responses')
@@ -77,7 +90,7 @@ async function slotState(sb: any, sessionId: string, sess: any, studentId: strin
     mine,
     myRequest: myRequest && {
       id: myRequest.id, from: myRequest.slot_from, to: myRequest.slot_to,
-      status: myRequest.status, date: myRequest.slot_date,
+      status: myRequest.status, date: myRequest.slot_date, ...myCounts,
     },
     incoming,
   }
@@ -200,9 +213,18 @@ export async function POST(req: NextRequest) {
 
 export async function DELETE(req: NextRequest) {
   const sb = svc()
-  const { student_id, access_code } = await req.json().catch(() => ({}))
+  const { student_id, access_code, action } = await req.json().catch(() => ({}))
   const ok = await gate(sb, student_id, access_code)
   if (!ok) return NextResponse.json({ error: 'unauthorized' }, { status: 403 })
+
+  // Retragerea cererii de urgență (de ex. când toți colegii au refuzat)
+  if (action === 'cancel_request') {
+    await sb.from('practice_swap_requests')
+      .update({ status: 'cancelled', resolved_at: new Date().toISOString() })
+      .eq('session_id', ok.student.session_id).eq('requester_id', student_id).eq('status', 'pending')
+    return NextResponse.json(await slotState(sb, ok.student.session_id, ok.session, student_id))
+  }
+
   const { error } = await sb.from('practice_bookings')
     .delete().eq('session_id', ok.student.session_id).eq('student_id', student_id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
