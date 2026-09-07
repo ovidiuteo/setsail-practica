@@ -950,10 +950,11 @@ Folosește {{variabila}} pentru câmpuri dinamice."
         )}
       </div>
 
-      {/* Generator de formule — independent de editarea unui template */}
+      {/* Generator de formule — independent de editarea unui template.
+          Se închide doar din X sau din butoanele de jos, nu la click pe fundal. */}
       {formulaOpen && (
-        <div onClick={() => setFormulaOpen(false)} className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
-          <div onClick={e => e.stopPropagation()} className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden">
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100 bg-gray-50">
               <div>
                 <h3 className="font-semibold text-sm text-gray-900">⚡ Formulă câmp variabil</h3>
@@ -1022,6 +1023,19 @@ Folosește {{variabila}} pentru câmpuri dinamice."
                   )}
                 </div>
               )}
+            </div>
+
+            <div className="flex justify-end gap-2 px-5 py-3 border-t border-gray-100 bg-gray-50">
+              <button onClick={() => setFormulaOpen(false)}
+                className="px-4 py-2 rounded-xl text-sm border border-gray-200 text-gray-600 hover:bg-white">
+                Închide
+              </button>
+              <button onClick={() => { if (varFound) navigator.clipboard.writeText(`{{${varFound}}}`); setFormulaOpen(false) }}
+                disabled={!varFound}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-xl text-sm font-medium text-white disabled:opacity-40"
+                style={{ background: '#0a1628' }}>
+                <Copy size={14} /> Copiază și închide
+              </button>
             </div>
           </div>
         </div>
