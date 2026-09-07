@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase'
 import { TIMELINE_SCOPES, timelineScopeLabel, scopeForSession } from '@/lib/timeline-scope'
 import { computeAddressChanges, AddressChange } from '@/lib/normalize-address'
 import { samePerson, mergeCarry, fillGaps } from '@/lib/student-merge'
+import PracticeSlotsCard from '@/components/PracticeSlotsCard'
 import { applyMailTemplate } from '@/lib/mail-template'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
@@ -2168,6 +2169,9 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
 
           {/* Link tabel cursanți (gated prin token) */}
           <RosterLinkCard sess={sess} />
+
+          {/* Programare la practică pe intervale (curs C/D Snagov) */}
+          <PracticeSlotsCard sess={sess} students={students} />
 
           {/* Coduri QR grup (A4 printabil) */}
           <QrPdfCard sess={sess} />

@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Ship, RotateCcw, Check, Upload, Loader2, CheckCircle, AlertCircle, Camera, ChevronDown, ChevronUp, FileText, RadioTower, AlertTriangle } from 'lucide-react'
 import CIImageEditor from '@/components/CIImageEditor'
+import PracticeBooking from '@/components/PracticeBooking'
 import { scopeForSession } from '@/lib/timeline-scope'
 
 type Step = 'login' | 'confirm' | 'done'
@@ -104,6 +105,8 @@ export default function PortalPage() {
   const needsLrcCert = examScope === 'radio_lrc' && /prelungire/i.test(classCaa)
   // La radio nu se semnează pe ecran: se semnează cererea de examen
   const isRadioSession = examScope === 'radio_lrc'
+  // Programarea pe intervale e doar la cursurile C/D de la Snagov
+  const isSnagovCourse = examScope === 'curs_cd_snagov'
   // Cursantul a ales între obținere și prelungire? (dacă nu, clasa e doar „Radio")
   // De asta depinde tipul cererii, deci fără alegere nu se poate genera.
   const lrcChosen = /obtinere|obținere|prelungire/i.test(classCaa)
@@ -1374,6 +1377,11 @@ export default function PortalPage() {
                   și o așezăm pe cerere, sub numele dumneavoastră.
                 </p>
               </div>
+            )}
+
+            {/* Programare la practică — doar la cursurile C/D (Snagov) */}
+            {isSnagovCourse && student?.id && session?.access_code && (
+              <PracticeBooking studentId={student.id} accessCode={session.access_code} />
             )}
 
             {/* Semnătură (canvas) — nu la radio, unde se semnează pe cerere */}
