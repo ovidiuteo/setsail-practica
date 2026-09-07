@@ -26,7 +26,11 @@ export const MAIL_VAR_GROUPS: MailVarGroup[] = [
       { key: 'zz_llll_data_practica', label: 'Ziua și luna practicii' },
       { key: 'zz_data_start_curs', label: 'Ziua din data start curs' },
       { key: 'zz_llll_aaaa_data_practica', label: 'Ziua, luna, anul practicii' },
-      { key: 'zi_sapt_start_curs', label: 'Ziua săptămânii, start curs (ex: luni)' },
+      { key: 'zi_sapt_start_curs', label: 'Ziua săptămânii, ziua 1 de curs (ex: luni)' },
+      { key: 'zi_sapt_curs_2', label: 'Ziua săptămânii, ziua 2 de curs (ex: marți)' },
+      { key: 'zi_sapt_curs_3', label: 'Ziua săptămânii, ziua 3 de curs (ex: miercuri)' },
+      { key: 'zz_llll_curs_2', label: 'Data zilei 2 de curs (ex: 15 septembrie)' },
+      { key: 'zz_llll_curs_3', label: 'Data zilei 3 de curs (ex: 16 septembrie)' },
       { key: 'zi_sapt_practica', label: 'Ziua săptămânii, practică (ex: joi)' },
       { key: 'zi_sapt_examen', label: 'Ziua săptămânii, examen (ex: vineri)' },
     ],
@@ -82,9 +86,26 @@ function roDate(d: string, opts: Intl.DateTimeFormatOptions): string {
 // citim pe componente — `new Date(iso)` ar da miezul nopții UTC și, la fusul
 // nostru, ar putea aluneca într-o altă zi.
 function roWeekday(d: string): string {
+  const day = localDay(d)
+  return day ? day.toLocaleDateString('ro-RO', { weekday: 'long' }) : ''
+}
+
+// 'YYYY-MM-DD' → Date la miezul nopții LOCAL (null dacă lipsește)
+function localDay(d: string): Date | null {
   const [y, m, dd] = String(d || '').slice(0, 10).split('-').map(Number)
-  if (!y || !m || !dd) return ''
-  return new Date(y, m - 1, dd).toLocaleDateString('ro-RO', { weekday: 'long' })
+  return y && m && dd ? new Date(y, m - 1, dd) : null
+}
+
+// Ziua a n-a de curs (1 = ziua de start): ziua săptămânii și data scurtă
+function cursDay(csd: string, n: number): { zi: string; data: string } {
+  const start = localDay(csd)
+  if (!start) return { zi: '', data: '' }
+  const d = new Date(start)
+  d.setDate(d.getDate() + (n - 1))
+  return {
+    zi: d.toLocaleDateString('ro-RO', { weekday: 'long' }),
+    data: d.toLocaleDateString('ro-RO', { day: 'numeric', month: 'long' }),
+  }
 }
 
 // Calculează valorile tuturor variabilelor pentru un context
@@ -117,6 +138,11 @@ export function mailVarValues(ctx: MailVarCtx): Record<string, string> {
     zi_sapt_start_curs: roWeekday(csd),
     zi_sapt_practica: roWeekday(psd || sd),
     zi_sapt_examen: roWeekday(sd),
+    // Zilele 2 și 3 de curs, calculate din ziua de start
+    zi_sapt_curs_2: cursDay(csd, 2).zi,
+    zi_sapt_curs_3: cursDay(csd, 3).zi,
+    zz_llll_curs_2: cursDay(csd, 2).data,
+    zz_llll_curs_3: cursDay(csd, 3).data,
     // Contact
     pers_cont_1: selected[0]?.full_name || '',
     pers_cont_2: selected[1]?.full_name || '',

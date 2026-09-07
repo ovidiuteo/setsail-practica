@@ -45,7 +45,11 @@ const VARIABLES_INFO: Record<string, string> = {
   zz_data_start_curs: 'Ziua din data start curs (ex: 18)',
   zz_llll_aaaa_data_practica: 'Ziua, luna și anul din data practică (ex: 20 mai 2026)',
   data_start_curs: 'Data de început a cursului (ex: luni, 14 septembrie)',
-  zi_sapt_start_curs: 'Ziua săptămânii în care începe cursul (ex: luni)',
+  zi_sapt_start_curs: 'Ziua săptămânii a zilei 1 de curs (ex: luni)',
+  zi_sapt_curs_2: 'Ziua săptămânii a zilei 2 de curs — start + 1 zi (ex: marți)',
+  zi_sapt_curs_3: 'Ziua săptămânii a zilei 3 de curs — start + 2 zile (ex: miercuri)',
+  zz_llll_curs_2: 'Data zilei 2 de curs (ex: 15 septembrie)',
+  zz_llll_curs_3: 'Data zilei 3 de curs (ex: 16 septembrie)',
   zi_sapt_practica: 'Ziua săptămânii în care e practica (ex: joi)',
   zi_sapt_examen: 'Ziua săptămânii în care e examenul (ex: vineri)',
   pers_cont_1: 'Numele primei persoane de contact bifate',
@@ -396,7 +400,9 @@ export default function MailTemplatesPage() {
     setVarBusy(true); setVarErr(null); setVarFound(null); setVarAlt([])
 
     // întâi potrivire directă pe valorile seriei (instant, exactă)
-    const norm = (s: string) => s.toLowerCase().replace(/\s+/g, ' ').trim()
+    // fără diacritice, ca „marti" să găsească „marți"
+    const norm = (s: string) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+      .replace(/ș|ş/g, 's').replace(/ț|ţ/g, 't').replace(/\s+/g, ' ').trim()
     const exact = Object.entries(simValues).find(([, v]) => v && norm(v) === norm(q))
     if (exact) { setVarFound(exact[0]); setVarWhy('Coincide exact cu valoarea de pe seria selectată.'); setVarBusy(false); return }
 
