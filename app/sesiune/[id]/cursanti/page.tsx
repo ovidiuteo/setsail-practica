@@ -2,6 +2,8 @@
 import { useEffect, useState, useCallback, useRef } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import { parseStudentsText } from '@/lib/import-parse'
+import type { SyncResult } from '@/lib/skipper-result'
+import SkipperSyncModal from '@/components/SkipperSyncModal'
 
 type Row = {
   id: string; full_name: string; email: string; cnp: string; birth_date: string
@@ -243,6 +245,10 @@ export default function RosterPage() {
   useEffect(() => { setOrigin(window.location.origin) }, [])
   const [deleting, setDeleting] = useState<string | null>(null)
   const [mailOpen, setMailOpen] = useState(false)
+  const [hasSkipper, setHasSkipper] = useState(false)
+  const [syncBusy, setSyncBusy] = useState(false)
+  const [syncRes, setSyncRes] = useState<SyncResult | null>(null)
+  const [syncErr, setSyncErr] = useState<string | null>(null)
   const [sort, setSort] = useState<Sort>({ mode: 'alpha', dir: 'asc' })
   // click pe butonul activ = inversează sensul; pe celălalt = comută pe el
   const toggleSort = (mode: SortMode) => setSort(s => s.mode === mode
@@ -258,6 +264,7 @@ export default function RosterPage() {
     setDocsVisible(!!j.docs_visible)
     setAccessCode(j.access_code || '')
     setVisits(j.visits || null)
+    setHasSkipper(!!j.has_skipper)
     if (j.session) {
       const t = sessionTitle(j.session)
       setTitle(t)
@@ -281,6 +288,26 @@ export default function RosterPage() {
     if (!r.ok) { alert('Salvare eșuată.'); return }
     rowUpdate(sid, { [field]: draft } as Partial<Row>)
     setEdit(null)
+  }
+
+  // Sincronizare cu grupa de pe skipper: citește linkul sesiunii + /full-table,
+  // compară emailurile cu lista și adaugă cine lipsește. Fără confirmări.
+  async function syncSkipper() {
+    setSyncBusy(true); setSyncRes(null); setSyncErr(null)
+    try {
+      const r = await fetch('/api/roster', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: id, token, action: 'skipper_sync' }),
+      })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok) { setSyncErr(j.error || `Sincronizare eșuată (${r.status})`); return }
+      setSyncRes(j)
+      if (j.adaugati.length) await load()
+    } catch (e: any) {
+      setSyncErr(e.message || 'Sincronizare eșuată')
+    } finally {
+      setSyncBusy(false)
+    }
   }
 
   // Plicul din tabel: cine intră în mailinguri. Fără email nu se poate bifa.
@@ -426,13 +453,20 @@ export default function RosterPage() {
           </div>
           <div className="flex gap-2">
             <button onClick={() => setAddOpen('manual')}
-              className="px-3 py-2 rounded-lg text-sm font-medium text-white hover:opacity-90" style={{ background: '#0a1628' }}>
+              className="px-3 py-2 rounded-lg text-sm font-medium border border-gray-200 bg-white text-gray-900 hover:bg-gray-50">
               + Adaugă cursant
             </button>
             <button onClick={() => setAddOpen('paste')}
               className="px-3 py-2 rounded-lg text-sm font-medium border border-gray-200 bg-white text-gray-700 hover:bg-gray-50">
               Importă din tabel
             </button>
+            {hasSkipper && (
+              <button onClick={syncSkipper} disabled={syncBusy}
+                title="Citește grupa de pe skipper și adaugă cursanții care lipsesc din listă"
+                className="px-3 py-2 rounded-lg text-sm font-medium border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                {syncBusy ? 'Se sincronizează…' : '⇅ Sincronizează'}
+              </button>
+            )}
           </div>
         </div>
 
@@ -682,6 +716,10 @@ export default function RosterPage() {
       {mailOpen && (
         <MailModal sessionId={id} token={token} emails={mailEmails} onClose={() => setMailOpen(false)} />
       )}
+
+      <SkipperSyncModal rezultat={syncRes} eroare={syncErr}
+        onClose={() => { setSyncRes(null); setSyncErr(null) }} />
+
 
       {addOpen && (
         <AddStudentsModal sessionId={id} token={token} mode={addOpen}

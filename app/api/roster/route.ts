@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { CARRY_FIELDS, findPersonRows } from '@/lib/student-merge'
 import { applyMailTemplate } from '@/lib/mail-template'
+import { syncSkipper, esteEroare } from '@/lib/skipper-sync'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -114,7 +115,7 @@ export async function GET(req: NextRequest) {
   const sessionId = sp.get('session_id') || ''
   const token = sp.get('token') || ''
   const { data: sess } = await sb.from('sessions')
-    .select('roster_token, roster_verified, roster_docs_visible, class_caa, session_date, course_start_date, access_code')
+    .select('roster_token, roster_verified, roster_docs_visible, class_caa, session_date, course_start_date, access_code, skipper_url')
     .eq('id', sessionId).maybeSingle()
   if (!sessionId || !token || !sess?.roster_token || sess.roster_token !== token)
     return NextResponse.json({ error: 'unauthorized' }, { status: 403 })
@@ -253,6 +254,8 @@ export async function GET(req: NextRequest) {
     session: { class_caa: sess.class_caa, session_date: sess.session_date, course_start_date: sess.course_start_date },
     // codul sesiunii — pentru linkul portalului cursantului
     access_code: sess.access_code || '',
+    // butonul de sincronizare apare doar dacă sesiunea are grupă pe skipper
+    has_skipper: !!String(sess.skipper_url || '').trim(),
   })
 }
 
@@ -369,6 +372,14 @@ export async function POST(req: NextRequest) {
     await sb.from('radio_leads')
       .update({ status: 'inscris', participare_session_id: session_id }).eq('id', body.enroll_lead_id)
     return NextResponse.json({ ok: true, reused: prevRows.length > 0 })
+  }
+
+  // ── Sincronizare cu grupa de pe skipper ──
+  // Aceeași logică (și aceeași cale de import) ca butonul din pagina de admin.
+  if (body?.action === 'skipper_sync') {
+    const r = await syncSkipper(sb, session_id, { dryRun: body.dry_run === true })
+    if (esteEroare(r)) return NextResponse.json({ error: r.error }, { status: r.status })
+    return NextResponse.json(r)
   }
 
   // ── Adăugare cursanți (manual sau din tabel lipit) ──

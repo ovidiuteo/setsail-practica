@@ -8,6 +8,8 @@ import { samePerson, mergeCarry, fillGaps } from '@/lib/student-merge'
 import PracticeSlotsCard from '@/components/PracticeSlotsCard'
 import { applyMailTemplate } from '@/lib/mail-template'
 import { defaultExamTime, sessionDefaults } from '@/lib/session-defaults'
+import type { SyncResult } from '@/lib/skipper-result'
+import SkipperSyncModal from '@/components/SkipperSyncModal'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Download, FileText, Users, Copy, Plus, Trash2, Check, X, Pencil, GitBranch, ArrowRight, UserX, Mail, ChevronDown, Database } from 'lucide-react'
@@ -275,7 +277,8 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
   const [saving, setSaving] = useState(false)
   const [showAdd, setShowAdd] = useState(false)
   const [syncBusy, setSyncBusy] = useState(false)
-  const [syncMsg, setSyncMsg] = useState<{ ok: boolean; text: string } | null>(null)
+  const [syncRes, setSyncRes] = useState<SyncResult | null>(null)
+  const [syncErr, setSyncErr] = useState<string | null>(null)
   const [newSt, setNewSt] = useState<any>(EMPTY_ST)
   const [adding, setAdding] = useState(false)
   const [moving, setMoving] = useState<string|null>(null)
@@ -343,21 +346,15 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
   // Sincronizare cu grupa de pe skipper: citește „Link skipper" + /full-table,
   // compară emailurile cu lista sesiunii și adaugă cine lipsește. Fără confirmări.
   async function syncSkipper() {
-    setSyncBusy(true); setSyncMsg(null)
+    setSyncBusy(true); setSyncRes(null); setSyncErr(null)
     try {
       const res = await fetch('/api/skipper-sync', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ session_id: sess.id }),
       })
       const j = await res.json().catch(() => ({}))
-      if (!res.ok) { setSyncMsg({ ok: false, text: j.error || `Sincronizare eșuată (${res.status})` }); return }
-
-      const parti = [
-        j.adaugati.length ? `Adăugați ${j.adaugati.length}: ${j.adaugati.join(', ')}` : 'Niciun cursant nou',
-        j.preluati?.length ? `date preluate din sistem pentru ${j.preluati.length}` : '',
-        j.existau.length ? `${j.existau.length} erau deja în listă` : '',
-      ].filter(Boolean)
-      setSyncMsg({ ok: true, text: `Grupa ${j.grupa} · ${j.total_skipper} pe skipper. ${parti.join(' · ')}.` })
+      if (!res.ok) { setSyncErr(j.error || `Sincronizare eșuată (${res.status})`); return }
+      setSyncRes(j)
 
       if (j.adaugati.length) {
         const { data } = await supabase.from('students').select('*').eq('session_id', sess.id)
@@ -365,7 +362,7 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
         if (data) setStudents(data as Student[])
       }
     } catch (e: any) {
-      setSyncMsg({ ok: false, text: e.message || 'Sincronizare eșuată' })
+      setSyncErr(e.message || 'Sincronizare eșuată')
     } finally {
       setSyncBusy(false)
     }
@@ -681,14 +678,8 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
       </div>
 
       {/* Rezultatul sincronizării cu skipper */}
-      {syncMsg && (
-        <div className={`px-4 py-2.5 text-xs flex items-start gap-2 border-b ${
-          syncMsg.ok ? 'bg-indigo-50 border-indigo-100 text-indigo-900' : 'bg-red-50 border-red-100 text-red-800'
-        }`}>
-          <span className="flex-1">{syncMsg.text}</span>
-          <button onClick={() => setSyncMsg(null)} className="opacity-50 hover:opacity-100 leading-none">×</button>
-        </div>
-      )}
+      <SkipperSyncModal rezultat={syncRes} eroare={syncErr}
+        onClose={() => { setSyncRes(null); setSyncErr(null) }} />
 
       {/* Modal normalizare adrese: previzualizare înainte de aplicare */}
       {normChanges && (
