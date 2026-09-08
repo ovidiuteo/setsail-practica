@@ -148,6 +148,19 @@ const PERSON_FIELDS = FIELDS
 
 const roDate = (d: string | null) => d ? new Date(d).toLocaleDateString('ro-RO') : ''
 
+// Ora ultimei verificări automate: „17:30" azi, „ieri 17:30", altfel cu data
+function oraScurta(iso: string | null): string {
+  if (!iso) return 'încă nu a rulat'
+  const d = new Date(iso)
+  const ora = d.toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' })
+  const zi = (x: Date) => x.toLocaleDateString('en-CA')
+  const azi = new Date()
+  const ieri = new Date(azi.getTime() - 86400000)
+  if (zi(d) === zi(azi)) return ora
+  if (zi(d) === zi(ieri)) return `ieri ${ora}`
+  return `${d.toLocaleDateString('ro-RO', { day: '2-digit', month: 'short' })} ${ora}`
+}
+
 const VERIFIERS: { key: keyof Verified; label: string }[] = [
   { key: 'corina', label: 'Corina' }, { key: 'paula', label: 'Paula' }, { key: 'ruxandra', label: 'Ruxandra' },
 ]
@@ -245,7 +258,9 @@ export default function RosterPage() {
   useEffect(() => { setOrigin(window.location.origin) }, [])
   const [deleting, setDeleting] = useState<string | null>(null)
   const [mailOpen, setMailOpen] = useState(false)
-  const [hasSkipper, setHasSkipper] = useState(false)
+  const [skipper, setSkipper] = useState<{ url: string; set_at: string | null; synced_at: string | null }>(
+    { url: '', set_at: null, synced_at: null })
+  const [linkOpen, setLinkOpen] = useState(false)
   const [syncBusy, setSyncBusy] = useState(false)
   const [syncRes, setSyncRes] = useState<SyncResult | null>(null)
   const [syncErr, setSyncErr] = useState<string | null>(null)
@@ -264,7 +279,7 @@ export default function RosterPage() {
     setDocsVisible(!!j.docs_visible)
     setAccessCode(j.access_code || '')
     setVisits(j.visits || null)
-    setHasSkipper(!!j.has_skipper)
+    setSkipper(j.skipper || { url: '', set_at: null, synced_at: null })
     if (j.session) {
       const t = sessionTitle(j.session)
       setTitle(t)
@@ -451,6 +466,7 @@ export default function RosterPage() {
               </a>
             </div>
           </div>
+          <div className="flex flex-col items-end gap-1.5">
           <div className="flex gap-2">
             <button onClick={() => setAddOpen('manual')}
               className="px-3 py-2 rounded-lg text-sm font-medium border border-gray-200 bg-white text-gray-900 hover:bg-gray-50">
@@ -460,13 +476,29 @@ export default function RosterPage() {
               className="px-3 py-2 rounded-lg text-sm font-medium border border-gray-200 bg-white text-gray-700 hover:bg-gray-50">
               Importă din tabel
             </button>
-            {hasSkipper && (
-              <button onClick={syncSkipper} disabled={syncBusy}
-                title="Citește grupa de pe skipper și adaugă cursanții care lipsesc din listă"
-                className="px-3 py-2 rounded-lg text-sm font-medium border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-50">
-                {syncBusy ? 'Se sincronizează…' : '⇅ Sincronizează'}
+            <button onClick={syncSkipper} disabled={syncBusy || !skipper.url}
+              title={skipper.url
+                ? 'Citește grupa de pe skipper și adaugă cursanții care lipsesc din listă'
+                : 'Sesiunea nu are link de grupă pe skipper'}
+              className="px-3 py-2 rounded-lg text-sm font-medium border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-white">
+              {syncBusy ? 'Se sincronizează…' : '⇅ Sincronizează'}
+            </button>
+          </div>
+          {/* Verificarea automată rulează din 15 în 15 minute, din momentul în
+              care s-a completat linkul și până a doua zi după examen. */}
+          <div className="text-xs text-right">
+            {skipper.url ? (
+              <span className="text-gray-400">
+                Last cron job: <b className="text-gray-600">{oraScurta(skipper.synced_at)}</b>
+                <span className="text-gray-300"> · verificare automată din 15 în 15 min</span>
+              </span>
+            ) : (
+              <button onClick={() => setLinkOpen(true)}
+                className="text-amber-700 hover:text-amber-900 underline decoration-amber-300 underline-offset-2">
+                Vă rog adăugați linkul skipper.setsail.ro în sesiune aici
               </button>
             )}
+          </div>
           </div>
         </div>
 
@@ -720,6 +752,12 @@ export default function RosterPage() {
       <SkipperSyncModal rezultat={syncRes} eroare={syncErr}
         onClose={() => { setSyncRes(null); setSyncErr(null) }} />
 
+      {linkOpen && (
+        <SkipperLinkModal sessionId={id} token={token} initial={skipper.url}
+          onClose={() => setLinkOpen(false)}
+          onSaved={() => { setLinkOpen(false); load() }} />
+      )}
+
 
       {addOpen && (
         <AddStudentsModal sessionId={id} token={token} mode={addOpen}
@@ -734,6 +772,62 @@ export default function RosterPage() {
             load()
           }} />
       )}
+    </div>
+  )
+}
+
+// ── Modal: linkul grupei de pe skipper ──
+// Se salvează pe sesiune; din momentul salvării intră și verificarea automată.
+function SkipperLinkModal({ sessionId, token, initial, onClose, onSaved }: {
+  sessionId: string; token: string; initial: string; onClose: () => void; onSaved: () => void
+}) {
+  const [url, setUrl] = useState(initial || '')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+
+  async function save() {
+    setBusy(true); setErr(null)
+    const r = await fetch('/api/roster', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId, token, skipper_url: url }),
+    })
+    const j = await r.json().catch(() => ({}))
+    setBusy(false)
+    if (!r.ok) { setErr(j.error || 'Salvare eșuată.'); return }
+    onSaved()
+  }
+
+  return (
+    <div className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center p-4"
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-lg">
+        <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+          <h3 className="font-semibold text-sm text-gray-900">Link grupă skipper.setsail.ro</h3>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
+        </div>
+        <div className="p-5 space-y-3">
+          <p className="text-xs text-gray-500">
+            Linkul grupei din skipper, așa cum apare în bara de adrese. Din momentul salvării,
+            lista se verifică automat din 15 în 15 minute și cursanții noi intră singuri în sesiune.
+          </p>
+          <input autoFocus value={url} onChange={e => setUrl(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && url.trim()) save() }}
+            placeholder="https://skipper.setsail.ro/admin/groups/257"
+            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-400" />
+          {err && <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{err}</div>}
+        </div>
+        <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-2">
+          <button onClick={onClose}
+            className="px-4 py-2 rounded-lg text-sm font-medium border border-gray-200 bg-white text-gray-700 hover:bg-gray-50">
+            Anulează
+          </button>
+          <button onClick={save} disabled={busy || !url.trim()}
+            className="px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-40"
+            style={{ background: '#0a1628' }}>
+            {busy ? 'Se salvează…' : 'Salvează'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

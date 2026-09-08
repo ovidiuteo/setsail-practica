@@ -115,7 +115,7 @@ export async function GET(req: NextRequest) {
   const sessionId = sp.get('session_id') || ''
   const token = sp.get('token') || ''
   const { data: sess } = await sb.from('sessions')
-    .select('roster_token, roster_verified, roster_docs_visible, class_caa, session_date, course_start_date, access_code, skipper_url')
+    .select('roster_token, roster_verified, roster_docs_visible, class_caa, session_date, course_start_date, access_code, skipper_url, skipper_url_set_at, skipper_synced_at')
     .eq('id', sessionId).maybeSingle()
   if (!sessionId || !token || !sess?.roster_token || sess.roster_token !== token)
     return NextResponse.json({ error: 'unauthorized' }, { status: 403 })
@@ -254,8 +254,13 @@ export async function GET(req: NextRequest) {
     session: { class_caa: sess.class_caa, session_date: sess.session_date, course_start_date: sess.course_start_date },
     // codul sesiunii — pentru linkul portalului cursantului
     access_code: sess.access_code || '',
-    // butonul de sincronizare apare doar dacă sesiunea are grupă pe skipper
-    has_skipper: !!String(sess.skipper_url || '').trim(),
+    // sincronizarea cu skipper: linkul grupei, de când e monitorizată sesiunea
+    // și când a rulat ultima verificare automată
+    skipper: {
+      url: sess.skipper_url || '',
+      set_at: sess.skipper_url_set_at || null,
+      synced_at: sess.skipper_synced_at || null,
+    },
   })
 }
 
@@ -285,6 +290,22 @@ export async function PATCH(req: NextRequest) {
     const { error } = await q
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ ok: true })
+  }
+
+  // Linkul grupei de pe skipper, completat din pagină. Momentul salvării e și
+  // momentul din care sesiunea intră în verificarea automată.
+  if (typeof body?.skipper_url === 'string') {
+    const url = body.skipper_url.trim().replace(/\/+$/, '').replace(/\/full-table$/, '')
+    if (url && !/^https?:\/\/[^\s]+\/groups\/\d+$/.test(url)) {
+      return NextResponse.json({
+        error: 'Linkul trebuie să fie de forma https://skipper.setsail.ro/admin/groups/257',
+      }, { status: 400 })
+    }
+    const { error } = await sb.from('sessions')
+      .update({ skipper_url: url, skipper_url_set_at: url ? new Date().toISOString() : null })
+      .eq('id', session_id)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ ok: true, skipper_url: url })
   }
 
   if (!student_id) return NextResponse.json({ error: 'lipsește cursantul' }, { status: 400 })
