@@ -148,19 +148,6 @@ const PERSON_FIELDS = FIELDS
 
 const roDate = (d: string | null) => d ? new Date(d).toLocaleDateString('ro-RO') : ''
 
-// Ora ultimei verificări automate: „17:30" azi, „ieri 17:30", altfel cu data
-function oraScurta(iso: string | null): string {
-  if (!iso) return 'încă nu a rulat'
-  const d = new Date(iso)
-  const ora = d.toLocaleTimeString('ro-RO', { hour: '2-digit', minute: '2-digit' })
-  const zi = (x: Date) => x.toLocaleDateString('en-CA')
-  const azi = new Date()
-  const ieri = new Date(azi.getTime() - 86400000)
-  if (zi(d) === zi(azi)) return ora
-  if (zi(d) === zi(ieri)) return `ieri ${ora}`
-  return `${d.toLocaleDateString('ro-RO', { day: '2-digit', month: 'short' })} ${ora}`
-}
-
 const VERIFIERS: { key: keyof Verified; label: string }[] = [
   { key: 'corina', label: 'Corina' }, { key: 'paula', label: 'Paula' }, { key: 'ruxandra', label: 'Ruxandra' },
 ]
@@ -258,8 +245,7 @@ export default function RosterPage() {
   useEffect(() => { setOrigin(window.location.origin) }, [])
   const [deleting, setDeleting] = useState<string | null>(null)
   const [mailOpen, setMailOpen] = useState(false)
-  const [skipper, setSkipper] = useState<{ url: string; set_at: string | null; synced_at: string | null }>(
-    { url: '', set_at: null, synced_at: null })
+  const [skipper, setSkipper] = useState<{ url: string }>({ url: '' })
   const [linkOpen, setLinkOpen] = useState(false)
   const [syncBusy, setSyncBusy] = useState(false)
   const [syncRes, setSyncRes] = useState<SyncResult | null>(null)
@@ -279,7 +265,7 @@ export default function RosterPage() {
     setDocsVisible(!!j.docs_visible)
     setAccessCode(j.access_code || '')
     setVisits(j.visits || null)
-    setSkipper(j.skipper || { url: '', set_at: null, synced_at: null })
+    setSkipper({ url: j.skipper?.url || '' })
     if (j.session) {
       const t = sessionTitle(j.session)
       setTitle(t)
@@ -484,21 +470,15 @@ export default function RosterPage() {
               {syncBusy ? 'Se sincronizează…' : '⇅ Sincronizează'}
             </button>
           </div>
-          {/* Verificarea automată rulează din 15 în 15 minute, din momentul în
-              care s-a completat linkul și până a doua zi după examen. */}
-          <div className="text-xs text-right">
-            {skipper.url ? (
-              <span className="text-gray-400">
-                Last cron job: <b className="text-gray-600">{oraScurta(skipper.synced_at)}</b>
-                <span className="text-gray-300"> · verificare automată din 15 în 15 min</span>
-              </span>
-            ) : (
+          {/* Fără link de grupă nu se poate sincroniza — oferim completarea lui */}
+          {!skipper.url && (
+            <div className="text-xs text-right">
               <button onClick={() => setLinkOpen(true)}
                 className="text-amber-700 hover:text-amber-900 underline decoration-amber-300 underline-offset-2">
                 Vă rog adăugați linkul skipper.setsail.ro în sesiune aici
               </button>
-            )}
-          </div>
+            </div>
+          )}
           </div>
         </div>
 
