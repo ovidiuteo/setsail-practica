@@ -23,7 +23,11 @@ export async function POST(req: NextRequest) {
   if (!verifyToken(req.cookies.get(ADMIN_COOKIE_NAME)?.value))
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
 
-  const { session_id } = await req.json().catch(() => ({}))
+  const body = await req.json().catch(() => ({}))
+  const { session_id } = body
+  // dry_run: citește și compară, dar nu scrie nimic — pentru verificarea
+  // conexiunii la skipper fără a atinge lista sesiunii
+  const dryRun = body?.dry_run === true
   if (!session_id) return NextResponse.json({ error: 'lipsește sesiunea' }, { status: 400 })
 
   const sb = svc()
@@ -77,13 +81,16 @@ export async function POST(req: NextRequest) {
       }
       preluati.push(s.full_name)
     }
-    const { error } = await sb.from('students').insert(base)
-    if (error) return NextResponse.json({ error: `${s.full_name}: ${error.message}` }, { status: 500 })
+    if (!dryRun) {
+      const { error } = await sb.from('students').insert(base)
+      if (error) return NextResponse.json({ error: `${s.full_name}: ${error.message}` }, { status: 500 })
+    }
     adaugati.push(s.full_name)
   }
 
   return NextResponse.json({
     ok: true,
+    dry_run: dryRun,
     grupa: skipperGroupId(sess.skipper_url as string),
     total_skipper: deSkipper.length,
     adaugati, existau, preluati,
