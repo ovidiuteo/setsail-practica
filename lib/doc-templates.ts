@@ -23,8 +23,67 @@ export type DocPlaceholderDef = { name: string; desc: string }
 export type DocTypeDef = {
   value: string
   label: string
+  // Documentele care fac parte din aceeasi familie primesc acelasi `group`:
+  // in admin apar ca un singur tab, cu sub-taburi pe `label`.
+  group?: string
   placeholders: DocPlaceholderDef[]
   fragments: DocFragmentDef[]
+}
+
+// ─── Înștiințări ANCOM ────────────────────────────────────────────────────
+// Cele patru înștiințări au aceeași structură (subiect, adresare, corp) și
+// aceleași variabile; diferă doar textele.
+const ANCOM_GROUP = 'Înștiințări ANCOM'
+
+const ANCOM_PLACEHOLDERS: DocPlaceholderDef[] = [
+  { name: 'protocol_valabil_pana', desc: 'Data până la care e valabil protocolul ANCOM (Configurare → Info SetSail)' },
+  { name: 'perioada_curs', desc: 'Perioada cursului (ex. 10 septembrie 2026 - 17 septembrie 2026)' },
+  { name: 'data_start_curs', desc: 'Data de început a cursului' },
+  { name: 'data_examen', desc: 'Data examenului (data sesiunii)' },
+  { name: 'ora_examen', desc: 'Ora examinării de pe sesiune (ex. 20:00)' },
+  { name: 'pers_contact_1', desc: 'Prima persoană de contact bifată pe sesiune' },
+  { name: 'pers_contact_2', desc: 'A doua persoană de contact bifată pe sesiune' },
+]
+
+const ancomFragments = (titlu: string, subiect: string, corp: string): DocFragmentDef[] => [
+  {
+    key: 'titlu_doc',
+    label: 'Denumirea documentului',
+    hint: 'Nu apare în document; e numele care se propune la tipărire/salvare PDF.',
+    default: titlu,
+    defaultAlign: 'left',
+  },
+  {
+    key: 'subiect',
+    label: 'Subiect',
+    hint: 'Apare după „Subiect:”, cu italice.',
+    default: subiect,
+    defaultAlign: 'left',
+  },
+  {
+    key: 'adresare',
+    label: 'Formulă de adresare',
+    default: 'Domnule Președinte,',
+    defaultAlign: 'center',
+  },
+  {
+    key: 'corp',
+    label: 'Corpul înștiințării',
+    hint: 'Rând gol = paragraf nou. Rândurile care încep cu „-” devin listă indentată.',
+    default: corp,
+    defaultAlign: 'justify',
+  },
+]
+
+const CORP_CURS = (ce: string) =>
+  `Subscrisa SC SET SAIL ADVERTISING SRL, cu datele de identificare din antet, în baza pct. 3, lit. a) și c) din cadrul protocolului de colaborare dintre instituțiile noastre valabil până la data de {{protocol_valabil_pana}}, vă înștiințăm că vom organiza un curs de ${ce} de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit de tip GMDSS-LRC în perioada {{perioada_curs}}.\n\nLocul de desfășurare al cursului este online.`
+
+const CORP_EXAMEN = (cand: string, ce: string) =>
+  `Subscrisa SC SET SAIL ADVERTISING SRL, cu datele de identificare din antet, în baza pct. 3, lit. a) și c) din cadrul protocolului de colaborare dintre instituțiile noastre valabil până la data de {{protocol_valabil_pana}}, vă înștiințăm că ${cand}, organizam o sesiune de examinare în vederea ${ce} certificatelor de operator radio, online.\n\nMembrii comisiei de examinare vor fi:\n- {{pers_contact_1:plain}}, deținător al certificatului de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit GMDSS-LRC\n- {{pers_contact_2:plain}}, deținător al certificatului de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit GMDSS-LRC`
+
+// tip din generator ('curs-obtinere') -> doc_type din template-uri
+export function ancomDocType(tip: string): string {
+  return 'instiintare_ancom_' + String(tip || '').replace(/-/g, '_')
 }
 
 export const DOC_TEMPLATE_TYPES: DocTypeDef[] = [
@@ -84,6 +143,50 @@ export const DOC_TEMPLATE_TYPES: DocTypeDef[] = [
         defaultAlign: 'justify',
       },
     ],
+  },
+  {
+    value: 'instiintare_ancom_curs_obtinere',
+    label: 'Curs obținere',
+    group: ANCOM_GROUP,
+    placeholders: ANCOM_PLACEHOLDERS,
+    fragments: ancomFragments(
+      'Înștiințare organizare curs obținere LRC',
+      'Înștiințare cu privire la data de începere a cursului de pregătire în vederea obținerii certificatelor de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit de tip GMDSS-LRC',
+      CORP_CURS('pregătire în vederea obținerii certificatelor'),
+    ),
+  },
+  {
+    value: 'instiintare_ancom_examen_obtinere',
+    label: 'Examen obținere',
+    group: ANCOM_GROUP,
+    placeholders: ANCOM_PLACEHOLDERS,
+    fragments: ancomFragments(
+      'Înștiințare organizare examen obținere LRC',
+      'Înștiințare cu privire la data de desfășurare a examenului în vederea obținerii certificatelor de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit de tip GMDSS-LRC',
+      CORP_EXAMEN('pe data de {{data_examen}}', 'obținerii'),
+    ),
+  },
+  {
+    value: 'instiintare_ancom_curs_prelungire',
+    label: 'Curs prelungire',
+    group: ANCOM_GROUP,
+    placeholders: ANCOM_PLACEHOLDERS,
+    fragments: ancomFragments(
+      'Înștiințare organizare curs reconfirmare LRC',
+      'Înștiințare cu privire la data de începere a cursului de reconfirmare în vederea prelungirii valabilității certificatelor de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit de tip GMDSS-LRC',
+      CORP_CURS('reconfirmare în vederea prelungirii valabilității certificatelor'),
+    ),
+  },
+  {
+    value: 'instiintare_ancom_examen_prelungire',
+    label: 'Examen prelungire',
+    group: ANCOM_GROUP,
+    placeholders: ANCOM_PLACEHOLDERS,
+    fragments: ancomFragments(
+      'Înștiințare organizare examen prelungire LRC',
+      'Înștiințare cu privire la data de desfășurare a examenului în vederea prelungirii valabilității certificatelor de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit de tip GMDSS-LRC',
+      CORP_EXAMEN('pe data de {{data_examen}}, orele 19.00', 'prelungirii valabilității'),
+    ),
   },
 ]
 

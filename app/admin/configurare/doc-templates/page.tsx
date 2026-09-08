@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
 import { ArrowLeft, RotateCcw, Check, Loader2, FileText, AlignLeft, AlignCenter, AlignRight, AlignJustify, Pin, PinOff } from 'lucide-react'
-import { DOC_TEMPLATE_TYPES, fillDocTemplate, type DocAlign } from '@/lib/doc-templates'
+import { DOC_TEMPLATE_TYPES, fillDocTemplate, type DocAlign, type DocTypeDef } from '@/lib/doc-templates'
 
 type Row = { doc_type: string; key: string; content: string; align: string | null }
 type Override = { content: string; align: string | null }
@@ -39,24 +39,41 @@ export default function DocTemplatesPage() {
   }, [])
 
   const def = useMemo(() => DOC_TEMPLATE_TYPES.find(d => d.value === docType)!, [docType])
+  const isAncom = docType.startsWith('instiintare_ancom')
 
-  // Sesiuni existente (prezent -> trecut; cele viitoare nu sunt selectabile)
+  // Taburi de nivel 1 (familii de documente) + sub-taburi
+  const groups = useMemo(() => {
+    const out: Array<{ name: string; types: DocTypeDef[] }> = []
+    for (const d of DOC_TEMPLATE_TYPES) {
+      const name = d.group || d.label
+      let g = out.find(x => x.name === name)
+      if (!g) { g = { name, types: [] }; out.push(g) }
+      g.types.push(d)
+    }
+    return out
+  }, [])
+  const activeGroup = useMemo(
+    () => groups.find(g => g.types.some(t => t.value === docType)) || groups[0],
+  [groups, docType])
+
+  // Sesiuni existente (prezent -> trecut; pentru înștiințări intră și cele viitoare,
+  // pentru că exact acelea se trimit la ANCOM)
   useEffect(() => {
-    const today = new Date().toISOString().slice(0, 10)
     supabase.from('sessions')
-      .select('id, session_date, session_type, class_caa, locations(name)')
+      .select('id, session_date, session_type, class_caa, timeline_scope, locations(name)')
       .neq('session_type', 'absent')
-      .lte('session_date', today)
       .order('session_date', { ascending: false })
       .then(({ data }) => setSessOptions(data || []))
   }, [])
 
-  // Pin per tip de document (localStorage); fara pin, dropdown-ul porneste gol
+  // Pin per familie de documente (localStorage); fara pin, dropdown-ul porneste gol.
+  // Cheia e familia, ca sa nu se piarda selectia cand comuti intre sub-taburi.
+  const pinKey = `docTplPin:${activeGroup?.name || docType}`
   useEffect(() => {
-    const pinned = typeof window !== 'undefined' ? localStorage.getItem(`docTplPin:${docType}`) : null
+    const pinned = typeof window !== 'undefined' ? localStorage.getItem(pinKey) : null
     setPinnedId(pinned)
     setPreviewSessionId(pinned || '')
-  }, [docType])
+  }, [pinKey])
 
   // La selectie: incarca sesiunea si construieste valorile reale pentru placeholder-e (oglinda generate-pv)
   useEffect(() => {
@@ -66,6 +83,34 @@ export default function DocTemplatesPage() {
       const { data: s } = await supabase.from('sessions')
         .select('*, locations(*), evaluators(*)').eq('id', previewSessionId).single()
       if (!s || cancelled) { if (!cancelled) setPreviewVars(null); return }
+
+      const roLong = (d: string) => d
+        ? new Date(d).toLocaleDateString('ro-RO', { day: '2-digit', month: 'long', year: 'numeric' }) : ''
+
+      // Înștiințări ANCOM: alt set de variabile (oglinda generate-instiintare-ancom)
+      if (isAncom) {
+        const [infoRes, contactRes] = await Promise.all([
+          supabase.from('setsail_info').select('key, value').eq('key', 'protocol_ancom_valabil_pana'),
+          (s.contact_person_ids || []).length
+            ? supabase.from('contact_persons').select('id, full_name').in('id', s.contact_person_ids).order('full_name')
+            : Promise.resolve({ data: [] as any[] }),
+        ])
+        if (cancelled) return
+        const contacts = (contactRes.data || []).slice().sort((a: any, b: any) => a.full_name.localeCompare(b.full_name, 'ro'))
+        const dataExamen = roLong(s.session_date)
+        const dataStart = s.course_start_date ? roLong(s.course_start_date) : dataExamen
+        setPreviewVars({
+          protocol_valabil_pana: (infoRes.data || [])[0]?.value || '31.12.2026',
+          perioada_curs: dataStart === dataExamen ? dataExamen : `${dataStart} - ${dataExamen}`,
+          data_start_curs: dataStart,
+          data_examen: dataExamen,
+          ora_examen: s.exam_time ? String(s.exam_time).slice(0, 5) : '',
+          pers_contact_1: contacts[0]?.full_name || 'Drugan Ovidiu',
+          pers_contact_2: contacts[1]?.full_name || 'Drugan Sorin',
+        })
+        return
+      }
+
       const instrIds = [s.instructor_id, s.instructor_id_2, s.instructor_id_3].filter(Boolean)
       const boatIds = [s.boat_id, s.boat_id_2, s.boat_id_3].filter(Boolean)
       const [instrRes, boatRes] = await Promise.all([
@@ -97,20 +142,24 @@ export default function DocTemplatesPage() {
       })
     })()
     return () => { cancelled = true }
-  }, [previewSessionId])
+  }, [previewSessionId, isAncom])
 
-  // Sesiunile potrivite tipului de document curent (pv_practica = non-radio)
-  const sessForType = useMemo(() =>
-    sessOptions.filter((s: any) => docType === 'pv_practica' ? !/radio|lrc/i.test(s.class_caa || '') : true),
-  [sessOptions, docType])
+  // Sesiunile potrivite tipului de document curent
+  // (pv_practica = non-radio, până azi · înștiințări ANCOM = doar radio, inclusiv viitoare)
+  const sessForType = useMemo(() => {
+    const today = new Date().toISOString().slice(0, 10)
+    const esteRadio = (s: any) => /radio|lrc/i.test(`${s.class_caa || ''} ${s.timeline_scope || ''}`)
+    if (isAncom) return sessOptions.filter(esteRadio)
+    return sessOptions.filter((s: any) => !esteRadio(s) && String(s.session_date || '') <= today)
+  }, [sessOptions, isAncom])
 
   function pinCurrent() {
     if (!previewSessionId) return
-    localStorage.setItem(`docTplPin:${docType}`, previewSessionId)
+    localStorage.setItem(pinKey, previewSessionId)
     setPinnedId(previewSessionId)
   }
   function clearPin() {
-    localStorage.removeItem(`docTplPin:${docType}`)
+    localStorage.removeItem(pinKey)
     setPinnedId(null)
     setPreviewSessionId('')
   }
@@ -166,7 +215,7 @@ export default function DocTemplatesPage() {
     const segs = fillDocTemplate(content, vars)
     return (
       <p className="text-xs text-gray-600 leading-relaxed bg-gray-50 border border-gray-100 rounded-lg p-3"
-        style={{ textAlign: align === 'justify' ? 'justify' : align }}>
+        style={{ textAlign: align === 'justify' ? 'justify' : align, whiteSpace: 'pre-wrap' }}>
         {segs.map((s, i) => (
           <span key={i} className={(s.bold ? 'font-semibold text-blue-700 ' : '') + (s.italics ? 'italic ' : '')}>{s.text}</span>
         ))}
@@ -190,17 +239,36 @@ export default function DocTemplatesPage() {
         </div>
       </div>
 
-      {/* Taburi per document */}
+      {/* Taburi per familie de documente */}
       <div className="flex flex-wrap gap-2 border-b border-gray-200">
-        {DOC_TEMPLATE_TYPES.map(d => (
-          <button key={d.value} onClick={() => setDocType(d.value)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${
-              docType === d.value ? 'border-purple-600 text-purple-700' : 'border-transparent text-gray-500 hover:text-gray-700'
-            }`}>
-            {d.label}
-          </button>
-        ))}
+        {groups.map(g => {
+          const active = activeGroup?.name === g.name
+          return (
+            <button key={g.name} onClick={() => { if (!active) setDocType(g.types[0].value) }}
+              className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${
+                active ? 'border-purple-600 text-purple-700' : 'border-transparent text-gray-500 hover:text-gray-700'
+              }`}>
+              {g.name}
+            </button>
+          )
+        })}
       </div>
+
+      {/* Sub-taburi (doar când familia are mai multe documente) */}
+      {activeGroup && activeGroup.types.length > 1 && (
+        <div className="flex flex-wrap gap-1.5">
+          {activeGroup.types.map(t => (
+            <button key={t.value} onClick={() => setDocType(t.value)}
+              className={`px-3 py-1.5 rounded-full text-xs font-medium border ${
+                docType === t.value
+                  ? 'bg-purple-600 border-purple-600 text-white'
+                  : 'bg-white border-gray-200 text-gray-500 hover:text-gray-800 hover:border-gray-300'
+              }`}>
+              {t.label}
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Placeholder-e disponibile */}
       <div className="bg-blue-50/60 border border-blue-100 rounded-xl p-4">
@@ -291,7 +359,8 @@ export default function DocTemplatesPage() {
               <textarea
                 value={valueFor(f.key, f.default)}
                 onChange={e => setDrafts(d => ({ ...d, [id]: e.target.value }))}
-                rows={Math.min(8, Math.max(2, Math.ceil(valueFor(f.key, f.default).length / 110)))}
+                rows={Math.min(14, Math.max(2,
+                  Math.ceil(valueFor(f.key, f.default).length / 110) + valueFor(f.key, f.default).split('\n').length - 1))}
                 spellCheck={false}
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm leading-relaxed focus:outline-none focus:ring-2 focus:ring-purple-400 mb-2"
               />

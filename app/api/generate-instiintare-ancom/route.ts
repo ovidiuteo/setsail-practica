@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { ancomDocType, fillDocTemplate, fragmentDefault, fragmentDefaultAlign, type DocAlign, type Segment } from '@/lib/doc-templates'
 
 // tip: 'curs-obtinere' | 'curs-prelungire' | 'examen-obtinere' | 'examen-prelungire'
 // format: 'docx' | 'pdf'
@@ -131,7 +132,6 @@ export async function POST(req: NextRequest) {
           : roData(session.session_date),
       }
     }
-    const { nr: nrCurent, data: dataNrFormatat } = nrPentru(tip)
 
     const sessionDate = new Date(session.session_date).toLocaleDateString('ro-RO', {
       day: '2-digit', month: 'long', year: 'numeric'
@@ -146,39 +146,42 @@ export async function POST(req: NextRequest) {
       ? sessionDate
       : `${courseStartDate} - ${sessionDate}`
 
-    // Textele fiecărui tip de înștiințare — apelate o dată sau de patru ori
-    const textePentru = (tip: string) => {
-    const isPrelungire = tip.includes('prelungire')
-    const isExamen = tip.includes('examen')
-
-    let subiect = ''
-    let corpText = ''
-    let titluDoc = ''
-
-    if (!isExamen && !isPrelungire) {
-      titluDoc = 'Înștiințare organizare curs obținere LRC'
-      subiect = 'Înștiințare cu privire la data de începere a cursului de pregătire în vederea obținerii certificatelor de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit de tip GMDSS-LRC'
-      corpText = `Subscrisa SC SET SAIL ADVERTISING SRL, cu datele de identificare din antet, în baza pct. 3, lit. a) și c) din cadrul protocolului de colaborare dintre instituțiile noastre valabil până la data de ${protocolValabilPana}, vă înștiințăm că vom organiza un curs de pregătire în vederea obținerii certificatelor de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit de tip GMDSS-LRC în perioada ${perioadaCurs}.\n\nLocul de desfășurare al cursului este online.`
-    } else if (!isExamen && isPrelungire) {
-      titluDoc = 'Înștiințare organizare curs reconfirmare LRC'
-      subiect = 'Înștiințare cu privire la data de începere a cursului de reconfirmare în vederea prelungirii valabilității certificatelor de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit de tip GMDSS-LRC'
-      corpText = `Subscrisa SC SET SAIL ADVERTISING SRL, cu datele de identificare din antet, în baza pct. 3, lit. a) și c) din cadrul protocolului de colaborare dintre instituțiile noastre valabil până la data de ${protocolValabilPana}, vă înștiințăm că vom organiza un curs de reconfirmare în vederea prelungirii valabilității certificatelor de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit de tip GMDSS-LRC în perioada ${perioadaCurs}.\n\nLocul de desfășurare al cursului este online.`
-    } else if (isExamen && !isPrelungire) {
-      titluDoc = 'Înștiințare organizare examen obținere LRC'
-      subiect = 'Înștiințare cu privire la data de desfășurare a examenului în vederea obținerii certificatelor de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit de tip GMDSS-LRC'
-      corpText = `Subscrisa SC SET SAIL ADVERTISING SRL, cu datele de identificare din antet, în baza pct. 3, lit. a) și c) din cadrul protocolului de colaborare dintre instituțiile noastre valabil până la data de ${protocolValabilPana}, vă înștiințăm că pe data de ${sessionDate}, organizam o sesiune de examinare în vederea obținerii certificatelor de operator radio, online.\n\nMembrii comisiei de examinare vor fi:\n- ${persContact1}, deținător al certificatului de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit GMDSS-LRC\n- ${persContact2}, deținător al certificatului de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit GMDSS-LRC`
-    } else {
-      titluDoc = 'Înștiințare organizare examen prelungire LRC'
-      subiect = 'Înștiințare cu privire la data de desfășurare a examenului în vederea prelungirii valabilității certificatelor de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit de tip GMDSS-LRC'
-      corpText = `Subscrisa SC SET SAIL ADVERTISING SRL, cu datele de identificare din antet, în baza pct. 3, lit. a) și c) din cadrul protocolului de colaborare dintre instituțiile noastre valabil până la data de ${protocolValabilPana}, vă înștiințăm că pe data de ${sessionDate}, orele 19.00, organizam o sesiune de examinare în vederea prelungirii valabilității certificatelor de operator radio, online.\n\nMembrii comisiei de examinare vor fi:\n- ${persContact1}, deținător al certificatului de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit GMDSS-LRC\n- ${persContact2}, deținător al certificatului de operator radio pentru ambarcațiuni de agrement în serviciile mobil maritim și mobil maritim prin satelit GMDSS-LRC`
-    }
-    return { subiect, corpText, titluDoc }
-    }
-
     // Cele patru înștiințări, în ordinea în care se depun
     const TOATE_TIPURILE = ['curs-obtinere', 'examen-obtinere', 'curs-prelungire', 'examen-prelungire']
     const tipuri: string[] = body.toate === true ? TOATE_TIPURILE : [tip]
-    const { subiect, corpText, titluDoc } = textePentru(tip)
+
+    // Template-uri editabile (admin → Template-uri Documente → Înștiințări ANCOM);
+    // fără override în DB, textele sunt exact cele istorice din lib/doc-templates.
+    const { data: tplRows } = await supabase
+      .from('doc_templates').select('doc_type, key, content, align')
+      .in('doc_type', TOATE_TIPURILE.map(ancomDocType))
+    const tplOverride: Record<string, { content: string; align: string | null }> = {}
+    for (const r of (tplRows || []) as any[]) tplOverride[`${r.doc_type}:${r.key}`] = { content: r.content, align: r.align }
+    const tpl = (t: string, key: string) =>
+      tplOverride[`${ancomDocType(t)}:${key}`]?.content ?? fragmentDefault(ancomDocType(t), key)
+    const tplAlign = (t: string, key: string): DocAlign =>
+      (tplOverride[`${ancomDocType(t)}:${key}`]?.align as DocAlign) || fragmentDefaultAlign(ancomDocType(t), key)
+
+    const tplVars: Record<string, string> = {
+      protocol_valabil_pana: protocolValabilPana,
+      perioada_curs: perioadaCurs,
+      data_start_curs: courseStartDate,
+      data_examen: sessionDate,
+      ora_examen: session.exam_time ? String(session.exam_time).slice(0, 5) : '',
+      pers_contact_1: persContact1,
+      pers_contact_2: persContact2,
+    }
+
+    // Textele fiecărui tip de înștiințare — apelate o dată sau de patru ori
+    const textePentru = (t: string) => ({
+      titluDoc: fillDocTemplate(tpl(t, 'titlu_doc'), tplVars).map(s => s.text).join(''),
+      subiect: fillDocTemplate(tpl(t, 'subiect'), tplVars).map(s => s.text).join(''),
+      adresare: fillDocTemplate(tpl(t, 'adresare'), tplVars).map(s => s.text).join(''),
+      // corpul rămâne pe segmente: variabilele se randează bold
+      corpLinii: tpl(t, 'corp').split('\n').map(l => ({ raw: l, segs: fillDocTemplate(l, tplVars) as Segment[] })),
+    })
+
+    const { titluDoc } = textePentru(tip)
 
     if (format === 'pdf') {
       const antetHtml = antetDoc?.file_data
@@ -192,13 +195,19 @@ export async function POST(req: NextRequest) {
           ? `<img src="${stampilaDoc.file_data}" style="height:110px;width:auto;display:block;margin:0 auto;"/>`
           : `<div style="font-style:italic;color:#666;">Semnătură și ștampilă</div>`)
 
+      const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      const segsHtml = (segs: Segment[]) => segs.map(s => {
+        const t = esc(s.text)
+        return s.bold ? `<strong>${t}</strong>` : s.italics ? `<em>${t}</em>` : t
+      }).join('')
+
       // Construim paragrafele corpului
-      const paragrafe = (txt: string) => txt.split('\n').map(line => {
-        if (!line.trim()) return `<p style="margin:6px 0;"></p>`
-        if (line.startsWith('-')) {
-          return `<p style="margin:4px 0 4px 30px;">${line}</p>`
+      const paragrafe = (linii: Array<{ raw: string; segs: Segment[] }>, align: DocAlign) => linii.map(l => {
+        if (!l.raw.trim()) return `<p style="margin:6px 0;"></p>`
+        if (l.raw.startsWith('-')) {
+          return `<p style="margin:4px 0 4px 30px;">${segsHtml(l.segs)}</p>`
         }
-        return `<p style="margin:6px 0;text-indent:40px;text-align:justify;">${line}</p>`
+        return `<p style="margin:6px 0;text-indent:40px;text-align:${align};">${segsHtml(l.segs)}</p>`
       }).join('')
 
       const html = `<!DOCTYPE html>
@@ -275,15 +284,15 @@ ${tipuri.map((t, i) => {
   </div>
 
   <!-- Subiect -->
-  <div class="subiect">
-    <span style="font-weight:bold;">Subiect: </span><em>${txt.subiect}</em>
+  <div class="subiect" style="text-align:${tplAlign(t, 'subiect')};">
+    <span style="font-weight:bold;">Subiect: </span><em>${esc(txt.subiect)}</em>
   </div>
 
   <!-- Titlu -->
-  <div class="titlu-centrat">Domnule Președinte,</div>
+  <div class="titlu-centrat" style="text-align:${tplAlign(t, 'adresare')};">${esc(txt.adresare)}</div>
 
   <!-- Corp -->
-  <div class="corp">${paragrafe(txt.corpText)}</div>
+  <div class="corp">${paragrafe(txt.corpLinii, tplAlign(t, 'corp'))}</div>
 
   <!-- Semnatura -->
   <div class="semnatura-bloc">
@@ -313,7 +322,6 @@ ${tipuri.map((t, i) => {
 
     const bold = (t: string, sz = 22) => new TextRun({ text: t, bold: true, size: sz, font: 'Arial' })
     const reg  = (t: string, sz = 22) => new TextRun({ text: t, size: sz, font: 'Arial' })
-    const ital = (t: string, sz = 22) => new TextRun({ text: t, italics: true, size: sz, font: 'Arial' })
     const boldItal = (t: string, sz = 22) => new TextRun({ text: t, bold: true, italics: true, size: sz, font: 'Arial' })
     const para = (ch: any[], align = AlignmentType.LEFT as any, sp = 120, indent?: number) =>
       new Paragraph({ alignment: align, spacing: { before: sp, after: sp }, indent: indent ? { firstLine: indent } : undefined, children: ch })
@@ -348,31 +356,31 @@ ${tipuri.map((t, i) => {
       } catch(e) { console.error(e) }
     }
 
+    const docxAlign = (a: DocAlign) =>
+      a === 'center' ? AlignmentType.CENTER : a === 'right' ? AlignmentType.RIGHT
+      : a === 'left' ? AlignmentType.LEFT : AlignmentType.JUSTIFIED
+    const runs = (segs: Segment[], sz = 22) =>
+      segs.map(s => new TextRun({ text: s.text, bold: s.bold, italics: s.italics, size: sz, font: 'Arial' }))
+
     // Corp paragraphs
-    const corpParagrafe = (corpText: string) => {
+    const corpParagrafe = (linii: Array<{ raw: string; segs: Segment[] }>, align: DocAlign) => {
     const corpParas: any[] = []
-    for (const line of corpText.split('\n')) {
-      if (!line.trim()) {
+    for (const l of linii) {
+      if (!l.raw.trim()) {
         corpParas.push(new Paragraph({ spacing: { before: 60, after: 60 }, children: [] }))
-      } else if (line.startsWith('-')) {
+      } else if (l.raw.startsWith('-')) {
         corpParas.push(new Paragraph({
-          alignment: AlignmentType.JUSTIFIED as any,
+          alignment: docxAlign(align) as any,
           spacing: { before: 80, after: 80 },
           indent: { left: 720 },
-          children: [reg(line)]
+          children: runs(l.segs)
         }))
       } else {
-        const boldParts = line.split(/(\d{1,2} \w+ \d{4}|\d{1,2}\.\d{1,2}\.\d{4})/g)
-        const children: any[] = boldParts.map(part =>
-          /\d{1,2} \w+ \d{4}/.test(part) || /\d{1,2}\.\d{1,2}\.\d{4}/.test(part)
-            ? bold(part)
-            : reg(part)
-        )
         corpParas.push(new Paragraph({
-          alignment: AlignmentType.JUSTIFIED as any,
+          alignment: docxAlign(align) as any,
           spacing: { before: 80, after: 80 },
-          indent: { firstLine: 720 },
-          children
+          indent: (align === 'justify' || align === 'left') ? { firstLine: 720 } : undefined,
+          children: runs(l.segs)
         }))
       }
     }
@@ -391,10 +399,11 @@ ${tipuri.map((t, i) => {
         new Paragraph({ spacing: { before: 0, after: 200 }, children: [reg('ȘI REGLEMENTARE ÎN COMUNICAȚII')] }),
         new Paragraph({
           spacing: { before: 200, after: 200 },
+          alignment: docxAlign(tplAlign(t, 'subiect')) as any,
           children: [bold('Subiect:   '), boldItal(txt.subiect)]
         }),
-        para([bold('Domnule Președinte,', 26)], AlignmentType.CENTER as any, 300),
-        ...corpParagrafe(txt.corpText),
+        para([bold(txt.adresare, 26)], docxAlign(tplAlign(t, 'adresare')) as any, 300),
+        ...corpParagrafe(txt.corpLinii, tplAlign(t, 'corp')),
         new Paragraph({ spacing: { before: 600, after: 0 }, alignment: AlignmentType.RIGHT as any, children: [reg('Cu stimă,')] }),
         new Paragraph({ spacing: { before: 60, after: 0 }, alignment: AlignmentType.RIGHT as any, children: [bold('SC SET SAIL ADVERTISING SRL')] }),
         new Paragraph({ spacing: { before: 60, after: 0 }, alignment: AlignmentType.RIGHT as any, children: [reg('director Cobianu Drugan Corina')] }),
