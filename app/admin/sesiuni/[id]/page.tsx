@@ -274,6 +274,8 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
   const [editValues, setEditValues] = useState<any>({})
   const [saving, setSaving] = useState(false)
   const [showAdd, setShowAdd] = useState(false)
+  const [syncBusy, setSyncBusy] = useState(false)
+  const [syncMsg, setSyncMsg] = useState<{ ok: boolean; text: string } | null>(null)
   const [newSt, setNewSt] = useState<any>(EMPTY_ST)
   const [adding, setAdding] = useState(false)
   const [moving, setMoving] = useState<string|null>(null)
@@ -336,6 +338,37 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
       else cmp = String((a as any)[sortCol] || '').localeCompare(String((b as any)[sortCol] || ''), 'ro')
       return sortDir === 'asc' ? cmp : -cmp
     })
+  }
+
+  // Sincronizare cu grupa de pe skipper: citește „Link skipper" + /full-table,
+  // compară emailurile cu lista sesiunii și adaugă cine lipsește. Fără confirmări.
+  async function syncSkipper() {
+    setSyncBusy(true); setSyncMsg(null)
+    try {
+      const res = await fetch('/api/skipper-sync', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sess.id }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok) { setSyncMsg({ ok: false, text: j.error || `Sincronizare eșuată (${res.status})` }); return }
+
+      const parti = [
+        j.adaugati.length ? `Adăugați ${j.adaugati.length}: ${j.adaugati.join(', ')}` : 'Niciun cursant nou',
+        j.preluati?.length ? `date preluate din sistem pentru ${j.preluati.length}` : '',
+        j.existau.length ? `${j.existau.length} erau deja în listă` : '',
+      ].filter(Boolean)
+      setSyncMsg({ ok: true, text: `Grupa ${j.grupa} · ${j.total_skipper} pe skipper. ${parti.join(' · ')}.` })
+
+      if (j.adaugati.length) {
+        const { data } = await supabase.from('students').select('*').eq('session_id', sess.id)
+          .order('order_in_session')
+        if (data) setStudents(data as Student[])
+      }
+    } catch (e: any) {
+      setSyncMsg({ ok: false, text: e.message || 'Sincronizare eșuată' })
+    } finally {
+      setSyncBusy(false)
+    }
   }
 
   async function recount() {
@@ -625,6 +658,13 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
           <span className="font-semibold text-sm text-gray-900">Cursanți ({students.filter((s:Student)=>!s.only_sailing).length})</span>
         </div>
         <div className="flex items-center gap-2">
+          {(sess as any).skipper_url && (
+            <button onClick={syncSkipper} disabled={syncBusy}
+              title="Citește grupa de pe skipper (linkul sesiunii + /full-table) și adaugă cursanții care lipsesc"
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border border-gray-200 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors disabled:opacity-50">
+              ⇅ {syncBusy ? 'Se sincronizează…' : 'Sincronizează sesiuni'}
+            </button>
+          )}
           <button onClick={startNormalize} title="Județ → jud. X / Sector N; scoate orașul/județul duplicat din adresă"
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs border border-gray-200 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50 transition-colors">
             ⌂ Normalizare adrese
@@ -639,6 +679,16 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
           </button>
         </div>
       </div>
+
+      {/* Rezultatul sincronizării cu skipper */}
+      {syncMsg && (
+        <div className={`px-4 py-2.5 text-xs flex items-start gap-2 border-b ${
+          syncMsg.ok ? 'bg-indigo-50 border-indigo-100 text-indigo-900' : 'bg-red-50 border-red-100 text-red-800'
+        }`}>
+          <span className="flex-1">{syncMsg.text}</span>
+          <button onClick={() => setSyncMsg(null)} className="opacity-50 hover:opacity-100 leading-none">×</button>
+        </div>
+      )}
 
       {/* Modal normalizare adrese: previzualizare înainte de aplicare */}
       {normChanges && (

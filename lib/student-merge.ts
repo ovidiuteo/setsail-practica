@@ -36,6 +36,41 @@ export function mergeCarry(incoming: Record<string, any>, previous: Record<strin
   return out
 }
 
+// Celelalte fișe ale ACELEIAȘI persoane din sistem (fiecare rând din `students`
+// e o înscriere per sesiune). Potrivire în ordinea încrederii: CNP → email → nume.
+// Primește clientul Supabase de la apelant, ca să meargă și cu service-role.
+export async function findPersonRows(
+  sb: any,
+  person: { cnp?: string | null; email?: string | null; full_name?: string | null },
+  excludeId?: string,
+): Promise<any[]> {
+  const cnp = clean(person.cnp)
+  const email = clean(person.email)
+  const name = clean(person.full_name)
+  const sel = '*, sessions!session_id(session_date, class_caa)'
+  let rows: any[] = []
+
+  if (cnp) {
+    const { data } = await sb.from('students').select(sel).eq('cnp', cnp)
+    rows = data || []
+  }
+  if (!rows.length && email) {
+    const { data } = await sb.from('students').select(sel).ilike('email', email)
+    rows = data || []
+  }
+  if (!rows.length && name) {
+    const { data } = await sb.from('students').select(sel).ilike('full_name', name)
+    rows = data || []
+  }
+  return rows.filter((r: any) => r.id !== excludeId)
+}
+
+// Cea mai recentă fișă dintr-un set (după created_at)
+export function ceaMaiRecenta(rows: any[]): any | null {
+  if (!rows.length) return null
+  return [...rows].sort((a, b) => String(b.created_at || '').localeCompare(String(a.created_at || '')))[0]
+}
+
 // Doar câmpurile pe care fișa existentă NU le are și care vin acum —
 // pentru completarea unei fișe deja aflate în sesiune, fără a suprascrie nimic.
 export function fillGaps(existing: Record<string, any>, incoming: Record<string, any>): Record<string, any> {

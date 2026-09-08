@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { CARRY_FIELDS } from '@/lib/student-merge'
+import { CARRY_FIELDS, findPersonRows } from '@/lib/student-merge'
 import { applyMailTemplate } from '@/lib/mail-template'
 
 export const runtime = 'nodejs'
@@ -46,35 +46,8 @@ const docFlag: Record<string, string> = {
   vhf: 'has_vhf',
 }
 
-// Găsește celelalte fișe ale ACELEIAȘI persoane (fiecare rând din `students` e o
-// înscriere per sesiune). Potrivire în ordinea încrederii: CNP → email → nume.
-async function findPersonRows(
-  sb: ReturnType<typeof svc>,
-  person: { cnp?: string | null; email?: string | null; full_name?: string | null },
-  excludeId?: string,
-) {
-  const cnp = String(person.cnp || '').trim()
-  const email = String(person.email || '').trim()
-  const name = String(person.full_name || '').trim()
-  const sel = '*, sessions!session_id(session_date, class_caa)'
-  let rows: any[] = []
-
-  if (cnp) {
-    const { data } = await sb.from('students').select(sel).eq('cnp', cnp)
-    rows = data || []
-  }
-  if (!rows.length && email) {
-    const { data } = await sb.from('students').select(sel).ilike('email', email)
-    rows = data || []
-  }
-  if (!rows.length && name) {
-    const { data } = await sb.from('students').select(sel).ilike('full_name', name)
-    rows = data || []
-  }
-  return rows.filter(r => r.id !== excludeId)
-}
-
-// CARRY_FIELDS vine din lib/student-merge (aceleași reguli ca în pagina sesiunii)
+// CARRY_FIELDS și findPersonRows vin din lib/student-merge (aceleași reguli
+// ca în pagina sesiunii și la sincronizarea cu skipper)
 
 // Seriile de radio pentru dropdownul „Înscris la": întâi seria care urmează,
 // apoi cele trecute (cea mai recentă prima), apoi eventualele serii de după.
