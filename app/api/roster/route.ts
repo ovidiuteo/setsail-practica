@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { CARRY_FIELDS } from '@/lib/student-merge'
+import { applyMailTemplate } from '@/lib/mail-template'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -13,7 +14,10 @@ function svc() {
 }
 
 // Câmpuri editabile de pe pagina gated
-const EDITABLE = new Set(['full_name', 'email', 'cnp', 'birth_date', 'address', 'city', 'county', 'obtinere_prelungire'])
+const EDITABLE = new Set([
+  'full_name', 'email', 'cnp', 'birth_date', 'address', 'city', 'county', 'obtinere_prelungire',
+  'communication_target',
+])
 const MAX_IMG = 8 * 1024 * 1024 // ~8MB data URL
 
 // Validează (session_id, token) și întoarce true dacă tokenul corespunde
@@ -174,6 +178,41 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ leads, sessions })
   }
 
+  // Template-urile de email, cu variabilele deja completate pentru această serie
+  // (la fel ca în pagina de admin a sesiunii, doar că substituția se face aici,
+  // ca pagina cu token să nu aibă nevoie de datele firmei și de contacte).
+  if (sp.get('action') === 'mail') {
+    const [{ data: templates }, { data: sessFull }, { data: contacts }, { data: info }] = await Promise.all([
+      sb.from('mail_templates').select('*').eq('activ', true).order('categorie').order('label'),
+      sb.from('sessions').select('*, locations(*), boats(*), evaluators(*)').eq('id', sessionId).maybeSingle(),
+      sb.from('contact_persons').select('id, full_name, phone'),
+      sb.from('setsail_info').select('key, value'),
+    ])
+    const s: any = sessFull || {}
+    const instrIds = [s.instructor_id, s.instructor_id_2, s.instructor_id_3].filter(Boolean)
+    const { data: instrRows } = instrIds.length
+      ? await sb.from('instructors').select('id, full_name').in('id', instrIds)
+      : { data: [] as any[] }
+    const iBy: Record<string, any> = Object.fromEntries((instrRows || []).map((r: any) => [r.id, r]))
+    const ctx = {
+      origin: req.nextUrl.origin,
+      sess: s,
+      contacts: contacts || [],
+      instructors: instrIds.map((i: any) => iBy[i]).filter(Boolean),
+      setsailInfo: Object.fromEntries((info || []).map((r: any) => [r.key, r.value])),
+    }
+    return NextResponse.json({
+      templates: (templates || [])
+        .filter((t: any) => t.categorie !== 'anr' && t.categorie !== 'ancom')
+        .map((t: any) => ({
+          id: t.id, label: t.label, categorie: t.categorie || 'general',
+          subject: applyMailTemplate(t.subject || '', ctx),
+          body: applyMailTemplate(t.body_html || t.body_text || '', ctx),
+          helper: t.helper || '',
+        })),
+    })
+  }
+
   if (studentId) {
     const col = docColumn(side)
     const { data } = await sb.from('students').select(`${col}`).eq('id', studentId).eq('session_id', sessionId).maybeSingle()
@@ -195,7 +234,7 @@ export async function GET(req: NextRequest) {
 
   const [{ data, error }, docSets, { data: cereri }] = await Promise.all([
     sb.from('students')
-      .select('id, full_name, email, cnp, birth_date, address, city, county, class_caa, obtinere_prelungire, doc_type')
+      .select('id, full_name, email, cnp, birth_date, address, city, county, class_caa, obtinere_prelungire, doc_type, communication_target')
       .eq('session_id', sessionId),
     Promise.all((Object.entries(DOC_COLS) as [DocKey, string][]).map(async ([key, col]) => {
       const { data: ids } = await sb.from('students').select('id')
@@ -215,6 +254,7 @@ export async function GET(req: NextRequest) {
     // Informația vine din clasă (sursa de adevăr); valoarea stocată e doar fallback dacă clasa nu o conține
     obtinere_prelungire: lrcFromClass(r.class_caa) || r.obtinere_prelungire || '',
     doc_type: r.doc_type || '',
+    communication_target: !!r.communication_target,
     has_ci: has.has_ci.has(r.id), has_verso: has.has_verso.has(r.id),
     has_adeverinta: has.has_adeverinta.has(r.id),
     has_cert_nastere: has.has_cert_nastere.has(r.id),
@@ -258,6 +298,16 @@ export async function PATCH(req: NextRequest) {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ ok: true })
   }
+  // All / None pe coloana de email a listei — o singură cerere, nu una per cursant.
+  // La „All" bifăm doar cine are email, ca să nu marcăm rânduri fără adresă.
+  if (typeof body?.comm_all === 'boolean') {
+    let q = sb.from('students').update({ communication_target: body.comm_all }).eq('session_id', session_id)
+    if (body.comm_all) q = q.not('email', 'is', null).neq('email', '')
+    const { error } = await q
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ ok: true })
+  }
+
   if (!student_id) return NextResponse.json({ error: 'lipsește cursantul' }, { status: 400 })
 
   const updates: Record<string, any> = {}

@@ -11,7 +11,17 @@ type Row = {
   has_adeverinta: boolean; has_cert_nastere: boolean
   has_signature: boolean; has_cerere: boolean; has_vhf: boolean
   cerere_nr: number | null; cerere_data: string | null
+  communication_target: boolean
 }
+
+// Plicul gri/verde din capul rândului: verde = intră în mailinguri
+const MailIcon = ({ on, color, size = 13 }: { on?: boolean; color?: string; size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" strokeWidth="2.5"
+    strokeLinecap="round" strokeLinejoin="round" stroke={color || (on ? '#16a34a' : '#d1d5db')}>
+    <rect x="2" y="4" width="20" height="16" rx="2" />
+    <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+  </svg>
+)
 
 // Documentele unui cursant, adresabile după cheie (recto = fața actului)
 type DocKey = 'recto' | 'verso' | 'domiciliu' | 'cert_nastere' | 'vhf' | 'semnatura' | 'cerere'
@@ -207,6 +217,7 @@ export default function RosterPage() {
   const [origin, setOrigin] = useState('')
   useEffect(() => { setOrigin(window.location.origin) }, [])
   const [deleting, setDeleting] = useState<string | null>(null)
+  const [mailOpen, setMailOpen] = useState(false)
 
   const load = useCallback(async () => {
     const r = await fetch(`/api/roster?session_id=${id}&token=${encodeURIComponent(token)}`)
@@ -241,6 +252,30 @@ export default function RosterPage() {
     rowUpdate(sid, { [field]: draft } as Partial<Row>)
     setEdit(null)
   }
+
+  // Plicul din tabel: cine intră în mailinguri. Fără email nu se poate bifa.
+  async function toggleComm(row: Row) {
+    if (!row.email) return
+    const nv = !row.communication_target
+    rowUpdate(row.id, { communication_target: nv })
+    const r = await fetch('/api/roster', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: id, token, student_id: row.id, field: 'communication_target', value: nv }),
+    })
+    if (!r.ok) { alert('Salvare eșuată.'); rowUpdate(row.id, { communication_target: !nv }) }
+  }
+  async function setCommAll(on: boolean) {
+    const before = rows
+    setRows(rs => (rs || []).map(x => ({ ...x, communication_target: on ? !!x.email : false })))
+    const r = await fetch('/api/roster', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: id, token, comm_all: on }),
+    })
+    if (!r.ok) { alert('Salvare eșuată.'); setRows(before) }
+  }
+
+  // Emailurile bifate — ce se pune în BCC la deschiderea modalului
+  const mailEmails = (rows || []).filter(r => r.email && r.communication_target).map(r => r.email)
 
   async function saveLrc(sid: string, v: string) {
     const r = await fetch('/api/roster', {
@@ -415,6 +450,13 @@ export default function RosterPage() {
             <table className="w-full text-sm border-collapse">
               <thead>
                 <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                  {/* Plicul: cine primește mailurile. All / None bifează toată lista. */}
+                  <th className="px-2 py-1.5 w-12 text-center normal-case tracking-normal">
+                    <div className="flex flex-col items-center leading-tight">
+                      <button onClick={() => setCommAll(true)} className="text-[11px] font-bold text-green-600 hover:text-green-800">All</button>
+                      <button onClick={() => setCommAll(false)} className="text-[11px] font-bold text-gray-400 hover:text-gray-600">None</button>
+                    </div>
+                  </th>
                   <th className="px-3 py-2.5 w-8">#</th>
                   {(tab === 'cursanti' ? PERSON_FIELDS : FIELDS).map(f => <th key={f.key} className={`px-3 py-2.5 ${f.w || ''}`}>{f.label}</th>)}
                   <th className="px-2 py-2.5 text-center whitespace-nowrap">CI</th>
@@ -440,6 +482,13 @@ export default function RosterPage() {
                   const ok = tab === 'cursanti' && rowComplete(row)
                   return (
                   <tr key={row.id} className={`hover:bg-gray-50/60 ${tab === 'cursanti' ? '[&>td]:py-1' : ''}`}>
+                    <td className="px-2 py-2 text-center">
+                      <button onClick={() => toggleComm(row)} disabled={!row.email}
+                        title={row.email ? (row.communication_target ? 'Email activ — intră în mailinguri' : 'Email inactiv') : 'Fără email'}
+                        className="p-1 rounded hover:bg-gray-100 disabled:opacity-20 transition-colors">
+                        <MailIcon on={row.communication_target && !!row.email} />
+                      </button>
+                    </td>
                     <td className="px-3 py-2 text-gray-300 text-xs">{i + 1}</td>
                     {(tab === 'cursanti' ? PERSON_FIELDS : FIELDS).map(f => {
                       const editing = edit?.id === row.id && edit?.field === f.key
@@ -531,6 +580,22 @@ export default function RosterPage() {
           </div>
         )}
 
+        {/* Mailing către cursanții bifați cu plic verde */}
+        {rows && rows.length > 0 && tab !== 'verify' && tab !== 'leaduri' && (
+          <div className="mt-3 flex items-center gap-3">
+            <button onClick={() => setMailOpen(true)}
+              className="px-4 py-2 rounded-lg text-sm font-medium text-white hover:opacity-90 flex items-center gap-2"
+              style={{ background: '#0a1628' }}>
+              <MailIcon color="#ffffff" size={14} /> Email
+            </button>
+            <span className="text-xs text-gray-400">
+              {mailEmails.length
+                ? <><b className="text-green-600">{mailEmails.length}</b> {mailEmails.length === 1 ? 'destinatar selectat' : 'destinatari selectați'}</>
+                : 'Niciun destinatar bifat — apasă plicul din dreptul cursanților sau „All"'}
+            </span>
+          </div>
+        )}
+
         {/* Leadurile de pe landing, sub lista de cursanți — cei înscriși deja
             (după email) nu mai apar aici */}
         {tab === 'cursanti' && (
@@ -551,6 +616,10 @@ export default function RosterPage() {
           onRowUpdate={rowUpdate} />
       )}
 
+      {mailOpen && (
+        <MailModal sessionId={id} token={token} emails={mailEmails} onClose={() => setMailOpen(false)} />
+      )}
+
       {addOpen && (
         <AddStudentsModal sessionId={id} token={token} mode={addOpen}
           onClose={() => setAddOpen(null)}
@@ -564,6 +633,162 @@ export default function RosterPage() {
             load()
           }} />
       )}
+    </div>
+  )
+}
+
+// ── Modal: email către cursanții bifați, cu template-urile din admin ──
+// Template-urile vin de la API deja completate cu datele seriei (aceleași
+// variabile ca în pagina de admin a sesiunii).
+type MailTpl = { id: string; label: string; categorie: string; subject: string; body: string; helper: string }
+const MAIL_CATS: Record<string, string> = {
+  portal: '🔗 Portal', practica: '⛵ Practică', organizatoric: '📋 Organizatoric',
+  rezultate: '🏆 Rezultate', general: '📧 General',
+}
+
+function MailModal({ sessionId, token, emails, onClose }: {
+  sessionId: string; token: string; emails: string[]; onClose: () => void
+}) {
+  const [templates, setTemplates] = useState<MailTpl[] | null>(null)
+  const [to, setTo] = useState(emails.join(', '))
+  const [subject, setSubject] = useState('')
+  const [body, setBody] = useState('')
+  const [helper, setHelper] = useState('')
+  const [copied, setCopied] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetch(`/api/roster?session_id=${sessionId}&token=${encodeURIComponent(token)}&action=mail`)
+      .then(r => r.json()).then(j => setTemplates(j.templates || [])).catch(() => setTemplates([]))
+  }, [sessionId, token])
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose() }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const copy = (text: string, what: string) => {
+    navigator.clipboard.writeText(text)
+    setCopied(what); setTimeout(() => setCopied(c => c === what ? null : c), 2000)
+  }
+  const CopyBtn = ({ text, what, label }: { text: string; what: string; label?: string }) => (
+    <button onClick={() => copy(text, what)} className="text-xs text-blue-500 hover:text-blue-700">
+      {copied === what ? 'Copiat ✓' : (label || 'Copiază')}
+    </button>
+  )
+
+  const esteHtml = body.trim().startsWith('<')
+  const gmail = (withBody: boolean) =>
+    `https://mail.google.com/mail/?view=cm&bcc=${encodeURIComponent(to)}&su=${encodeURIComponent(subject)}` +
+    (withBody ? `&body=${encodeURIComponent(body)}` : '')
+
+  const grouped = (templates || []).reduce((acc: Record<string, MailTpl[]>, t) => {
+    (acc[t.categorie] ||= []).push(t); return acc
+  }, {})
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center p-4 overflow-y-auto"
+      onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl my-8">
+        <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
+          <div>
+            <h2 className="font-semibold text-gray-900">Email cursanți</h2>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {emails.length} {emails.length === 1 ? 'destinatar bifat' : 'destinatari bifați'} · se trimit în BCC
+            </p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
+        </div>
+
+        <div className="p-5 space-y-4">
+          {/* BCC */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs text-gray-400">BCC</label>
+              <CopyBtn text={to} what="bcc" />
+            </div>
+            <textarea rows={2} value={to} onChange={e => setTo(e.target.value)}
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs font-mono resize-none focus:outline-none focus:ring-1 focus:ring-blue-400" />
+          </div>
+
+          {/* Subiect */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs text-gray-400">Subiect</label>
+              <CopyBtn text={subject} what="subj" />
+            </div>
+            <input value={subject} onChange={e => setSubject(e.target.value)} placeholder="Subiect email..."
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400" />
+          </div>
+
+          {/* Mesaj */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-xs text-gray-400">Mesaj</label>
+              <CopyBtn text={body} what="body" label="Copiază tot" />
+            </div>
+            <textarea rows={8} value={body} onChange={e => setBody(e.target.value)}
+              placeholder="Scrie sau selectează un template..."
+              className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs font-mono resize-y focus:outline-none focus:ring-1 focus:ring-blue-400" />
+          </div>
+
+          {/* Template-uri */}
+          <div>
+            <div className="text-xs text-gray-400 mb-2">Template-uri</div>
+            {templates === null ? (
+              <div className="text-xs text-gray-400 italic">Se încarcă template-urile…</div>
+            ) : templates.length === 0 ? (
+              <div className="text-xs text-gray-400 italic">Niciun template activ.</div>
+            ) : (
+              <div className="space-y-3">
+                {Object.entries(grouped).map(([cat, items]) => (
+                  <div key={cat}>
+                    <div className="text-xs text-gray-400 font-medium mb-1">{MAIL_CATS[cat] || cat}</div>
+                    <div className="grid sm:grid-cols-2 gap-1">
+                      {items.map(t => (
+                        <button key={t.id}
+                          onClick={() => { setSubject(t.subject); setBody(t.body); setHelper(t.helper) }}
+                          className="text-left px-3 py-2 rounded-lg text-xs border border-gray-200 hover:bg-blue-50 hover:border-blue-200 transition-colors">
+                          {t.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Deschide în Gmail — la template HTML, Gmail nu poate primi corpul din URL */}
+          {esteHtml ? (
+            <div className="space-y-2">
+              <button onClick={() => copy(body, 'html')}
+                className="w-full py-2.5 rounded-lg text-xs font-medium border border-blue-200 text-blue-700 hover:bg-blue-50">
+                {copied === 'html' ? '✓ HTML copiat în clipboard!' : '📋 Copiază HTML în clipboard'}
+              </button>
+              <a href={gmail(false)} target="_blank" rel="noopener noreferrer"
+                className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-medium text-white"
+                style={{ background: '#0a1628' }}>
+                Deschide Gmail (paste HTML manual)
+              </a>
+              <p className="text-xs text-gray-400 text-center">1. Copiază HTML → 2. Deschide Gmail → 3. Ctrl+Shift+V</p>
+            </div>
+          ) : (
+            <a href={gmail(true)} target="_blank" rel="noopener noreferrer"
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-medium text-white"
+              style={{ background: '#0a1628' }}>
+              Deschide în Gmail
+            </a>
+          )}
+
+          {helper.trim() && (
+            <div className="p-3 rounded-lg border border-amber-200 bg-amber-50 text-xs text-amber-900 whitespace-pre-wrap leading-relaxed">
+              <div className="font-semibold mb-1">📋 Procedură</div>
+              {helper}
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
