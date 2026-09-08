@@ -234,7 +234,7 @@ export async function GET(req: NextRequest) {
 
   const [{ data, error }, docSets, { data: cereri }] = await Promise.all([
     sb.from('students')
-      .select('id, full_name, email, cnp, birth_date, address, city, county, class_caa, obtinere_prelungire, doc_type, communication_target')
+      .select('id, full_name, email, cnp, birth_date, address, city, county, class_caa, obtinere_prelungire, doc_type, communication_target, created_at, order_in_session')
       .eq('session_id', sessionId),
     Promise.all((Object.entries(DOC_COLS) as [DocKey, string][]).map(async ([key, col]) => {
       const { data: ids } = await sb.from('students').select('id')
@@ -255,6 +255,9 @@ export async function GET(req: NextRequest) {
     obtinere_prelungire: lrcFromClass(r.class_caa) || r.obtinere_prelungire || '',
     doc_type: r.doc_type || '',
     communication_target: !!r.communication_target,
+    // pentru sortarea cronologică din pagină (ordinea în care au intrat în serie)
+    created_at: r.created_at || null,
+    order_in_session: r.order_in_session ?? null,
     has_ci: has.has_ci.has(r.id), has_verso: has.has_verso.has(r.id),
     has_adeverinta: has.has_adeverinta.has(r.id),
     has_cert_nastere: has.has_cert_nastere.has(r.id),

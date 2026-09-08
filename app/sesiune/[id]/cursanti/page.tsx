@@ -12,7 +12,32 @@ type Row = {
   has_signature: boolean; has_cerere: boolean; has_vhf: boolean
   cerere_nr: number | null; cerere_data: string | null
   communication_target: boolean
+  created_at: string | null; order_in_session: number | null
 }
+
+// Sortarea listei: alfabetic sau cronologic (când a intrat în serie), cu sens reversibil
+type SortMode = 'alpha' | 'time'
+type Sort = { mode: SortMode; dir: 'asc' | 'desc' }
+function sortRows(rows: Row[], s: Sort): Row[] {
+  const semn = s.dir === 'asc' ? 1 : -1
+  const cheieTimp = (r: Row) => r.created_at || ''
+  return [...rows].sort((a, b) => {
+    if (s.mode === 'alpha') return semn * (a.full_name || '').localeCompare(b.full_name || '', 'ro', { sensitivity: 'base' })
+    // fără created_at (rânduri vechi) cădem pe ordinea din serie, apoi pe nume
+    const ta = cheieTimp(a), tb = cheieTimp(b)
+    if (ta && tb && ta !== tb) return semn * ta.localeCompare(tb)
+    const oa = a.order_in_session ?? 0, ob = b.order_in_session ?? 0
+    if (oa !== ob) return semn * (oa - ob)
+    return (a.full_name || '').localeCompare(b.full_name || '', 'ro', { sensitivity: 'base' })
+  })
+}
+
+const ClockIcon = ({ size = 12 }: { size?: number }) => (
+  <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor"
+    strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 2" />
+  </svg>
+)
 
 // Plicul gri/verde din capul rândului: verde = intră în mailinguri
 const MailIcon = ({ on, color, size = 13 }: { on?: boolean; color?: string; size?: number }) => (
@@ -218,6 +243,11 @@ export default function RosterPage() {
   useEffect(() => { setOrigin(window.location.origin) }, [])
   const [deleting, setDeleting] = useState<string | null>(null)
   const [mailOpen, setMailOpen] = useState(false)
+  const [sort, setSort] = useState<Sort>({ mode: 'alpha', dir: 'asc' })
+  // click pe butonul activ = inversează sensul; pe celălalt = comută pe el
+  const toggleSort = (mode: SortMode) => setSort(s => s.mode === mode
+    ? { mode, dir: s.dir === 'asc' ? 'desc' : 'asc' }
+    : { mode, dir: mode === 'alpha' ? 'asc' : 'desc' })
 
   const load = useCallback(async () => {
     const r = await fetch(`/api/roster?session_id=${id}&token=${encodeURIComponent(token)}`)
@@ -458,7 +488,40 @@ export default function RosterPage() {
                     </div>
                   </th>
                   <th className="px-3 py-2.5 w-8">#</th>
-                  {(tab === 'cursanti' ? PERSON_FIELDS : FIELDS).map(f => <th key={f.key} className={`px-3 py-2.5 ${f.w || ''}`}>{f.label}</th>)}
+                  {(tab === 'cursanti' ? PERSON_FIELDS : FIELDS).map(f => (
+                    <th key={f.key} className={`px-3 py-2.5 ${f.w || ''}`}>
+                      {f.key === 'full_name' ? (
+                        <span className="flex items-center gap-1.5">
+                          {f.label}
+                          {/* Sortare: ceas = cronologic (intrarea în serie), A-Z = alfabetic */}
+                          <button onClick={() => toggleSort('time')}
+                            title={sort.mode === 'time'
+                              ? (sort.dir === 'desc' ? 'Cronologic: cei mai noi sus (click = invers)' : 'Cronologic: cei mai vechi sus (click = invers)')
+                              : 'Sortează cronologic, după intrarea în serie'}
+                            className={`flex items-center gap-0.5 px-1.5 py-1 rounded border normal-case tracking-normal ${
+                              sort.mode === 'time'
+                                ? 'border-blue-300 bg-blue-50 text-blue-700'
+                                : 'border-gray-200 bg-white text-gray-400 hover:text-gray-700'
+                            }`}>
+                            <ClockIcon />
+                            {sort.mode === 'time' && <span className="text-[10px] leading-none">{sort.dir === 'desc' ? '↓' : '↑'}</span>}
+                          </button>
+                          <button onClick={() => toggleSort('alpha')}
+                            title={sort.mode === 'alpha'
+                              ? (sort.dir === 'asc' ? 'Alfabetic: A sus (click = invers)' : 'Alfabetic: Z sus (click = invers)')
+                              : 'Sortează alfabetic'}
+                            className={`flex items-center gap-0.5 px-1.5 py-1 rounded border text-[10px] font-bold normal-case tracking-normal ${
+                              sort.mode === 'alpha'
+                                ? 'border-blue-300 bg-blue-50 text-blue-700'
+                                : 'border-gray-200 bg-white text-gray-400 hover:text-gray-700'
+                            }`}>
+                            {sort.mode === 'alpha' && sort.dir === 'desc' ? 'Z-A' : 'A-Z'}
+                            {sort.mode === 'alpha' && <span className="leading-none">{sort.dir === 'asc' ? '↑' : '↓'}</span>}
+                          </button>
+                        </span>
+                      ) : f.label}
+                    </th>
+                  ))}
                   <th className="px-2 py-2.5 text-center whitespace-nowrap">CI</th>
                   {tab === 'cursanti' ? <>
                     {DOC_COLS_ID.map(c => (
@@ -478,7 +541,7 @@ export default function RosterPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {rows.map((row, i) => {
+                {sortRows(rows, sort).map((row, i) => {
                   const ok = tab === 'cursanti' && rowComplete(row)
                   return (
                   <tr key={row.id} className={`hover:bg-gray-50/60 ${tab === 'cursanti' ? '[&>td]:py-1' : ''}`}>
