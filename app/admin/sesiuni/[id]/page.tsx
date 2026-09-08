@@ -3298,16 +3298,29 @@ function SessionFilesCard({ sess, isRadio }: { sess: any; isRadio: boolean }) {
     return () => { cancelled = true }
   }, [open, sess.id, categorie])
 
+  // Fisierul urca direct in Supabase Storage, cu un URL semnat cerut de la API.
+  // Asa nu mai trece prin functia Vercel, care refuza body-uri peste 4,5 MB.
   async function upload(file: File, fileTypeId: string | null) {
     setUploading(fileTypeId || 'diverse')
-    const fd = new FormData()
-    fd.append('session_id', sess.id)
-    if (fileTypeId) fd.append('file_type_id', fileTypeId)
-    fd.append('file', file)
-    const res = await fetch('/api/session-files', { method: 'POST', body: fd })
-    const j = await res.json().catch(() => ({}))
-    if (!res.ok) alert(j.error || 'Eroare la upload')
-    else setFiles(f => [...f, j.file])
+    try {
+      const post = async (body: any) => {
+        const res = await fetch('/api/session-files', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
+        })
+        const j = await res.json().catch(() => ({}))
+        if (!res.ok) throw new Error(j.error || `Eroare la upload (${res.status})`)
+        return j
+      }
+      const meta = { session_id: sess.id, file_name: file.name, mime_type: file.type, size: file.size }
+      const { key, token } = await post({ ...meta, action: 'sign' })
+      const { error: upErr } = await supabase.storage.from('session-files')
+        .uploadToSignedUrl(key, token, file, { contentType: file.type })
+      if (upErr) throw new Error(upErr.message)
+      const j = await post({ ...meta, action: 'record', storage_key: key, file_type_id: fileTypeId })
+      setFiles(f => [...f, j.file])
+    } catch (e: any) {
+      alert(e.message || 'Eroare la upload')
+    }
     setUploading(null)
   }
   async function del(id: string) {
