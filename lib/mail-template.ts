@@ -40,6 +40,9 @@ export const MAIL_VAR_GROUPS: MailVarGroup[] = [
       { key: 'intervale_practica', label: 'Intervalele de practică (ex: 10:00–12:00, …)' },
       { key: 'zi_sapt_practica', label: 'Ziua săptămânii, practică (ex: joi)' },
       { key: 'zi_sapt_examen', label: 'Ziua săptămânii, examen (ex: vineri)' },
+      { key: 'zile_pana_la_curs', label: 'Câte zile mai sunt până la prima zi de curs (ex: 6)' },
+      { key: 'zile_pana_la_curs_text', label: 'Zile până la curs, cu text (ex: 6 zile / mâine / azi)' },
+      { key: 'zile_pana_la_practica', label: 'Câte zile mai sunt până la practică (ex: 9)' },
     ],
   },
   {
@@ -123,6 +126,35 @@ function practiceSlots(sess: any): { ore: string; intervale: string } {
   }
 }
 
+// Câte zile întregi mai sunt de azi până la o dată. Azi îl luăm în ora
+// României (pe Vercel funcțiile rulează pe UTC, altfel seara am pierde o zi).
+// Poate ieși negativ — data a trecut; cine îl folosește decide ce face.
+function zilePanaLa(d: string): number | null {
+  const tinta = localDay(d)
+  if (!tinta) return null
+  const azi = localDay(new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Bucharest' }))
+  if (!azi) return null
+  return Math.round((tinta.getTime() - azi.getTime()) / 86400000)
+}
+
+// Numărul, ca text. Nu scoatem niciodată un negativ într-un email („AMR -3 zile"),
+// deci o dată trecută devine 0.
+function zileNr(d: string): string {
+  const n = d ? zilePanaLa(d) : null
+  return n === null ? '' : String(Math.max(0, n))
+}
+
+// „6 zile", „20 de zile" (în română, „de" de la 20 în sus, după ultimele două
+// cifre), plus „azi" și „mâine". Dacă data a trecut, nu inventăm nimic.
+function zileText(d: string): string {
+  const n = d ? zilePanaLa(d) : null
+  if (n === null || n < 0) return ''
+  if (n === 0) return 'azi'
+  if (n === 1) return 'mâine'
+  const ultimele2 = n % 100
+  return ultimele2 >= 1 && ultimele2 <= 19 ? `${n} zile` : `${n} de zile`
+}
+
 // Ziua a n-a de curs (1 = ziua de start): ziua săptămânii și data scurtă
 function cursDay(csd: string, n: number): { zi: string; data: string } {
   const start = localDay(csd)
@@ -168,6 +200,10 @@ export function mailVarValues(ctx: MailVarCtx): Record<string, string> {
     zi_sapt_start_curs: roWeekday(csd),
     zi_sapt_practica: roWeekday(psd || sd),
     zi_sapt_examen: roWeekday(sd),
+    // Numărătoare inversă, calculată în momentul trimiterii
+    zile_pana_la_curs: zileNr(csd),
+    zile_pana_la_curs_text: zileText(csd),
+    zile_pana_la_practica: zileNr(psd || sd),
     // Zilele 2 și 3 de curs, calculate din ziua de start
     zi_sapt_curs_2: cursDay(csd, 2).zi,
     zi_sapt_curs_3: cursDay(csd, 3).zi,
