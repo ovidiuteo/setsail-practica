@@ -248,6 +248,9 @@ export default function RosterPage() {
   const [skipper, setSkipper] = useState<{ url: string }>({ url: '' })
   const [linkOpen, setLinkOpen] = useState(false)
   const [seriiToken, setSeriiToken] = useState('')
+  const [copiedSkipper, setCopiedSkipper] = useState(false)
+  const [skipperDraft, setSkipperDraft] = useState('')
+  const [skipperSaving, setSkipperSaving] = useState(false)
   const [syncBusy, setSyncBusy] = useState(false)
   const [syncRes, setSyncRes] = useState<SyncResult | null>(null)
   const [syncErr, setSyncErr] = useState<string | null>(null)
@@ -387,6 +390,28 @@ export default function RosterPage() {
     } catch { alert(portalLink()) }
   }
 
+  async function copySkipperLink() {
+    try {
+      await navigator.clipboard.writeText(skipper.url)
+      setCopiedSkipper(true)
+      setTimeout(() => setCopiedSkipper(false), 1800)
+    } catch { alert(skipper.url) }
+  }
+
+  // Salvează linkul grupei pe sesiune (validat de API: .../groups/<nr>)
+  async function salveazaSkipper(url: string) {
+    setSkipperSaving(true)
+    const r = await fetch('/api/roster', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: id, token, skipper_url: url.trim() }),
+    })
+    const j = await r.json().catch(() => ({}))
+    setSkipperSaving(false)
+    if (!r.ok) { alert(j.error || 'Salvare eșuată.'); return }
+    setSkipperDraft('')
+    load()
+  }
+
   // Landing-ul de curs radio — datele lui se iau automat din seria care urmează
   const landingLink = () => `${origin}/curs-radio-gmdss-lrc`
   async function copyLandingLink() {
@@ -460,6 +485,34 @@ export default function RosterPage() {
                 className="px-2.5 py-1 rounded-lg text-xs font-medium border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100">
                 Deschide landing page
               </a>
+            </div>
+            {/* Grupa de pe skipper — dacă lipsește, se poate lipi aici direct */}
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <span className="text-xs text-gray-400">Serie skipper.setsail.ro:</span>
+              {skipper.url ? (<>
+                <code className="px-2 py-1 rounded bg-gray-100 border border-gray-200 text-xs text-gray-700 break-all">{skipper.url}</code>
+                <button onClick={copySkipperLink}
+                  className="px-2.5 py-1 rounded-lg text-xs font-medium border border-gray-200 bg-white text-gray-700 hover:bg-gray-50">
+                  {copiedSkipper ? 'Copiat ✓' : 'Copy link'}
+                </button>
+                <a href={skipper.url} target="_blank" rel="noopener noreferrer"
+                  className="px-2.5 py-1 rounded-lg text-xs font-medium border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100">
+                  Deschide skipper.setsail.ro
+                </a>
+                <button onClick={() => setLinkOpen(true)}
+                  className="px-2 py-1 rounded-lg text-xs text-gray-400 hover:text-gray-700 hover:bg-gray-50">
+                  Schimbă
+                </button>
+              </>) : (<>
+                <input value={skipperDraft} onChange={e => setSkipperDraft(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter' && skipperDraft.trim()) salveazaSkipper(skipperDraft) }}
+                  placeholder="Lipește aici linkul grupei (https://skipper.setsail.ro/admin/groups/257)"
+                  className="px-2 py-1 rounded border border-gray-200 text-xs font-mono w-[380px] max-w-full focus:outline-none focus:ring-1 focus:ring-blue-400" />
+                <button onClick={() => salveazaSkipper(skipperDraft)} disabled={!skipperDraft.trim() || skipperSaving}
+                  className="px-2.5 py-1 rounded-lg text-xs font-medium border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100 disabled:opacity-40">
+                  {skipperSaving ? 'Se salvează…' : 'Salvează'}
+                </button>
+              </>)}
             </div>
           </div>
           <div className="flex flex-col items-end gap-1.5">

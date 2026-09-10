@@ -2364,19 +2364,25 @@ Set Sail NauticSchool
                     <Check size={10}/> atașată
                   </span>
                 )}
+                {notifTrimisaLa && (
+                  <span title={`Trimisă pe ${momentTrimitere(notifTrimisaLa)}`}
+                    className="shrink-0 flex items-center gap-0.5 text-[10px] font-medium text-green-700 bg-green-50 border border-green-200 rounded-full px-1.5 py-0.5">
+                    <Check size={10}/> trimisă
+                  </span>
+                )}
               </button>
-              {/* Trimisă / netrimisă — comutator pe aceeași linie, în dreapta */}
+              {/* Bifa trimisă / netrimisă, în dreapta liniei */}
               <div className="flex items-center gap-2 shrink-0">
-                <button onClick={()=>setTrimisa(!notifTrimisaLa)}
+                <label
                   title={notifTrimisaLa
-                    ? `Trimisă pe ${momentTrimitere(notifTrimisaLa)} — click pentru a marca netrimisă`
-                    : 'Click pentru a marca notificarea ca trimisă'}
-                  className={`flex items-center gap-0.5 text-[10px] font-medium rounded-full border px-1.5 py-0.5 transition-colors ${
-                    notifTrimisaLa
-                      ? 'text-green-700 bg-green-50 border-green-200 hover:bg-green-100'
-                      : 'text-gray-400 bg-white border-gray-200 hover:text-gray-600 hover:bg-gray-50'}`}>
-                  <Check size={10}/> {notifTrimisaLa ? 'trimisă' : 'netrimisă'}
-                </button>
+                    ? `Trimisă pe ${momentTrimitere(notifTrimisaLa)} — debifează pentru netrimisă`
+                    : 'Bifează când notificarea a fost trimisă'}
+                  className="flex items-center gap-1 text-[10px] font-medium text-gray-400 cursor-pointer select-none hover:text-gray-600">
+                  <input type="checkbox" checked={!!notifTrimisaLa}
+                    onChange={e=>setTrimisa(e.target.checked)}
+                    className="w-3.5 h-3.5 accent-green-600 cursor-pointer"/>
+                  trimisă
+                </label>
                 <button onClick={async()=>{
                     if(!showNotif) await ensureNotification()
                     setShowNotif(s=>!s)
