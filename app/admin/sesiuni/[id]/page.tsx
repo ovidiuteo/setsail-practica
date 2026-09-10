@@ -3730,6 +3730,15 @@ export default function SessionDetailPage() {
   const [editSessionValues, setEditSessionValues] = useState<any>({})
   // câmpul pe care sărim când modalul e deschis dintr-un dublu-click
   const [editFocusKey, setEditFocusKey] = useState<string|null>(null)
+
+  // Valoarea implicită a unui câmp al sesiunii care se editează, după locație și
+  // tipul cursului (aceleași reguli ca la crearea sesiunii). Se arată ca text
+  // estompat în câmp, iar dublu-clickul o scrie efectiv.
+  function defaultCampSesiune(key: string): string {
+    const s = sessions.find(x => x.id === editingSession) || mainSession
+    if (!s) return ''
+    return (sessionDefaults(s) as Record<string, string>)[key] || ''
+  }
   const [savingSession, setSavingSession] = useState(false)
   const [refs, setRefs] = useState<any>({locations:[], boats:[], evaluators:[], instructors:[]})
 
@@ -4290,7 +4299,10 @@ export default function SessionDetailPage() {
       {editingSession && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6">
-            <h3 className="font-semibold text-gray-900 mb-4">Editează sesiunea</h3>
+            <h3 className="font-semibold text-gray-900 mb-1">Editează sesiunea</h3>
+            <p className="text-xs text-gray-400 mb-4">
+              Câmpurile care arată o valoare estompată au o valoare implicită după locație — dublu-click pe câmp o completează.
+            </p>
             <div className="grid grid-cols-2 gap-3">
               {[
                 ['Data start curs', 'course_start_date', 'date'],
@@ -4325,7 +4337,13 @@ export default function SessionDetailPage() {
                   ) : (
                     <input type={type}
                       autoFocus={editFocusKey===key}
-                      placeholder={key==='exam_time' ? defaultExamTimeFor(sessions.find(s=>s.id===editingSession) || mainSession) : undefined}
+                      // câmpurile cu valoare implicită o arată estompat; dublu-click o completează
+                      placeholder={defaultCampSesiune(key as string) || undefined}
+                      title={defaultCampSesiune(key as string) ? 'Dublu-click pentru valoarea implicită' : undefined}
+                      onDoubleClick={()=>{
+                        const d = defaultCampSesiune(key as string)
+                        if (d) setEditSessionValues((v:any)=>({...v,[key]:d}))
+                      }}
                       className={`border rounded-lg px-2.5 py-1.5 text-xs w-full focus:outline-none focus:ring-1 focus:ring-blue-400 ${
                         editFocusKey===key ? 'border-blue-400 ring-1 ring-blue-200' : 'border-gray-200'}`}
                       value={editSessionValues[key]||''} onChange={e=>setEditSessionValues((v:any)=>({...v,[key]:e.target.value}))}/>
