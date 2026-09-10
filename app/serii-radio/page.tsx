@@ -54,7 +54,7 @@ function SeriiRadio() {
     setRows(j.sessions || [])
     setSectiuni(j.sectiuni || [])
   }, [token])
-  useEffect(() => { load(); document.title = 'Serii în lucru' }, [load])
+  useEffect(() => { load(); document.title = 'Serii radio' }, [load])
 
   if (denied) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0b1220', color: '#cdd9e5', fontFamily: 'system-ui', textAlign: 'center', padding: 24 }}>
@@ -65,15 +65,15 @@ function SeriiRadio() {
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-8">
       <div className="max-w-3xl mx-auto">
-        <h1 className="text-xl font-bold text-gray-900">Serii în lucru</h1>
-        <p className="text-sm text-gray-500 mt-1 mb-5">
-          Seriile în lucru (focus, active și ciorne), pe categorii. Apasă pe o serie pentru lista de cursanți.
+        {/* Fără titlu de pagină — titlurile sunt cele patru secțiuni */}
+        <p className="text-sm text-gray-500 mb-5">
+          Seriile în lucru (focus, active și ciorne). Apasă pe o serie pentru lista de cursanți.
         </p>
 
         {rows === null ? (
           <div className="text-center text-gray-400 py-16">Se încarcă…</div>
         ) : rows.length === 0 ? (
-          <div className="text-center text-gray-400 py-16">Nicio serie în lucru.</div>
+          <div className="text-center text-gray-400 py-16">Nicio serie de radio în lucru.</div>
         ) : (
           <div className="space-y-7">
             {sectiuni.map(sec => {
@@ -81,7 +81,7 @@ function SeriiRadio() {
               return (
                 <div key={sec.scope}>
                   <div className="flex items-center gap-2 mb-2">
-                    <h2 className="text-sm font-semibold text-gray-700">{sec.titlu}</h2>
+                    <h2 className="text-base font-bold text-gray-900">{sec.titlu}</h2>
                     <span className="text-xs text-gray-400">({ale.length})</span>
                   </div>
                   {ale.length === 0 ? (
