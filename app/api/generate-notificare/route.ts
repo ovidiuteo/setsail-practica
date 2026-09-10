@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { intervalCurs as calcIntervalCurs, ziLocala } from '@/lib/notificare-interval'
 import {
   Document, Packer, Paragraph, TextRun, ImageRun,
   AlignmentType, BorderStyle
@@ -32,18 +33,16 @@ export async function POST(req: NextRequest) {
   const { data: docStampila } = await supabase
     .from('setsail_documents').select('file_data').eq('tip', tipStampila).single()
 
-  // Date
-  const dataNotif = new Date(notif.data_notificare)
-  const dataSesiune = new Date(sess.session_date)
+  // Date. 'YYYY-MM-DD' se citește pe componente, ca miezul nopții UTC să nu
+  // alunece într-o altă zi.
+  const dataNotif = ziLocala(notif.data_notificare)
+  const dataSesiune = ziLocala(sess.session_date)
   const ziuaSesiune = dataSesiune.getDate()
   const lunaSesiune = dataSesiune.toLocaleDateString('ro-RO', { month: 'long' })
   const anulSesiune = dataSesiune.getFullYear()
 
-  // Intervalul curs
-  const courseStartDate = sess.course_start_date ? new Date(sess.course_start_date) : null
-  const intervalCurs = courseStartDate
-    ? `${courseStartDate.getDate()} - ${ziuaSesiune} ${lunaSesiune}`
-    : `${ziuaSesiune} ${lunaSesiune}`
+  // Perioada cursului — regulile de lună și an stau în lib/notificare-interval
+  const intervalCurs = calcIntervalCurs(sess.course_start_date || null, sess.session_date, notif.data_notificare)
 
   const barci = (notif.barci_selectate || []).join(' și ')
   // clasa e stocata ca text complet editabil ex: "C/D/Manevra ambarcatiunii cu vele"
