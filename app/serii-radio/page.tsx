@@ -6,11 +6,12 @@ import { useSearchParams } from 'next/navigation'
 // Seriile noi apar automat; nu e nevoie de un link nou la fiecare serie.
 
 type Row = {
-  id: string; class_caa: string | null
+  id: string; scope: string; class_caa: string | null
   session_date: string | null; course_start_date: string | null
   status: string; location: string | null
   roster_token: string | null; students: number
 }
+type Sectiune = { scope: string; titlu: string }
 
 const STATUS: Record<string, { label: string; cls: string }> = {
   focus:  { label: 'Focus',  cls: 'bg-purple-50 text-purple-700 border-purple-200' },
@@ -43,6 +44,7 @@ export default function SeriiRadioPage() {
 function SeriiRadio() {
   const token = useSearchParams().get('token') || ''
   const [rows, setRows] = useState<Row[] | null>(null)
+  const [sectiuni, setSectiuni] = useState<Sectiune[]>([])
   const [denied, setDenied] = useState(false)
 
   const load = useCallback(async () => {
@@ -50,8 +52,9 @@ function SeriiRadio() {
     if (r.status === 403) { setDenied(true); return }
     const j = await r.json()
     setRows(j.sessions || [])
+    setSectiuni(j.sectiuni || [])
   }, [token])
-  useEffect(() => { load(); document.title = 'Serii radio' }, [load])
+  useEffect(() => { load(); document.title = 'Serii în lucru' }, [load])
 
   if (denied) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0b1220', color: '#cdd9e5', fontFamily: 'system-ui', textAlign: 'center', padding: 24 }}>
@@ -62,34 +65,53 @@ function SeriiRadio() {
   return (
     <div className="min-h-screen bg-gray-50 p-4 sm:p-8">
       <div className="max-w-3xl mx-auto">
-        <h1 className="text-xl font-bold text-gray-900">Serii radio</h1>
+        <h1 className="text-xl font-bold text-gray-900">Serii în lucru</h1>
         <p className="text-sm text-gray-500 mt-1 mb-5">
-          Seriile în lucru (focus, active și ciorne). Apasă pe o serie pentru lista de cursanți.
+          Seriile în lucru (focus, active și ciorne), pe categorii. Apasă pe o serie pentru lista de cursanți.
         </p>
 
         {rows === null ? (
           <div className="text-center text-gray-400 py-16">Se încarcă…</div>
         ) : rows.length === 0 ? (
-          <div className="text-center text-gray-400 py-16">Nicio serie de radio în lucru.</div>
+          <div className="text-center text-gray-400 py-16">Nicio serie în lucru.</div>
         ) : (
-          <div className="space-y-2">
-            {rows.map(s => {
-              const st = STATUS[s.status] || { label: s.status, cls: 'bg-gray-100 text-gray-600 border-gray-200' }
+          <div className="space-y-7">
+            {sectiuni.map(sec => {
+              const ale = rows.filter(s => s.scope === sec.scope)
               return (
-                <a key={s.id} href={`/sesiune/${s.id}/cursanti?token=${s.roster_token || ''}`}
-                  className="flex items-center gap-3 bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3 hover:border-blue-300 hover:shadow transition-all">
-                  <div className="flex-1 min-w-0">
-                    <div className="font-semibold text-gray-900">
-                      Curs {(s.class_caa || 'Radio').trim()} {interval(s)}
-                    </div>
-                    <div className="text-xs text-gray-400 mt-0.5">
-                      {s.students} {s.students === 1 ? 'cursant' : 'cursanți'}
-                      {s.location ? ` · ${s.location}` : ''}
-                    </div>
+                <div key={sec.scope}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <h2 className="text-sm font-semibold text-gray-700">{sec.titlu}</h2>
+                    <span className="text-xs text-gray-400">({ale.length})</span>
                   </div>
-                  <span className={`shrink-0 text-xs font-medium px-2 py-1 rounded-lg border ${st.cls}`}>{st.label}</span>
-                  <span className="shrink-0 text-gray-300">›</span>
-                </a>
+                  {ale.length === 0 ? (
+                    <div className="text-xs text-gray-400 bg-white rounded-xl border border-gray-100 px-4 py-3">
+                      Nicio serie în lucru.
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {ale.map(s => {
+                        const st = STATUS[s.status] || { label: s.status, cls: 'bg-gray-100 text-gray-600 border-gray-200' }
+                        return (
+                          <a key={s.id} href={`/sesiune/${s.id}/cursanti?token=${s.roster_token || ''}`}
+                            className="flex items-center gap-3 bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3 hover:border-blue-300 hover:shadow transition-all">
+                            <div className="flex-1 min-w-0">
+                              <div className="font-semibold text-gray-900">
+                                Curs {(s.class_caa || '').trim() || 'C,D'} {interval(s)}
+                              </div>
+                              <div className="text-xs text-gray-400 mt-0.5">
+                                {s.students} {s.students === 1 ? 'cursant' : 'cursanți'}
+                                {s.location ? ` · ${s.location}` : ''}
+                              </div>
+                            </div>
+                            <span className={`shrink-0 text-xs font-medium px-2 py-1 rounded-lg border ${st.cls}`}>{st.label}</span>
+                            <span className="shrink-0 text-gray-300">›</span>
+                          </a>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
               )
             })}
           </div>

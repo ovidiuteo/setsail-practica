@@ -22,6 +22,15 @@ const TOKEN_KEY = 'radio_index_token'
 // Seriile trecute nu se mai deschid — arătăm doar ce e în lucru
 const LIVE = ['draft', 'active', 'focus']
 
+// Secțiunile paginii, în ordinea în care apar. Cheia e categoria de timeline a
+// sesiunii, deci o serie nouă intră singură în secțiunea potrivită.
+export const SECTIUNI: { scope: string; titlu: string }[] = [
+  { scope: 'radio_lrc',           titlu: 'Serii radio' },
+  { scope: 'practica_ba',         titlu: 'Serii motor' },
+  { scope: 'curs_cd_snagov',      titlu: 'Serii CDS București' },
+  { scope: 'intensiv_cds_limanu', titlu: 'Serii intensiv' },
+]
+
 function newToken(): string {
   const b = new Uint8Array(12)
   crypto.getRandomValues(b)
@@ -47,10 +56,10 @@ export async function GET(req: NextRequest) {
     .order('session_date', { ascending: true })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // Doar seriile propriu-zise de radio: fără clone și fără sesiunile de absenți
-  // (acelea atârnă de o serie principală, n-au durată și dublau lista).
+  // Seriile propriu-zise: fără clone și fără sesiunile de absenți (acelea atârnă
+  // de o serie principală, n-au durată și dublau lista).
   const radio = (data || []).filter((s: any) =>
-    scopeForSession(s) === 'radio_lrc' && s.session_type === 'principal' && !s.is_clone)
+    SECTIUNI.some(x => x.scope === scopeForSession(s)) && s.session_type === 'principal' && !s.is_clone)
 
   // Seriile noi n-au încă token de listă — îl generăm acum, ca linkul să meargă din prima
   for (const s of radio as any[]) {
@@ -69,8 +78,10 @@ export async function GET(req: NextRequest) {
   const countBy = new Map(counts)
 
   return NextResponse.json({
+    sectiuni: SECTIUNI,
     sessions: (radio as any[]).map(s => ({
       id: s.id,
+      scope: scopeForSession(s),
       class_caa: s.class_caa,
       session_date: s.session_date,
       course_start_date: s.course_start_date,
