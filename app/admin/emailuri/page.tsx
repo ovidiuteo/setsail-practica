@@ -69,6 +69,7 @@ export default function EmailuriPage() {
 
   // Pending AI proposals
   const [proposals, setProposals]             = useState<Record<string, 'whitelist' | 'blacklist'>>({})
+  const [classifyNote, setClassifyNote]       = useState<string | null>(null)
   const [proposalReasons, setProposalReasons] = useState<Record<string, string>>({})
   const [classifying, setClassifying]         = useState(false)
   const [committing, setCommitting]           = useState(false)
@@ -258,13 +259,20 @@ export default function EmailuriPage() {
         }),
       })
       const data = await res.json()
+      // propunerile vin legate de adresa expeditorului, nu de o poziție în listă
       const newP: Record<string, 'whitelist' | 'blacklist'> = {}
       const newR: Record<string, string> = {}
       for (const p of data.proposals || []) {
-        const email = pending[p.index]
-        if (email) { newP[email.from_address] = p.proposal; newR[email.from_address] = p.reason }
+        if (!p?.from_address) continue
+        if (p.proposal !== 'whitelist' && p.proposal !== 'blacklist') continue
+        newP[p.from_address] = p.proposal
+        newR[p.from_address] = p.reason
       }
       setProposals(newP); setProposalReasons(newR)
+      const fara = (data.unclassified || []).length
+      setClassifyNote(fara
+        ? `${Object.keys(newP).length} expeditori clasificați · ${fara} fără răspuns de la AI (rămân nebifați)`
+        : null)
     } catch (err) { console.error(err) }
     setClassifying(false)
   }
@@ -589,7 +597,9 @@ export default function EmailuriPage() {
             <div className="text-sm text-gray-700 truncate">{email.subject}</div>
             {reason && (
               <div className={`mt-1 text-xs px-2 py-0.5 rounded-full inline-flex items-center gap-1 ${
-                proposal === 'whitelist' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-600'
+                proposal === 'whitelist' ? 'bg-green-50 text-green-700'
+                : proposal === 'blacklist' ? 'bg-red-50 text-red-600'
+                : 'bg-gray-100 text-gray-500'
               }`}>
                 <Sparkles size={10} /> {reason}
               </div>
@@ -698,6 +708,7 @@ export default function EmailuriPage() {
                         ? `${Object.values(proposals).filter(p => p === 'whitelist').length} → WL · ${Object.values(proposals).filter(p => p === 'blacklist').length} → BL propuse`
                         : 'Selectează manual sau folosește AI Propuneri'}
                   </div>
+                  {classifyNote && <div className="text-xs text-amber-700 mt-0.5">{classifyNote}</div>}
                 </div>
                 <div className="flex gap-2 flex-wrap">
                   <button onClick={() => setPendingSelected(new Set(pending.map(e => e.id)))}

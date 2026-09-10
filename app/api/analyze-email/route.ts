@@ -27,37 +27,81 @@ export async function POST(req: NextRequest) {
     return text.replace(/```json|```/g, '').trim()
   }
 
-  // ── Tip 1: clasificare pending (in batches of 20) ───────────────────────
+  // ── Tip 1: clasificare pending ─────────────────────────────────────────────
+  // Clasificam EXPEDITORI unici, iar raspunsul e legat de adresa de email, nu de
+  // un index: modelul se incurca la numerotare (batch-ul al doilea intorcea
+  // 21,22,23… in loc de 20,21,22…), iar propunerile ajungeau pe alt expeditor.
   if (type === 'classify') {
     try {
-      const allProposals: any[] = []
-      const batchSize = 20
+      // un singur rand per adresa — pagina oricum tine propunerile pe adresa
+      const perAdresa = new Map<string, any>()
+      for (const e of emails || []) {
+        const adr = String(e?.from_address || '').trim()
+        if (adr && !perAdresa.has(adr.toLowerCase())) perAdresa.set(adr.toLowerCase(), e)
+      }
+      const unice: any[] = []
+      perAdresa.forEach(v => unice.push(v))
 
-      for (let start = 0; start < emails.length; start += batchSize) {
-        const batch = emails.slice(start, start + batchSize)
+      const proposals: any[] = []
+      const fara: string[] = []          // expeditori la care modelul n-a raspuns
+      const batchSize = 15
 
-        const emailList = batch.map((e: any, i: number) =>
-          `${start + i + 1}. De la: ${clean(e.from_address, 80)}\n   Subiect: ${clean(e.subject, 80)}\n   Preview: ${clean(e.body_text, 80)}`
+      for (let start = 0; start < unice.length; start += batchSize) {
+        const batch = unice.slice(start, start + batchSize)
+
+        const emailList = batch.map((e: any) =>
+          `- from: ${clean(e.from_address, 80)}\n  subiect: ${clean(e.subject, 80)}\n  preview: ${clean(e.body_text, 80)}`
         ).join('\n\n')
 
         const prompt = [
           'Esti asistentul platformei SetSail — o platforma romana de navigatie sportiva.',
-          'Clasifica fiecare expeditor ca WHITELIST sau BLACKLIST.',
-          'WHITELIST = cursanti, instructori, parteneri, clienti, cereri profesionale.',
-          'BLACKLIST = newsletter, promotii, notificari automate, spam, facturi externe.',
+          'Clasifica fiecare expeditor ca whitelist sau blacklist.',
+          'whitelist = cursanti (actuali, fosti sau care vor sa se inscrie), instructori, parteneri, clienti, cereri profesionale, interes pentru cursuri sau expeditii.',
+          'blacklist = newsletter, promotii, notificari automate, spam, facturi externe.',
           '',
           emailList,
           '',
-          `Raspunde DOAR cu JSON array cu exact ${batch.length} obiecte (index incepe de la ${start}):`,
-          `[{"index":${start},"proposal":"whitelist","reason":"motiv scurt max 8 cuvinte"}]`,
+          `Raspunde DOAR cu un JSON array cu exact ${batch.length} obiecte, cate unul pentru fiecare expeditor de mai sus.`,
+          'Campul "from" trebuie copiat EXACT ca in lista. "proposal" e scris cu litere mici: whitelist sau blacklist.',
+          '[{"from":"adresa@exemplu.ro","proposal":"whitelist","reason":"motiv scurt max 8 cuvinte"}]',
         ].join('\n')
 
-        const text = await callClaude(prompt, 800)
-        const parsed = JSON.parse(text)
-        allProposals.push(...parsed)
+        let parsed: any[] = []
+        try {
+          parsed = JSON.parse(await callClaude(prompt, 4000))
+          if (!Array.isArray(parsed)) parsed = []
+        } catch (e: any) {
+          // un lot picat nu mai arunca tot rezultatul la gunoi
+          console.error('classify batch error:', e?.message)
+          parsed = []
+        }
+
+        // potrivire pe adresa; indexul ramane doar ca rezerva
+        const ramase = new Map(batch.map((e: any, i: number) => [String(e.from_address).toLowerCase(), i]))
+        for (const p of parsed) {
+          const prop = String(p?.proposal || '').trim().toLowerCase()
+          if (prop !== 'whitelist' && prop !== 'blacklist') continue
+
+          const dupaAdresa = String(p?.from || '').trim().toLowerCase()
+          let i = ramase.get(dupaAdresa)
+          if (i === undefined && typeof p?.index === 'number') {
+            const rel = p.index >= start ? p.index - start : p.index    // 0- sau 1-based, absolut sau local
+            if (rel >= 0 && rel < batch.length) i = rel
+          }
+          if (i === undefined) continue
+
+          const e = batch[i]
+          ramase.delete(String(e.from_address).toLowerCase())
+          proposals.push({
+            from_address: e.from_address,
+            proposal: prop,
+            reason: clean(p?.reason, 60),
+          })
+        }
+        ramase.forEach(i => fara.push(batch[i].from_address))
       }
 
-      return NextResponse.json({ proposals: allProposals })
+      return NextResponse.json({ proposals, unclassified: fara })
     } catch (err: any) {
       console.error('classify error:', err?.message)
       return NextResponse.json({ error: 'Claude error', detail: err?.message }, { status: 500 })
