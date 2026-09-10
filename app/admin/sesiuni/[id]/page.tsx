@@ -1355,6 +1355,11 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
   const [notifForm, setNotifForm] = useState({ nr_notificare:'', ora_examinare:'10:00', barci_selectate:[] as string[], clasa:'', locatie_curs:'', locatie_examinare:'' })
   const [notifScanFile, setNotifScanFile] = useState<string|null>(null)
   const [showNotif, setShowNotif] = useState(false)
+  // Notificarea scanată e atașată? Se află fără a aduce base64-ul, ca să putem
+  // pune bifa verde în antet fără să deschidem cardul.
+  const [notifHasScan, setNotifHasScan] = useState(false)
+  const [notifPreview, setNotifPreview] = useState<{subject:string;body:string}|null>(null)
+  const [showNotifHelp, setShowNotifHelp] = useState(false)
   const [gNotif, setGNotif] = useState(false)
   const [notifSaved, setNotifSaved] = useState(false)
   const [dlAncom, setDlAncom] = useState(false)
@@ -1635,6 +1640,45 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
   }, [selectedEmails.join(',')])
 
 
+
+  // Bifa verde din antetul cardului — doar existența fișierului, nu conținutul
+  useEffect(() => {
+    supabase.from('notifications').select('id').eq('session_id', sess.id)
+      .not('scanned_file_data', 'is', null).neq('scanned_file_data', '')
+      .maybeSingle().then(({ data }) => setNotifHasScan(!!data))
+  }, [sess.id])
+
+  // Emailul către ANR — același text în „Deschide în Gmail" și în preview
+  function emailANR() {
+    const sessDt = new Date(sess.session_date)
+    const zi = sessDt.getDate()
+    const luna = sessDt.toLocaleDateString('ro-RO', { month: 'long' })
+    const locName = sess.locations?.name || 'locatie'
+    return {
+      subject: `Notificare privind cursuri si examene practice SetSail ${locName}`,
+      body: `Bună ziua,
+
+Vă trimitem atașata notificarea privind următorul curs și examinare practică SetSail, în vederea alocării unui reprezentant ANR:
+
+${zi} ${luna} - ${locName} ora ${notifForm.ora_examinare}
+
+Vă mulțumim!
+
+Cu stimă,
+
+Ruxandra Taloș
+Set Sail NauticSchool
+0727387245`,
+    }
+  }
+
+  // Procedura scrisă pe template-ul de email corespunzător (ANR sau ANCOM)
+  const notifHelper = (): string => {
+    const t = (dbTemplates || []).find((x: any) => isRadio
+      ? x.categorie === 'ancom' && /instiintare curs si examen/i.test(x.label || '')
+      : x.categorie === 'anr' && /notificare privind curs/i.test(x.label || ''))
+    return String(t?.helper || '').trim()
+  }
 
   const defaultExamTime = () => defaultExamTimeFor(sess)
   const examTime = () => String((sess as any).exam_time || '').trim() || defaultExamTime()
@@ -2273,6 +2317,12 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
                 </svg>
                 <h3 className="font-semibold text-sm text-gray-900">{isRadio ? 'Notificare ANCOM' : 'Notificare ANR'}</h3>
+                {(notifHasScan || !!notifScanFile) && (
+                  <span title="Notificarea scanată e atașată"
+                    className="flex items-center gap-0.5 text-[10px] font-medium text-green-700 bg-green-50 border border-green-200 rounded-full px-1.5 py-0.5">
+                    <Check size={10}/> atașată
+                  </span>
+                )}
               </div>
               <ChevronDown size={14} className={`text-gray-400 transition-transform ${showNotif?'rotate-180':''}`}/>
             </button>
@@ -2425,6 +2475,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                       reader.onload=async ev=>{
                         const data=ev.target?.result as string
                         setNotifScanFile(data)
+                        setNotifHasScan(true)
                         if(notif?.id) await supabase.from('notifications').update({scanned_file_data:data,scanned_file_name:f.name}).eq('id',notif.id)
                       }
                       reader.readAsDataURL(f)
@@ -2451,25 +2502,8 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
                       Destinatar: <span className="font-mono text-gray-600">autorizari@rna.ro</span>
                     </div>
                     <button onClick={()=>{
-                      const sessDt = new Date(sess.session_date)
-                      const zi = sessDt.getDate()
-                      const luna = sessDt.toLocaleDateString('ro-RO',{month:'long'})
-                      const locName = sess.locations?.name||'locatie'
-                      const subject = encodeURIComponent(`Notificare privind cursuri si examene practice SetSail ${locName}`)
-                      const body = encodeURIComponent(`Bună ziua,
-
-Vă trimitem atașata notificarea privind următorul curs și examinare practică SetSail, în vederea alocării unui reprezentant ANR:
-
-${zi} ${luna} - ${locName} ora ${notifForm.ora_examinare}
-
-Vă mulțumim!
-
-Cu stimă,
-
-Ruxandra Taloș
-Set Sail NauticSchool
-0727387245`)
-                      window.open(`https://mail.google.com/mail/?view=cm&to=autorizari@rna.ro&su=${subject}&body=${body}`)
+                      const { subject, body } = emailANR()
+                      window.open(`https://mail.google.com/mail/?view=cm&to=autorizari@rna.ro&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`)
                     }}
                       className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs bg-blue-600 text-white hover:bg-blue-700">
                       ✉ Deschide în Gmail
@@ -2478,16 +2512,82 @@ Set Sail NauticSchool
                   </div>
                 )}
 
-                <button onClick={async()=>{
-                    const id = await saveNotification()
-                    if(id){ setNotifSaved(true); setTimeout(()=>setNotifSaved(false),2500) }
-                  }}
-                  className={`w-full py-2 rounded-lg text-xs border transition-colors ${notifSaved?'border-green-300 text-green-600 bg-green-50':'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
-                  {notifSaved ? '✓ Salvat!' : '💾 Salvează info'}
-                </button>
+                <div className="flex gap-1.5">
+                  <button onClick={async()=>{
+                      const id = await saveNotification()
+                      if(id){ setNotifSaved(true); setTimeout(()=>setNotifSaved(false),2500) }
+                    }}
+                    className={`flex-1 py-2 rounded-lg text-xs border transition-colors ${notifSaved?'border-green-300 text-green-600 bg-green-50':'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
+                    {notifSaved ? '✓ Salvat!' : '💾 Salvează info'}
+                  </button>
+                  <button onClick={()=>setNotifPreview(emailANR())}
+                    title="Vezi textul emailului către ANR"
+                    className="flex-1 py-2 rounded-lg text-xs border border-gray-200 text-gray-500 hover:bg-gray-50">
+                    ✉ Preview email
+                  </button>
+                  <button onClick={()=>setShowNotifHelp(v=>!v)}
+                    title="Procedura de pe template-ul de email"
+                    className={`flex-1 py-2 rounded-lg text-xs border transition-colors ${
+                      showNotifHelp ? 'border-amber-300 text-amber-800 bg-amber-50' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
+                    ❓ Help procedură
+                  </button>
+                </div>
+
+                {/* Procedura, sub butoane, pe fond galben ca la template-uri */}
+                {showNotifHelp && (
+                  notifHelper() ? (
+                    <div className="p-3 rounded-lg border border-amber-200 bg-amber-50 text-xs text-amber-900 whitespace-pre-wrap leading-relaxed">
+                      <div className="font-semibold mb-1">📋 Procedură</div>
+                      {notifHelper()}
+                    </div>
+                  ) : (
+                    <div className="p-3 rounded-lg border border-amber-200 bg-amber-50 text-xs text-amber-900">
+                      Template-ul de email {isRadio ? 'ANCOM' : 'ANR'} nu are procedură scrisă. O poți completa în
+                      Configurare → Template-uri Email.
+                    </div>
+                  )
+                )}
               </div>
             )}
           </div>
+
+          {/* Preview text email ANR */}
+          {notifPreview && (
+            <div className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center p-4"
+              onClick={e=>{ if(e.target===e.currentTarget) setNotifPreview(null) }}>
+              <div className="bg-white rounded-xl shadow-xl w-full max-w-lg">
+                <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
+                  <h3 className="font-semibold text-sm text-gray-900">Preview email către ANR</h3>
+                  <button onClick={()=>setNotifPreview(null)} className="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
+                </div>
+                <div className="p-5 space-y-3">
+                  <div>
+                    <div className="text-xs text-gray-400 mb-1">Către</div>
+                    <div className="border border-gray-200 rounded-lg px-3 py-2 text-xs font-mono text-gray-700 bg-gray-50">autorizari@rna.ro</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-400 mb-1">Subiect</div>
+                    <div className="border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-800">{notifPreview.subject}</div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-gray-400 mb-1">Mesaj</div>
+                    <div className="border border-gray-200 rounded-lg px-3 py-2 text-xs text-gray-800 whitespace-pre-wrap leading-relaxed">{notifPreview.body}</div>
+                  </div>
+                  <p className="text-xs text-gray-400">Notificarea scanată se atașează manual, din Gmail.</p>
+                </div>
+                <div className="px-5 py-3 border-t border-gray-100 flex justify-end gap-2">
+                  <button onClick={()=>navigator.clipboard.writeText(notifPreview.body)}
+                    className="px-4 py-2 rounded-lg text-xs font-medium border border-gray-200 bg-white text-gray-700 hover:bg-gray-50">
+                    Copiază mesajul
+                  </button>
+                  <button onClick={()=>setNotifPreview(null)}
+                    className="px-4 py-2 rounded-lg text-xs font-medium border border-gray-200 bg-white text-gray-900 hover:bg-gray-50">
+                    Închide
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
         {/* Mailing autoritati - colapsabil, identic cu cursanti */}
         {!isAbsent && (
