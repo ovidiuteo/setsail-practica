@@ -65,6 +65,22 @@ export async function findPersonRows(
   return rows.filter((r: any) => r.id !== excludeId)
 }
 
+// Scoate cursantul din ACEASTĂ serie. Dacă persoana mai e înscrisă și în alte
+// serii, acelea rămân neatinse; dacă asta era singura, dispare din sistem.
+// Aceeași procedură ca la ștergerea manuală din listă.
+export async function stergeDinSerie(sb: any, sessionId: string, studentId: string): Promise<{
+  ok: boolean; error?: string; still_in_other_series: number
+}> {
+  const { data: st } = await sb.from('students')
+    .select('cnp, email, full_name').eq('id', studentId).eq('session_id', sessionId).maybeSingle()
+  if (!st) return { ok: false, error: 'not found', still_in_other_series: 0 }
+
+  const others = await findPersonRows(sb, st, studentId)
+  const { error } = await sb.from('students').delete().eq('id', studentId).eq('session_id', sessionId)
+  if (error) return { ok: false, error: error.message, still_in_other_series: others.length }
+  return { ok: true, still_in_other_series: others.length }
+}
+
 // Cea mai recentă fișă dintr-un set (după created_at)
 export function ceaMaiRecenta(rows: any[]): any | null {
   if (!rows.length) return null

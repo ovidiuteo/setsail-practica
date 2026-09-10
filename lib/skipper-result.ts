@@ -9,6 +9,8 @@ export type SyncResult = {
   adaugati: string[]
   existau: string[]
   preluati: string[]
+  // cursanții din serie care nu mai apar pe skipper; ștergerea se cere separat
+  de_sters: { id: string; full_name: string }[]
 }
 
 // Același mesaj în pagina de admin și în pagina cu token

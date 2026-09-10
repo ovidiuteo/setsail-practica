@@ -10,6 +10,11 @@ import type { SyncResult } from './skipper-result'
 export type { SyncResult }
 export type SyncError = { error: string; status: number }
 
+// Cursanții din serie care nu mai apar în tabelul de pe skipper NU se șterg în
+// timpul sincronizării: îi raportăm, iar ștergerea o cere clientul după ce
+// utilizatorul vede lista și are ocazia să dea undo. Așa nimic nu se pierde
+// dacă tabelul de pe skipper e incomplet într-o zi.
+
 export function esteEroare(r: SyncResult | SyncError): r is SyncError {
   return (r as SyncError).error !== undefined
 }
@@ -42,7 +47,7 @@ export async function syncSkipper(
     return { error: 'Nu am găsit niciun cursant în tabelul de pe skipper.', status: 422 }
 
   const { data: existenti } = await sb.from('students')
-    .select('id, full_name, email, cnp, order_in_session').eq('session_id', sessionId)
+    .select('id, full_name, email, cnp, order_in_session, only_sailing').eq('session_id', sessionId)
   const inSesiune = existenti || []
   let order = inSesiune.reduce((m: number, s: any) => Math.max(m, s.order_in_session || 0), 0)
 
@@ -80,11 +85,18 @@ export async function syncSkipper(
     adaugati.push(s.full_name)
   }
 
+  // Cine e în serie dar nu mai apare pe skipper. Cei mutați la „doar navigație"
+  // sunt lăsați în pace — nu sunt participanți obișnuiți la serie.
+  const deSters = inSesiune
+    .filter((e: any) => !e.only_sailing && !deSkipper.some(s => samePerson(e, s)))
+    .map((e: any) => ({ id: e.id, full_name: e.full_name }))
+
   return {
     ok: true,
     dry_run: !!opts.dryRun,
     grupa: skipperGroupId(sess.skipper_url as string),
     total_skipper: deSkipper.length,
     adaugati, existau, preluati,
+    de_sters: deSters,
   }
 }

@@ -679,6 +679,15 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
 
       {/* Rezultatul sincronizării cu skipper */}
       <SkipperSyncModal rezultat={syncRes} eroare={syncErr}
+        onSterge={async ids => {
+          const r = await fetch('/api/skipper-sync', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: sess.id, delete_ids: ids }),
+          })
+          if (!r.ok) { alert('Ștergerea a eșuat.'); return }
+          const { data } = await supabase.from('students').select('*').eq('session_id', sess.id).order('order_in_session')
+          if (data) setStudents(data as Student[])
+        }}
         onClose={() => { setSyncRes(null); setSyncErr(null) }} />
 
       {/* Modal normalizare adrese: previzualizare înainte de aplicare */}

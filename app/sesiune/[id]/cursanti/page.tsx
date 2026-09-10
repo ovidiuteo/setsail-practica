@@ -793,6 +793,14 @@ export default function RosterPage() {
       )}
 
       <SkipperSyncModal rezultat={syncRes} eroare={syncErr}
+        onSterge={async ids => {
+          const r = await fetch('/api/roster', {
+            method: 'DELETE', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: id, token, student_ids: ids }),
+          })
+          if (!r.ok) alert('Ștergerea a eșuat.')
+          await load()
+        }}
         onClose={() => { setSyncRes(null); setSyncErr(null) }} />
 
       {linkOpen && (

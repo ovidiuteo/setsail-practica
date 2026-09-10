@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
-import { CARRY_FIELDS, findPersonRows } from '@/lib/student-merge'
+import { CARRY_FIELDS, findPersonRows, stergeDinSerie } from '@/lib/student-merge'
 import { applyMailTemplate } from '@/lib/mail-template'
 import { syncSkipper, esteEroare } from '@/lib/skipper-sync'
 
@@ -491,7 +491,7 @@ export async function POST(req: NextRequest) {
 // alte serii, acelea rămân neatinse; dacă asta era singura, dispare din sistem.
 export async function DELETE(req: NextRequest) {
   const sb = svc()
-  const { session_id, token, student_id, lead_id, doc } = await req.json().catch(() => ({}))
+  const { session_id, token, student_id, student_ids, lead_id, doc } = await req.json().catch(() => ({}))
   if (!(await authed(sb, session_id, token)))
     return NextResponse.json({ error: 'unauthorized' }, { status: 403 })
 
@@ -509,14 +509,19 @@ export async function DELETE(req: NextRequest) {
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ ok: true })
   }
+  // Ștergerea în masă a celor care nu mai sunt pe skipper (după sincronizare)
+  if (Array.isArray(student_ids)) {
+    let sterse = 0
+    for (const sid of (student_ids as string[]).slice(0, 200)) {
+      const r = await stergeDinSerie(sb, session_id, String(sid))
+      if (r.ok) sterse++
+    }
+    return NextResponse.json({ ok: true, sterse })
+  }
+
   if (!student_id) return NextResponse.json({ error: 'lipsește cursantul' }, { status: 400 })
 
-  const { data: st } = await sb.from('students')
-    .select('cnp, email, full_name').eq('id', student_id).eq('session_id', session_id).maybeSingle()
-  if (!st) return NextResponse.json({ error: 'not found' }, { status: 404 })
-
-  const others = await findPersonRows(sb, st, student_id)
-  const { error } = await sb.from('students').delete().eq('id', student_id).eq('session_id', session_id)
-  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ ok: true, removed_from_series: true, still_in_other_series: others.length })
+  const r = await stergeDinSerie(sb, session_id, student_id)
+  if (!r.ok) return NextResponse.json({ error: r.error }, { status: r.error === 'not found' ? 404 : 500 })
+  return NextResponse.json({ ok: true, removed_from_series: true, still_in_other_series: r.still_in_other_series })
 }
