@@ -2349,30 +2349,42 @@ Set Sail NauticSchool
 
           {/* Notificare ANR */}
           <div className="bg-white rounded-xl p-5 shadow-sm border border-gray-100">
-            <button onClick={async()=>{
-              if(!showNotif) await ensureNotification()
-              setShowNotif(s=>!s)
-            }} className="w-full flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={isRadio ? '#7c3aed' : '#9ca3af'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <div className="w-full flex items-center justify-between gap-2">
+              <button onClick={async()=>{
+                  if(!showNotif) await ensureNotification()
+                  setShowNotif(s=>!s)
+                }} className="flex items-center gap-2 min-w-0 flex-1 text-left">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke={isRadio ? '#7c3aed' : '#9ca3af'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0">
                   <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
                 </svg>
-                <h3 className="font-semibold text-sm text-gray-900">{isRadio ? 'Notificare ANCOM' : 'Notificare ANR'}</h3>
+                <h3 className="font-semibold text-sm text-gray-900 truncate">{isRadio ? 'Notificare ANCOM' : 'Notificare ANR'}</h3>
                 {(notifHasScan || !!notifScanFile) && (
                   <span title="Notificarea scanată e atașată"
-                    className="flex items-center gap-0.5 text-[10px] font-medium text-green-700 bg-green-50 border border-green-200 rounded-full px-1.5 py-0.5">
+                    className="shrink-0 flex items-center gap-0.5 text-[10px] font-medium text-green-700 bg-green-50 border border-green-200 rounded-full px-1.5 py-0.5">
                     <Check size={10}/> atașată
                   </span>
                 )}
-                {notifTrimisaLa && (
-                  <span title={`Trimisă pe ${momentTrimitere(notifTrimisaLa)}`}
-                    className="flex items-center gap-0.5 text-[10px] font-medium text-green-700 bg-green-50 border border-green-200 rounded-full px-1.5 py-0.5">
-                    <Check size={10}/> trimisă
-                  </span>
-                )}
+              </button>
+              {/* Trimisă / netrimisă — comutator pe aceeași linie, în dreapta */}
+              <div className="flex items-center gap-2 shrink-0">
+                <button onClick={()=>setTrimisa(!notifTrimisaLa)}
+                  title={notifTrimisaLa
+                    ? `Trimisă pe ${momentTrimitere(notifTrimisaLa)} — click pentru a marca netrimisă`
+                    : 'Click pentru a marca notificarea ca trimisă'}
+                  className={`flex items-center gap-0.5 text-[10px] font-medium rounded-full border px-1.5 py-0.5 transition-colors ${
+                    notifTrimisaLa
+                      ? 'text-green-700 bg-green-50 border-green-200 hover:bg-green-100'
+                      : 'text-gray-400 bg-white border-gray-200 hover:text-gray-600 hover:bg-gray-50'}`}>
+                  <Check size={10}/> {notifTrimisaLa ? 'trimisă' : 'netrimisă'}
+                </button>
+                <button onClick={async()=>{
+                    if(!showNotif) await ensureNotification()
+                    setShowNotif(s=>!s)
+                  }} className="text-gray-400">
+                  <ChevronDown size={14} className={`transition-transform ${showNotif?'rotate-180':''}`}/>
+                </button>
               </div>
-              <ChevronDown size={14} className={`text-gray-400 transition-transform ${showNotif?'rotate-180':''}`}/>
-            </button>
+            </div>
             {showNotif && (
               <div className="mt-4 space-y-3">
                 {/* Avertizare termen */}
@@ -2568,18 +2580,9 @@ Set Sail NauticSchool
                       ✉ Deschide în Gmail
                     </button>
                     <p className="text-xs text-gray-400 mt-1 text-center">Atașează manual notificarea scanată</p>
-
-                    {/* Trimisă / netrimisă, cu momentul ștampilat */}
-                    <label className={`mt-2 flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer select-none text-xs transition-colors ${
-                      notifTrimisaLa ? 'border-green-300 bg-green-50 text-green-800' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
-                      <input type="checkbox" checked={!!notifTrimisaLa}
-                        onChange={e=>setTrimisa(e.target.checked)}
-                        className="w-3.5 h-3.5 accent-green-600"/>
-                      <span className="flex-1">
-                        {notifTrimisaLa ? 'Trimisă' : 'Netrimisă'}
-                        {notifTrimisaLa && <span className="text-green-600/70"> · {momentTrimitere(notifTrimisaLa)}</span>}
-                      </span>
-                    </label>
+                    {notifTrimisaLa && (
+                      <p className="text-xs text-green-700 mt-1 text-center">Trimisă pe {momentTrimitere(notifTrimisaLa)}</p>
+                    )}
                   </div>
                 )}
 
