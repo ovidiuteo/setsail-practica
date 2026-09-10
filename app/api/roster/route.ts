@@ -248,6 +248,10 @@ export async function GET(req: NextRequest) {
   // seriei precedente — de atunci încolo vizitele sunt pentru cursul următor.
   const visits = await landingVisits(sb)
 
+  // Tokenul paginii cu toate seriile, ca să putem pune un link înapoi la index
+  const { data: idxToken } = await sb.from('setsail_info')
+    .select('value').eq('key', 'radio_index_token').maybeSingle()
+
   return NextResponse.json({
     students: rows, verified, docs_visible: !!sess.roster_docs_visible, visits,
     // pentru titlul paginii/tab-ului (ex. „Curs Radio 5-7 oct")
@@ -256,6 +260,8 @@ export async function GET(req: NextRequest) {
     access_code: sess.access_code || '',
     // linkul grupei de pe skipper — fără el butonul de sincronizare e dezactivat
     skipper: { url: sess.skipper_url || '' },
+    // pentru butonul „Toate sesiunile"
+    serii_token: (idxToken as any)?.value || '',
   })
 }
 

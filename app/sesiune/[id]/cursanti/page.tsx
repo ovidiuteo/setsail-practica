@@ -247,6 +247,7 @@ export default function RosterPage() {
   const [mailOpen, setMailOpen] = useState(false)
   const [skipper, setSkipper] = useState<{ url: string }>({ url: '' })
   const [linkOpen, setLinkOpen] = useState(false)
+  const [seriiToken, setSeriiToken] = useState('')
   const [syncBusy, setSyncBusy] = useState(false)
   const [syncRes, setSyncRes] = useState<SyncResult | null>(null)
   const [syncErr, setSyncErr] = useState<string | null>(null)
@@ -266,6 +267,7 @@ export default function RosterPage() {
     setAccessCode(j.access_code || '')
     setVisits(j.visits || null)
     setSkipper({ url: j.skipper?.url || '' })
+    setSeriiToken(j.serii_token || '')
     if (j.session) {
       const t = sessionTitle(j.session)
       setTitle(t)
@@ -415,7 +417,15 @@ export default function RosterPage() {
       <div className="max-w-7xl mx-auto">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
-            <h1 className="text-xl font-bold text-gray-900">{title}</h1>
+            <div className="flex items-center gap-10 flex-wrap">
+              <h1 className="text-xl font-bold text-gray-900">{title}</h1>
+              {seriiToken && (
+                <a href={`/serii-radio?token=${encodeURIComponent(seriiToken)}`}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 whitespace-nowrap">
+                  ← Toate sesiunile
+                </a>
+              )}
+            </div>
             <p className="text-sm text-gray-500 mt-1">
               Click pe o celulă pentru a edita, apoi confirmă cu ✓ (sau Enter). Apasă „CI" pentru imagini și date.
             </p>
