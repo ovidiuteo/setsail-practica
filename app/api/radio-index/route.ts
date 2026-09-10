@@ -26,8 +26,10 @@ const LIVE = ['draft', 'active', 'focus']
 // sesiunii, deci o serie nouă intră singură în secțiunea potrivită.
 const SECTIUNI: { scope: string; titlu: string }[] = [
   { scope: 'radio_lrc',           titlu: 'Serii radio' },
-  { scope: 'practica_ba',         titlu: 'Serii motor' },
-  { scope: 'curs_cd_snagov',      titlu: 'Serii CDS București' },
+  // curs C/D București, cu practica pe Snagov — ambarcațiuni cu motor
+  { scope: 'curs_cd_snagov',      titlu: 'Serii motor' },
+  // cursurile lungi: teoria la București, practica la Limanu
+  { scope: 'practica_cds_limanu', titlu: 'Serii CDS București' },
   { scope: 'intensiv_cds_limanu', titlu: 'Serii intensiv' },
 ]
 
