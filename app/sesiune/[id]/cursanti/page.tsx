@@ -442,8 +442,13 @@ export default function RosterPage() {
       <div className="max-w-7xl mx-auto">
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
-            <div className="flex items-center gap-10 flex-wrap">
+            <div className="flex items-center gap-4 flex-wrap">
               <h1 className="text-xl font-bold text-gray-900">{title}</h1>
+              {rows !== null && (
+                <span className="text-sm font-medium text-gray-500 whitespace-nowrap">
+                  {rows.length} {rows.length === 1 ? 'cursant' : 'cursanți'}
+                </span>
+              )}
               {seriiToken && (
                 <a href={`/serii-radio?token=${encodeURIComponent(seriiToken)}`}
                   className="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 bg-white text-gray-700 hover:bg-gray-50 whitespace-nowrap">
