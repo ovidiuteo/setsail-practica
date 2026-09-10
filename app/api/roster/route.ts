@@ -146,9 +146,11 @@ export async function GET(req: NextRequest) {
       sb.from('students').select('email').eq('session_id', sessionId),
       radioSessionOptions(sb),
     ])
+    // Lista arată doar cine NU e încă înscris: fără arhivați, fără cei marcați
+    // „înscris" și fără cei care sunt deja în serie (după email).
     const taken = new Set((enrolled || []).map((s: any) => String(s.email || '').trim().toLowerCase()).filter(Boolean))
     const leads = (data || []).filter((l: any) =>
-      l.status !== 'arhivat' && !taken.has(String(l.email || '').trim().toLowerCase()))
+      l.status !== 'arhivat' && l.status !== 'inscris' && !taken.has(String(l.email || '').trim().toLowerCase()))
     return NextResponse.json({ leads, sessions })
   }
 

@@ -1315,11 +1315,14 @@ function LeaduriTab({ sessionId, token, variant = 'full', onEnrolled }: {
   useEffect(() => { load() }, [load])
 
   async function patchLead(id: string, body: any) {
-    setLeads(ls => (ls || []).map(l => l.id === id ? { ...l, ...body } : l))
+    // „înscris" scoate leadul din listă — lista arată doar cine nu e încă înscris
+    if (body.status === 'inscris') setLeads(ls => (ls || []).filter(l => l.id !== id))
+    else setLeads(ls => (ls || []).map(l => l.id === id ? { ...l, ...body } : l))
     await fetch('/api/roster', {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ session_id: sessionId, token, lead_id: id, ...body }),
     })
+    if (body.status === 'inscris') onEnrolled?.()
   }
   async function enroll(l: any) {
     if (!confirm(`Îl înscrii pe „${l.name || l.email}" în această serie?`)) return
@@ -1375,14 +1378,12 @@ function LeaduriTab({ sessionId, token, variant = 'full', onEnrolled }: {
               </td>
               {full && <td className="px-3 py-2 text-xs text-gray-500 max-w-[220px]">{l.message || '—'}</td>}
               <td className="px-3 py-2">
-                {full ? (
-                  <select value={l.status || 'nou'} onChange={e => patchLead(l.id, { status: e.target.value })}
-                    className={`text-xs font-medium rounded-full px-2.5 py-1 border-0 cursor-pointer capitalize ${LEAD_STATUS_STYLE[l.status] || 'bg-gray-100 text-gray-600'}`}>
-                    {LEAD_STATUSES.map(s => <option key={s} value={s} className="bg-white text-gray-800">{s}</option>)}
-                  </select>
-                ) : (
-                  <span className={`text-xs font-medium px-2 py-0.5 rounded-full capitalize ${LEAD_STATUS_STYLE[l.status] || 'bg-gray-100 text-gray-600'}`}>{l.status}</span>
-                )}
+                {/* statusul se schimbă cu un click, în ambele variante de listă */}
+                <select value={l.status || 'nou'} onChange={e => patchLead(l.id, { status: e.target.value })}
+                  title="Schimbă statusul"
+                  className={`text-xs font-medium rounded-full px-2.5 py-1 border-0 cursor-pointer capitalize ${LEAD_STATUS_STYLE[l.status] || 'bg-gray-100 text-gray-600'}`}>
+                  {LEAD_STATUSES.map(s => <option key={s} value={s} className="bg-white text-gray-800">{s}</option>)}
+                </select>
               </td>
               {full && (
                 <td className="px-3 py-2">
