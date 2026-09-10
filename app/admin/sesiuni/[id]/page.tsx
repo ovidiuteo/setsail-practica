@@ -1641,6 +1641,28 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
 
 
 
+  // Înștiințarea semnată încărcată în „Fișiere sesiune" — o arătăm și aici,
+  // ca cele două locuri să nu pară că au fiecare altceva
+  const [instiintariDinFisiere, setInstiintariDinFisiere] = useState<any[]>([])
+  useEffect(() => {
+    if (!showNotif) return
+    // isRadio se declară mai jos în componentă; aici îl calculăm pe loc
+    const categorie = /radio|lrc/i.test(sess.class_caa || '') ? 'ancom' : 'anr'
+    let anulat = false
+    ;(async () => {
+      const [{ data: tipuri }, res] = await Promise.all([
+        supabase.from('session_file_types').select('id, label').eq('categorie', categorie),
+        fetch(`/api/session-files?session_id=${sess.id}`).then(r => r.json()).catch(() => ({ files: [] })),
+      ])
+      if (anulat) return
+      const ids = new Set((tipuri || [])
+        .filter((t: any) => /[îi]n[sș]tiin[tț]are.*semnat/i.test(t.label || ''))
+        .map((t: any) => t.id))
+      setInstiintariDinFisiere((res.files || []).filter((f: any) => ids.has(f.file_type_id)))
+    })()
+    return () => { anulat = true }
+  }, [showNotif, sess.id, sess.class_caa])
+
   // Bifa verde din antetul cardului — doar existența fișierului, nu conținutul
   useEffect(() => {
     supabase.from('notifications').select('id').eq('session_id', sess.id)
@@ -2492,6 +2514,16 @@ Set Sail NauticSchool
                       ⬆ Încarcă notificare scanată
                     </button>
                   )}
+                  {/* Aceleași documente, încărcate în „Fișiere sesiune" */}
+                  {instiintariDinFisiere.map((f:any)=>(
+                    <div key={f.id} className="flex items-center gap-2 text-xs mt-1.5">
+                      <span>📄</span>
+                      {f.url
+                        ? <a href={f.url} target="_blank" rel="noopener noreferrer" className="flex-1 truncate text-blue-600 hover:underline">{f.file_name}</a>
+                        : <span className="flex-1 truncate text-gray-600">{f.file_name}</span>}
+                      <span className="text-[10px] text-gray-400 shrink-0">din Fișiere sesiune</span>
+                    </div>
+                  ))}
                 </div>
 
                 {/* Email ANR */}
@@ -3423,21 +3455,47 @@ function SessionFilesCard({ sess, isRadio }: { sess: any; isRadio: boolean }) {
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
+  // Înștiințarea semnată încărcată în cardul de notificare — o arătăm și aici,
+  // ca să nu pară că lipsește. Aducem doar numele, nu și base64-ul.
+  const [scanNotif, setScanNotif] = useState<{ id: string; name: string } | null>(null)
 
   useEffect(() => {
     if (!open) return
     let cancelled = false
     ;(async () => {
       setLoading(true)
-      const [{ data: t }, res] = await Promise.all([
+      const [{ data: t }, res, { data: n }] = await Promise.all([
         supabase.from('session_file_types').select('*').eq('categorie', categorie).order('ordine'),
         fetch(`/api/session-files?session_id=${sess.id}`).then(r => r.json()).catch(() => ({ files: [] })),
+        supabase.from('notifications').select('id, scanned_file_name').eq('session_id', sess.id)
+          .not('scanned_file_data', 'is', null).neq('scanned_file_data', '').maybeSingle(),
       ])
       if (cancelled) return
       setTypes(t || []); setFiles(res.files || []); setLoading(false)
+      setScanNotif(n ? { id: (n as any).id, name: (n as any).scanned_file_name || 'Înștiințare scanată' } : null)
     })()
     return () => { cancelled = true }
   }, [open, sess.id, categorie])
+
+  // Fișierul stă ca data-URL în notificare; îl deschidem printr-un blob, fiindcă
+  // browserele nu permit navigarea directă către data:
+  async function deschideScanNotif() {
+    if (!scanNotif) return
+    const { data } = await supabase.from('notifications')
+      .select('scanned_file_data').eq('id', scanNotif.id).single()
+    const durl = (data as any)?.scanned_file_data
+    if (!durl) return
+    try {
+      const [meta, b64] = String(durl).split(',')
+      const mime = /data:([^;]+)/.exec(meta)?.[1] || 'application/octet-stream'
+      const bin = atob(b64)
+      const buf = new Uint8Array(bin.length)
+      for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i)
+      const url = URL.createObjectURL(new Blob([buf], { type: mime }))
+      window.open(url, '_blank')
+      setTimeout(() => URL.revokeObjectURL(url), 60000)
+    } catch { alert('Nu am putut deschide fișierul.') }
+  }
 
   // Fisierul urca direct in Supabase Storage, cu un URL semnat cerut de la API.
   // Asa nu mai trece prin functia Vercel, care refuza body-uri peste 4,5 MB.
@@ -3508,14 +3566,26 @@ function SessionFilesCard({ sess, isRadio }: { sess: any; isRadio: boolean }) {
           {loading ? <div className="text-xs text-gray-400 text-center py-3">Se încarcă...</div> : (<>
             {types.map(t => {
               const fs = files.filter(f => f.file_type_id === t.id)
+              // la „Înștiințare semnată" arătăm și scanul din cardul de notificare
+              const esteInstiintare = /[îi]n[sș]tiin[tț]are.*semnat/i.test(t.label || '')
+              const dinNotificare = esteInstiintare && scanNotif
               return (
                 <div key={t.id} className="rounded-lg border border-gray-100 p-2.5">
                   <div className="flex items-center justify-between mb-1.5">
                     <span className="text-xs font-medium text-gray-700">{t.label}</span>
-                    {fs.length === 0 && <span className="text-[10px] text-amber-500 font-medium">lipsă</span>}
+                    {fs.length === 0 && !dinNotificare && <span className="text-[10px] text-amber-500 font-medium">lipsă</span>}
                   </div>
+                  {dinNotificare && (
+                    <div className="flex items-center gap-2 text-xs mb-2">
+                      <span>📄</span>
+                      <button onClick={deschideScanNotif} className="flex-1 truncate text-left text-blue-600 hover:underline">
+                        {scanNotif!.name}
+                      </button>
+                      <span className="text-[10px] text-gray-400 shrink-0">din Notificare {isRadio ? 'ANCOM' : 'ANR'}</span>
+                    </div>
+                  )}
                   {fs.length > 0 && <div className="space-y-1 mb-2">{fs.map(fileRow)}</div>}
-                  {uploadBtn(t.id, fs.length ? 'Adaugă încă unul' : 'Încarcă')}
+                  {uploadBtn(t.id, (fs.length || dinNotificare) ? 'Adaugă încă unul' : 'Încarcă')}
                 </div>
               )
             })}
