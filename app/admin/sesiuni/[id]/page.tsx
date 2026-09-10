@@ -1360,6 +1360,8 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
   const [notifHasScan, setNotifHasScan] = useState(false)
   const [notifPreview, setNotifPreview] = useState<{subject:string;body:string}|null>(null)
   const [showNotifHelp, setShowNotifHelp] = useState(false)
+  // Momentul trimiterii către ANR/ANCOM; null = netrimisă
+  const [notifTrimisaLa, setNotifTrimisaLa] = useState<string|null>(null)
   const [gNotif, setGNotif] = useState(false)
   const [notifSaved, setNotifSaved] = useState(false)
   const [dlAncom, setDlAncom] = useState(false)
@@ -1663,12 +1665,28 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
     return () => { anulat = true }
   }, [showNotif, sess.id, sess.class_caa])
 
-  // Bifa verde din antetul cardului — doar existența fișierului, nu conținutul
+  // Bifele verzi din antetul cardului — existența fișierului (fără a aduce
+  // base64-ul) și momentul trimiterii, ca să se vadă și cu cardul închis
   useEffect(() => {
+    supabase.from('notifications').select('id, trimisa_la').eq('session_id', sess.id)
+      .maybeSingle().then(({ data }) => setNotifTrimisaLa((data as any)?.trimisa_la || null))
     supabase.from('notifications').select('id').eq('session_id', sess.id)
       .not('scanned_file_data', 'is', null).neq('scanned_file_data', '')
       .maybeSingle().then(({ data }) => setNotifHasScan(!!data))
   }, [sess.id])
+
+  // Bifa trimisă/netrimisă. Bifarea ștampilează momentul; debifarea îl șterge.
+  async function setTrimisa(trimisa: boolean) {
+    const id = notif?.id || await ensureNotification()
+    if (!id) return
+    const cand = trimisa ? new Date().toISOString() : null
+    setNotifTrimisaLa(cand)
+    const { error } = await supabase.from('notifications').update({ trimisa_la: cand }).eq('id', id)
+    if (error) { alert('Nu am putut salva: ' + error.message); setNotifTrimisaLa(trimisa ? null : cand) }
+  }
+  const momentTrimitere = (iso: string) => new Date(iso).toLocaleString('ro-RO', {
+    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  })
 
   // Emailul către ANR — același text în „Deschide în Gmail" și în preview
   function emailANR() {
@@ -1739,6 +1757,7 @@ Set Sail NauticSchool
         locatie_examinare: existing.locatie_examinare || '',
       })
       setNotifScanFile(existing.scanned_file_data || null)
+      setNotifTrimisaLa(existing.trimisa_la || null)
       return existing.id
     }
 
@@ -2345,6 +2364,12 @@ Set Sail NauticSchool
                     <Check size={10}/> atașată
                   </span>
                 )}
+                {notifTrimisaLa && (
+                  <span title={`Trimisă pe ${momentTrimitere(notifTrimisaLa)}`}
+                    className="flex items-center gap-0.5 text-[10px] font-medium text-green-700 bg-green-50 border border-green-200 rounded-full px-1.5 py-0.5">
+                    <Check size={10}/> trimisă
+                  </span>
+                )}
               </div>
               <ChevronDown size={14} className={`text-gray-400 transition-transform ${showNotif?'rotate-180':''}`}/>
             </button>
@@ -2536,11 +2561,25 @@ Set Sail NauticSchool
                     <button onClick={()=>{
                       const { subject, body } = emailANR()
                       window.open(`https://mail.google.com/mail/?view=cm&to=autorizari@rna.ro&su=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`)
+                      // presupunem că a fost trimisă; bifa se poate scoate manual
+                      if (!notifTrimisaLa) setTrimisa(true)
                     }}
                       className="w-full flex items-center justify-center gap-1.5 py-2 rounded-lg text-xs bg-blue-600 text-white hover:bg-blue-700">
                       ✉ Deschide în Gmail
                     </button>
                     <p className="text-xs text-gray-400 mt-1 text-center">Atașează manual notificarea scanată</p>
+
+                    {/* Trimisă / netrimisă, cu momentul ștampilat */}
+                    <label className={`mt-2 flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer select-none text-xs transition-colors ${
+                      notifTrimisaLa ? 'border-green-300 bg-green-50 text-green-800' : 'border-gray-200 text-gray-500 hover:bg-gray-50'}`}>
+                      <input type="checkbox" checked={!!notifTrimisaLa}
+                        onChange={e=>setTrimisa(e.target.checked)}
+                        className="w-3.5 h-3.5 accent-green-600"/>
+                      <span className="flex-1">
+                        {notifTrimisaLa ? 'Trimisă' : 'Netrimisă'}
+                        {notifTrimisaLa && <span className="text-green-600/70"> · {momentTrimitere(notifTrimisaLa)}</span>}
+                      </span>
+                    </label>
                   </div>
                 )}
 
