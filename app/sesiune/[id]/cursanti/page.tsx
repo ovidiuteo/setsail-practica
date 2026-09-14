@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, Fragment } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import { parseStudentsText } from '@/lib/import-parse'
 import type { SyncResult } from '@/lib/skipper-result'
@@ -15,6 +15,14 @@ type Row = {
   cerere_nr: number | null; cerere_data: string | null
   communication_target: boolean
   created_at: string | null; order_in_session: number | null
+  practice_slot: string | null   // intervalul de practică ales („10:00–12:00")
+}
+
+type Practica = {
+  data: string | null; data_text: string; deschisa: boolean
+  intervale: { from: string; to: string; capacitate: number; cursanti: string[] }[]
+  in_afara: { interval: string; nume: string }[]
+  neprogramati: string[]
 }
 
 // Sortarea listei: alfabetic sau cronologic (când a intrat în serie), cu sens reversibil
@@ -248,6 +256,7 @@ export default function RosterPage() {
   const [skipper, setSkipper] = useState<{ url: string }>({ url: '' })
   const [linkOpen, setLinkOpen] = useState(false)
   const [seriiToken, setSeriiToken] = useState('')
+  const [practica, setPractica] = useState<Practica | null>(null)
   const [copiedSkipper, setCopiedSkipper] = useState(false)
   const [skipperDraft, setSkipperDraft] = useState('')
   const [skipperSaving, setSkipperSaving] = useState(false)
@@ -271,6 +280,7 @@ export default function RosterPage() {
     setVisits(j.visits || null)
     setSkipper({ url: j.skipper?.url || '' })
     setSeriiToken(j.serii_token || '')
+    setPractica(j.practica || null)
     if (j.session) {
       const t = sessionTitle(j.session)
       setTitle(t)
@@ -336,6 +346,10 @@ export default function RosterPage() {
     })
     if (!r.ok) { alert('Salvare eșuată.'); setRows(before) }
   }
+
+  // Coloana „SN" (intervalul de practică) apare doar în Lista cursanți și doar
+  // când seria are intervale de practică stabilite
+  const arataSN = tab === 'cursanti' && !!practica
 
   // Emailurile bifate — ce se pune în BCC la deschiderea modalului
   const mailEmails = (rows || []).filter(r => r.email && r.communication_target).map(r => r.email)
@@ -603,7 +617,8 @@ export default function RosterPage() {
                   </th>
                   <th className="px-3 py-2.5 w-8">#</th>
                   {(tab === 'cursanti' ? PERSON_FIELDS : FIELDS).map(f => (
-                    <th key={f.key} className={`px-3 py-2.5 ${f.w || ''}`}>
+                    <Fragment key={f.key}>
+                    <th className={`px-3 py-2.5 ${f.w || ''}`}>
                       {f.key === 'full_name' ? (
                         <span className="flex items-center gap-1.5">
                           {f.label}
@@ -635,6 +650,11 @@ export default function RosterPage() {
                         </span>
                       ) : f.label}
                     </th>
+                    {/* intervalul de practică ales, între nume și email */}
+                    {f.key === 'full_name' && arataSN && (
+                      <th title="Intervalul de practică ales" className="px-2 py-2.5 whitespace-nowrap">SN</th>
+                    )}
+                    </Fragment>
                   ))}
                   <th className="px-2 py-2.5 text-center whitespace-nowrap">CI</th>
                   {tab === 'cursanti' ? <>
@@ -672,7 +692,8 @@ export default function RosterPage() {
                       // de la CNP încolo, dacă e totul în regulă, fundal verde deschis
                       const green = ok && f.key === 'cnp'
                       return (
-                        <td key={f.key} className={`${tab === 'cursanti' ? 'px-2 whitespace-nowrap' : 'px-3'} py-2 align-middle ${green ? 'bg-green-50' : ''}`}>
+                        <Fragment key={f.key}>
+                        <td className={`${tab === 'cursanti' ? 'px-2 whitespace-nowrap' : 'px-3'} py-2 align-middle ${green ? 'bg-green-50' : ''}`}>
                           {editing ? (
                             <div className="flex items-center gap-1">
                               <input autoFocus value={draft} onChange={e => setDraft(e.target.value)}
@@ -690,6 +711,14 @@ export default function RosterPage() {
                             </span>
                           )}
                         </td>
+                        {f.key === 'full_name' && arataSN && (
+                          <td className="px-2 py-2 align-middle whitespace-nowrap">
+                            {row.practice_slot
+                              ? <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200">{row.practice_slot}</span>
+                              : <span className="text-gray-300 text-xs">—</span>}
+                          </td>
+                        )}
+                        </Fragment>
                       )
                     })}
                     {/* Actul de identitate: eticheta arată tipul ales, culoarea dacă e încărcat */}
@@ -770,6 +799,58 @@ export default function RosterPage() {
                 ? <><b className="text-green-600">{mailEmails.length}</b> {mailEmails.length === 1 ? 'destinatar selectat' : 'destinatari selectați'}</>
                 : 'Niciun destinatar bifat — apasă plicul din dreptul cursanților sau „All"'}
             </span>
+          </div>
+        )}
+
+        {/* Intervalele de practică: locuri ocupate și cine e pe fiecare.
+            Între lista de cursanți și leaduri, doar când s-au stabilit intervalele. */}
+        {tab === 'cursanti' && practica && (
+          <div className="mt-8">
+            <div className="flex items-baseline gap-2 flex-wrap mb-1">
+              <h2 className="text-sm font-semibold text-gray-700">Intervale practică</h2>
+              {practica.data_text && <span className="text-xs text-gray-500">{practica.data_text}</span>}
+              {!practica.deschisa && (
+                <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 border border-gray-200">
+                  programare închisă cursanților
+                </span>
+              )}
+            </div>
+            <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 mt-3">
+              {practica.intervale.map(iv => {
+                const ocupate = iv.cursanti.length
+                const plin = ocupate >= iv.capacitate
+                return (
+                  <div key={iv.from} className={`rounded-xl border p-3 bg-white ${plin ? 'border-red-200' : 'border-gray-100'} shadow-sm`}>
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <span className="text-sm font-semibold text-gray-900">{iv.from}–{iv.to}</span>
+                      <span className={`text-xs font-medium px-2 py-0.5 rounded-full border ${
+                        plin ? 'bg-red-50 text-red-700 border-red-200'
+                          : ocupate ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                          : 'bg-gray-50 text-gray-500 border-gray-200'}`}>
+                        {ocupate}/{iv.capacitate} {plin ? '· plin' : 'ocupate'}
+                      </span>
+                    </div>
+                    {iv.cursanti.length ? (
+                      <ul className="space-y-0.5">
+                        {iv.cursanti.map(n => <li key={n} className="text-xs text-gray-700 truncate">{n}</li>)}
+                      </ul>
+                    ) : (
+                      <div className="text-xs text-gray-300">Niciun cursant</div>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+            {practica.in_afara.length > 0 && (
+              <p className="text-xs text-amber-700 mt-2">
+                Rezervări pe intervale care nu mai există după reconfigurare: {practica.in_afara.map(x => `${x.nume} (${x.interval})`).join(', ')}
+              </p>
+            )}
+            {practica.neprogramati.length > 0 && (
+              <p className="text-xs text-gray-500 mt-2">
+                <b>Neprogramați ({practica.neprogramati.length}):</b> {practica.neprogramati.join(', ')}
+              </p>
+            )}
           </div>
         )}
 

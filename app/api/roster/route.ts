@@ -3,6 +3,7 @@ import { createClient } from '@supabase/supabase-js'
 import { CARRY_FIELDS, findPersonRows, stergeDinSerie } from '@/lib/student-merge'
 import { applyMailTemplate } from '@/lib/mail-template'
 import { syncSkipper, esteEroare } from '@/lib/skipper-sync'
+import { configFromSession, buildSlots, slotCapacity, slotDateLabel } from '@/lib/practice-slots'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -115,7 +116,7 @@ export async function GET(req: NextRequest) {
   const sessionId = sp.get('session_id') || ''
   const token = sp.get('token') || ''
   const { data: sess } = await sb.from('sessions')
-    .select('roster_token, roster_verified, roster_docs_visible, class_caa, session_date, course_start_date, access_code, skipper_url')
+    .select('roster_token, roster_verified, roster_docs_visible, class_caa, session_date, course_start_date, access_code, skipper_url, practice_booking_enabled, practice_start_date, practice_slot_minutes, practice_start_hour, practice_end_hour, practice_boats, practice_per_boat, practice_per_slot')
     .eq('id', sessionId).maybeSingle()
   if (!sessionId || !token || !sess?.roster_token || sess.roster_token !== token)
     return NextResponse.json({ error: 'unauthorized' }, { status: 403 })
@@ -208,7 +209,7 @@ export async function GET(req: NextRequest) {
   } as const
   type DocKey = keyof typeof DOC_COLS
 
-  const [{ data, error }, docSets, { data: cereri }] = await Promise.all([
+  const [{ data, error }, docSets, { data: cereri }, { data: rezervari }] = await Promise.all([
     sb.from('students')
       .select('id, full_name, email, cnp, birth_date, address, city, county, class_caa, obtinere_prelungire, doc_type, communication_target, created_at, order_in_session')
       .eq('session_id', sessionId),
@@ -218,11 +219,15 @@ export async function GET(req: NextRequest) {
       return [key, new Set((ids || []).map((r: any) => r.id))] as [DocKey, Set<string>]
     })),
     sb.from('cerere_numbers').select('student_id, numar, data_cerere').eq('session_id', sessionId),
+    sb.from('practice_bookings').select('student_id, slot_from, slot_to').eq('session_id', sessionId),
   ])
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   const has = Object.fromEntries(docSets) as Record<DocKey, Set<string>>
   const cerereBy = new Map<string, { numar: number; data_cerere: string }>()
   for (const c of cereri || []) cerereBy.set((c as any).student_id, c as any)
+  // intervalul de practică ales de fiecare cursant („10:00–12:00")
+  const slotBy = new Map<string, string>()
+  for (const b of (rezervari || []) as any[]) slotBy.set(b.student_id, `${b.slot_from}–${b.slot_to}`)
 
   const rows = (data || []).map((r: any) => ({
     id: r.id, full_name: r.full_name, email: r.email, cnp: r.cnp, birth_date: r.birth_date,
@@ -240,6 +245,7 @@ export async function GET(req: NextRequest) {
     has_signature: has.has_signature.has(r.id),
     has_cerere: has.has_cerere.has(r.id),
     has_vhf: has.has_vhf.has(r.id),
+    practice_slot: slotBy.get(r.id) || null,
     cerere_nr: cerereBy.get(r.id)?.numar ?? null,
     cerere_data: cerereBy.get(r.id)?.data_cerere ?? null,
   }))
@@ -249,6 +255,34 @@ export async function GET(req: NextRequest) {
   // Vizitele pe landing-ul de radio. „Overall" repornește în ziua examenului
   // seriei precedente — de atunci încolo vizitele sunt pentru cursul următor.
   const visits = await landingVisits(sb)
+
+  // Intervalele de practică: câte locuri, cine e pe fiecare. Doar când
+  // programarea e deschisă sau există deja rezervări.
+  const cfg = configFromSession(sess)
+  const areRezervari = (rezervari || []).length > 0
+  const practica = (cfg.enabled || areRezervari) ? (() => {
+    const capacitate = slotCapacity(cfg)
+    const numeBy = new Map(rows.map(r => [r.id, r.full_name]))
+    const intervale = buildSlots(cfg).map(sl => ({
+      from: sl.from, to: sl.to, capacitate,
+      cursanti: (rezervari || [])
+        .filter((b: any) => b.slot_from === sl.from && b.slot_to === sl.to)
+        .map((b: any) => numeBy.get(b.student_id))
+        .filter(Boolean)
+        .sort((a: any, b: any) => String(a).localeCompare(String(b), 'ro')),
+    }))
+    // rezervări pe intervale care nu mai există după o reconfigurare — nu le ascundem
+    const cunoscute = new Set(intervale.map(i => `${i.from}–${i.to}`))
+    const inAfara = (rezervari || []).filter((b: any) => !cunoscute.has(`${b.slot_from}–${b.slot_to}`))
+    return {
+      data: cfg.date,
+      data_text: slotDateLabel(cfg.date),
+      deschisa: cfg.enabled,
+      intervale,
+      in_afara: inAfara.map((b: any) => ({ interval: `${b.slot_from}–${b.slot_to}`, nume: numeBy.get(b.student_id) || '—' })),
+      neprogramati: rows.filter(r => !slotBy.has(r.id)).map(r => r.full_name),
+    }
+  })() : null
 
   // Tokenul paginii cu toate seriile, ca să putem pune un link înapoi la index
   const { data: idxToken } = await sb.from('setsail_info')
@@ -264,6 +298,7 @@ export async function GET(req: NextRequest) {
     skipper: { url: sess.skipper_url || '' },
     // pentru butonul „Toate sesiunile"
     serii_token: (idxToken as any)?.value || '',
+    practica,
   })
 }
 
