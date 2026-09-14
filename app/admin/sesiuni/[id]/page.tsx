@@ -3407,13 +3407,39 @@ function QrPdfCard({ sess }: { sess: any }) {
   const [luna, setLuna] = useState(d ? new Date(d).toLocaleDateString('ro-RO', { month: 'long' }).toUpperCase() : '')
   const [an, setAn] = useState(d ? String(new Date(d).getFullYear()) : '')
   const [imgs, setImgs] = useState<{ portal?: string; skipper?: string; whatsapp?: string }>({})
+  const [saving, setSaving] = useState(false)
+  const [savedAt, setSavedAt] = useState<string | null>(null)
+  const [dirty, setDirty] = useState(false)
 
-  // La deschidere, preîncarcă QR-ul skipper salvat ca default (dacă există)
+  // La deschidere: QR-ul skipper (default global) + QR-urile salvate pe sesiune
   useEffect(() => {
     if (!open) return
     supabase.from('setsail_documents').select('file_data').eq('tip', 'qr_skipper').maybeSingle()
       .then(({ data }) => { if (data?.file_data) setImgs(s => ({ ...s, skipper: s.skipper || data.file_data })) })
-  }, [open])
+    supabase.from('session_qr').select('portal, whatsapp, luna, an, updated_at').eq('session_id', sess.id).maybeSingle()
+      .then(({ data }) => {
+        if (!data) return
+        setImgs(s => ({ ...s, portal: s.portal || data.portal || undefined, whatsapp: s.whatsapp || data.whatsapp || undefined }))
+        if (data.luna) setLuna(data.luna)
+        if (data.an) setAn(data.an)
+        setSavedAt(data.updated_at || null)
+        setDirty(false)
+      })
+  }, [open, sess.id])
+
+  // Salvează QR-urile sesiunii (portal + WhatsApp) și luna/anul de pe pagină
+  async function saveSession() {
+    setSaving(true)
+    const acum = new Date().toISOString()
+    const { error } = await supabase.from('session_qr').upsert({
+      session_id: sess.id, portal: imgs.portal || null, whatsapp: imgs.whatsapp || null,
+      luna, an, updated_at: acum,
+    }, { onConflict: 'session_id' })
+    setSaving(false)
+    if (error) { alert('Nu am putut salva: ' + error.message); return }
+    if (imgs.skipper) await saveSkipperDefault(imgs.skipper)
+    setSavedAt(acum); setDirty(false)
+  }
 
   // Salvează QR-ul skipper ca default global (devine default pentru toate grupele viitoare)
   async function saveSkipperDefault(dataUrl: string) {
@@ -3428,6 +3454,7 @@ function QrPdfCard({ sess }: { sess: any }) {
     fr.onload = () => {
       const url = fr.result as string
       setImgs(s => ({ ...s, [slot]: url }))
+      setDirty(true)
       if (slot === 'skipper') saveSkipperDefault(url) // devine default de acum înainte
     }
     fr.readAsDataURL(file)
@@ -3468,9 +3495,9 @@ function QrPdfCard({ sess }: { sess: any }) {
             <div className="p-5 space-y-4">
               <div className="flex gap-3">
                 <label className="flex-1"><span className="block text-xs text-gray-500 mb-1">Luna</span>
-                  <input value={luna} onChange={e => setLuna(e.target.value.toUpperCase())} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" /></label>
+                  <input value={luna} onChange={e => { setLuna(e.target.value.toUpperCase()); setDirty(true) }} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" /></label>
                 <label className="w-28"><span className="block text-xs text-gray-500 mb-1">An</span>
-                  <input value={an} onChange={e => setAn(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" /></label>
+                  <input value={an} onChange={e => { setAn(e.target.value); setDirty(true) }} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" /></label>
               </div>
               {SLOTS.map(s => (
                 <div key={s.key} className="border border-gray-200 rounded-xl overflow-hidden">
@@ -3492,8 +3519,17 @@ function QrPdfCard({ sess }: { sess: any }) {
                 </div>
               ))}
             </div>
-            <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100">
+            <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-gray-100 flex-wrap">
+              <span className="mr-auto text-xs">
+                {dirty ? <span className="text-amber-600">Modificări nesalvate</span>
+                  : savedAt ? <span className="text-green-600">✓ Salvat {new Date(savedAt).toLocaleString('ro-RO', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}</span>
+                  : null}
+              </span>
               <button onClick={() => setOpen(false)} className="px-4 py-2 rounded-lg text-sm border border-gray-200 text-gray-600 hover:bg-gray-50">Renunță</button>
+              <button onClick={saveSession} disabled={saving}
+                className="px-4 py-2 rounded-lg text-sm font-medium border border-green-300 bg-green-50 text-green-700 hover:bg-green-100 disabled:opacity-50">
+                {saving ? 'Se salvează…' : 'Salvează'}
+              </button>
               <button onClick={generate} disabled={!ready} className="px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50" style={{ background: '#0B3D6B' }}>
                 Generează PDF (print)
               </button>
