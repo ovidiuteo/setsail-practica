@@ -3346,7 +3346,16 @@ function AttendanceCard({ sess }: { sess: any }) {
 }
 
 // Construiește pagina A4 (HTML printabil) cu 3 QR-uri așezate în triunghi
-function buildQrPdfHtml(luna: string, an: string, imgs: { portal: string; skipper: string; whatsapp: string }): string {
+// Textele cardului WhatsApp: la seriile motor e comunitatea SetSail, nu un grup al seriei
+function whatsappText(sess: any): { label: string; sub: string; comunitate: boolean } {
+  const comunitate = scopeForSession(sess) === 'curs_cd_snagov'
+  return comunitate
+    ? { label: 'COMUNITATE SETSAIL WHATSAPP', sub: 'Scaneaza pentru a intra in comunitate', comunitate }
+    : { label: 'GRUP WHATSAPP', sub: 'Scaneaza pentru a intra in grup', comunitate }
+}
+
+function buildQrPdfHtml(luna: string, an: string, imgs: { portal: string; skipper: string; whatsapp: string },
+  wa: { label: string; sub: string } = { label: 'GRUP WHATSAPP', sub: 'Scaneaza pentru a intra in grup' }): string {
   const NAVY = '#0B3D6B', GREEN = '#26AE61', BORDER = '#CCD6DE', GRAY = '#6b7a86'
   return `<!DOCTYPE html><html lang="ro"><head><meta charset="utf-8">
 <title>SETSAIL CDS ${luna} ${an}</title>
@@ -3390,10 +3399,10 @@ function buildQrPdfHtml(luna: string, an: string, imgs: { portal: string; skippe
   <div class="sub" style="left:31mm; top:221mm;">skipper.setsail.ro &nbsp;·&nbsp; Simulator examen</div>
 
   <div class="card" style="left:115mm; top:150mm;">
-    <div class="band" style="background:${GREEN};">GRUP WHATSAPP</div>
+    <div class="band" style="background:${GREEN};${wa.label.length > 25 ? 'font-size:8.5pt;letter-spacing:0.2px;' : ''}">${wa.label}</div>
     <img class="qr" src="${imgs.whatsapp}"/>
   </div>
-  <div class="sub" style="left:115mm; top:221mm;">Scaneaza pentru a intra in grup</div>
+  <div class="sub" style="left:115mm; top:221mm;">${wa.sub}</div>
 
   <div class="footer">SetSail NauticSchool &nbsp;·&nbsp; setsail.ro</div>
 </div>
@@ -3410,22 +3419,38 @@ function QrPdfCard({ sess }: { sess: any }) {
   const [saving, setSaving] = useState(false)
   const [savedAt, setSavedAt] = useState<string | null>(null)
   const [dirty, setDirty] = useState(false)
+  const wa = whatsappText(sess)
 
-  // La deschidere: QR-ul skipper (default global) + QR-urile salvate pe sesiune
+  // La deschidere: QR-ul skipper (default global), QR-urile salvate pe sesiune și,
+  // la seriile motor, QR-ul comunității ca default dacă sesiunea n-are unul al ei
   useEffect(() => {
     if (!open) return
-    supabase.from('setsail_documents').select('file_data').eq('tip', 'qr_skipper').maybeSingle()
-      .then(({ data }) => { if (data?.file_data) setImgs(s => ({ ...s, skipper: s.skipper || data.file_data })) })
-    supabase.from('session_qr').select('portal, whatsapp, luna, an, updated_at').eq('session_id', sess.id).maybeSingle()
-      .then(({ data }) => {
-        if (!data) return
-        setImgs(s => ({ ...s, portal: s.portal || data.portal || undefined, whatsapp: s.whatsapp || data.whatsapp || undefined }))
-        if (data.luna) setLuna(data.luna)
-        if (data.an) setAn(data.an)
-        setSavedAt(data.updated_at || null)
-        setDirty(false)
-      })
-  }, [open, sess.id])
+    let anulat = false
+    ;(async () => {
+      const [{ data: sk }, { data: q }] = await Promise.all([
+        supabase.from('setsail_documents').select('file_data').eq('tip', 'qr_skipper').maybeSingle(),
+        supabase.from('session_qr').select('portal, whatsapp, luna, an, updated_at').eq('session_id', sess.id).maybeSingle(),
+      ])
+      if (anulat) return
+      let waDefault: string | undefined
+      if (wa.comunitate && !q?.whatsapp) {
+        const { data: c } = await supabase.from('setsail_documents').select('file_data').eq('tip', 'qr_whatsapp_motor').maybeSingle()
+        waDefault = c?.file_data || undefined
+      }
+      if (anulat) return
+      setImgs(s => ({
+        ...s,
+        skipper: s.skipper || sk?.file_data || undefined,
+        portal: s.portal || q?.portal || undefined,
+        whatsapp: s.whatsapp || q?.whatsapp || waDefault,
+      }))
+      if (q?.luna) setLuna(q.luna)
+      if (q?.an) setAn(q.an)
+      setSavedAt(q?.updated_at || null)
+      setDirty(false)
+    })()
+    return () => { anulat = true }
+  }, [open, sess.id, wa.comunitate])
 
   // Salvează QR-urile sesiunii (portal + WhatsApp) și luna/anul de pe pagină
   async function saveSession() {
@@ -3463,7 +3488,7 @@ function QrPdfCard({ sess }: { sess: any }) {
 
   function generate() {
     if (!ready) return
-    const html = buildQrPdfHtml(luna, an, imgs as { portal: string; skipper: string; whatsapp: string })
+    const html = buildQrPdfHtml(luna, an, imgs as { portal: string; skipper: string; whatsapp: string }, wa)
     const w = window.open('', '_blank')
     if (w) { w.document.write(html); w.document.close() }
   }
@@ -3471,7 +3496,8 @@ function QrPdfCard({ sess }: { sess: any }) {
   const SLOTS: { key: 'portal' | 'skipper' | 'whatsapp'; label: string; band: string; hint: string }[] = [
     { key: 'portal', label: 'UPLOAD CI PENTRU PRACTICA', band: '#0B3D6B', hint: 'QR portal (setsail-practica.vercel.app/portal?cod=...)' },
     { key: 'skipper', label: 'PLATFORMA SETSAIL', band: '#0B3D6B', hint: 'QR skipper.setsail.ro — se reține ca default pentru toate grupele' },
-    { key: 'whatsapp', label: 'GRUP WHATSAPP', band: '#26AE61', hint: 'QR grup WhatsApp (cu sigla lui)' },
+    { key: 'whatsapp', label: wa.label, band: '#26AE61',
+      hint: wa.comunitate ? 'QR comunitate SetSail WhatsApp — implicit cel folosit la seriile motor' : 'QR grup WhatsApp (cu sigla lui)' },
   ]
 
   return (
