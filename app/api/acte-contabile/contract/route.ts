@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { acteServiceClient, canAccess, isEntity } from '@/lib/acte-contabile/server'
 import {
-  buildContractSsyDocx, perioadaImplicita, type SiglaContract, PLATA_IMPLICITA, EVENIMENT_IMPLICIT,
+  buildContractSsyDocx, buildContractSsyHtml, numeFisierContract, perioadaImplicita, type SiglaContract, PLATA_IMPLICITA, EVENIMENT_IMPLICIT,
   type ContractSsyData,
 } from '@/lib/acte-contabile/contract-ssy'
 import { SIGLA_CONTRACT_JPG } from '@/lib/acte-contabile/sigla-contract'
@@ -13,6 +13,7 @@ export const maxDuration = 60
 // Contract de prestări servicii SSY pentru facturi emise (încă neîncărcate în sistem).
 //   { entity:'ssy', token, action:'extract', file:{base64,mime} | text } -> datele propuse (editabile în pagină)
 //   { entity:'ssy', token, action:'generate', data }    -> DOCX
+//   { entity:'ssy', token, action:'pdf', data, cu_stampila } -> HTML de tipărit (PDF), cu/fără ștampila cu semnătură SSY
 //   { entity:'ssy', token, action:'list' | 'save' (id?, data, factura?, sursa?) | 'delete' (id) } -> contracte salvate
 
 const PROMPT = `Primești o factură românească (document, poză sau text copiat) sau datele unui contract. Extrage datele de mai jos, exact cum apar pe document.
@@ -163,12 +164,31 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true })
   }
 
+  // ── PDF (pagină HTML tipărită din browser) ──
+  if (action === 'pdf') {
+    const data = curata(body.data)
+    if (!data.beneficiar_nume) return NextResponse.json({ ok: false, error: 'Lipsește beneficiarul.' }, { status: 400 })
+    let stampila: string | null = null
+    if (body.cu_stampila === true) {
+      const { data: doc } = await acteServiceClient().from('setsail_documents').select('file_data').eq('tip', 'stampila_semnatura_ssy').maybeSingle()
+      stampila = (doc as { file_data: string | null } | null)?.file_data || null
+      if (!stampila || !stampila.startsWith('data:image/')) {
+        return NextResponse.json({ ok: false, error: 'Nu există „Ștampilă cu semnătură SSY". Încarc-o în Configurare → Ștampile și semnături.' }, { status: 400 })
+      }
+    }
+    const sigla = await siglaContract()
+    const siglaUrl = `data:image/${sigla.type === 'png' ? 'png' : 'jpeg'};base64,${sigla.data.toString('base64')}`
+    return new NextResponse(buildContractSsyHtml(data, { sigla: siglaUrl, stampila }), {
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    })
+  }
+
   // ── Generare DOCX din datele (eventual corectate) din pagină ──
   if (action === 'generate') {
     const data = curata(body.data)
     if (!data.beneficiar_nume) return NextResponse.json({ ok: false, error: 'Lipsește beneficiarul.' }, { status: 400 })
     const buf = await buildContractSsyDocx(data, await siglaContract())
-    const nume = `Contract ${data.nr || 'SSY'} - ${data.beneficiar_nume}`.replace(/[\\/:*?"<>|]+/g, ' ').trim()
+    const nume = numeFisierContract(data)
     return new NextResponse(buf as unknown as BodyInit, {
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',

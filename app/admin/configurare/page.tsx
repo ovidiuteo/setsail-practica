@@ -234,6 +234,7 @@ export default function ConfigurarePage() {
       <RadioTokenSection />
       <LeadsDashboardTokenSection />
       <ActeContabileSection />
+      <StampileSection />
 
       <div className="grid grid-cols-2 gap-6">
         <Section title="📍 Locații de practică" table="locations"
@@ -617,6 +618,153 @@ function LandingTokenSection() {
           <p className="text-xs text-gray-400 mt-2">Oricine are acest link poate edita pagina. Regenerează token-ul pentru a revoca accesul.</p>
         </div>
       </div>
+    </div>
+  )
+}
+
+// ── Ștampile și semnături ───────────────────────────────────────────────────
+// Imaginile folosite în documentele generate, ținute în setsail_documents.
+// Tipurile SSA păstrează cheile vechi (le folosesc notificările ANR, PV-urile,
+// înștiințările ANCOM); SSY sunt pentru contractele Set Sail Yachting.
+const STAMPILE_FIXE = [
+  { tip: 'stampila_fara_semnatura', label: 'Ștampilă SSA',              firma: 'ssa' },
+  { tip: 'stampila_ssy',            label: 'Ștampilă SSY',              firma: 'ssy' },
+  { tip: 'stampila_cu_semnatura',   label: 'Ștampilă cu semnătură SSA', firma: 'ssa' },
+  { tip: 'stampila_semnatura_ssy',  label: 'Ștampilă cu semnătură SSY', firma: 'ssy' },
+] as const
+
+type DocImg = { id: string; tip: string; label: string; file_data: string | null; file_name: string | null }
+
+const citesteDataUrl = (f: File) => new Promise<string>((ok, fail) => {
+  const r = new FileReader(); r.onload = () => ok(String(r.result)); r.onerror = fail; r.readAsDataURL(f)
+})
+
+function StampileSection() {
+  const [rows, setRows] = useState<DocImg[]>([])
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState<string | null>(null)
+  const [numeNou, setNumeNou] = useState('')
+
+  useEffect(() => {
+    supabase.from('setsail_documents').select('id, tip, label, file_data, file_name')
+      .or(`tip.in.(${STAMPILE_FIXE.map(s => s.tip).join(',')}),tip.like.extra_%`)
+      .then(({ data }) => { setRows((data || []) as DocImg[]); setLoading(false) })
+  }, [])
+
+  async function incarca(tip: string, label: string, file: File) {
+    setBusy(tip)
+    try {
+      const file_data = await citesteDataUrl(file)
+      const exista = rows.find(r => r.tip === tip)
+      if (exista) {
+        const { error } = await supabase.from('setsail_documents').update({ file_data, file_name: file.name }).eq('id', exista.id)
+        if (error) throw error
+        setRows(rs => rs.map(r => r.id === exista.id ? { ...r, file_data, file_name: file.name } : r))
+      } else {
+        const { data, error } = await supabase.from('setsail_documents').insert({ tip, label, file_data, file_name: file.name })
+          .select('id, tip, label, file_data, file_name').single()
+        if (error) throw error
+        if (data) setRows(rs => [...rs, data as DocImg])
+      }
+    } catch (e: any) { alert('Încărcarea a eșuat: ' + (e?.message || e)) }
+    finally { setBusy(null) }
+  }
+
+  async function golesteFisier(r: DocImg) {
+    if (!confirm(`Elimini fișierul de la „${r.label}"?`)) return
+    await supabase.from('setsail_documents').update({ file_data: null, file_name: null }).eq('id', r.id)
+    setRows(rs => rs.map(x => x.id === r.id ? { ...x, file_data: null, file_name: null } : x))
+  }
+
+  async function stergeExtra(r: DocImg) {
+    if (!confirm(`Ștergi „${r.label}"?`)) return
+    await supabase.from('setsail_documents').delete().eq('id', r.id)
+    setRows(rs => rs.filter(x => x.id !== r.id))
+  }
+
+  async function redenumeste(r: DocImg, label: string) {
+    await supabase.from('setsail_documents').update({ label }).eq('id', r.id)
+    setRows(rs => rs.map(x => x.id === r.id ? { ...x, label } : x))
+  }
+
+  const card = (tip: string, label: string, r: DocImg | undefined, extra: boolean, culoare?: string) => {
+    const img = r?.file_data?.startsWith('data:image/')
+    return (
+      <div key={tip} className="border border-gray-100 rounded-xl p-3 flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          {culoare && <span className="w-2 h-2 rounded-full shrink-0" style={{ background: culoare }} />}
+          {extra && r ? (
+            <input defaultValue={r.label} onBlur={e => e.target.value.trim() && e.target.value !== r.label && redenumeste(r, e.target.value.trim())}
+              className="flex-1 min-w-0 border border-transparent hover:border-gray-200 rounded-md px-1.5 py-0.5 text-sm font-medium text-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-300" />
+          ) : (
+            <div className="flex-1 min-w-0 text-sm font-medium text-gray-800 truncate">{label}</div>
+          )}
+          {extra && r && (
+            <button onClick={() => stergeExtra(r)} title="Șterge" className="p-1 rounded hover:bg-red-50 text-gray-300 hover:text-red-500"><Trash2 size={13} /></button>
+          )}
+        </div>
+        <div className="h-32 rounded-lg border border-dashed border-gray-200 bg-gray-50 flex items-center justify-center overflow-hidden">
+          {busy === tip ? <Loader2 size={18} className="animate-spin text-gray-400" />
+            : r?.file_data ? (img
+              ? <img src={r.file_data} alt={label} className="max-h-full max-w-full object-contain" />
+              : <div className="flex flex-col items-center gap-1 text-gray-400 text-xs"><FileText size={22} />{r.file_name}</div>)
+            : <span className="text-xs text-gray-300">Niciun fișier</span>}
+        </div>
+        <div className="text-[11px] text-gray-400 truncate" title={r?.file_name || ''}>{r?.file_name || '—'}</div>
+        <div className="flex items-center gap-1.5">
+          <label className="flex-1 text-center cursor-pointer px-2 py-1.5 rounded-lg bg-blue-50 text-blue-600 text-xs font-medium hover:bg-blue-100">
+            {r?.file_data ? 'Înlocuiește' : 'Încarcă'}
+            <input type="file" accept="image/*,application/pdf" className="hidden"
+              onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) incarca(tip, r?.label || label, f) }} />
+          </label>
+          {r?.file_data && (<>
+            <a href={r.file_data} download={r.file_name || tip} title="Descarcă"
+              className="p-1.5 rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50"><ExternalLink size={13} /></a>
+            {!extra && (
+              <button onClick={() => golesteFisier(r)} title="Elimină fișierul"
+                className="p-1.5 rounded-lg border border-gray-200 text-gray-400 hover:text-red-500 hover:bg-red-50"><X size={13} /></button>
+            )}
+          </>)}
+        </div>
+      </div>
+    )
+  }
+
+  const extras = rows.filter(r => r.tip.startsWith('extra_'))
+
+  return (
+    <div className="mb-8 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="px-6 py-4 border-b border-gray-100">
+        <h2 className="font-semibold text-gray-900">🔏 Ștampile și semnături</h2>
+        <p className="text-xs text-gray-400 mt-0.5">Imaginile puse în documentele generate. SSA — notificări ANR, PV-uri, înștiințări ANCOM; SSY — contractele Set Sail Yachting. PNG cu fundal transparent arată cel mai bine.</p>
+      </div>
+      {loading ? (
+        <div className="text-center text-gray-400 py-8 text-sm">Se încarcă...</div>
+      ) : (
+        <div className="p-6 space-y-5">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {STAMPILE_FIXE.map(s => card(s.tip, s.label, rows.find(r => r.tip === s.tip), false, s.firma === 'ssa' ? '#2563eb' : '#0a8a6f'))}
+          </div>
+          {extras.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {extras.map(r => card(r.tip, r.label, r, true))}
+            </div>
+          )}
+          <div className="flex items-center gap-2 max-w-lg">
+            <input value={numeNou} onChange={e => setNumeNou(e.target.value)} placeholder="Nume fișier nou, ex: Semnătură Paula"
+              className="flex-1 border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-blue-300" />
+            <label className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium whitespace-nowrap ${numeNou.trim() ? 'cursor-pointer bg-blue-50 text-blue-600 hover:bg-blue-100' : 'bg-gray-50 text-gray-300 cursor-not-allowed'}`}>
+              <Plus size={13} /> Adaugă fișier
+              <input type="file" accept="image/*,application/pdf" className="hidden" disabled={!numeNou.trim()}
+                onChange={async e => {
+                  const f = e.target.files?.[0]; e.target.value = ''
+                  if (!f || !numeNou.trim()) return
+                  await incarca(`extra_${Date.now()}`, numeNou.trim(), f); setNumeNou('')
+                }} />
+            </label>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -1013,6 +1013,26 @@ async function descarcaContract(entity: string, token: string | null, data: Cont
   setTimeout(() => URL.revokeObjectURL(a.href), 30000)
 }
 
+// Deschide contractul ca pagină de tipărit. Fereastra se deschide imediat, la click
+// (altfel browserul o blochează după așteptarea salvării), apoi primește conținutul.
+async function tiparesteContract(entity: string, token: string | null, data: ContractSsy, cuStampila: boolean, w: Window | null) {
+  if (!w) throw new Error('Browserul a blocat fereastra nouă. Permite pop-up-urile pentru acest site.')
+  const res = await fetch(API_CONTRACT, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ entity, token, action: 'pdf', data, cu_stampila: cuStampila }),
+  })
+  if (!res.ok) { const j = await res.json().catch(() => ({})); w.close(); throw new Error(j.error || 'Generarea PDF a eșuat.') }
+  const html = await res.text()
+  w.document.open(); w.document.write(html); w.document.close()
+  setTimeout(() => { try { w.focus(); w.print() } catch { /* fereastra închisă */ } }, 700)
+}
+
+function fereastraPdf(): Window | null {
+  const w = window.open('', '_blank')
+  if (w) w.document.write('<p style="font-family:Arial,sans-serif;color:#64748b;padding:24px">Se generează contractul…</p>')
+  return w
+}
+
 function ContractePanel({ entity, token }: { entity: string; token: string | null }) {
   const [text, setText] = useState('')
   const [file, setFile] = useState<File | null>(null)
@@ -1022,7 +1042,7 @@ function ContractePanel({ entity, token }: { entity: string; token: string | nul
   const [sursa, setSursa] = useState<string>('')
   const [perioadaImplicita, setPerioadaImplicita] = useState(false)
   const [err, setErr] = useState<string | null>(null)
-  const [busy, setBusy] = useState<null | 'salvez' | 'docx'>(null)
+  const [busy, setBusy] = useState<null | 'salvez' | 'docx' | 'pdf' | 'pdf-gol'>(null)
   const fileRef = useRef<HTMLInputElement | null>(null)
   // Contractul deschis din listă / deja salvat (null = încă nesalvat)
   const [id, setId] = useState<string | null>(null)
@@ -1165,6 +1185,18 @@ function ContractePanel({ entity, token }: { entity: string; token: string | nul
       if ((modificat || !id) && !(await salveaza())) return
       await descarcaContract(entity, token, f)
     } catch (e: any) { alert(e?.message || 'Conexiune eșuată.') }
+    finally { setBusy(null) }
+  }
+
+  async function genereazaPdf(cuStampila: boolean) {
+    if (!f) return
+    if (!f.beneficiar_nume.trim()) { alert('Completează beneficiarul.'); return }
+    const w = fereastraPdf()
+    setBusy(cuStampila ? 'pdf' : 'pdf-gol')
+    try {
+      if ((modificat || !id) && !(await salveaza())) { w?.close(); return }
+      await tiparesteContract(entity, token, f, cuStampila, w)
+    } catch (e: any) { w?.close(); alert(e?.message || 'Conexiune eșuată.') }
     finally { setBusy(null) }
   }
 
@@ -1439,6 +1471,14 @@ function ContractePanel({ entity, token }: { entity: string; token: string | nul
               className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-[#0a1628] disabled:opacity-60"
               style={{ background: '#f5c842' }}>
               {busy === 'docx' ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />} Generează DOCX
+            </button>
+            <button onClick={() => genereazaPdf(true)} disabled={!!busy}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-60">
+              {busy === 'pdf' ? <Loader2 size={14} className="animate-spin" /> : <FileSignature size={14} />} PDF semnat și ștampilat
+            </button>
+            <button onClick={() => genereazaPdf(false)} disabled={!!busy}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-pink-500 hover:bg-pink-600 disabled:opacity-60">
+              {busy === 'pdf-gol' ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />} PDF fără ștampilă/semnătură
             </button>
           </div>
         </div>

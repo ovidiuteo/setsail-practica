@@ -27,8 +27,8 @@ const INFO_FIELDS: InfoRow[] = [
 ]
 
 const DOC_TIPS = [
-  { tip: 'stampila_cu_semnatura',   label: 'Ștampilă cu semnătură',    desc: 'Folosită în notificările oficiale semnate' },
-  { tip: 'stampila_fara_semnatura', label: 'Ștampilă fără semnătură',  desc: 'Versiune curată, fără semnătură manuscrisă' },
+  { tip: 'stampila_cu_semnatura',   label: 'Ștampilă cu semnătură SSA', desc: 'Folosită în notificările oficiale semnate' },
+  { tip: 'stampila_fara_semnatura', label: 'Ștampilă SSA',            desc: 'Versiune curată, fără semnătură manuscrisă' },
   { tip: 'antet',                   label: 'Antet document ANR',       desc: 'Imaginea de antet pentru documente oficiale ANR' },
   { tip: 'antet_radio',             label: 'Antet Radio (ANCOM)',      desc: 'Antet pentru documentele sesiunilor Radio / LRC' },
   { tip: 'semnatura_reprezentant',  label: 'Semnătură reprezentant',   desc: 'Semnătura manuscrisă a reprezentantului legal' },
