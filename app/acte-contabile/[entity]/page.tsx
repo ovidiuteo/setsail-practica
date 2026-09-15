@@ -849,8 +849,11 @@ function DocRow({ d, entity, token, onPreview, onDeleted, onMonthChanged, onRepl
 }) {
   const [saving, setSaving] = useState(false)
   const [replacing, setReplacing] = useState(false)
+  const [contractOpen, setContractOpen] = useState(false)
   const fileRef = useRef<HTMLInputElement | null>(null)
   const luna = d.luna || currentLuna()
+  // Contractul SSY se face din facturile Set Sail Yachting (PDF sau imagine)
+  const poateContract = entity === 'ssy' && d.categorie === 'factura'
 
   async function changeMonth(next: string) {
     if (next === luna && d.luna) return
@@ -911,8 +914,18 @@ function DocRow({ d, entity, token, onPreview, onDeleted, onMonthChanged, onRepl
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 transition disabled:opacity-60" title="Înlocuiește fișierul (păstrează denumirea și luna)">
             {replacing ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />} Înlocuiește
           </button>
+          {poateContract && (
+            <button onClick={() => setContractOpen(true)}
+              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-white bg-[#0a1628] hover:opacity-90 transition"
+              title="Generează contractul SSY cu datele din această factură">
+              <FileSignature size={14} /> Contract
+            </button>
+          )}
           <DeleteButton entity={entity} token={token} id={d.id} onDeleted={onDeleted} />
         </div>
+        {contractOpen && (
+          <ContractSsyModal entity={entity} token={token} doc={d} onClose={() => setContractOpen(false)} />
+        )}
       </td>
       <td className="px-4 py-3">
         <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700">{CAT_LABEL(d.categorie)}</span>
@@ -934,6 +947,193 @@ function DocRow({ d, entity, token, onPreview, onDeleted, onMonthChanged, onRepl
         {new Date(d.created_at).toLocaleDateString('ro-RO')}
       </td>
     </tr>
+  )
+}
+
+// ── Contract SSY din factură ────────────────────────────────────────────────
+// Citește factura cu AI, propune datele contractului (toate editabile) și
+// generează DOCX-ul cu textul contractului de prestări servicii SSY.
+type ContractSsy = {
+  nr: string; data: string; beneficiar_tip: 'pf' | 'pj'
+  beneficiar_nume: string; beneficiar_adresa: string; beneficiar_cnp: string
+  beneficiar_cui: string; beneficiar_reg_com: string; beneficiar_reprezentant: string
+  eveniment: string; perioada_start: string; perioada_end: string
+  suma: number; moneda: 'RON' | 'EUR'; plata: string
+}
+type FacturaCitita = { emisa_de_ssy: boolean; furnizor: string; serie: string; numar: string; data: string; descriere: string }
+
+// Etichetă + câmp. Definit în afara modalului: o componentă declarată în
+// interiorul altei componente se re-creează la fiecare tastă și câmpul pierde focusul.
+function Camp({ label, children, lat }: { label: string; children: React.ReactNode; lat?: boolean }) {
+  return (
+    <label className={`block ${lat ? 'sm:col-span-2' : ''}`}>
+      <span className="block text-[11px] text-slate-400 mb-1">{label}</span>
+      {children}
+    </label>
+  )
+}
+
+function ContractSsyModal({ entity, token, doc, onClose }: {
+  entity: string; token: string | null; doc: Doc; onClose: () => void
+}) {
+  const [f, setF] = useState<ContractSsy | null>(null)
+  const [factura, setFactura] = useState<FacturaCitita | null>(null)
+  const [perioadaImplicita, setPerioadaImplicita] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const [busy, setBusy] = useState(false)
+
+  const citeste = useCallback(async () => {
+    setErr(null); setF(null)
+    try {
+      const res = await fetch('/api/acte-contabile/contract', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ entity, token, action: 'extract', doc_id: doc.id }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok || !j.ok) { setErr(j.error || 'Nu am putut citi factura.'); return }
+      setF(j.propunere); setFactura(j.factura); setPerioadaImplicita(!!j.perioada_implicita)
+    } catch { setErr('Conexiune eșuată.') }
+  }, [entity, token, doc.id])
+  useEffect(() => { citeste() }, [citeste])
+
+  const set = <K extends keyof ContractSsy>(k: K, v: ContractSsy[K]) => setF(x => x ? { ...x, [k]: v } : x)
+
+  async function genereaza() {
+    if (!f) return
+    if (!f.beneficiar_nume.trim()) { alert('Completează beneficiarul.'); return }
+    setBusy(true)
+    try {
+      const res = await fetch('/api/acte-contabile/contract', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ entity, token, action: 'generate', data: f }),
+      })
+      if (!res.ok) { const j = await res.json().catch(() => ({})); alert(j.error || 'Generarea a eșuat.'); return }
+      const blob = await res.blob()
+      const a = document.createElement('a')
+      a.href = URL.createObjectURL(blob)
+      a.download = `Contract ${f.nr || 'SSY'} - ${f.beneficiar_nume}.docx`.replace(/[\\/:*?"<>|]+/g, ' ')
+      a.click()
+      setTimeout(() => URL.revokeObjectURL(a.href), 30000)
+    } catch { alert('Conexiune eșuată.') }
+    finally { setBusy(false) }
+  }
+
+  const inp = 'w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#f5c842]'
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center p-4 overflow-y-auto"
+      onClick={e => { if (e.target === e.currentTarget && !busy) onClose() }}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl my-8">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
+          <div>
+            <h3 className="font-semibold text-[#0a1628] flex items-center gap-2"><FileSignature size={16} /> Contract SSY</h3>
+            <p className="text-xs text-slate-400 mt-0.5">Din factura „{doc.nume || doc.file_name}"</p>
+          </div>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-700"><X size={18} /></button>
+        </div>
+
+        <div className="p-5">
+          {err ? (
+            <div className="space-y-3">
+              <div className="flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2.5">
+                <AlertCircle size={16} className="shrink-0 mt-0.5" /> {err}
+              </div>
+              <button onClick={citeste} className="px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-200 text-slate-600 hover:bg-slate-50">
+                Încearcă din nou
+              </button>
+            </div>
+          ) : !f ? (
+            <div className="flex items-center justify-center gap-2 py-12 text-sm text-slate-500">
+              <Loader2 size={16} className="animate-spin" /> Citesc factura…
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {factura && !factura.emisa_de_ssy && (
+                <div className="flex items-start gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5">
+                  <AlertCircle size={14} className="shrink-0 mt-0.5" />
+                  <span>Factura pare emisă <b>către</b> Set Sail Yachting{factura.furnizor ? ` de ${factura.furnizor}` : ''}, nu de ea. Contractul se face pentru clienții facturilor emise de SSY — verifică datele înainte să-l generezi.</span>
+                </div>
+              )}
+              {factura && (
+                <div className="text-xs text-slate-500">
+                  Factura {[factura.serie, factura.numar].filter(Boolean).join(' ') || '—'}
+                  {factura.data ? ` · ${new Date(factura.data).toLocaleDateString('ro-RO')}` : ''}
+                  {factura.descriere ? ` · ${factura.descriere}` : ''}
+                </div>
+              )}
+
+              <div className="grid sm:grid-cols-2 gap-3">
+                <Camp label="Nr. contract"><input className={inp} value={f.nr} placeholder="ex. SSY631" onChange={e => set('nr', e.target.value)} /></Camp>
+                <Camp label="Data contractului"><input type="date" className={inp} value={f.data} onChange={e => set('data', e.target.value)} /></Camp>
+              </div>
+
+              <div className="rounded-xl border border-slate-100 p-3 space-y-3">
+                <div className="flex items-center gap-3 text-xs">
+                  <span className="text-slate-400">Beneficiar:</span>
+                  {(['pf', 'pj'] as const).map(t => (
+                    <label key={t} className="flex items-center gap-1 cursor-pointer">
+                      <input type="radio" checked={f.beneficiar_tip === t} onChange={() => set('beneficiar_tip', t)} />
+                      {t === 'pf' ? 'Persoană fizică' : 'Firmă'}
+                    </label>
+                  ))}
+                </div>
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <Camp label={f.beneficiar_tip === 'pj' ? 'Denumire firmă' : 'Nume și prenume'} lat>
+                    <input className={inp} value={f.beneficiar_nume} onChange={e => set('beneficiar_nume', e.target.value)} />
+                  </Camp>
+                  <Camp label={f.beneficiar_tip === 'pj' ? 'Sediu' : 'Domiciliu'} lat>
+                    <input className={inp} value={f.beneficiar_adresa} onChange={e => set('beneficiar_adresa', e.target.value)} />
+                  </Camp>
+                  {f.beneficiar_tip === 'pj' ? (<>
+                    <Camp label="Cod fiscal (CUI)"><input className={inp} value={f.beneficiar_cui} onChange={e => set('beneficiar_cui', e.target.value)} /></Camp>
+                    <Camp label="Nr. Registrul Comerțului"><input className={inp} value={f.beneficiar_reg_com} onChange={e => set('beneficiar_reg_com', e.target.value)} /></Camp>
+                    <Camp label="Reprezentată prin (opțional)" lat><input className={inp} value={f.beneficiar_reprezentant} onChange={e => set('beneficiar_reprezentant', e.target.value)} /></Camp>
+                  </>) : (
+                    <Camp label="CNP"><input className={inp} value={f.beneficiar_cnp} onChange={e => set('beneficiar_cnp', e.target.value)} /></Camp>
+                  )}
+                </div>
+              </div>
+
+              <div className="grid sm:grid-cols-2 gap-3">
+                <Camp label="Evenimentul (obiectul contractului)" lat>
+                  <input className={inp} value={f.eveniment} onChange={e => set('eveniment', e.target.value)} />
+                </Camp>
+                <Camp label="Perioada — de la"><input type="date" className={inp} value={f.perioada_start} onChange={e => set('perioada_start', e.target.value)} /></Camp>
+                <Camp label="până la"><input type="date" className={inp} value={f.perioada_end} onChange={e => set('perioada_end', e.target.value)} /></Camp>
+              </div>
+              {perioadaImplicita && (
+                <p className="text-[11px] text-slate-400 -mt-2">Factura nu menționează perioada: am propus de la o săptămână după data contractului până la 30 octombrie.</p>
+              )}
+
+              <div className="grid sm:grid-cols-2 gap-3">
+                <Camp label="Valoarea contractului">
+                  <input type="number" step="0.01" className={inp} value={f.suma || ''} onChange={e => set('suma', Number(e.target.value) || 0)} />
+                </Camp>
+                <Camp label="Moneda">
+                  <select className={inp} value={f.moneda} onChange={e => set('moneda', e.target.value as 'RON' | 'EUR')}>
+                    <option value="RON">RON</option><option value="EUR">EUR (echivalent în RON)</option>
+                  </select>
+                </Camp>
+                <Camp label="Modul de plată" lat>
+                  <textarea rows={2} className={inp} value={f.plata} onChange={e => set('plata', e.target.value)} />
+                </Camp>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {f && (
+          <div className="flex justify-end gap-2 px-5 py-4 border-t border-slate-100">
+            <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm border border-slate-200 text-slate-600 hover:bg-slate-50">Închide</button>
+            <button onClick={genereaza} disabled={busy}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-[#0a1628] disabled:opacity-60"
+              style={{ background: '#f5c842' }}>
+              {busy ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />} Generează DOCX
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
   )
 }
 
