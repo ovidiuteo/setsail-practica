@@ -368,18 +368,27 @@ export default function RosterPage() {
     (practica?.intervale || []).map((iv, i) => [`${iv.from}–${iv.to}`, i]))
   const nrIntervale = practica?.intervale.length || 0
 
-  // Intervalul k din N: nuanța de albastru crește cu k/N (1/3, 2/3, 3/3; la 4: ¼, ½, ¾, 1)
-  const stilInterval = (slot: string): React.CSSProperties => {
+  // Eticheta intervalului k din N e umplută pe lungime: k/N din lățime închis,
+  // restul deschis (la 3 intervale 1/3, 2/3, 3/3; la 4: ¼, ½, ¾, plin).
+  // Textul e desenat de două ori — închis peste zona deschisă, alb peste cea
+  // închisă — ca să se citească oriunde ar cădea granița.
+  const EtichetaInterval = ({ slot }: { slot: string }) => {
     const i = ordineInterval.get(slot)
-    if (i === undefined || !nrIntervale) {
-      return { background: '#f3f4f6', color: '#6b7280', borderColor: '#e5e7eb' }   // interval care nu mai există
-    }
-    const f = (i + 1) / nrIntervale
-    return {
-      background: `rgba(3, 105, 161, ${f})`,
-      borderColor: 'rgba(3, 105, 161, 0.6)',
-      color: f > 0.45 ? '#ffffff' : '#075985',
-    }
+    const pct = i === undefined || !nrIntervale ? 0 : Math.round(((i + 1) / nrIntervale) * 100)
+    const necunoscut = i === undefined
+    return (
+      <span className={`relative inline-block overflow-hidden rounded-full border text-xs font-medium px-2 py-0.5 whitespace-nowrap ${
+        necunoscut ? 'bg-gray-100 text-gray-500 border-gray-200' : 'bg-sky-100 text-sky-800 border-sky-700/40'}`}
+        title={necunoscut ? 'Interval care nu mai există în configurare' : `Intervalul ${(i as number) + 1} din ${nrIntervale}`}>
+        {slot}
+        {!necunoscut && (
+          <span aria-hidden className="absolute inset-0 flex items-center px-2 bg-sky-700 text-white whitespace-nowrap"
+            style={{ clipPath: `inset(0 ${100 - pct}% 0 0)` }}>
+            {slot}
+          </span>
+        )}
+      </span>
+    )
   }
 
   // Emailurile bifate — ce se pune în BCC la deschiderea modalului
@@ -756,7 +765,7 @@ export default function RosterPage() {
                         {f.key === 'full_name' && arataSN && (
                           <td className="px-2 py-2 align-middle whitespace-nowrap">
                             {row.practice_slot
-                              ? <span className="text-xs font-medium px-2 py-0.5 rounded-full border" style={stilInterval(row.practice_slot)}>{row.practice_slot}</span>
+                              ? <EtichetaInterval slot={row.practice_slot} />
                               : <span className="text-gray-300 text-xs">—</span>}
                           </td>
                         )}
