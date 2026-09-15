@@ -26,13 +26,25 @@ type Practica = {
 }
 
 // Sortarea listei: alfabetic sau cronologic (când a intrat în serie), cu sens reversibil
-type SortMode = 'alpha' | 'time'
+type SortMode = 'alpha' | 'time' | 'slot'
 type Sort = { mode: SortMode; dir: 'asc' | 'desc' }
-function sortRows(rows: Row[], s: Sort): Row[] {
+// ordinea intervalelor („10:00–12:00" -> 0, „12:00–14:00" -> 1 …), pentru sortarea după SN
+function sortRows(rows: Row[], s: Sort, ordineInterval: Map<string, number> = new Map()): Row[] {
   const semn = s.dir === 'asc' ? 1 : -1
   const cheieTimp = (r: Row) => r.created_at || ''
+  const dupaNume = (a: Row, b: Row) => (a.full_name || '').localeCompare(b.full_name || '', 'ro', { sensitivity: 'base' })
   return [...rows].sort((a, b) => {
-    if (s.mode === 'alpha') return semn * (a.full_name || '').localeCompare(b.full_name || '', 'ro', { sensitivity: 'base' })
+    if (s.mode === 'alpha') return semn * dupaNume(a, b)
+    if (s.mode === 'slot') {
+      // neprogramații rămân la final, în ambele sensuri
+      const ia = a.practice_slot ? (ordineInterval.get(a.practice_slot) ?? 999) : null
+      const ib = b.practice_slot ? (ordineInterval.get(b.practice_slot) ?? 999) : null
+      if (ia === null && ib === null) return dupaNume(a, b)
+      if (ia === null) return 1
+      if (ib === null) return -1
+      if (ia !== ib) return semn * (ia - ib)
+      return dupaNume(a, b)
+    }
     // fără created_at (rânduri vechi) cădem pe ordinea din serie, apoi pe nume
     const ta = cheieTimp(a), tb = cheieTimp(b)
     if (ta && tb && ta !== tb) return semn * ta.localeCompare(tb)
@@ -267,7 +279,7 @@ export default function RosterPage() {
   // click pe butonul activ = inversează sensul; pe celălalt = comută pe el
   const toggleSort = (mode: SortMode) => setSort(s => s.mode === mode
     ? { mode, dir: s.dir === 'asc' ? 'desc' : 'asc' }
-    : { mode, dir: mode === 'alpha' ? 'asc' : 'desc' })
+    : { mode, dir: mode === 'time' ? 'desc' : 'asc' })
 
   const load = useCallback(async () => {
     const r = await fetch(`/api/roster?session_id=${id}&token=${encodeURIComponent(token)}`)
@@ -350,6 +362,25 @@ export default function RosterPage() {
   // Coloana „SN" (intervalul de practică) apare doar în Lista cursanți și doar
   // când seria are intervale de practică stabilite
   const arataSN = tab === 'cursanti' && !!practica
+
+  // Poziția fiecărui interval în zi, pentru sortare și pentru nuanța etichetei
+  const ordineInterval = new Map<string, number>(
+    (practica?.intervale || []).map((iv, i) => [`${iv.from}–${iv.to}`, i]))
+  const nrIntervale = practica?.intervale.length || 0
+
+  // Intervalul k din N: nuanța de albastru crește cu k/N (1/3, 2/3, 3/3; la 4: ¼, ½, ¾, 1)
+  const stilInterval = (slot: string): React.CSSProperties => {
+    const i = ordineInterval.get(slot)
+    if (i === undefined || !nrIntervale) {
+      return { background: '#f3f4f6', color: '#6b7280', borderColor: '#e5e7eb' }   // interval care nu mai există
+    }
+    const f = (i + 1) / nrIntervale
+    return {
+      background: `rgba(3, 105, 161, ${f})`,
+      borderColor: 'rgba(3, 105, 161, 0.6)',
+      color: f > 0.45 ? '#ffffff' : '#075985',
+    }
+  }
 
   // Emailurile bifate — ce se pune în BCC la deschiderea modalului
   const mailEmails = (rows || []).filter(r => r.email && r.communication_target).map(r => r.email)
@@ -652,7 +683,18 @@ export default function RosterPage() {
                     </th>
                     {/* intervalul de practică ales, între nume și email */}
                     {f.key === 'full_name' && arataSN && (
-                      <th title="Intervalul de practică ales" className="px-2 py-2.5 whitespace-nowrap">SN</th>
+                      <th className="px-2 py-2.5 whitespace-nowrap">
+                        <button onClick={() => toggleSort('slot')}
+                          title={sort.mode === 'slot'
+                            ? `Sortat după interval, ${sort.dir === 'asc' ? 'crescător' : 'descrescător'} (click = invers)`
+                            : 'Sortează după intervalul de practică'}
+                          className={`flex items-center gap-1 uppercase tracking-wide hover:text-gray-800 ${sort.mode === 'slot' ? 'text-blue-700' : ''}`}>
+                          SN
+                          <span className="text-[10px] leading-none">
+                            {sort.mode === 'slot' ? (sort.dir === 'asc' ? '↑' : '↓') : <span className="text-gray-300">↕</span>}
+                          </span>
+                        </button>
+                      </th>
                     )}
                     </Fragment>
                   ))}
@@ -675,7 +717,7 @@ export default function RosterPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {sortRows(rows, sort).map((row, i) => {
+                {sortRows(rows, sort, ordineInterval).map((row, i) => {
                   const ok = tab === 'cursanti' && rowComplete(row)
                   return (
                   <tr key={row.id} className={`hover:bg-gray-50/60 ${tab === 'cursanti' ? '[&>td]:py-1' : ''}`}>
@@ -714,7 +756,7 @@ export default function RosterPage() {
                         {f.key === 'full_name' && arataSN && (
                           <td className="px-2 py-2 align-middle whitespace-nowrap">
                             {row.practice_slot
-                              ? <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200">{row.practice_slot}</span>
+                              ? <span className="text-xs font-medium px-2 py-0.5 rounded-full border" style={stilInterval(row.practice_slot)}>{row.practice_slot}</span>
                               : <span className="text-gray-300 text-xs">—</span>}
                           </td>
                         )}
