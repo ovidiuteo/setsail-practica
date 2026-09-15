@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { acteServiceClient, canAccess, isEntity } from '@/lib/acte-contabile/server'
 import {
-  buildContractSsyDocx, perioadaImplicita, PLATA_IMPLICITA, EVENIMENT_IMPLICIT,
+  buildContractSsyDocx, perioadaImplicita, type SiglaContract, PLATA_IMPLICITA, EVENIMENT_IMPLICIT,
   type ContractSsyData,
 } from '@/lib/acte-contabile/contract-ssy'
+import { SIGLA_CONTRACT_JPG } from '@/lib/acte-contabile/sigla-contract'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -62,6 +63,28 @@ const SCHEMA = {
 
 const esteData = (s: unknown) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s)
 const str = (v: unknown, max = 300) => String(v ?? '').trim().slice(0, max)
+
+// Sigla din /admin/setsail (tip sigla_setsail); altfel cea din modelul de contract
+async function siglaContract(): Promise<SiglaContract> {
+  const sharp = (await import('sharp')).default
+  try {
+    const { data } = await acteServiceClient().from('setsail_documents').select('file_data').eq('tip', 'sigla_setsail').maybeSingle()
+    const fd = (data as { file_data: string | null } | null)?.file_data
+    if (fd) {
+      const buf = Buffer.from(fd.includes(',') ? fd.split(',')[1] : fd, 'base64')
+      const meta = await sharp(buf).metadata()
+      if (meta.width && meta.height) {
+        // docx acceptă png/jpg; orice alt format (webp, svg) se convertește în png
+        if (meta.format === 'png' || meta.format === 'jpeg') {
+          return { data: buf, type: meta.format === 'png' ? 'png' : 'jpg', width: meta.width, height: meta.height }
+        }
+        const png = await sharp(buf).png().toBuffer()
+        return { data: png, type: 'png', width: meta.width, height: meta.height }
+      }
+    }
+  } catch { /* cade pe sigla implicită */ }
+  return { data: Buffer.from(SIGLA_CONTRACT_JPG, 'base64'), type: 'jpg', width: 172, height: 89 }
+}
 
 function curata(x: any): ContractSsyData {
   x = x || {}
@@ -144,7 +167,7 @@ export async function POST(req: NextRequest) {
   if (action === 'generate') {
     const data = curata(body.data)
     if (!data.beneficiar_nume) return NextResponse.json({ ok: false, error: 'Lipsește beneficiarul.' }, { status: 400 })
-    const buf = await buildContractSsyDocx(data)
+    const buf = await buildContractSsyDocx(data, await siglaContract())
     const nume = `Contract ${data.nr || 'SSY'} - ${data.beneficiar_nume}`.replace(/[\\/:*?"<>|]+/g, ' ').trim()
     return new NextResponse(buf as unknown as BodyInit, {
       headers: {

@@ -32,6 +32,7 @@ const DOC_TIPS = [
   { tip: 'antet',                   label: 'Antet document ANR',       desc: 'Imaginea de antet pentru documente oficiale ANR' },
   { tip: 'antet_radio',             label: 'Antet Radio (ANCOM)',      desc: 'Antet pentru documentele sesiunilor Radio / LRC' },
   { tip: 'semnatura_reprezentant',  label: 'Semnătură reprezentant',   desc: 'Semnătura manuscrisă a reprezentantului legal' },
+  { tip: 'sigla_setsail',           label: 'Siglă SetSail',            desc: 'Sigla din colțul contractelor SSY (PNG sau JPG)' },
 ]
 
 export default function SetSailPage() {
