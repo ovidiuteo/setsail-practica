@@ -64,73 +64,23 @@ export async function POST(req: NextRequest) {
     for (const row of infoRows || []) infoMap[row.key] = row.value
     const protocolValabilPana = infoMap['protocol_ancom_valabil_pana'] || '31.12.2026'
 
-    // Aducem numerele de solicitare alocate pentru aceasta sesiune
-    // Intai cautam dupa session_id, daca nu gasim luam ultimele alocate global
-    const { data: nrRowsSession } = await supabase
-      .from('notification_numbers')
-      .select('numar, document_tip, data_notificare, tip')
-      .eq('session_id', session_id)
-      .eq('tip', 'solicitare')
-      .order('numar')
-    
-    const { data: nrRowsAll } = await supabase
-      .from('notification_numbers')
-      .select('numar, document_tip, data_notificare, tip')
-      .eq('tip', 'solicitare')
-      .order('numar', { ascending: false })
-
-    // Folosim session_id specific daca exista, altfel ultimele globale per document_tip
-    const nrRows = (nrRowsSession && nrRowsSession.length > 0) ? nrRowsSession : []
-    
-    const nrMap: Record<string, number> = {}
-    for (const row of nrRows) {
-      if (row.document_tip) nrMap[row.document_tip] = row.numar
-    }
-    // Daca nu avem per sesiune, luam ultimul global per document_tip
-    if (Object.keys(nrMap).length === 0 && nrRowsAll && nrRowsAll.length > 0) {
-      const seen = new Set<string>()
-      for (const row of nrRowsAll) {
-        if (row.document_tip && !seen.has(row.document_tip)) {
-          nrMap[row.document_tip] = row.numar
-          seen.add(row.document_tip)
-        }
-      }
-    }
-
-    const nrTipMap: Record<string, string> = {
-      'curs-obtinere':    'curs-obtinere',
-      'curs-prelungire':  'curs-prelungire',
-      'examen-obtinere':  'examen-obtinere',
-      'examen-prelungire':'examen-prelungire',
-    }
-    // Numărul care apare pe înștiințare e cel din registrul „Înștiințări ANCOM"
-    // (numărul de ieșire). Vechile numere de „solicitare" rămân doar ca rezervă.
+    // Numărul din colțul dreapta sus = Nr. ieșire ANCOM al înștiințării, completat
+    // manual în pagina sesiunii. Dacă lipsește, rămân puncte — nu împrumutăm numere
+    // din alte registre sau din alte sesiuni.
     const { data: iesireRows } = await supabase
       .from('notification_numbers')
-      .select('numar, document_tip, data_notificare, tip')
+      .select('numar, document_tip, data_notificare')
       .eq('session_id', session_id)
-      .in('tip', ['instiintari_ancom', 'nr_iesire_ancom'])
-      .order('numar', { ascending: false })
-    const iesirePentru = (t: string) => {
-      const ale = (iesireRows || []).filter((r: any) => r.document_tip === t)
-      return ale.find((r: any) => r.tip === 'instiintari_ancom') || ale[0]
-    }
-
-    const allRows = [...(nrRowsSession || []), ...(nrRowsAll || [])]
+      .eq('tip', 'nr_iesire_ancom')
     const roData = (d: string) => {
       const [y, m, dd] = String(d || '').slice(0, 10).split('-').map(Number)
       return y && m && dd ? new Date(y, m - 1, dd).toLocaleDateString('ro-RO') : ''
     }
-    // Numărul și data afișate pentru un anumit document
     const nrPentru = (t: string) => {
-      const ies = iesirePentru(t)
-      const vechi = allRows.find((r: any) => r.document_tip === t)
-      return {
-        nr: ies ? String(ies.numar) : (nrMap[nrTipMap[t]] ? String(nrMap[nrTipMap[t]]) : ''),
-        data: ies ? roData(ies.data_notificare)
-          : vechi ? roData(vechi.data_notificare)
-          : roData(session.session_date),
-      }
+      const ies = (iesireRows || []).find((r: any) => r.document_tip === t)
+      return ies
+        ? { nr: String(ies.numar), data: roData(ies.data_notificare) }
+        : { nr: '', data: '......' }
     }
 
     const sessionDate = new Date(session.session_date).toLocaleDateString('ro-RO', {

@@ -1413,19 +1413,19 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
   // === Numere documente per-document, pe 3 registre separate (reset anual) ===
   // tip = registrul (folosit ca filtru pentru "următorul număr" și istoric)
   const REG_LABEL: Record<string, string> = {
-    pv_ancom: 'PV ANCOM', instiintari_ancom: 'Înștiințări ANCOM', cereri_ancom: 'Cereri examen ANCOM',
+    pv_ancom: 'PV ANCOM', cereri_ancom: 'Cereri examen ANCOM',
     nr_iesire_ancom: 'Nr. ieșire ANCOM', instiintari_anr: 'Înștiințări ANR',
   }
-  // Documentele care primesc și un Nr. ieșire ANCOM separat.
-  // Înștiințările NU: numărul lor din registru e chiar numărul de ieșire,
-  // cel care apare în colțul din dreapta al documentului.
+  // Documentele care primesc și un Nr. ieșire ANCOM separat, pe lângă nr. propriu.
   const hasIesire = (docTip: string) => DOC_DEFS[docTip]?.reg === 'pv_ancom'
   // anexaOf = preia numărul PV-ului corespunzător (nu primește număr propriu)
-  const DOC_DEFS: Record<string, { reg: string; label: string; anexaOf?: string }> = {
-    'curs-obtinere':     { reg: 'instiintari_ancom', label: 'Înștiințare Curs Obținere LRC' },
-    'examen-obtinere':   { reg: 'instiintari_ancom', label: 'Înștiințare Examen Obținere LRC' },
-    'curs-prelungire':   { reg: 'instiintari_ancom', label: 'Înștiințare Curs Prelungire LRC' },
-    'examen-prelungire': { reg: 'instiintari_ancom', label: 'Înștiințare Examen Prelungire LRC' },
+  // doarIesire = documentul n-are număr propriu, doar Nr. ieșire ANCOM, completat
+  //   manual (nu se propune „următorul"); e numărul din colțul dreapta al documentului
+  const DOC_DEFS: Record<string, { reg: string; label: string; anexaOf?: string; doarIesire?: boolean }> = {
+    'curs-obtinere':     { reg: 'nr_iesire_ancom', label: 'Înștiințare Curs Obținere LRC', doarIesire: true },
+    'examen-obtinere':   { reg: 'nr_iesire_ancom', label: 'Înștiințare Examen Obținere LRC', doarIesire: true },
+    'curs-prelungire':   { reg: 'nr_iesire_ancom', label: 'Înștiințare Curs Prelungire LRC', doarIesire: true },
+    'examen-prelungire': { reg: 'nr_iesire_ancom', label: 'Înștiințare Examen Prelungire LRC', doarIesire: true },
     'cereri-obtinere':   { reg: 'cereri_ancom', label: 'Cerere Examen Obținere LRC' },
     'cereri-prelungire': { reg: 'cereri_ancom', label: 'Cerere Examen Prelungire LRC' },
     'pv-obtinere':       { reg: 'pv_ancom', label: 'PV Obținere LRC' },
@@ -1534,7 +1534,8 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
     setDocNrRecent(rows)
     const yr = date.slice(0, 4)
     const maxY = Math.max(0, ...rows.filter(r => String(r.data_notificare).startsWith(yr)).map(r => r.numar))
-    setDocNrValue(existing?.numar ?? (maxY + 1))
+    // Nr. ieșire al înștiințărilor se scrie de mână — nu propunem nimic
+    setDocNrValue(existing?.numar ?? (def.doarIesire ? 0 : maxY + 1))
     setDocNrDate(date)
     setDocNrModal({ docTip, kind })
   }
@@ -1544,6 +1545,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
     const { docTip, kind } = docNrModal
     const def = DOC_DEFS[docTip]
     const reg = regFor(docTip, kind)
+    if (!docNrValue || docNrValue < 1) { alert('Completează numărul.'); return }
     setDocNrSaving(true)
     // Înlocuim DOAR rândul din acest registru pentru (sesiune, document)
     await supabase.from('notification_numbers').delete()
@@ -1601,15 +1603,25 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
       const interact = opts.filled ? 'border border-gray-200 hover:bg-gray-100' : 'border border-dashed border-gray-300 hover:bg-gray-50'
       return <button type="button" onClick={opts.onClick} title={opts.title} className={`${base} ${color} ${interact}`}>{txt}</button>
     }
-    const esteInstiintare = DOC_DEFS[src]?.reg === 'instiintari_ancom'
+    // Înștiințările au un singur număr: Nr. ieșire ANCOM, completat manual
+    if (DOC_DEFS[src]?.doarIesire) {
+      return (
+        <div className="w-full order-last flex flex-col items-center gap-1 pt-1">
+          {pill(
+            iesRec ? `ieș. ${iesRec.numar} · ${shortDate(iesRec.data_notificare)}` : '+ nr. ieșire ANCOM',
+            { filled: !!iesRec,
+              title: 'Nr. ieșire ANCOM — se completează manual; apare în colțul din dreapta sus al înștiințării',
+              onClick: () => openDocNrModal(docTip, 'iesire') }
+          )}
+        </div>
+      )
+    }
     return (
       <div className="w-full order-last flex flex-col items-center gap-1 pt-1">
         {pill(
           (docRec ? `${docRec.numar} · ${shortDate(docRec.data_notificare)}` : (ro ? '—' : '+ nr')),
           { filled: !!docRec,
-            title: ro ? 'Preia nr. PV'
-              : esteInstiintare ? 'Nr. ieșire ANCOM — apare în colțul din dreapta al documentului'
-              : 'Nr. document — click pentru alocare',
+            title: ro ? 'Preia nr. PV' : 'Nr. document — click pentru alocare',
             onClick: () => openDocNrModal(docTip, 'doc') }
         )}
         {hasIesire(docTip) && pill(
@@ -3049,7 +3061,7 @@ Set Sail NauticSchool
             <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl">
               <div className="flex items-center justify-between p-5 border-b border-gray-100">
                 <div>
-                  <h3 className="font-semibold text-gray-900">{def?.label}{kind === 'iesire' ? ' · Nr. ieșire' : ''}</h3>
+                  <h3 className="font-semibold text-gray-900">{def?.label}{kind === 'iesire' ? ' · Nr. ieșire ANCOM' : ''}</h3>
                   <p className="text-xs text-gray-400">Registru: {REG_LABEL[reg]} · numerotare anuală ({yr})</p>
                 </div>
                 <button onClick={() => setDocNrModal(null)} className="p-1 rounded hover:bg-gray-100 text-gray-400"><X size={16} /></button>
@@ -3058,12 +3070,20 @@ Set Sail NauticSchool
                 {/* Stânga: editor număr + dată */}
                 <div>
                   <div className="text-xs text-gray-400 mb-1">{kind === 'iesire' ? 'Nr. ieșire ANCOM' : 'Număr document'}</div>
-                  <div className="flex items-center gap-2 mb-4">
+                  <div className="flex items-center gap-2 mb-1">
                     <button onClick={() => setDocNrValue(v => Math.max(1, v - 1))} className="w-9 h-9 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 text-lg font-bold">−</button>
-                    <input type="number" value={docNrValue} onChange={e => setDocNrValue(Math.max(1, parseInt(e.target.value) || 1))}
-                      className="flex-1 w-full border-2 border-blue-400 rounded-lg px-3 py-2 text-lg font-bold text-blue-700 text-center focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                    <input type="number" value={docNrValue || ''} placeholder={def?.doarIesire ? 'scrie numărul' : ''}
+                      autoFocus={!!def?.doarIesire}
+                      onChange={e => setDocNrValue(Math.max(0, parseInt(e.target.value) || 0))}
+                      className="flex-1 w-full border-2 border-blue-400 rounded-lg px-3 py-2 text-lg font-bold text-blue-700 text-center placeholder:text-sm placeholder:font-normal placeholder:text-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-300" />
                     <button onClick={() => setDocNrValue(v => v + 1)} className="w-9 h-9 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 text-lg font-bold">+</button>
                   </div>
+                  {def?.doarIesire ? (
+                    <p className="text-[11px] text-gray-400 mb-4">
+                      Se completează manual, exact ca pe documentul înregistrat.
+                      {recentYr.length > 0 && <> Ultimul nr. ieșire din {yr}: <b className="text-gray-600">{Math.max(...recentYr.map((r: any) => r.numar))}</b>.</>}
+                    </p>
+                  ) : <div className="mb-3" />}
                   <div className="text-xs text-gray-400 mb-1">Data</div>
                   <input type="date" value={docNrDate} onChange={e => setDocNrDate(e.target.value)}
                     className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mb-4 focus:outline-none focus:ring-2 focus:ring-blue-300" />

@@ -1013,15 +1013,15 @@ function NotificationNumbersSection() {
     'cereri-obtinere':   'Cerere Obținere',
     'cereri-prelungire': 'Cerere Prelungire',
   }
-  // Etichete + filtre pe registru (noile: pv_ancom/instiintari_ancom/cereri_ancom; vechi: solicitare/document)
+  // Etichete + filtre pe registru (ANCOM: nr. ieșire, PV, cereri; vechi ANR: solicitare/document).
+  // Înștiințările ANCOM nu mai au registru propriu — numărul lor e Nr. ieșire ANCOM.
   // Registrele ANCOM (radio). Tot ce nu e aici = Înștiințare ANR (practica)
-  const ANCOM_TIPS = ['instiintari_ancom', 'pv_ancom', 'cereri_ancom', 'nr_iesire_ancom']
+  const ANCOM_TIPS = ['pv_ancom', 'cereri_ancom', 'nr_iesire_ancom']
   const isAnr = (tip: string) => !ANCOM_TIPS.includes(tip)
   const REG_BADGE: Record<string, { label: string; cls: string }> = {
     solicitare:        { label: 'Înștiințare ANR', cls: 'bg-amber-50 text-amber-700' },
     document:          { label: 'Înștiințare ANR', cls: 'bg-amber-50 text-amber-700' },
     instiintari_anr:   { label: 'Înștiințări ANR', cls: 'bg-amber-50 text-amber-700' },
-    instiintari_ancom: { label: 'Înștiințări ANCOM', cls: 'bg-blue-50 text-blue-700' },
     pv_ancom:          { label: 'PV ANCOM', cls: 'bg-purple-50 text-purple-700' },
     cereri_ancom:      { label: 'Cereri ANCOM', cls: 'bg-indigo-50 text-indigo-700' },
     nr_iesire_ancom:   { label: 'Nr. ieșire ANCOM', cls: 'bg-emerald-50 text-emerald-700' },
@@ -1030,7 +1030,6 @@ function NotificationNumbersSection() {
     { key: 'all', label: 'Toate' },
     { key: 'anr', label: 'Înștiințări ANR' },
     { key: 'nr_iesire_ancom', label: 'Nr. ieșire ANCOM' },
-    { key: 'instiintari_ancom', label: 'Înștiințări ANCOM' },
     { key: 'pv_ancom', label: 'PV ANCOM' },
     { key: 'cereri_ancom', label: 'Cereri ANCOM' },
   ]
