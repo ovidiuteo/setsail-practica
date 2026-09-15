@@ -103,6 +103,18 @@ export default function ActeContabilePage({ params }: { params: { entity: string
   const [preview, setPreview] = useState<Doc | null>(null)
   const [months, setMonths] = useState<string[]>([currentLuna()])
   const [showAllMonths, setShowAllMonths] = useState(false)
+  // „Contracte" = secțiune separată: contractele pentru facturile emise, care nu
+  // sunt încă în sistem. Doar la SSY. Păstrată în URL (?view=contracte).
+  const [view, setView] = useState<'acte' | 'contracte'>('acte')
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('view') === 'contracte') setView('contracte')
+  }, [])
+  function schimbaView(v: 'acte' | 'contracte') {
+    setView(v)
+    const u = new URL(window.location.href)
+    if (v === 'contracte') u.searchParams.set('view', 'contracte'); else u.searchParams.delete('view')
+    window.history.replaceState(null, '', u.toString())
+  }
 
   function toggleMonth(m: string) {
     setMonths(prev => prev.includes(m) ? prev.filter(x => x !== m) : [...prev, m])
@@ -183,12 +195,27 @@ export default function ActeContabilePage({ params }: { params: { entity: string
               <p className="text-xs text-white/50">{meta?.full || ''}</p>
             </div>
           </div>
-          <button onClick={load} className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-white/10 hover:bg-white/20 transition">
-            <RefreshCw size={14} /> Reîncarcă
-          </button>
+          <div className="flex items-center gap-2">
+            {entity === 'ssy' && (
+              <button onClick={() => schimbaView(view === 'contracte' ? 'acte' : 'contracte')}
+                className={`flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg font-medium transition ${
+                  view === 'contracte' ? 'text-[#0a1628]' : 'bg-white/10 hover:bg-white/20'}`}
+                style={view === 'contracte' ? { background: '#f5c842' } : {}}>
+                {view === 'contracte' ? <><X size={14} /> Închide contracte</> : <><FileSignature size={14} /> Contracte</>}
+              </button>
+            )}
+            <button onClick={load} className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-white/10 hover:bg-white/20 transition">
+              <RefreshCw size={14} /> Reîncarcă
+            </button>
+          </div>
         </div>
       </header>
 
+      {view === 'contracte' && entity === 'ssy' ? (
+        <main className="max-w-5xl mx-auto px-5 py-6">
+          <ContractePanel entity={entity} token={token} />
+        </main>
+      ) : (
       <main className="max-w-5xl mx-auto px-5 py-6">
         <UploadBox entity={entity} token={token} onUploaded={d => setDocs(prev => [d, ...(prev || [])])} />
 
@@ -275,6 +302,7 @@ export default function ActeContabilePage({ params }: { params: { entity: string
           Documentele sunt confidențiale. Acest link oferă acces complet — nu îl distribui în afara contabilității.
         </p>
       </main>
+      )}
 
       {preview && <PreviewModal doc={preview} onClose={() => setPreview(null)} />}
     </div>
@@ -849,11 +877,8 @@ function DocRow({ d, entity, token, onPreview, onDeleted, onMonthChanged, onRepl
 }) {
   const [saving, setSaving] = useState(false)
   const [replacing, setReplacing] = useState(false)
-  const [contractOpen, setContractOpen] = useState(false)
   const fileRef = useRef<HTMLInputElement | null>(null)
   const luna = d.luna || currentLuna()
-  // Contractul SSY se face din facturile Set Sail Yachting (PDF sau imagine)
-  const poateContract = entity === 'ssy' && d.categorie === 'factura'
 
   async function changeMonth(next: string) {
     if (next === luna && d.luna) return
@@ -914,18 +939,8 @@ function DocRow({ d, entity, token, onPreview, onDeleted, onMonthChanged, onRepl
             className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 transition disabled:opacity-60" title="Înlocuiește fișierul (păstrează denumirea și luna)">
             {replacing ? <Loader2 size={14} className="animate-spin" /> : <Upload size={14} />} Înlocuiește
           </button>
-          {poateContract && (
-            <button onClick={() => setContractOpen(true)}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-white bg-[#0a1628] hover:opacity-90 transition"
-              title="Generează contractul SSY cu datele din această factură">
-              <FileSignature size={14} /> Contract
-            </button>
-          )}
           <DeleteButton entity={entity} token={token} id={d.id} onDeleted={onDeleted} />
         </div>
-        {contractOpen && (
-          <ContractSsyModal entity={entity} token={token} doc={d} onClose={() => setContractOpen(false)} />
-        )}
       </td>
       <td className="px-4 py-3">
         <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700">{CAT_LABEL(d.categorie)}</span>
@@ -950,9 +965,9 @@ function DocRow({ d, entity, token, onPreview, onDeleted, onMonthChanged, onRepl
   )
 }
 
-// ── Contract SSY din factură ────────────────────────────────────────────────
-// Citește factura cu AI, propune datele contractului (toate editabile) și
-// generează DOCX-ul cu textul contractului de prestări servicii SSY.
+// ── Contracte SSY ───────────────────────────────────────────────────────────
+// Pentru facturi emise de SSY care nu sunt în sistem: factura încărcată sau
+// textul lipit e interpretat cu AI, datele sunt editabile, apoi DOCX.
 type ContractSsy = {
   nr: string; data: string; beneficiar_tip: 'pf' | 'pj'
   beneficiar_nume: string; beneficiar_adresa: string; beneficiar_cnp: string
@@ -962,7 +977,7 @@ type ContractSsy = {
 }
 type FacturaCitita = { emisa_de_ssy: boolean; furnizor: string; serie: string; numar: string; data: string; descriere: string }
 
-// Etichetă + câmp. Definit în afara modalului: o componentă declarată în
+// Etichetă + câmp. Definit în afara panoului: o componentă declarată în
 // interiorul altei componente se re-creează la fiecare tastă și câmpul pierde focusul.
 function Camp({ label, children, lat }: { label: string; children: React.ReactNode; lat?: boolean }) {
   return (
@@ -973,28 +988,88 @@ function Camp({ label, children, lat }: { label: string; children: React.ReactNo
   )
 }
 
-function ContractSsyModal({ entity, token, doc, onClose }: {
-  entity: string; token: string | null; doc: Doc; onClose: () => void
-}) {
+function ContractePanel({ entity, token }: { entity: string; token: string | null }) {
+  const [text, setText] = useState('')
+  const [file, setFile] = useState<File | null>(null)
+  const [citind, setCitind] = useState<null | 'fisier' | 'text'>(null)
   const [f, setF] = useState<ContractSsy | null>(null)
   const [factura, setFactura] = useState<FacturaCitita | null>(null)
+  const [sursa, setSursa] = useState<string>('')
   const [perioadaImplicita, setPerioadaImplicita] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const fileRef = useRef<HTMLInputElement | null>(null)
 
-  const citeste = useCallback(async () => {
-    setErr(null); setF(null)
+  // Fișierul pleacă spre API ca base64 în JSON. Pozele se micșorează în browser
+  // (o poză de telefon ar trece de limita de 4,5 MB a cererii pe Vercel).
+  async function pregatesteFisier(fl: File): Promise<{ base64: string; mime: string }> {
+    const esteImg = fl.type.startsWith('image/')
+    if (esteImg) {
+      const url = URL.createObjectURL(fl)
+      try {
+        const img = await new Promise<HTMLImageElement>((ok, fail) => {
+          const i = new Image(); i.onload = () => ok(i); i.onerror = fail; i.src = url
+        })
+        const max = 2000
+        const k = Math.min(1, max / Math.max(img.width, img.height))
+        const c = document.createElement('canvas')
+        c.width = Math.round(img.width * k); c.height = Math.round(img.height * k)
+        c.getContext('2d')!.drawImage(img, 0, 0, c.width, c.height)
+        const durl = c.toDataURL('image/jpeg', 0.88)
+        return { base64: durl.split(',')[1], mime: 'image/jpeg' }
+      } finally { URL.revokeObjectURL(url) }
+    }
+    if (fl.size > 3 * 1024 * 1024) throw new Error('PDF-ul are peste 3 MB. Folosește un PDF mai mic sau lipește textul facturii.')
+    const buf = new Uint8Array(await fl.arrayBuffer())
+    let bin = ''
+    for (let i = 0; i < buf.length; i += 0x8000) bin += String.fromCharCode.apply(null, Array.from(buf.subarray(i, i + 0x8000)))
+    return { base64: btoa(bin), mime: 'application/pdf' }
+  }
+
+  async function interpreteaza(mod: 'fisier' | 'text') {
+    setErr(null); setCitind(mod)
     try {
+      const payload: any = { entity, token, action: 'extract' }
+      if (mod === 'fisier') {
+        if (!file) { setErr('Alege factura.'); return }
+        payload.file = await pregatesteFisier(file)
+        setSursa(`factura „${file.name}"`)
+      } else {
+        if (!text.trim()) { setErr('Lipește textul facturii sau datele contractului.'); return }
+        payload.text = text
+        setSursa('textul importat')
+      }
       const res = await fetch('/api/acte-contabile/contract', {
-        method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ entity, token, action: 'extract', doc_id: doc.id }),
+        method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload),
       })
       const j = await res.json().catch(() => ({}))
-      if (!res.ok || !j.ok) { setErr(j.error || 'Nu am putut citi factura.'); return }
+      if (!res.ok || !j.ok) { setErr(j.error || (res.status === 413 ? 'Fișierul e prea mare.' : 'Nu am putut interpreta datele.')); return }
       setF(j.propunere); setFactura(j.factura); setPerioadaImplicita(!!j.perioada_implicita)
-    } catch { setErr('Conexiune eșuată.') }
-  }, [entity, token, doc.id])
-  useEffect(() => { citeste() }, [citeste])
+    } catch (e: any) {
+      setErr(e?.message || 'Conexiune eșuată.')
+    } finally { setCitind(null) }
+  }
+
+  // Formular gol, fără factură: data de azi și perioada implicită
+  function manual() {
+    const azi = new Date()
+    const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+    const start = new Date(azi.getFullYear(), azi.getMonth(), azi.getDate() + 7)
+    let end = new Date(start.getFullYear(), 9, 30)
+    if (start > end) end = new Date(start.getFullYear() + 1, 9, 30)
+    setF({
+      nr: '', data: iso(azi), beneficiar_tip: 'pf', beneficiar_nume: '', beneficiar_adresa: '',
+      beneficiar_cnp: '', beneficiar_cui: '', beneficiar_reg_com: '', beneficiar_reprezentant: '',
+      eveniment: 'Eveniment nautic', perioada_start: iso(start), perioada_end: iso(end),
+      suma: 0, moneda: 'RON', plata: 'Plata se va efectua pe baza facturii fiscale emise de SC Set Sail Yachting SRL.',
+    })
+    setFactura(null); setSursa('completare manuală'); setPerioadaImplicita(true); setErr(null)
+  }
+
+  function contractNou() {
+    setF(null); setFactura(null); setText(''); setFile(null); setSursa(''); setErr(null)
+    if (fileRef.current) fileRef.current.value = ''
+  }
 
   const set = <K extends keyof ContractSsy>(k: K, v: ContractSsy[K]) => setF(x => x ? { ...x, [k]: v } : x)
 
@@ -1021,118 +1096,152 @@ function ContractSsyModal({ entity, token, doc, onClose }: {
   const inp = 'w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#f5c842]'
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center p-4 overflow-y-auto"
-      onClick={e => { if (e.target === e.currentTarget && !busy) onClose() }}>
-      <div className="bg-white rounded-2xl shadow-xl w-full max-w-2xl my-8">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-          <div>
-            <h3 className="font-semibold text-[#0a1628] flex items-center gap-2"><FileSignature size={16} /> Contract SSY</h3>
-            <p className="text-xs text-slate-400 mt-0.5">Din factura „{doc.nume || doc.file_name}"</p>
-          </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-700"><X size={18} /></button>
-        </div>
+    <div className="space-y-5">
+      <div>
+        <h2 className="text-lg font-bold text-[#0a1628] flex items-center gap-2"><FileSignature size={18} /> Contracte SSY</h2>
+        <p className="text-sm text-slate-500 mt-0.5">
+          Contract de prestări servicii pentru facturile emise de Set Sail Yachting. Încarcă factura sau lipește textul ei — datele se completează singure și le poți corecta.
+        </p>
+      </div>
 
-        <div className="p-5">
-          {err ? (
-            <div className="space-y-3">
-              <div className="flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2.5">
-                <AlertCircle size={16} className="shrink-0 mt-0.5" /> {err}
-              </div>
-              <button onClick={citeste} className="px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-200 text-slate-600 hover:bg-slate-50">
-                Încearcă din nou
+      {!f && (
+        <>
+          <div className="grid md:grid-cols-2 gap-4">
+            {/* Încărcare factură */}
+            <div className="bg-white rounded-xl border border-slate-200 p-4 flex flex-col">
+              <div className="font-semibold text-sm text-[#0a1628] mb-1 flex items-center gap-1.5"><Upload size={15} /> Încarcă factura</div>
+              <p className="text-xs text-slate-400 mb-3">PDF sau poză (JPG, PNG, WEBP).</p>
+              <input ref={fileRef} type="file" accept="application/pdf,.pdf,image/jpeg,image/png,image/webp"
+                onChange={e => setFile(e.target.files?.[0] || null)}
+                className="text-sm text-slate-600 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:bg-slate-100 file:text-slate-700 file:text-xs file:font-medium mb-3" />
+              <button onClick={() => interpreteaza('fisier')} disabled={!!citind || !file}
+                className="mt-auto flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-[#0a1628] disabled:opacity-50"
+                style={{ background: '#f5c842' }}>
+                {citind === 'fisier' ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />} Interpretează factura
               </button>
             </div>
-          ) : !f ? (
-            <div className="flex items-center justify-center gap-2 py-12 text-sm text-slate-500">
-              <Loader2 size={16} className="animate-spin" /> Citesc factura…
+
+            {/* Import text */}
+            <div className="bg-white rounded-xl border border-slate-200 p-4 flex flex-col">
+              <div className="font-semibold text-sm text-[#0a1628] mb-1 flex items-center gap-1.5"><ScrollText size={15} /> Importă text</div>
+              <p className="text-xs text-slate-400 mb-3">Lipește textul facturii sau datele contractului (client, sumă, dată, eveniment…).</p>
+              <textarea value={text} onChange={e => setText(e.target.value)} rows={6}
+                placeholder={'ex. Factura SSY 1176 din 09.09.2026\nClient: AGHIDENT CERAM SRL, CIF 27697229, J2010010973401\nStr. Echinoctiului nr. 79, Corp A, Sector 5, București\nServicii conf. contract SSY631/09.09.2026 — 1313,55 lei'}
+                className={`${inp} font-mono text-xs mb-3`} />
+              <button onClick={() => interpreteaza('text')} disabled={!!citind || !text.trim()}
+                className="mt-auto flex items-center justify-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-[#0a1628] disabled:opacity-50"
+                style={{ background: '#f5c842' }}>
+                {citind === 'text' ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />} Interpretează textul
+              </button>
             </div>
-          ) : (
-            <div className="space-y-4">
-              {factura && !factura.emisa_de_ssy && (
-                <div className="flex items-start gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5">
-                  <AlertCircle size={14} className="shrink-0 mt-0.5" />
-                  <span>Factura pare emisă <b>către</b> Set Sail Yachting{factura.furnizor ? ` de ${factura.furnizor}` : ''}, nu de ea. Contractul se face pentru clienții facturilor emise de SSY — verifică datele înainte să-l generezi.</span>
-                </div>
-              )}
-              {factura && (
-                <div className="text-xs text-slate-500">
-                  Factura {[factura.serie, factura.numar].filter(Boolean).join(' ') || '—'}
-                  {factura.data ? ` · ${new Date(factura.data).toLocaleDateString('ro-RO')}` : ''}
-                  {factura.descriere ? ` · ${factura.descriere}` : ''}
-                </div>
-              )}
+          </div>
 
-              <div className="grid sm:grid-cols-2 gap-3">
-                <Camp label="Nr. contract"><input className={inp} value={f.nr} placeholder="ex. SSY631" onChange={e => set('nr', e.target.value)} /></Camp>
-                <Camp label="Data contractului"><input type="date" className={inp} value={f.data} onChange={e => set('data', e.target.value)} /></Camp>
-              </div>
-
-              <div className="rounded-xl border border-slate-100 p-3 space-y-3">
-                <div className="flex items-center gap-3 text-xs">
-                  <span className="text-slate-400">Beneficiar:</span>
-                  {(['pf', 'pj'] as const).map(t => (
-                    <label key={t} className="flex items-center gap-1 cursor-pointer">
-                      <input type="radio" checked={f.beneficiar_tip === t} onChange={() => set('beneficiar_tip', t)} />
-                      {t === 'pf' ? 'Persoană fizică' : 'Firmă'}
-                    </label>
-                  ))}
-                </div>
-                <div className="grid sm:grid-cols-2 gap-3">
-                  <Camp label={f.beneficiar_tip === 'pj' ? 'Denumire firmă' : 'Nume și prenume'} lat>
-                    <input className={inp} value={f.beneficiar_nume} onChange={e => set('beneficiar_nume', e.target.value)} />
-                  </Camp>
-                  <Camp label={f.beneficiar_tip === 'pj' ? 'Sediu' : 'Domiciliu'} lat>
-                    <input className={inp} value={f.beneficiar_adresa} onChange={e => set('beneficiar_adresa', e.target.value)} />
-                  </Camp>
-                  {f.beneficiar_tip === 'pj' ? (<>
-                    <Camp label="Cod fiscal (CUI)"><input className={inp} value={f.beneficiar_cui} onChange={e => set('beneficiar_cui', e.target.value)} /></Camp>
-                    <Camp label="Nr. Registrul Comerțului"><input className={inp} value={f.beneficiar_reg_com} onChange={e => set('beneficiar_reg_com', e.target.value)} /></Camp>
-                    <Camp label="Reprezentată prin (opțional)" lat><input className={inp} value={f.beneficiar_reprezentant} onChange={e => set('beneficiar_reprezentant', e.target.value)} /></Camp>
-                  </>) : (
-                    <Camp label="CNP"><input className={inp} value={f.beneficiar_cnp} onChange={e => set('beneficiar_cnp', e.target.value)} /></Camp>
-                  )}
-                </div>
-              </div>
-
-              <div className="grid sm:grid-cols-2 gap-3">
-                <Camp label="Evenimentul (obiectul contractului)" lat>
-                  <input className={inp} value={f.eveniment} onChange={e => set('eveniment', e.target.value)} />
-                </Camp>
-                <Camp label="Perioada — de la"><input type="date" className={inp} value={f.perioada_start} onChange={e => set('perioada_start', e.target.value)} /></Camp>
-                <Camp label="până la"><input type="date" className={inp} value={f.perioada_end} onChange={e => set('perioada_end', e.target.value)} /></Camp>
-              </div>
-              {perioadaImplicita && (
-                <p className="text-[11px] text-slate-400 -mt-2">Factura nu menționează perioada: am propus de la o săptămână după data contractului până la 30 octombrie.</p>
-              )}
-
-              <div className="grid sm:grid-cols-2 gap-3">
-                <Camp label="Valoarea contractului">
-                  <input type="number" step="0.01" className={inp} value={f.suma || ''} onChange={e => set('suma', Number(e.target.value) || 0)} />
-                </Camp>
-                <Camp label="Moneda">
-                  <select className={inp} value={f.moneda} onChange={e => set('moneda', e.target.value as 'RON' | 'EUR')}>
-                    <option value="RON">RON</option><option value="EUR">EUR (echivalent în RON)</option>
-                  </select>
-                </Camp>
-                <Camp label="Modul de plată" lat>
-                  <textarea rows={2} className={inp} value={f.plata} onChange={e => set('plata', e.target.value)} />
-                </Camp>
-              </div>
+          {citind && (
+            <div className="flex items-center justify-center gap-2 py-3 text-sm text-slate-500">
+              <Loader2 size={16} className="animate-spin" /> Interpretez datele…
             </div>
           )}
-        </div>
+          {err && (
+            <div className="flex items-start gap-2 text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2.5">
+              <AlertCircle size={16} className="shrink-0 mt-0.5" /> {err}
+            </div>
+          )}
+          <p className="text-xs text-slate-400 text-center">
+            sau <button onClick={manual} className="underline hover:text-slate-600">completează contractul manual</button>
+          </p>
+        </>
+      )}
 
-        {f && (
-          <div className="flex justify-end gap-2 px-5 py-4 border-t border-slate-100">
-            <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm border border-slate-200 text-slate-600 hover:bg-slate-50">Închide</button>
+      {f && (
+        <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="text-xs text-slate-500">Date din {sursa}</div>
+            <button onClick={contractNou} className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-800">
+              <Plus size={12} /> Contract nou
+            </button>
+          </div>
+
+          {factura && !factura.emisa_de_ssy && (
+            <div className="flex items-start gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5">
+              <AlertCircle size={14} className="shrink-0 mt-0.5" />
+              <span>Datele par ale unei facturi emise <b>către</b> Set Sail Yachting{factura.furnizor ? ` de ${factura.furnizor}` : ''}, nu de ea. Verifică beneficiarul înainte să generezi contractul.</span>
+            </div>
+          )}
+          {factura && (factura.serie || factura.numar || factura.descriere) && (
+            <div className="text-xs text-slate-500">
+              Factura {[factura.serie, factura.numar].filter(Boolean).join(' ') || '—'}
+              {factura.data ? ` · ${new Date(factura.data).toLocaleDateString('ro-RO')}` : ''}
+              {factura.descriere ? ` · ${factura.descriere}` : ''}
+            </div>
+          )}
+
+          <div className="grid sm:grid-cols-2 gap-3">
+            <Camp label="Nr. contract"><input className={inp} value={f.nr} placeholder="ex. SSY631" onChange={e => set('nr', e.target.value)} /></Camp>
+            <Camp label="Data contractului"><input type="date" className={inp} value={f.data} onChange={e => set('data', e.target.value)} /></Camp>
+          </div>
+
+          <div className="rounded-xl border border-slate-100 p-3 space-y-3">
+            <div className="flex items-center gap-3 text-xs">
+              <span className="text-slate-400">Beneficiar:</span>
+              {(['pf', 'pj'] as const).map(t => (
+                <label key={t} className="flex items-center gap-1 cursor-pointer">
+                  <input type="radio" checked={f.beneficiar_tip === t} onChange={() => set('beneficiar_tip', t)} />
+                  {t === 'pf' ? 'Persoană fizică' : 'Firmă'}
+                </label>
+              ))}
+            </div>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <Camp label={f.beneficiar_tip === 'pj' ? 'Denumire firmă' : 'Nume și prenume'} lat>
+                <input className={inp} value={f.beneficiar_nume} onChange={e => set('beneficiar_nume', e.target.value)} />
+              </Camp>
+              <Camp label={f.beneficiar_tip === 'pj' ? 'Sediu' : 'Domiciliu'} lat>
+                <input className={inp} value={f.beneficiar_adresa} onChange={e => set('beneficiar_adresa', e.target.value)} />
+              </Camp>
+              {f.beneficiar_tip === 'pj' ? (<>
+                <Camp label="Cod fiscal (CUI)"><input className={inp} value={f.beneficiar_cui} onChange={e => set('beneficiar_cui', e.target.value)} /></Camp>
+                <Camp label="Nr. Registrul Comerțului"><input className={inp} value={f.beneficiar_reg_com} onChange={e => set('beneficiar_reg_com', e.target.value)} /></Camp>
+                <Camp label="Reprezentată prin (opțional)" lat><input className={inp} value={f.beneficiar_reprezentant} onChange={e => set('beneficiar_reprezentant', e.target.value)} /></Camp>
+              </>) : (
+                <Camp label="CNP"><input className={inp} value={f.beneficiar_cnp} onChange={e => set('beneficiar_cnp', e.target.value)} /></Camp>
+              )}
+            </div>
+          </div>
+
+          <div className="grid sm:grid-cols-2 gap-3">
+            <Camp label="Evenimentul (obiectul contractului)" lat>
+              <input className={inp} value={f.eveniment} onChange={e => set('eveniment', e.target.value)} />
+            </Camp>
+            <Camp label="Perioada — de la"><input type="date" className={inp} value={f.perioada_start} onChange={e => set('perioada_start', e.target.value)} /></Camp>
+            <Camp label="până la"><input type="date" className={inp} value={f.perioada_end} onChange={e => set('perioada_end', e.target.value)} /></Camp>
+          </div>
+          {perioadaImplicita && (
+            <p className="text-[11px] text-slate-400 -mt-2">Fără perioadă specificată: de la o săptămână după data contractului până la 30 octombrie.</p>
+          )}
+
+          <div className="grid sm:grid-cols-2 gap-3">
+            <Camp label="Valoarea contractului">
+              <input type="number" step="0.01" className={inp} value={f.suma || ''} onChange={e => set('suma', Number(e.target.value) || 0)} />
+            </Camp>
+            <Camp label="Moneda">
+              <select className={inp} value={f.moneda} onChange={e => set('moneda', e.target.value as 'RON' | 'EUR')}>
+                <option value="RON">RON</option><option value="EUR">EUR (echivalent în RON)</option>
+              </select>
+            </Camp>
+            <Camp label="Modul de plată" lat>
+              <textarea rows={2} className={inp} value={f.plata} onChange={e => set('plata', e.target.value)} />
+            </Camp>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+            <button onClick={contractNou} className="px-4 py-2 rounded-lg text-sm border border-slate-200 text-slate-600 hover:bg-slate-50">Renunță</button>
             <button onClick={genereaza} disabled={busy}
               className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-[#0a1628] disabled:opacity-60"
               style={{ background: '#f5c842' }}>
               {busy ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />} Generează DOCX
             </button>
           </div>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   )
 }

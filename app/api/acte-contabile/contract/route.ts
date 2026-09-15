@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { acteServiceClient, canAccess, isEntity, ACTE_BUCKET } from '@/lib/acte-contabile/server'
+import { canAccess, isEntity } from '@/lib/acte-contabile/server'
 import {
   buildContractSsyDocx, perioadaImplicita, PLATA_IMPLICITA, EVENIMENT_IMPLICIT,
   type ContractSsyData,
@@ -9,11 +9,11 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 60
 
-// Contract de prestări servicii SSY generat dintr-o factură încărcată.
-//   { entity:'ssy', token, action:'extract', doc_id }  -> datele propuse (editabile în pagină)
+// Contract de prestări servicii SSY pentru facturi emise (încă neîncărcate în sistem).
+//   { entity:'ssy', token, action:'extract', file:{base64,mime} | text } -> datele propuse (editabile în pagină)
 //   { entity:'ssy', token, action:'generate', data }    -> DOCX
 
-const PROMPT = `Primești o factură românească. Extrage datele de mai jos, exact cum apar pe document.
+const PROMPT = `Primești o factură românească (document, poză sau text copiat) sau datele unui contract. Extrage datele de mai jos, exact cum apar pe document.
 
 - emisa_de_set_sail_yachting: true dacă FURNIZORUL (emitentul) este SET SAIL YACHTING SRL (CIF 34825339); false dacă Set Sail Yachting e clientul.
 - furnizor_nume: numele furnizorului.
@@ -101,31 +101,27 @@ export async function POST(req: NextRequest) {
     })
   }
 
-  // ── Extragere din factura încărcată ──
+  // ── Interpretare factură / text ──
   if (action !== 'extract') return NextResponse.json({ ok: false, error: 'Acțiune necunoscută.' }, { status: 400 })
   if (!process.env.ANTHROPIC_API_KEY) {
     return NextResponse.json({ ok: false, error: 'Citirea automată a facturii nu este configurată (lipsește cheia API).' }, { status: 503 })
   }
 
-  const sb = acteServiceClient()
-  const { data: doc } = await sb.from('acte_contabile_documente')
-    .select('id, file_path, file_type, categorie, data_doc')
-    .eq('entity', entity).eq('id', String(body.doc_id || '')).maybeSingle()
-  if (!doc) return NextResponse.json({ ok: false, error: 'Factura nu a fost găsită.' }, { status: 404 })
-
-  const d = doc as { id: string; file_path: string; file_type: string | null; data_doc: string | null }
-  const cale = d.file_path.toLowerCase()
-  const mime = d.file_type || ''
-  const estePdf = mime === 'application/pdf' || cale.endsWith('.pdf')
-  const imgMime = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'].includes(mime) ? mime
-    : cale.endsWith('.png') ? 'image/png' : /\.jpe?g$/.test(cale) ? 'image/jpeg' : cale.endsWith('.webp') ? 'image/webp' : ''
-  if (!estePdf && !imgMime) {
-    return NextResponse.json({ ok: false, error: 'Pot citi facturi PDF sau imagini JPG/PNG/WEBP.' }, { status: 400 })
+  // Sursa: factura încărcată în pagină (base64) sau textul lipit
+  const IMG = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
+  const text = str(body.text, 20000)
+  const file = body.file && typeof body.file.base64 === 'string' ? body.file as { base64: string; mime: string } : null
+  let sursa: any
+  if (file) {
+    const mime = String(file.mime || '')
+    if (mime === 'application/pdf') sursa = { type: 'document', source: { type: 'base64', media_type: mime, data: file.base64 } }
+    else if (IMG.includes(mime)) sursa = { type: 'image', source: { type: 'base64', media_type: mime, data: file.base64 } }
+    else return NextResponse.json({ ok: false, error: 'Pot citi facturi PDF sau imagini JPG/PNG/WEBP.' }, { status: 400 })
+  } else if (text) {
+    sursa = { type: 'text', text: 'Textul facturii / datele contractului:\n\n' + text }
+  } else {
+    return NextResponse.json({ ok: false, error: 'Încarcă factura sau lipește textul ei.' }, { status: 400 })
   }
-
-  const { data: blob, error: dlErr } = await sb.storage.from(ACTE_BUCKET).download(d.file_path)
-  if (dlErr || !blob) return NextResponse.json({ ok: false, error: 'Nu am putut citi fișierul facturii.' }, { status: 500 })
-  const base64 = Buffer.from(await blob.arrayBuffer()).toString('base64')
 
   let x: any
   try {
@@ -143,9 +139,7 @@ export async function POST(req: NextRequest) {
         messages: [{
           role: 'user',
           content: [
-            estePdf
-              ? { type: 'document', source: { type: 'base64', media_type: 'application/pdf', data: base64 } }
-              : { type: 'image', source: { type: 'base64', media_type: imgMime, data: base64 } },
+            sursa,
             { type: 'text', text: PROMPT },
           ],
         }],
@@ -168,7 +162,7 @@ export async function POST(req: NextRequest) {
   // facturii; perioada din factură, altfel o săptămână după contract → 30 octombrie
   const dataContract = esteData(x.contract_data) ? x.contract_data
     : esteData(x.factura_data) ? x.factura_data
-    : (esteData(d.data_doc) ? d.data_doc as string : new Date().toISOString().slice(0, 10))
+    : new Date().toISOString().slice(0, 10)
   const areEveniment = esteData(x.eveniment_data_start)
   const perioada = areEveniment
     ? { start: x.eveniment_data_start, end: esteData(x.eveniment_data_end) ? x.eveniment_data_end : x.eveniment_data_start }
