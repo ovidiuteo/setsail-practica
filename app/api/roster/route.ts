@@ -18,7 +18,7 @@ function svc() {
 // Câmpuri editabile de pe pagina gated
 const EDITABLE = new Set([
   'full_name', 'email', 'cnp', 'birth_date', 'address', 'city', 'county', 'obtinere_prelungire',
-  'communication_target',
+  'communication_target', 'class_caa', 'phone',
 ])
 const MAX_IMG = 8 * 1024 * 1024 // ~8MB data URL
 
@@ -211,7 +211,7 @@ export async function GET(req: NextRequest) {
 
   const [{ data, error }, docSets, { data: cereri }, { data: rezervari }] = await Promise.all([
     sb.from('students')
-      .select('id, full_name, email, cnp, birth_date, address, city, county, class_caa, obtinere_prelungire, doc_type, communication_target, created_at, order_in_session')
+      .select('id, full_name, email, phone, cnp, birth_date, address, city, county, class_caa, obtinere_prelungire, doc_type, communication_target, created_at, order_in_session')
       .eq('session_id', sessionId),
     Promise.all((Object.entries(DOC_COLS) as [DocKey, string][]).map(async ([key, col]) => {
       const { data: ids } = await sb.from('students').select('id')
@@ -230,11 +230,13 @@ export async function GET(req: NextRequest) {
   for (const b of (rezervari || []) as any[]) slotBy.set(b.student_id, `${b.slot_from}–${b.slot_to}`)
 
   const rows = (data || []).map((r: any) => ({
-    id: r.id, full_name: r.full_name, email: r.email, cnp: r.cnp, birth_date: r.birth_date,
+    id: r.id, full_name: r.full_name, email: r.email, phone: r.phone || '', cnp: r.cnp, birth_date: r.birth_date,
     address: r.address, city: r.city, county: r.county,
     // Informația vine din clasă (sursa de adevăr); valoarea stocată e doar fallback dacă clasa nu o conține
     obtinere_prelungire: lrcFromClass(r.class_caa) || r.obtinere_prelungire || '',
     doc_type: r.doc_type || '',
+    // categoria (C / D / C,D) — la seriile C,D se afișează și se editează în listă
+    class_caa: r.class_caa || '',
     communication_target: !!r.communication_target,
     // pentru sortarea cronologică din pagină (ordinea în care au intrat în serie)
     created_at: r.created_at || null,

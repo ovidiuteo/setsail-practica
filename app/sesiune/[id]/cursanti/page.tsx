@@ -16,6 +16,8 @@ type Row = {
   communication_target: boolean
   created_at: string | null; order_in_session: number | null
   practice_slot: string | null   // intervalul de practică ales („10:00–12:00")
+  class_caa: string              // categoria: C / D / C,D
+  phone: string
 }
 
 type Practica = {
@@ -118,10 +120,33 @@ function docState(row: Row, key: DocKey): DocState {
 }
 // Cursantul e „în regulă" când are CNP și niciun document necesar nu lipsește
 // (bifat sau N/A peste tot) — atunci coloanele de la CNP încolo se colorează verde.
-function rowComplete(row: Row): boolean {
+// La seriile C,D nu există cerere de examen și carnet VHF — nu intră în calcul.
+function rowComplete(row: Row, esteRadio = true): boolean {
   if (!String(row.cnp || '').trim()) return false
   const keys: DocKey[] = ['recto', ...CHECK_COLS.map(c => c.key)]
+    .filter(k => esteRadio || (k !== 'vhf' && k !== 'cerere')) as DocKey[]
   return keys.every(k => { const s = docState(row, k); return s === 'ok' || s === 'na' })
+}
+
+// Categoria cursantului la seriile C,D: C, D sau C+D (în bază „C,D")
+const CAT_OPTS: [string, string][] = [['C', 'C'], ['D', 'D'], ['C,D', 'C+D']]
+const catLabel = (v: string) => CAT_OPTS.find(o => o[0] === v)?.[1] || String(v || '').replace(/,/g, '+') || '—'
+
+function CategorieSelect({ value, onConfirm }: { value: string; onConfirm: (v: string) => void }) {
+  const opts = CAT_OPTS.some(o => o[0] === value) || !value ? CAT_OPTS : [[value, catLabel(value)] as [string, string], ...CAT_OPTS]
+  return (
+    <select value={value || ''}
+      onChange={e => {
+        const v = e.target.value
+        if (v === (value || '')) return
+        if (confirm(`Confirmi categoria „${catLabel(v)}"?`)) onConfirm(v)
+        else e.target.value = value || ''
+      }}
+      className="text-sm font-bold text-blue-600 bg-blue-50 border border-blue-200 rounded-lg px-2 py-1 cursor-pointer focus:outline-none focus:ring-2 focus:ring-blue-200">
+      {!value && <option value="">—</option>}
+      {opts.map(([v, l]) => <option key={v} value={v} className="font-normal text-gray-800">{l}</option>)}
+    </select>
+  )
 }
 
 const DocCell = ({ state }: { state: DocState }) =>
@@ -160,8 +185,12 @@ const FIELDS: { key: keyof Row; label: string; w?: string }[] = [
   { key: 'county', label: 'Județ', w: 'min-w-[110px]' },
 ]
 // Tabul „Lista cursanți" — doar identificarea persoanei; restul coloanelor sunt stări de documente
-const PERSON_FIELDS = FIELDS
-  .filter(f => ['full_name', 'email', 'cnp'].includes(f.key as string))
+// Ordinea: nume · email · telefon · CNP. Telefonul stă doar aici, nu și în FIELDS
+// (FIELDS alimentează și formularele din Verify by ID).
+const PERSON_FIELDS = (['full_name', 'email', 'phone', 'cnp'] as (keyof Row)[])
+  .map(k => k === 'phone'
+    ? { key: 'phone' as keyof Row, label: 'Telefon' }
+    : FIELDS.find(f => f.key === k)!)
   // fără lățimi minime: coloanele se strâng la conținut, iar numele/emailul nu se rup
   // pe două rânduri (rânduri de aceeași înălțime, tabelul scrollează pe orizontală)
   .map(f => ({ ...f, w: 'whitespace-nowrap' }))
@@ -269,6 +298,8 @@ export default function RosterPage() {
   const [linkOpen, setLinkOpen] = useState(false)
   const [seriiToken, setSeriiToken] = useState('')
   const [practica, setPractica] = useState<Practica | null>(null)
+  // seriile radio au obținere/prelungire, VHF și cerere; cele C,D au categoria
+  const [esteRadio, setEsteRadio] = useState(true)
   const [copiedSkipper, setCopiedSkipper] = useState(false)
   const [skipperDraft, setSkipperDraft] = useState('')
   const [skipperSaving, setSkipperSaving] = useState(false)
@@ -297,8 +328,18 @@ export default function RosterPage() {
       const t = sessionTitle(j.session)
       setTitle(t)
       document.title = t
+      setEsteRadio(/radio|lrc/i.test(String(j.session.class_caa || '')))
     }
   }, [id, token])
+
+  async function saveCategorie(sid: string, v: string) {
+    const r = await fetch('/api/roster', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: id, token, student_id: sid, field: 'class_caa', value: v }),
+    })
+    if (!r.ok) { alert('Salvare eșuată.'); return }
+    rowUpdate(sid, { class_caa: v } as Partial<Row>)
+  }
   useEffect(() => { load() }, [load])
 
   const rowUpdate = (sid: string, partial: Partial<Row>) =>
@@ -362,6 +403,8 @@ export default function RosterPage() {
   // Coloana „SN" (intervalul de practică) apare doar în Lista cursanți și doar
   // când seria are intervale de practică stabilite
   const arataSN = tab === 'cursanti' && !!practica
+  // la C,D rămâne doar semnătura din coloanele de la final (fără cererea de examen)
+  const docColsEnd = esteRadio ? DOC_COLS_END : DOC_COLS_END.filter(c => c.key !== 'cerere')
 
   // Poziția fiecărui interval în zi, pentru sortare și pentru nuanța etichetei
   const ordineInterval = new Map<string, number>(
@@ -712,14 +755,18 @@ export default function RosterPage() {
                     {DOC_COLS_ID.map(c => (
                       <th key={c.key} title={c.full} className="px-1 py-2.5 text-center text-[10px] w-12 normal-case tracking-normal">{c.short}</th>
                     ))}
-                    <th className="px-2 py-2.5 whitespace-nowrap">Obț. / Prel.</th>
-                    <th title={VHF_COL.full} className="px-1 py-2.5 text-center text-[10px] w-12 normal-case tracking-normal">{VHF_COL.short}</th>
-                    <th className="px-2 py-2.5 whitespace-nowrap">Cerere nr./data</th>
-                    {DOC_COLS_END.map(c => (
+                    {esteRadio ? <>
+                      <th className="px-2 py-2.5 whitespace-nowrap">Obț. / Prel.</th>
+                      <th title={VHF_COL.full} className="px-1 py-2.5 text-center text-[10px] w-12 normal-case tracking-normal">{VHF_COL.short}</th>
+                      <th className="px-2 py-2.5 whitespace-nowrap">Cerere nr./data</th>
+                    </> : (
+                      <th className="px-2 py-2.5 whitespace-nowrap">Categorie</th>
+                    )}
+                    {docColsEnd.map(c => (
                       <th key={c.key} title={c.full} className="px-1 py-2.5 text-center text-[10px] w-14 normal-case tracking-normal">{c.short}</th>
                     ))}
                   </> : (
-                    <th className="px-2 py-2.5 min-w-[150px]">Obținere / Prelungire LRC</th>
+                    <th className="px-2 py-2.5 min-w-[150px]">{esteRadio ? 'Obținere / Prelungire LRC' : 'Categorie'}</th>
                   )}
                   <th className="px-1 py-2.5 w-9"></th>
                   <th className="px-1 py-2.5 w-9"></th>
@@ -727,7 +774,7 @@ export default function RosterPage() {
               </thead>
               <tbody className="divide-y divide-gray-50">
                 {sortRows(rows, sort, ordineInterval).map((row, i) => {
-                  const ok = tab === 'cursanti' && rowComplete(row)
+                  const ok = tab === 'cursanti' && rowComplete(row, esteRadio)
                   return (
                   <tr key={row.id} className={`hover:bg-gray-50/60 ${tab === 'cursanti' ? '[&>td]:py-1' : ''}`}>
                     <td className="px-2 py-2 text-center">
@@ -789,21 +836,27 @@ export default function RosterPage() {
                           </button>
                         </td>
                       ))}
-                      <td className={`px-2 py-2 ${ok ? 'bg-green-50' : ''}`}>
-                        <LrcSelect value={row.obtinere_prelungire} onConfirm={v => saveLrc(row.id, v)} />
-                      </td>
-                      <td className={`px-1 py-2 text-center ${ok ? 'bg-green-50' : ''}`}>
-                        <button onClick={() => setCiFor({ row, doc: VHF_COL.key })} title={VHF_COL.full}
-                          className="w-7 h-6 rounded hover:bg-gray-100">
-                          <DocCell state={docState(row, VHF_COL.key)} />
-                        </button>
-                      </td>
-                      <td className={`px-2 py-2 whitespace-nowrap text-xs ${ok ? 'bg-green-50' : ''}`}>
-                        {row.cerere_nr
-                          ? <span className="text-gray-800">{row.cerere_nr}<span className="text-gray-400"> / {roDate(row.cerere_data)}</span></span>
-                          : <span className="text-gray-300">–</span>}
-                      </td>
-                      {DOC_COLS_END.map(c => (
+                      {esteRadio ? <>
+                        <td className={`px-2 py-2 ${ok ? 'bg-green-50' : ''}`}>
+                          <LrcSelect value={row.obtinere_prelungire} onConfirm={v => saveLrc(row.id, v)} />
+                        </td>
+                        <td className={`px-1 py-2 text-center ${ok ? 'bg-green-50' : ''}`}>
+                          <button onClick={() => setCiFor({ row, doc: VHF_COL.key })} title={VHF_COL.full}
+                            className="w-7 h-6 rounded hover:bg-gray-100">
+                            <DocCell state={docState(row, VHF_COL.key)} />
+                          </button>
+                        </td>
+                        <td className={`px-2 py-2 whitespace-nowrap text-xs ${ok ? 'bg-green-50' : ''}`}>
+                          {row.cerere_nr
+                            ? <span className="text-gray-800">{row.cerere_nr}<span className="text-gray-400"> / {roDate(row.cerere_data)}</span></span>
+                            : <span className="text-gray-300">–</span>}
+                        </td>
+                      </> : (
+                        <td className={`px-2 py-2 ${ok ? 'bg-green-50' : ''}`}>
+                          <CategorieSelect value={row.class_caa} onConfirm={v => saveCategorie(row.id, v)} />
+                        </td>
+                      )}
+                      {docColsEnd.map(c => (
                         <td key={c.key} className={`px-1 py-2 text-center ${ok ? 'bg-green-50' : ''}`}>
                           <button onClick={() => setCiFor({ row, doc: c.key })} title={c.full}
                             className="w-8 h-6 rounded hover:bg-gray-100">
@@ -813,20 +866,22 @@ export default function RosterPage() {
                       ))}
                     </> : (
                       <td className="px-2 py-2">
-                        <LrcSelect value={row.obtinere_prelungire} onConfirm={v => saveLrc(row.id, v)} />
+                        {esteRadio
+                          ? <LrcSelect value={row.obtinere_prelungire} onConfirm={v => saveLrc(row.id, v)} />
+                          : <CategorieSelect value={row.class_caa} onConfirm={v => saveCategorie(row.id, v)} />}
                       </td>
                     )}
                     <td className="px-1 py-2 text-center">
                       <a href={portalLink(row.email)} target="_blank" rel="noopener noreferrer"
                         title="Deschide portalul cursantului"
-                        className="inline-flex items-center justify-center w-7 h-7 rounded-lg text-gray-300 hover:text-blue-600 hover:bg-blue-50">
+                        className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-base font-bold text-white bg-blue-600 hover:bg-blue-700 shadow-sm">
                         ↗
                       </a>
                     </td>
                     <td className="px-1 py-2 text-center">
                       <button onClick={() => removeRow(row)} disabled={deleting === row.id}
                         title="Șterge cursantul din serie"
-                        className="w-7 h-7 rounded-lg text-gray-300 hover:text-red-600 hover:bg-red-50 disabled:opacity-40">
+                        className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-sm text-white bg-red-600 hover:bg-red-700 shadow-sm disabled:opacity-40">
                         🗑
                       </button>
                     </td>
