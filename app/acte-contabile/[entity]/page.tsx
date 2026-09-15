@@ -1463,22 +1463,22 @@ function ContractePanel({ entity, token }: { entity: string; token: string | nul
 
           <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 flex-wrap">
             <button onClick={contractNou} className="px-4 py-2 rounded-lg text-sm border border-slate-200 text-slate-600 hover:bg-slate-50">Renunță</button>
-            <button onClick={butonSalveaza} disabled={!!busy || (!!id && !modificat)}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-[#0a1628] text-[#0a1628] bg-white hover:bg-slate-50 disabled:opacity-50">
-              {busy === 'salvez' ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} {id && !modificat ? 'Salvat' : 'Salvează'}
-            </button>
             <button onClick={genereaza} disabled={!!busy}
               className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-[#0a1628] disabled:opacity-60"
               style={{ background: '#f5c842' }}>
               {busy === 'docx' ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />} Generează DOCX
             </button>
+            <button onClick={() => genereazaPdf(false)} disabled={!!busy}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-pink-500 hover:bg-pink-600 disabled:opacity-60">
+              {busy === 'pdf-gol' ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />} PDF fără ștampilă/semnătură
+            </button>
             <button onClick={() => genereazaPdf(true)} disabled={!!busy}
               className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-red-600 hover:bg-red-700 disabled:opacity-60">
               {busy === 'pdf' ? <Loader2 size={14} className="animate-spin" /> : <FileSignature size={14} />} PDF semnat și ștampilat
             </button>
-            <button onClick={() => genereazaPdf(false)} disabled={!!busy}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white bg-pink-500 hover:bg-pink-600 disabled:opacity-60">
-              {busy === 'pdf-gol' ? <Loader2 size={14} className="animate-spin" /> : <FileText size={14} />} PDF fără ștampilă/semnătură
+            <button onClick={butonSalveaza} disabled={!!busy || (!!id && !modificat)}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-[#0a1628] text-[#0a1628] bg-white hover:bg-slate-50 disabled:opacity-50">
+              {busy === 'salvez' ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} {id && !modificat ? 'Salvat' : 'Salvează'}
             </button>
           </div>
         </div>
