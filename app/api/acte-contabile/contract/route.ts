@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { canAccess, isEntity } from '@/lib/acte-contabile/server'
+import { acteServiceClient, canAccess, isEntity } from '@/lib/acte-contabile/server'
 import {
   buildContractSsyDocx, perioadaImplicita, PLATA_IMPLICITA, EVENIMENT_IMPLICIT,
   type ContractSsyData,
@@ -12,6 +12,7 @@ export const maxDuration = 60
 // Contract de prestări servicii SSY pentru facturi emise (încă neîncărcate în sistem).
 //   { entity:'ssy', token, action:'extract', file:{base64,mime} | text } -> datele propuse (editabile în pagină)
 //   { entity:'ssy', token, action:'generate', data }    -> DOCX
+//   { entity:'ssy', token, action:'list' | 'save' (id?, data, factura?, sursa?) | 'delete' (id) } -> contracte salvate
 
 const PROMPT = `Primești o factură românească (document, poză sau text copiat) sau datele unui contract. Extrage datele de mai jos, exact cum apar pe document.
 
@@ -62,6 +63,39 @@ const SCHEMA = {
 const esteData = (s: unknown) => typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s)
 const str = (v: unknown, max = 300) => String(v ?? '').trim().slice(0, max)
 
+function curata(x: any): ContractSsyData {
+  x = x || {}
+  return {
+    nr: str(x.nr, 40),
+    data: esteData(x.data) ? x.data : '',
+    beneficiar_tip: x.beneficiar_tip === 'pj' ? 'pj' : 'pf',
+    beneficiar_nume: str(x.beneficiar_nume, 200),
+    beneficiar_adresa: str(x.beneficiar_adresa, 400),
+    beneficiar_cnp: str(x.beneficiar_cnp, 20),
+    beneficiar_cui: str(x.beneficiar_cui, 30),
+    beneficiar_reg_com: str(x.beneficiar_reg_com, 40),
+    beneficiar_reprezentant: str(x.beneficiar_reprezentant, 120),
+    eveniment: str(x.eveniment, 300) || EVENIMENT_IMPLICIT,
+    perioada_start: esteData(x.perioada_start) ? x.perioada_start : '',
+    perioada_end: esteData(x.perioada_end) ? x.perioada_end : '',
+    suma: Math.abs(Number(x.suma) || 0),
+    moneda: x.moneda === 'EUR' ? 'EUR' : 'RON',
+    plata: str(x.plata, 600) || PLATA_IMPLICITA,
+  }
+}
+
+// Rândul din DB ↔ datele contractului
+function dinRand(r: any) {
+  return {
+    id: r.id as string, nr: r.nr, data: r.data_contract || '', beneficiar_tip: r.beneficiar_tip,
+    beneficiar_nume: r.beneficiar_nume, beneficiar_adresa: r.beneficiar_adresa, beneficiar_cnp: r.beneficiar_cnp,
+    beneficiar_cui: r.beneficiar_cui, beneficiar_reg_com: r.beneficiar_reg_com, beneficiar_reprezentant: r.beneficiar_reprezentant,
+    eveniment: r.eveniment, perioada_start: r.perioada_start || '', perioada_end: r.perioada_end || '',
+    suma: Number(r.suma) || 0, moneda: r.moneda, plata: r.plata,
+    factura: r.factura || null, sursa: r.sursa || '', created_at: r.created_at, updated_at: r.updated_at,
+  }
+}
+
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null)
   if (!body) return NextResponse.json({ ok: false, error: 'Cerere invalidă.' }, { status: 400 })
@@ -70,26 +104,45 @@ export async function POST(req: NextRequest) {
   if (!(await canAccess(entity, token))) return NextResponse.json({ ok: false, error: 'Acces refuzat.' }, { status: 401 })
   if (entity !== 'ssy') return NextResponse.json({ ok: false, error: 'Contractele se generează doar pentru Set Sail Yachting.' }, { status: 400 })
 
+  // ── Contracte salvate ──
+  if (action === 'list') {
+    const { data, error } = await acteServiceClient().from('acte_contabile_contracte').select('*')
+      .eq('entity', entity).order('data_contract', { ascending: false, nullsFirst: false }).order('created_at', { ascending: false })
+    if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
+    return NextResponse.json({ ok: true, contracte: (data || []).map(dinRand) })
+  }
+  if (action === 'save') {
+    const d = curata(body.data)
+    if (!d.beneficiar_nume) return NextResponse.json({ ok: false, error: 'Lipsește beneficiarul.' }, { status: 400 })
+    const rand = {
+      entity, nr: d.nr, data_contract: d.data || null, beneficiar_tip: d.beneficiar_tip,
+      beneficiar_nume: d.beneficiar_nume, beneficiar_adresa: d.beneficiar_adresa, beneficiar_cnp: d.beneficiar_cnp,
+      beneficiar_cui: d.beneficiar_cui, beneficiar_reg_com: d.beneficiar_reg_com, beneficiar_reprezentant: d.beneficiar_reprezentant,
+      eveniment: d.eveniment, perioada_start: d.perioada_start || null, perioada_end: d.perioada_end || null,
+      suma: d.suma, moneda: d.moneda, plata: d.plata,
+      ...(body.factura !== undefined ? { factura: body.factura && typeof body.factura === 'object' ? body.factura : null } : {}),
+      ...(body.sursa !== undefined ? { sursa: str(body.sursa, 200) } : {}),
+    }
+    const sb = acteServiceClient()
+    const id = typeof body.id === 'string' && body.id ? body.id : null
+    const q = id
+      ? sb.from('acte_contabile_contracte').update({ ...rand, updated_at: new Date().toISOString() }).eq('entity', entity).eq('id', id).select('*').maybeSingle()
+      : sb.from('acte_contabile_contracte').insert(rand).select('*').maybeSingle()
+    const { data, error } = await q
+    if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
+    if (!data) return NextResponse.json({ ok: false, error: 'Contractul nu a fost găsit.' }, { status: 404 })
+    return NextResponse.json({ ok: true, contract: dinRand(data) })
+  }
+  if (action === 'delete') {
+    const { error } = await acteServiceClient().from('acte_contabile_contracte').delete()
+      .eq('entity', entity).eq('id', String(body.id || ''))
+    if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
+    return NextResponse.json({ ok: true })
+  }
+
   // ── Generare DOCX din datele (eventual corectate) din pagină ──
   if (action === 'generate') {
-    const x = body.data || {}
-    const data: ContractSsyData = {
-      nr: str(x.nr, 40),
-      data: esteData(x.data) ? x.data : '',
-      beneficiar_tip: x.beneficiar_tip === 'pj' ? 'pj' : 'pf',
-      beneficiar_nume: str(x.beneficiar_nume, 200),
-      beneficiar_adresa: str(x.beneficiar_adresa, 400),
-      beneficiar_cnp: str(x.beneficiar_cnp, 20),
-      beneficiar_cui: str(x.beneficiar_cui, 30),
-      beneficiar_reg_com: str(x.beneficiar_reg_com, 40),
-      beneficiar_reprezentant: str(x.beneficiar_reprezentant, 120),
-      eveniment: str(x.eveniment, 300) || EVENIMENT_IMPLICIT,
-      perioada_start: esteData(x.perioada_start) ? x.perioada_start : '',
-      perioada_end: esteData(x.perioada_end) ? x.perioada_end : '',
-      suma: Math.abs(Number(x.suma) || 0),
-      moneda: x.moneda === 'EUR' ? 'EUR' : 'RON',
-      plata: str(x.plata, 600) || PLATA_IMPLICITA,
-    }
+    const data = curata(body.data)
     if (!data.beneficiar_nume) return NextResponse.json({ ok: false, error: 'Lipsește beneficiarul.' }, { status: 400 })
     const buf = await buildContractSsyDocx(data)
     const nume = `Contract ${data.nr || 'SSY'} - ${data.beneficiar_nume}`.replace(/[\\/:*?"<>|]+/g, ' ').trim()

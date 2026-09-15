@@ -988,6 +988,31 @@ function Camp({ label, children, lat }: { label: string; children: React.ReactNo
   )
 }
 
+type ContractSalvat = ContractSsy & {
+  id: string; factura: FacturaCitita | null; sursa: string; created_at: string; updated_at: string
+}
+
+const API_CONTRACT = '/api/acte-contabile/contract'
+const ziRo = (s: string) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(s || '')
+  return m ? `${m[3]}.${m[2]}.${m[1]}` : '—'
+}
+const sumaRo = (n: number) => n.toLocaleString('ro-RO', { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 })
+
+async function descarcaContract(entity: string, token: string | null, data: ContractSsy) {
+  const res = await fetch(API_CONTRACT, {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ entity, token, action: 'generate', data }),
+  })
+  if (!res.ok) { const j = await res.json().catch(() => ({})); throw new Error(j.error || 'Generarea a eșuat.') }
+  const blob = await res.blob()
+  const a = document.createElement('a')
+  a.href = URL.createObjectURL(blob)
+  a.download = `Contract ${data.nr || 'SSY'} - ${data.beneficiar_nume}.docx`.replace(/[\\/:*?"<>|]+/g, ' ')
+  a.click()
+  setTimeout(() => URL.revokeObjectURL(a.href), 30000)
+}
+
 function ContractePanel({ entity, token }: { entity: string; token: string | null }) {
   const [text, setText] = useState('')
   const [file, setFile] = useState<File | null>(null)
@@ -997,8 +1022,29 @@ function ContractePanel({ entity, token }: { entity: string; token: string | nul
   const [sursa, setSursa] = useState<string>('')
   const [perioadaImplicita, setPerioadaImplicita] = useState(false)
   const [err, setErr] = useState<string | null>(null)
-  const [busy, setBusy] = useState(false)
+  const [busy, setBusy] = useState<null | 'salvez' | 'docx'>(null)
   const fileRef = useRef<HTMLInputElement | null>(null)
+  // Contractul deschis din listă / deja salvat (null = încă nesalvat)
+  const [id, setId] = useState<string | null>(null)
+  const [modificat, setModificat] = useState(false)
+  const [salvatLa, setSalvatLa] = useState<string | null>(null)
+  // Lista contractelor salvate (se deschide din titlu)
+  const [lista, setLista] = useState(false)
+  const [contracte, setContracte] = useState<ContractSalvat[] | null>(null)
+  const [cauta, setCauta] = useState('')
+  const [randBusy, setRandBusy] = useState<string | null>(null)
+
+  const incarcaLista = useCallback(async () => {
+    try {
+      const res = await fetch(API_CONTRACT, {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ entity, token, action: 'list' }),
+      })
+      const j = await res.json().catch(() => ({}))
+      if (res.ok && j.ok) setContracte(j.contracte)
+    } catch { /* lista rămâne cum era */ }
+  }, [entity, token])
+  useEffect(() => { incarcaLista() }, [incarcaLista])
 
   // Fișierul pleacă spre API ca base64 în JSON. Pozele se micșorează în browser
   // (o poză de telefon ar trece de limita de 4,5 MB a cererii pe Vercel).
@@ -1030,21 +1076,23 @@ function ContractePanel({ entity, token }: { entity: string; token: string | nul
     setErr(null); setCitind(mod)
     try {
       const payload: any = { entity, token, action: 'extract' }
+      let s = ''
       if (mod === 'fisier') {
         if (!file) { setErr('Alege factura.'); return }
         payload.file = await pregatesteFisier(file)
-        setSursa(`factura „${file.name}"`)
+        s = `factura „${file.name}"`
       } else {
         if (!text.trim()) { setErr('Lipește textul facturii sau datele contractului.'); return }
         payload.text = text
-        setSursa('textul importat')
+        s = 'textul importat'
       }
-      const res = await fetch('/api/acte-contabile/contract', {
+      const res = await fetch(API_CONTRACT, {
         method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(payload),
       })
       const j = await res.json().catch(() => ({}))
       if (!res.ok || !j.ok) { setErr(j.error || (res.status === 413 ? 'Fișierul e prea mare.' : 'Nu am putut interpreta datele.')); return }
       setF(j.propunere); setFactura(j.factura); setPerioadaImplicita(!!j.perioada_implicita)
+      setSursa(s); setId(null); setModificat(true); setSalvatLa(null)
     } catch (e: any) {
       setErr(e?.message || 'Conexiune eșuată.')
     } finally { setCitind(null) }
@@ -1064,47 +1112,186 @@ function ContractePanel({ entity, token }: { entity: string; token: string | nul
       suma: 0, moneda: 'RON', plata: 'Plata se va efectua pe baza facturii fiscale emise de SC Set Sail Yachting SRL.',
     })
     setFactura(null); setSursa('completare manuală'); setPerioadaImplicita(true); setErr(null)
+    setId(null); setModificat(true); setSalvatLa(null)
+  }
+
+  function poatePleca() {
+    return !f || !modificat || confirm('Contractul are modificări nesalvate. Renunți la ele?')
   }
 
   function contractNou() {
+    if (!poatePleca()) return
     setF(null); setFactura(null); setText(''); setFile(null); setSursa(''); setErr(null)
+    setId(null); setModificat(false); setSalvatLa(null); setLista(false)
     if (fileRef.current) fileRef.current.value = ''
   }
 
-  const set = <K extends keyof ContractSsy>(k: K, v: ContractSsy[K]) => setF(x => x ? { ...x, [k]: v } : x)
+  function deschide(c: ContractSalvat) {
+    if (!poatePleca()) return
+    const { id: cid, factura: fc, sursa: sc, created_at: _c, updated_at, ...date } = c
+    setF(date); setFactura(fc); setSursa(sc || 'contract salvat'); setPerioadaImplicita(false)
+    setId(cid); setModificat(false); setSalvatLa(updated_at); setErr(null); setLista(false)
+  }
 
+  const set = <K extends keyof ContractSsy>(k: K, v: ContractSsy[K]) => {
+    setF(x => x ? { ...x, [k]: v } : x); setModificat(true)
+  }
+
+  async function salveaza(): Promise<boolean> {
+    if (!f) return false
+    if (!f.beneficiar_nume.trim()) { alert('Completează beneficiarul.'); return false }
+    const res = await fetch(API_CONTRACT, {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ entity, token, action: 'save', id, data: f, ...(id ? {} : { factura, sursa }) }),
+    })
+    const j = await res.json().catch(() => ({}))
+    if (!res.ok || !j.ok) { alert(j.error || 'Salvarea a eșuat.'); return false }
+    const c: ContractSalvat = j.contract
+    setId(c.id); setModificat(false); setSalvatLa(c.updated_at)
+    setContracte(xs => xs ? [c, ...xs.filter(x => x.id !== c.id)] : [c])
+    return true
+  }
+
+  async function butonSalveaza() {
+    setBusy('salvez')
+    try { await salveaza() } catch { alert('Conexiune eșuată.') } finally { setBusy(null) }
+  }
+
+  // Generarea salvează întâi contractul, ca documentul emis să fie mereu în listă
   async function genereaza() {
     if (!f) return
-    if (!f.beneficiar_nume.trim()) { alert('Completează beneficiarul.'); return }
-    setBusy(true)
+    setBusy('docx')
     try {
-      const res = await fetch('/api/acte-contabile/contract', {
+      if ((modificat || !id) && !(await salveaza())) return
+      await descarcaContract(entity, token, f)
+    } catch (e: any) { alert(e?.message || 'Conexiune eșuată.') }
+    finally { setBusy(null) }
+  }
+
+  async function docxDinLista(c: ContractSalvat) {
+    setRandBusy(c.id)
+    try { await descarcaContract(entity, token, c) } catch (e: any) { alert(e?.message || 'Conexiune eșuată.') }
+    finally { setRandBusy(null) }
+  }
+
+  async function sterge(c: ContractSalvat) {
+    if (!confirm(`Ștergi contractul ${c.nr || 'fără număr'} — ${c.beneficiar_nume}?`)) return
+    setRandBusy(c.id)
+    try {
+      const res = await fetch(API_CONTRACT, {
         method: 'POST', headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ entity, token, action: 'generate', data: f }),
+        body: JSON.stringify({ entity, token, action: 'delete', id: c.id }),
       })
-      if (!res.ok) { const j = await res.json().catch(() => ({})); alert(j.error || 'Generarea a eșuat.'); return }
-      const blob = await res.blob()
-      const a = document.createElement('a')
-      a.href = URL.createObjectURL(blob)
-      a.download = `Contract ${f.nr || 'SSY'} - ${f.beneficiar_nume}.docx`.replace(/[\\/:*?"<>|]+/g, ' ')
-      a.click()
-      setTimeout(() => URL.revokeObjectURL(a.href), 30000)
+      const j = await res.json().catch(() => ({}))
+      if (!res.ok || !j.ok) { alert(j.error || 'Ștergerea a eșuat.'); return }
+      setContracte(xs => (xs || []).filter(x => x.id !== c.id))
+      if (id === c.id) { setId(null); setModificat(true); setSalvatLa(null) }
     } catch { alert('Conexiune eșuată.') }
-    finally { setBusy(false) }
+    finally { setRandBusy(null) }
   }
 
   const inp = 'w-full border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#f5c842]'
+  const q = cauta.trim().toLowerCase()
+  const vizibile = (contracte || []).filter(c => !q
+    || [c.nr, c.beneficiar_nume, c.beneficiar_cui, c.beneficiar_cnp, c.eveniment].some(v => (v || '').toLowerCase().includes(q)))
 
   return (
     <div className="space-y-5">
-      <div>
-        <h2 className="text-lg font-bold text-[#0a1628] flex items-center gap-2"><FileSignature size={18} /> Contracte SSY</h2>
-        <p className="text-sm text-slate-500 mt-0.5">
-          Contract de prestări servicii pentru facturile emise de Set Sail Yachting. Încarcă factura sau lipește textul ei — datele se completează singure și le poți corecta.
-        </p>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <button onClick={() => { if (lista) setLista(false); else { setLista(true); incarcaLista() } }}
+            title={lista ? 'Înapoi la contract' : 'Lista contractelor salvate'}
+            className="group text-lg font-bold text-[#0a1628] flex items-center gap-2 hover:text-[#1a3a6b]">
+            <FileSignature size={18} /> Contracte SSY
+            {contracte && (
+              <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 group-hover:bg-[#f5c842] group-hover:text-[#0a1628]">
+                {contracte.length}
+              </span>
+            )}
+            {lista ? <ChevronUp size={16} className="text-slate-400" /> : <ChevronDown size={16} className="text-slate-400" />}
+          </button>
+          <p className="text-sm text-slate-500 mt-0.5">
+            {lista
+              ? 'Contractele salvate. Click pe un contract ca să-l deschizi și să-l modifici.'
+              : 'Contract de prestări servicii pentru facturile emise de Set Sail Yachting. Încarcă factura sau lipește textul ei — datele se completează singure și le poți corecta.'}
+          </p>
+        </div>
+        {lista && (
+          <button onClick={contractNou}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium text-[#0a1628]"
+            style={{ background: '#f5c842' }}>
+            <Plus size={14} /> Contract nou
+          </button>
+        )}
       </div>
 
-      {!f && (
+      {lista && (
+        <div className="bg-white rounded-xl border border-slate-200">
+          <div className="p-3 border-b border-slate-100">
+            <div className="relative max-w-sm">
+              <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400" />
+              <input value={cauta} onChange={e => setCauta(e.target.value)} placeholder="Caută după număr, beneficiar, CUI…"
+                className={`${inp} pl-8`} />
+            </div>
+          </div>
+          {contracte === null ? (
+            <div className="flex items-center justify-center gap-2 py-10 text-sm text-slate-500">
+              <Loader2 size={16} className="animate-spin" /> Se încarcă…
+            </div>
+          ) : vizibile.length === 0 ? (
+            <div className="py-10 text-center text-sm text-slate-400">
+              {contracte.length ? 'Niciun contract nu corespunde căutării.' : 'Niciun contract salvat încă.'}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-[11px] uppercase tracking-wide text-slate-400 border-b border-slate-100">
+                    <th className="px-3 py-2 font-medium">Nr.</th>
+                    <th className="px-3 py-2 font-medium">Data</th>
+                    <th className="px-3 py-2 font-medium">Beneficiar</th>
+                    <th className="px-3 py-2 font-medium">Perioada</th>
+                    <th className="px-3 py-2 font-medium text-right">Valoare</th>
+                    <th className="px-3 py-2" />
+                  </tr>
+                </thead>
+                <tbody>
+                  {vizibile.map(c => (
+                    <tr key={c.id} onClick={() => deschide(c)}
+                      className={`border-b border-slate-50 last:border-0 cursor-pointer hover:bg-amber-50/60 ${id === c.id ? 'bg-amber-50' : ''}`}>
+                      <td className="px-3 py-2 font-medium text-[#0a1628] whitespace-nowrap">{c.nr || '—'}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-slate-600">{ziRo(c.data)}</td>
+                      <td className="px-3 py-2">
+                        <div className="text-[#0a1628]">{c.beneficiar_nume}</div>
+                        <div className="text-[11px] text-slate-400">
+                          {c.beneficiar_tip === 'pj' ? (c.beneficiar_cui ? `CUI ${c.beneficiar_cui}` : 'Firmă') : 'Persoană fizică'}
+                          {c.factura?.numar ? ` · factura ${[c.factura.serie, c.factura.numar].filter(Boolean).join(' ')}` : ''}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap text-slate-600">
+                        {c.perioada_start === c.perioada_end ? ziRo(c.perioada_start) : `${ziRo(c.perioada_start)} – ${ziRo(c.perioada_end)}`}
+                      </td>
+                      <td className="px-3 py-2 whitespace-nowrap text-right text-[#0a1628]">{sumaRo(c.suma)} {c.moneda}</td>
+                      <td className="px-3 py-2 whitespace-nowrap text-right" onClick={e => e.stopPropagation()}>
+                        <button onClick={() => docxDinLista(c)} disabled={randBusy === c.id} title="Descarcă DOCX"
+                          className="p-1.5 rounded-md text-slate-500 hover:text-[#0a1628] hover:bg-slate-100 disabled:opacity-50">
+                          {randBusy === c.id ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />}
+                        </button>
+                        <button onClick={() => sterge(c)} disabled={randBusy === c.id} title="Șterge contractul"
+                          className="p-1.5 rounded-md text-red-400 hover:text-red-600 hover:bg-red-50 disabled:opacity-50">
+                          <Trash2 size={14} />
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {!lista && !f && (
         <>
           <div className="grid md:grid-cols-2 gap-4">
             {/* Încărcare factură */}
@@ -1152,10 +1339,20 @@ function ContractePanel({ entity, token }: { entity: string; token: string | nul
         </>
       )}
 
-      {f && (
+      {!lista && f && (
         <div className="bg-white rounded-xl border border-slate-200 p-5 space-y-4">
           <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div className="text-xs text-slate-500">Date din {sursa}</div>
+            <div className="text-xs text-slate-500 flex items-center gap-2 flex-wrap">
+              <span>Date din {sursa}</span>
+              {id && !modificat && salvatLa && (
+                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 font-medium">
+                  <Check size={11} /> salvat {new Date(salvatLa).toLocaleString('ro-RO', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })}
+                </span>
+              )}
+              {modificat && (
+                <span className="px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 font-medium">nesalvat</span>
+              )}
+            </div>
             <button onClick={contractNou} className="flex items-center gap-1 text-xs text-slate-500 hover:text-slate-800">
               <Plus size={12} /> Contract nou
             </button>
@@ -1170,7 +1367,7 @@ function ContractePanel({ entity, token }: { entity: string; token: string | nul
           {factura && (factura.serie || factura.numar || factura.descriere) && (
             <div className="text-xs text-slate-500">
               Factura {[factura.serie, factura.numar].filter(Boolean).join(' ') || '—'}
-              {factura.data ? ` · ${new Date(factura.data).toLocaleDateString('ro-RO')}` : ''}
+              {factura.data ? ` · ${ziRo(factura.data)}` : ''}
               {factura.descriere ? ` · ${factura.descriere}` : ''}
             </div>
           )}
@@ -1232,12 +1429,16 @@ function ContractePanel({ entity, token }: { entity: string; token: string | nul
             </Camp>
           </div>
 
-          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
+          <div className="flex justify-end gap-2 pt-2 border-t border-slate-100 flex-wrap">
             <button onClick={contractNou} className="px-4 py-2 rounded-lg text-sm border border-slate-200 text-slate-600 hover:bg-slate-50">Renunță</button>
-            <button onClick={genereaza} disabled={busy}
+            <button onClick={butonSalveaza} disabled={!!busy || (!!id && !modificat)}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border border-[#0a1628] text-[#0a1628] bg-white hover:bg-slate-50 disabled:opacity-50">
+              {busy === 'salvez' ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />} {id && !modificat ? 'Salvat' : 'Salvează'}
+            </button>
+            <button onClick={genereaza} disabled={!!busy}
               className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-[#0a1628] disabled:opacity-60"
               style={{ background: '#f5c842' }}>
-              {busy ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />} Generează DOCX
+              {busy === 'docx' ? <Loader2 size={14} className="animate-spin" /> : <Download size={14} />} Generează DOCX
             </button>
           </div>
         </div>
