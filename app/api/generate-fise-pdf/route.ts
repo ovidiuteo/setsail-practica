@@ -1,8 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { tintSignatureToBlueDataUrl } from '@/lib/sign-tint'
+
+// semnat: true (implicit) — cu semnăturile cursanților, albastre ca în DOCX; false — fișe nesemnate
 
 export async function POST(req: NextRequest) {
-  const { session_id } = await req.json()
+  const body = await req.json()
+  const { session_id } = body
+  const semnat = body.semnat !== false
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -46,14 +51,24 @@ export async function POST(req: NextRequest) {
     return val || '___________________________________'
   }
 
+  // Semnăturile recolorate în albastru, ca în DOCX
+  const semnaturi = new Map<string, string>()
+  if (semnat) {
+    await Promise.all(students.map(async (s: any) => {
+      const src = s.signature_data || s.signature_random
+      if (src) semnaturi.set(s.id, (await tintSignatureToBlueDataUrl(src)) || src)
+    }))
+  }
+
   function studentPage(s: any): string {
     const ciDoc = s.ci_series && s.ci_number
       ? `${s.ci_series} ${s.ci_number}`
       : (s.id_document || '___________________________')
 
-    const sigSrc = s.signature_data || s.signature_random
+    // Aceeași cutie ca imaginea din DOCX (160×55 px)
+    const sigSrc = semnaturi.get(s.id)
     const sigHtml = sigSrc
-      ? `<img src="${sigSrc}" style="height:55px;max-width:160px;display:block;margin-top:2px;" />`
+      ? `<img src="${sigSrc}" style="width:160px;height:55px;display:block;margin-top:2px;" />`
       : `<div style="height:40px;"></div>`
 
     const evalRowsHtml = evalRows.map(r => `
@@ -131,6 +146,7 @@ export async function POST(req: NextRequest) {
 <html>
 <head>
 <meta charset="UTF-8">
+<title>Fise_${session.session_date}${semnat ? '' : '_nesemnate'}</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   html, body { background:#fff; }

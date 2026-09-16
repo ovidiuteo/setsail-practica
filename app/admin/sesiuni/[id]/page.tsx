@@ -2340,7 +2340,17 @@ Set Sail NauticSchool
                   <Download size={13}/>{gFise?'Se generează...':'Fișe DOCX (Anexa 10)'}
                 </button>
                 <button onClick={async()=>{setGPDF(true);try{
-                  const res=await fetch('/api/generate-fise-pdf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id})})
+                  const res=await fetch('/api/generate-fise-pdf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id,semnat:false})})
+                  const isPdfFallback=res.headers.get('X-Pdf-Fallback')==='true'
+                  const blob=await res.blob();const url=URL.createObjectURL(blob)
+                  if(isPdfFallback){const win=window.open(url,'_blank');if(win)win.onload=()=>win.print()}
+                  else{const a=document.createElement('a');a.href=url;a.download=`Fise_${sess.session_date}.pdf`;a.click()}
+                }catch(e:any){alert(e.message)}setGPDF(false)}}
+                  disabled={gPDF||students.length===0} className="w-full flex items-center justify-center gap-2 py-2.5 rounded-lg text-xs font-medium border border-pink-200 text-pink-700 hover:bg-pink-50 disabled:opacity-50">
+                  <Download size={13}/>{gPDF?'Se generează...':'Fișe PDF nesemnate'}
+                </button>
+                <button onClick={async()=>{setGPDF(true);try{
+                  const res=await fetch('/api/generate-fise-pdf',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({session_id:sess.id,semnat:true})})
                   const isPdfFallback=res.headers.get('X-Pdf-Fallback')==='true'
                   const blob=await res.blob();const url=URL.createObjectURL(blob)
                   if(isPdfFallback){const win=window.open(url,'_blank');if(win)win.onload=()=>win.print()}
