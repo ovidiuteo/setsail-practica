@@ -22,6 +22,34 @@ type Doc = {
   note: string | null
   created_at: string
   url: string | null
+  // totalul citit de pe factură/bon/chitanță (sau corectat manual)
+  suma_total: number | null
+  moneda: string | null
+  emitent: string | null
+  analizat_la: string | null
+}
+
+const CATEGORII_CU_SUMA = ['factura', 'bon', 'chitanta']
+const fmtBani = (n: number) => n.toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+
+// Citirile de sumă (AI) rulează câte două o dată, ca pagina să nu pornească zeci deodată
+const coadaSume: (() => Promise<void>)[] = []
+let citiriActive = 0
+function inCoada(fn: () => Promise<void>) {
+  coadaSume.push(fn)
+  const porneste = () => {
+    while (citiriActive < 2 && coadaSume.length) {
+      const f = coadaSume.shift()!
+      citiriActive++
+      f().catch(() => {}).finally(() => { citiriActive--; porneste() })
+    }
+  }
+  porneste()
+}
+// O sumă nouă pe un document -> panourile de cheltuieli din luna lui și din lunile vecine reîncearcă potrivirea
+const EVENIMENT_SUMA = 'acte-suma-document'
+function anuntaSuma(luna: string | null) {
+  window.dispatchEvent(new CustomEvent(EVENIMENT_SUMA, { detail: { luna } }))
 }
 
 type Cheltuiala = {
@@ -292,7 +320,7 @@ export default function ActeContabilePage({ params }: { params: { entity: string
                   groupDocs={shown.filter(d => lunaOf(d) === m)}
                   monthSlotDocs={slotDocs.filter(d => lunaOf(d) === m)}
                   monthHasFiles={normalDocs.some(d => lunaOf(d) === m) || slotDocs.some(d => lunaOf(d) === m)}
-                  setDocs={setDocs} setPreview={setPreview}
+                  allDocs={normalDocs} setDocs={setDocs} setPreview={setPreview}
                 />
               ))}
             </div>
@@ -373,9 +401,10 @@ function PreviewModal({ doc, onClose }: { doc: Doc; onClose: () => void }) {
   )
 }
 
-function MonthSection({ m, entity, token, groupDocs, monthSlotDocs, monthHasFiles, setDocs, setPreview }: {
+function MonthSection({ m, entity, token, groupDocs, monthSlotDocs, monthHasFiles, allDocs, setDocs, setPreview }: {
   m: string; entity: string; token: string | null
   groupDocs: Doc[]; monthSlotDocs: Doc[]; monthHasFiles: boolean
+  allDocs: Doc[]   // toate documentele (factura legată poate fi în luna vecină)
   setDocs: (u: (prev: Doc[] | null) => Doc[] | null) => void
   setPreview: (d: Doc) => void
 }) {
@@ -429,7 +458,7 @@ function MonthSection({ m, entity, token, groupDocs, monthSlotDocs, monthHasFile
       {(hasExtras || (chelt && chelt.length > 0)) && (
         <CheltuieliPanel entity={entity} token={token} month={m} items={chelt} setItems={setChelt}
           analyzing={analyzing} hasExtras={hasExtras} onReanalyze={analyzeExtras}
-          docs={groupDocs} onPreview={d => setPreview(d)}
+          docs={allDocs} onPreview={d => setPreview(d)}
           onDocAdded={d => setDocs(prev => [d, ...(prev || [])])} />
       )}
 
@@ -447,6 +476,7 @@ function MonthSection({ m, entity, token, groupDocs, monthSlotDocs, monthHasFile
               <tr className="bg-slate-50 text-xs text-slate-400 text-left">
                 <th className="px-4 py-3">Document</th>
                 <th className="px-4 py-3">Categorie</th>
+                <th className="px-4 py-3 text-right whitespace-nowrap">Sumă</th>
                 <th className="px-4 py-3 whitespace-nowrap">Lună</th>
                 <th className="px-4 py-3 whitespace-nowrap">Data act</th>
                 <th className="px-4 py-3 whitespace-nowrap">Încărcat</th>
@@ -478,6 +508,43 @@ function CheltuieliPanel({ entity, token, month, items, setItems, analyzing, has
   const [doarNeacoperite, setDoarNeacoperite] = useState(true)
   const [adding, setAdding] = useState(false)
   const [facturaPentru, setFacturaPentru] = useState<Cheltuiala | null>(null)
+  const [potrivesc, setPotrivesc] = useState(false)
+
+  // Leagă automat cheltuielile neacoperite de facturile cu exact aceeași sumă
+  const potriveste = useCallback(async (manual = false) => {
+    setPotrivesc(true)
+    try {
+      const j = await fetch('/api/acte-contabile/cheltuieli/potrivire', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ entity, token, luna: month }),
+      }).then(r => r.json()).catch(() => null)
+      const p: { cheltuiala_id: string; doc_id: string }[] = j?.potrivite || []
+      if (p.length) {
+        const dupa = new Map(p.map(x => [x.cheltuiala_id, x.doc_id]))
+        setItems(prev => (prev || []).map(c => dupa.has(c.id) ? { ...c, acoperit: true, factura_doc_id: dupa.get(c.id)! } : c))
+      }
+      if (manual) alert(p.length ? `Am legat ${p.length} ${p.length === 1 ? 'cheltuială' : 'cheltuieli'} de facturi cu aceeași sumă.` : 'Nicio factură cu aceeași sumă pentru cheltuielile neacoperite.')
+    } finally { setPotrivesc(false) }
+  }, [entity, token, month, setItems])
+
+  // la deschidere (dacă sunt neacoperite) și când apare o sumă nouă pe un document din luna asta sau din cele vecine
+  const areNeacoperite = (items || []).some(c => !c.acoperit)
+  const pornitPotrivire = useRef(false)
+  useEffect(() => {
+    if (pornitPotrivire.current || !items || !areNeacoperite) return
+    pornitPotrivire.current = true
+    potriveste()
+  }, [items, areNeacoperite, potriveste])
+  useEffect(() => {
+    const i = LUNI.indexOf(month as typeof LUNI[number])
+    const vecine = [LUNI[(i + 11) % 12], month, LUNI[(i + 1) % 12]]
+    const asculta = (e: Event) => {
+      const luna = (e as CustomEvent).detail?.luna
+      if (areNeacoperite && (!luna || vecine.includes(luna))) potriveste()
+    }
+    window.addEventListener(EVENIMENT_SUMA, asculta)
+    return () => window.removeEventListener(EVENIMENT_SUMA, asculta)
+  }, [month, areNeacoperite, potriveste])
 
   // Factura încărcată pentru o cheltuială: documentul intră în lună, iar cheltuiala e bifată și legată de el
   async function facturaIncarcata(c: Cheltuiala, d: Doc) {
@@ -559,10 +626,19 @@ function CheltuieliPanel({ entity, token, month, items, setItems, analyzing, has
       </div>
 
       <div className="px-4 py-2 flex items-center justify-between gap-3 flex-wrap">
-        <label className="flex items-center gap-1.5 text-xs font-medium text-slate-600 cursor-pointer">
-          <input type="checkbox" checked={doarNeacoperite} onChange={e => setDoarNeacoperite(e.target.checked)} />
-          Doar neacoperite
-        </label>
+        <div className="flex items-center gap-3 flex-wrap">
+          <label className="flex items-center gap-1.5 text-xs font-medium text-slate-600 cursor-pointer">
+            <input type="checkbox" checked={doarNeacoperite} onChange={e => setDoarNeacoperite(e.target.checked)} />
+            Doar neacoperite
+          </label>
+          {neacoperite.length > 0 && (
+            <button onClick={() => potriveste(true)} disabled={potrivesc}
+              title="Leagă cheltuielile neacoperite de facturile/bonurile încărcate cu exact aceeași sumă (luna asta și cele vecine)"
+              className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border border-sky-200 text-sky-700 bg-white hover:bg-sky-50 disabled:opacity-60">
+              {potrivesc ? <Loader2 size={13} className="animate-spin" /> : <Link2 size={13} />} Potrivește facturile
+            </button>
+          )}
+        </div>
         <button onClick={() => setAdding(v => !v)}
           className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium border border-slate-200 text-slate-600 bg-white hover:bg-slate-50">
           {adding ? <X size={13} /> : <Plus size={13} />} {adding ? 'Renunță' : 'Adaugă cheltuială'}
@@ -927,6 +1003,61 @@ function SlotCard({ slot, month, entity, token, doc, past30, onPreview, onAdd, o
   )
 }
 
+// Suma de pe document: se citește automat (la încărcare / prima afișare), se poate corecta de mână
+function SumaDocument({ d, entity, token, onChange }: {
+  d: Doc; entity: string; token: string | null; onChange: (doc: Doc) => void
+}) {
+  const [citesc, setCitesc] = useState(false)
+  const [text, setText] = useState(d.suma_total != null ? fmtBani(Number(d.suma_total)) : '')
+  const pornit = useRef(false)
+
+  useEffect(() => { setText(d.suma_total != null ? fmtBani(Number(d.suma_total)) : '') }, [d.suma_total])
+
+  const cere = useCallback(async (body: Record<string, unknown>) => {
+    const res = await fetch('/api/acte-contabile/suma', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ entity, token, id: d.id, ...body }),
+    })
+    const j = await res.json().catch(() => ({}))
+    if (!res.ok || !j.ok) return false
+    onChange({ ...d, suma_total: j.suma_total, moneda: j.moneda, emitent: j.emitent ?? d.emitent, analizat_la: j.analizat_la })
+    if (j.suma_total != null) anuntaSuma(d.luna)
+    return true
+  }, [entity, token, d, onChange])
+
+  const citeste = useCallback(() => {
+    setCitesc(true)
+    inCoada(async () => { try { await cere({ action: 'citeste' }) } finally { setCitesc(false) } })
+  }, [cere])
+
+  // documentele încă necitite: citim o singură dată
+  useEffect(() => {
+    if (pornit.current || d.analizat_la) return
+    pornit.current = true
+    citeste()
+  }, [d.analizat_la, citeste])
+
+  async function salveaza() {
+    const vechi = d.suma_total != null ? fmtBani(Number(d.suma_total)) : ''
+    if (text.trim() === vechi) return
+    if (!(await cere({ action: 'seteaza', suma: text }))) { alert('Sumă invalidă.'); setText(vechi) }
+  }
+
+  if (citesc) return <span className="inline-flex items-center gap-1 text-xs text-slate-400"><Loader2 size={12} className="animate-spin" /> citesc…</span>
+  return (
+    <span className="inline-flex items-center gap-1">
+      <input value={text} onChange={e => setText(e.target.value)} onBlur={salveaza}
+        onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur() }}
+        placeholder="—" title={d.emitent ? `Emitent: ${d.emitent}` : 'Suma totală de pe document'}
+        className="w-24 text-right bg-transparent border border-transparent hover:border-slate-200 focus:border-sky-300 rounded px-1 py-0.5 text-sm font-medium text-[#0a1628] focus:outline-none" />
+      <span className="text-[11px] text-slate-400">{d.moneda && d.moneda !== 'RON' ? d.moneda : 'lei'}</span>
+      <button onClick={citeste} title="Citește din nou suma de pe document" className="p-0.5 rounded text-slate-300 hover:text-slate-600">
+        <RefreshCw size={11} />
+      </button>
+    </span>
+  )
+}
+
 function DocRow({ d, entity, token, onPreview, onDeleted, onMonthChanged, onReplaced }: {
   d: Doc; entity: string; token: string | null
   onPreview: () => void; onDeleted: () => void; onMonthChanged: (luna: string) => void
@@ -1001,6 +1132,11 @@ function DocRow({ d, entity, token, onPreview, onDeleted, onMonthChanged, onRepl
       </td>
       <td className="px-4 py-3">
         <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-amber-50 text-amber-700">{CAT_LABEL(d.categorie)}</span>
+      </td>
+      <td className="px-4 py-3 text-right whitespace-nowrap">
+        {CATEGORII_CU_SUMA.includes(d.categorie)
+          ? <SumaDocument d={d} entity={entity} token={token} onChange={onReplaced} />
+          : <span className="text-slate-300 text-xs">—</span>}
       </td>
       <td className="px-4 py-3">
         <div className="flex items-center gap-1.5">

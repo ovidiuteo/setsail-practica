@@ -67,6 +67,8 @@ export async function POST(req: NextRequest) {
       file_name: file.name || null,
       file_type: file.type || null,
       file_size: file.size,
+      // fișier nou -> suma se citește din nou
+      suma_total: null, moneda: null, emitent: null, analizat_la: null,
     })
     .eq('id', id).eq('entity', entity)
     .select().single()
