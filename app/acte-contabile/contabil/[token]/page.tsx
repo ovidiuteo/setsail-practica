@@ -41,6 +41,19 @@ const CAT_LABEL: Record<string, string> = {
 const CAT_ORDER = ['extras_cont', 'sumar_facturi', 'factura', 'chitanta', 'extras', 'contract', 'bon', 'altele']
 const LUNA_LABEL = (m: string) => m.charAt(0).toUpperCase() + m.slice(1)
 
+// Eticheta tab-ului: „SSY Aug 26", „SSA Iulie 26" — lunile lungi prescurtate, cele scurte întregi
+const LUNA_SCURT: Record<string, string> = {
+  ianuarie: 'Ian', februarie: 'Feb', martie: 'Mar', aprilie: 'Apr', mai: 'Mai', iunie: 'Iunie',
+  iulie: 'Iulie', august: 'Aug', septembrie: 'Sept', octombrie: 'Oct', noiembrie: 'Nov', decembrie: 'Dec',
+}
+const LUNI_ORDINE = Object.keys(LUNA_SCURT)
+function titluTab(entitate: string, luna: string): string {
+  const acum = new Date()
+  // luna fără an: e din anul curent, iar o lună de după cea curentă ține de anul trecut
+  const an = LUNI_ORDINE.indexOf(luna) > acum.getMonth() ? acum.getFullYear() - 1 : acum.getFullYear()
+  return `${entitate.toUpperCase()} ${LUNA_SCURT[luna] || LUNA_LABEL(luna)} ${String(an).slice(-2)}`
+}
+
 function fmtSize(n: number | null) {
   if (!n) return ''
   if (n < 1024) return `${n} B`
@@ -74,6 +87,10 @@ export default function ContabilPage({ params }: { params: { token: string } }) 
       setPhase('ready')
     })()
   }, [token])
+
+  useEffect(() => {
+    if (meta?.label && luna) document.title = titluTab(meta.label, luna)
+  }, [meta, luna])
 
   async function downloadAll() {
     setZipping(true)
