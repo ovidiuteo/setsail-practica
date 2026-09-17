@@ -83,8 +83,10 @@ export default function PortalPage() {
 
 
   // Validare CI
-  const ciSeriesValid = /^[A-Z]{2}$/.test(form.ci_series.trim()) // PP pentru pasaport, sau serie CI
-  const ciNumberValid = /^\d{6,9}$/.test(form.ci_number.trim()) // 6-7 pentru CI, 9 pentru pasaport
+  // Serie CI = 2 litere; pașaport = PASS și numărul are exact 9 cifre (poate începe cu 0)
+  const estePasaport = form.ci_series.trim() === 'PASS'
+  const ciSeriesValid = /^([A-Z]{2}|PASS)$/.test(form.ci_series.trim())
+  const ciNumberValid = estePasaport ? /^\d{9}$/.test(form.ci_number.trim()) : /^\d{6,9}$/.test(form.ci_number.trim())
   const canSave = ciSeriesValid && ciNumberValid
 
   // Optiuni pentru Clasa CAA, in functie de tipul practicii sesiunii.
@@ -650,7 +652,7 @@ export default function PortalPage() {
       let detected: 'ci_vechi' | 'ci_nou' | 'ci_strain' | 'pasaport'
       if (['ci_vechi', 'ci_nou', 'ci_strain', 'pasaport'].includes(d.doc_type)) {
         detected = d.doc_type
-      } else if (d.ci_series === 'PP' || /pasaport|passport/i.test(String(d.doc_type || ''))) {
+      } else if (d.ci_series === 'PP' || d.ci_series === 'PASS' || /pasaport|passport/i.test(String(d.doc_type || ''))) {
         detected = 'pasaport'
       } else if (/strain|străin|foreign/i.test(String(d.doc_type || ''))
         || (d.country && !/^(romania|românia|rou|ro)$/i.test(String(d.country).trim()))) {
@@ -661,6 +663,8 @@ export default function PortalPage() {
         detected = d.address ? 'ci_vechi' : 'ci_nou'
       }
       setDocType(detected)
+      // pașaportul are seria PASS (OCR-ul poate întoarce „PP")
+      if (detected === 'pasaport') d.ci_series = 'PASS'
       const fullNameFromCI = (d.last_name && d.first_name)
         ? d.last_name.toUpperCase() + ' ' + d.first_name.toUpperCase() : ''
       setForm(f => ({
@@ -1111,18 +1115,18 @@ export default function PortalPage() {
                           Serie CI / Tip doc *
                           {form.ci_series.trim() && (ciSeriesValid ? <span className="ml-1 text-green-600 font-semibold">✓</span> : <span className="ml-1 text-red-500">✗</span>)}
                         </label>
-                        <input className={ciFieldCls(form.ci_series, ciSeriesValid)} value={form.ci_series} placeholder="AB sau PP" maxLength={2}
+                        <input className={ciFieldCls(form.ci_series, ciSeriesValid)} value={form.ci_series} placeholder="AB sau PASS" maxLength={4}
                           onChange={e => setForm(f => ({ ...f, ci_series: e.target.value.toUpperCase() }))} />
-                        {form.ci_series.trim() && !ciSeriesValid && (<p className="text-xs text-red-500 mt-1">2 litere (ex: AB, IF) sau PP pentru pașaport</p>)}
+                        {form.ci_series.trim() && !ciSeriesValid && (<p className="text-xs text-red-500 mt-1">2 litere (ex: AB, IF) sau PASS pentru pașaport</p>)}
                       </div>
                       <div>
                         <label className={labelCls}>
                           Număr CI / Pașaport *
                           {form.ci_number.trim() && (ciNumberValid ? <span className="ml-1 text-green-600 font-semibold">✓</span> : <span className="ml-1 text-red-500">✗</span>)}
                         </label>
-                        <input className={ciFieldCls(form.ci_number, ciNumberValid)} value={form.ci_number} placeholder="123456 / 1234567 / 058339673" maxLength={7}
+                        <input className={ciFieldCls(form.ci_number, ciNumberValid)} value={form.ci_number} placeholder="123456 / 1234567 / 058339673" maxLength={9}
                           onChange={e => setForm(f => ({ ...f, ci_number: e.target.value.replace(/\D/g, '') }))} />
-                        {form.ci_number.trim() && !ciNumberValid && (<p className="text-xs text-red-500 mt-1">6-7 cifre (CI) sau 9 cifre (pașaport)</p>)}
+                        {form.ci_number.trim() && !ciNumberValid && (<p className="text-xs text-red-500 mt-1">{estePasaport ? '9 cifre pentru pașaport (poate începe cu 0)' : '6-7 cifre (CI) sau 9 cifre (pașaport)'}</p>)}
                       </div>
                     </div>
 

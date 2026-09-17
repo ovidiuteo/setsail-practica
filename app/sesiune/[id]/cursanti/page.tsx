@@ -18,6 +18,8 @@ type Row = {
   practice_slot: string | null   // intervalul de practică ales („10:00–12:00")
   class_caa: string              // categoria: C / D / C,D
   phone: string
+  ci_series: string; ci_number: string   // pașaport: seria PASS, numărul din 9 cifre
+  expiry_date: string; nationality: string; country: string
 }
 
 type Practica = {
@@ -194,6 +196,38 @@ const PERSON_FIELDS = (['full_name', 'email', 'phone', 'cnp'] as (keyof Row)[])
   // fără lățimi minime: coloanele se strâng la conținut, iar numele/emailul nu se rup
   // pe două rânduri (rânduri de aceeași înălțime, tabelul scrollează pe orizontală)
   .map(f => ({ ...f, w: 'whitespace-nowrap' }))
+
+// Formularul din Verify by ID: toate datele din actul de identitate
+const VERIFY_FIELDS: { key: keyof Row; label: string }[] = [
+  { key: 'full_name', label: 'Nume și prenume' },
+  { key: 'email', label: 'Email' },
+  { key: 'phone', label: 'Telefon' },
+  { key: 'cnp', label: 'CNP' },
+  { key: 'birth_date', label: 'Data nașterii' },
+  { key: 'ci_series', label: 'Serie act' },
+  { key: 'ci_number', label: 'Număr act' },
+  { key: 'expiry_date', label: 'Valabil până la' },
+  { key: 'nationality', label: 'Cetățenie' },
+  { key: 'country', label: 'Țara' },
+  { key: 'address', label: 'Adresă' },
+  { key: 'city', label: 'Localitate' },
+  { key: 'county', label: 'Județ' },
+]
+
+// Input cât textul + ~4 caractere: un span invizibil cu același text dă lățimea
+function AutoWidthInput({ value, onChange, onBlur, className }: {
+  value: string; onChange: (v: string) => void; onBlur?: () => void; className: string
+}) {
+  return (
+    <span className="inline-grid max-w-full align-top">
+      <span aria-hidden className={`${className} invisible whitespace-pre col-start-1 row-start-1 overflow-hidden`}>
+        {value || ' '}{'    '}
+      </span>
+      <input value={value} onChange={e => onChange(e.target.value)} onBlur={onBlur} size={1}
+        className={`${className} col-start-1 row-start-1 w-full min-w-[8ch]`} />
+    </span>
+  )
+}
 
 const roDate = (d: string | null) => d ? new Date(d).toLocaleDateString('ro-RO') : ''
 
@@ -1639,20 +1673,22 @@ function VerifyTab({ sessionId, token, rows, onRowUpdate }: {
   // La schimbarea cursantului: reîncarcă formularul + imaginea
   useEffect(() => {
     const c = rows[index]; if (!c) return
-    // din FIELDS, ca formularul să nu rămână în urmă când se adaugă o coloană
-    setForm(Object.fromEntries(FIELDS.map(f => [f.key, (c[f.key] as string) || ''])))
+    setForm(Object.fromEntries(VERIFY_FIELDS.map(f => [f.key, (c[f.key] as string) || ''])))
     setDirty(false); fetchCi(c.id)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index])
 
   async function saveCurrent() {
     if (!dirty || !cur) return
+    // aceeași normalizare ca pe server: seria cu majuscule, „PP" -> PASS, fără spații
+    const serie = (form.ci_series || '').replace(/\s+/g, '').toUpperCase()
+    const f = { ...form, ci_series: serie === 'PP' ? 'PASS' : serie, ci_number: (form.ci_number || '').replace(/\s+/g, '') }
     await fetch('/api/roster', {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_id: sessionId, token, student_id: cur.id, fields: form }),
+      body: JSON.stringify({ session_id: sessionId, token, student_id: cur.id, fields: f }),
     })
-    onRowUpdate(cur.id, form as Partial<Row>)
-    setDirty(false)
+    onRowUpdate(cur.id, f as Partial<Row>)
+    setForm(f); setDirty(false)
   }
   async function goto(i: number) {
     if (i === index || i < 0 || i >= rows.length) return
@@ -1698,19 +1734,33 @@ function VerifyTab({ sessionId, token, rows, onRowUpdate }: {
       </div>
 
       {/* Date cursant */}
-      <div className="md:w-72 shrink-0 bg-white rounded-xl shadow-sm border border-gray-100 p-4 self-start">
+      <div className="min-w-[14rem] max-w-full shrink-0 bg-white rounded-xl shadow-sm border border-gray-100 p-4 self-start">
         <div className="flex items-center justify-between mb-3">
           <span className="text-xs text-gray-400">{index + 1} / {rows.length}</span>
           {dirty && <span className="text-xs font-medium text-amber-600">● nesalvat</span>}
         </div>
         <div className="space-y-3">
-          {FIELDS.map(f => (
-            <label key={f.key} className="block">
-              <span className="block text-[11px] uppercase tracking-wide text-gray-400 mb-1">{f.label}</span>
-              <input value={form[f.key] || ''} onChange={e => { setForm(s => ({ ...s, [f.key]: e.target.value })); setDirty(true) }}
-                className="w-full px-2.5 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200" />
-            </label>
-          ))}
+          {VERIFY_FIELDS.map(f => {
+            const v = form[f.key] || ''
+            const pasaport = (form.ci_series || '').trim().toUpperCase() === 'PASS'
+            // pașaport: numărul are exact 9 cifre (poate începe cu 0)
+            const avertisment = f.key === 'ci_number' && pasaport && v.trim() && !/^\d{9}$/.test(v.replace(/\s+/g, ''))
+              ? 'Pașaport: numărul are 9 cifre (poate începe cu 0)'
+              : f.key === 'ci_series' && v.trim().toUpperCase() === 'PP' ? 'La pașaport seria este PASS' : ''
+            return (
+              <label key={f.key} className="block">
+                <span className="block text-[11px] uppercase tracking-wide text-gray-400 mb-1">{f.label}</span>
+                <AutoWidthInput value={v}
+                  onChange={nv => {
+                    const val = f.key === 'ci_series' ? nv.toUpperCase() : f.key === 'ci_number' && pasaport ? nv.replace(/\D/g, '') : nv
+                    setForm(s => ({ ...s, [f.key]: val })); setDirty(true)
+                  }}
+                  onBlur={f.key === 'ci_series' && v.trim().toUpperCase() === 'PP' ? () => setForm(s => ({ ...s, ci_series: 'PASS' })) : undefined}
+                  className={`px-2.5 py-1.5 rounded-lg border text-sm focus:outline-none focus:ring-2 ${avertisment ? 'border-amber-300 focus:ring-amber-200' : 'border-gray-200 focus:ring-blue-200'}`} />
+                {avertisment && <span className="block text-[11px] text-amber-600 mt-0.5">{avertisment}</span>}
+              </label>
+            )
+          })}
           <div className="pt-3 mt-1 border-t border-gray-100">
             <span className="block text-[11px] uppercase tracking-wide text-gray-400 mb-1">Obținere / Prelungire LRC</span>
             <LrcSelect value={cur.obtinere_prelungire || ''} onConfirm={saveLrc} />

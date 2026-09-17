@@ -19,7 +19,18 @@ function svc() {
 const EDITABLE = new Set([
   'full_name', 'email', 'cnp', 'birth_date', 'address', 'city', 'county', 'obtinere_prelungire',
   'communication_target', 'class_caa', 'phone',
+  'ci_series', 'ci_number', 'expiry_date', 'nationality', 'country',
 ])
+
+// Seria/numărul actului: seria cu majuscule, fără spații; pașaportul are seria PASS
+// (vechiul „PP" devine PASS), iar numărul rămâne text — poate începe cu 0
+function normalizeazaAct(u: Record<string, any>) {
+  if (typeof u.ci_series === 'string') {
+    const s = u.ci_series.replace(/\s+/g, '').toUpperCase()
+    u.ci_series = s === 'PP' ? 'PASS' : s
+  }
+  if (typeof u.ci_number === 'string') u.ci_number = u.ci_number.replace(/\s+/g, '')
+}
 const MAX_IMG = 8 * 1024 * 1024 // ~8MB data URL
 
 // Validează (session_id, token) și întoarce true dacă tokenul corespunde
@@ -211,7 +222,7 @@ export async function GET(req: NextRequest) {
 
   const [{ data, error }, docSets, { data: cereri }, { data: rezervari }] = await Promise.all([
     sb.from('students')
-      .select('id, full_name, email, phone, cnp, birth_date, address, city, county, class_caa, obtinere_prelungire, doc_type, communication_target, created_at, order_in_session')
+      .select('id, full_name, email, phone, cnp, birth_date, address, city, county, ci_series, ci_number, expiry_date, nationality, country, class_caa, obtinere_prelungire, doc_type, communication_target, created_at, order_in_session')
       .eq('session_id', sessionId),
     Promise.all((Object.entries(DOC_COLS) as [DocKey, string][]).map(async ([key, col]) => {
       const { data: ids } = await sb.from('students').select('id')
@@ -232,6 +243,8 @@ export async function GET(req: NextRequest) {
   const rows = (data || []).map((r: any) => ({
     id: r.id, full_name: r.full_name, email: r.email, phone: r.phone || '', cnp: r.cnp, birth_date: r.birth_date,
     address: r.address, city: r.city, county: r.county,
+    ci_series: r.ci_series || '', ci_number: r.ci_number || '',
+    expiry_date: r.expiry_date || '', nationality: r.nationality || '', country: r.country || '',
     // Informația vine din clasă (sursa de adevăr); valoarea stocată e doar fallback dacă clasa nu o conține
     obtinere_prelungire: lrcFromClass(r.class_caa) || r.obtinere_prelungire || '',
     doc_type: r.doc_type || '',
@@ -357,6 +370,15 @@ export async function PATCH(req: NextRequest) {
     updates[field] = typeof value === 'string' ? value.trim() : value
   }
   if (!Object.keys(updates).length) return NextResponse.json({ error: 'câmp invalid' }, { status: 400 })
+  normalizeazaAct(updates)
+  // id_document („SERIE NUMĂR") e folosit în documente — îl ținem în pas cu seria/numărul
+  if ('ci_series' in updates || 'ci_number' in updates) {
+    const { data: act } = await sb.from('students').select('ci_series, ci_number').eq('id', student_id).eq('session_id', session_id).maybeSingle()
+    const serie = 'ci_series' in updates ? updates.ci_series : (act as any)?.ci_series || ''
+    const numar = 'ci_number' in updates ? updates.ci_number : (act as any)?.ci_number || ''
+    updates.id_document = `${serie} ${numar}`.trim() || null
+    if (serie === 'PASS') updates.doc_type = 'pasaport'
+  }
 
   const { error } = await sb.from('students').update(updates).eq('id', student_id).eq('session_id', session_id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

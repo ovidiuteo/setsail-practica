@@ -41,7 +41,7 @@ TIPURI DE DOCUMENTE:
    - ci_series = cele 2 litere, ci_number = cifrele
 
 2. PAȘAPORT ROMÂNESC — "PAȘAPORT / PASSPORT", "ROMÂNIA / ROMANIA / ROUMANIE"
-   - Numărul pașaportului (ex: 058339673) → ci_number = numărul pașaportului, ci_series = "PP"
+   - Numărul pașaportului (ex: 058339673) → ci_number = numărul pașaportului, ci_series = "PASS"
    - Câmpuri: 1.Nume, 2.Prenume, 3.Cetățenie, 4.Data nașterii, Cod Numeric Personal
    - Banda MRZ (rânduri cu <<): ex "058339673ROU9211294..." → CNP = 1921129420025 (13 cifre)
    - Locul nașterii (ex: BUCUREȘTI) → câmpul "city"
