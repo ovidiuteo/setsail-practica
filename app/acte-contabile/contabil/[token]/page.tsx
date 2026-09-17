@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Loader2, ShieldAlert, FileText, Download, Eye, X, FolderArchive, FileSpreadsheet } from 'lucide-react'
+import { Loader2, ShieldAlert, FileText, Download, Eye, X, FolderArchive, FileSpreadsheet, MessageSquare } from 'lucide-react'
 
 type Doc = {
   id: string
@@ -14,6 +14,18 @@ type Doc = {
   file_size: number | null
   url: string | null
   created_at: string
+}
+
+// Plată din extrasul de cont, cu observațiile lăsate de firmă pentru contabil
+type Plata = {
+  id: string; data: string | null; descriere: string; suma: number
+  acoperit: boolean; factura_doc_id: string | null; observatii: string
+}
+
+const fmtRon = (n: number) => Number(n).toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+const ziRo = (d: string | null) => {
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(d || '')
+  return m ? `${m[3]}.${m[2]}.${m[1]}` : '—'
 }
 
 const CAT_LABEL: Record<string, string> = {
@@ -49,6 +61,7 @@ export default function ContabilPage({ params }: { params: { token: string } }) 
   const [meta, setMeta] = useState<{ label: string; full: string } | null>(null)
   const [luna, setLuna] = useState('')
   const [docs, setDocs] = useState<Doc[]>([])
+  const [plati, setPlati] = useState<Plata[]>([])
   const [preview, setPreview] = useState<Doc | null>(null)
   const [zipping, setZipping] = useState(false)
 
@@ -57,7 +70,7 @@ export default function ContabilPage({ params }: { params: { token: string } }) 
       const j = await fetch(`/api/acte-contabile/contabil/data?token=${encodeURIComponent(token)}`)
         .then(r => r.json()).catch(() => ({ ok: false }))
       if (!j.ok) { setPhase('denied'); return }
-      setMeta(j.meta || null); setLuna(j.luna || ''); setDocs(j.docs || [])
+      setMeta(j.meta || null); setLuna(j.luna || ''); setDocs(j.docs || []); setPlati(j.cheltuieli || [])
       setPhase('ready')
     })()
   }, [token])
@@ -116,6 +129,7 @@ export default function ContabilPage({ params }: { params: { token: string } }) 
       </header>
 
       <main className="max-w-4xl mx-auto px-5 py-6">
+        <ObservatiiPlati plati={plati} />
         {docs.length === 0 ? (
           <div className="text-center text-slate-400 py-20 bg-white rounded-xl border border-slate-200">Niciun document încărcat pentru această lună.</div>
         ) : (
@@ -158,6 +172,50 @@ export default function ContabilPage({ params }: { params: { token: string } }) 
 
       {preview && <PreviewModal doc={preview} onClose={() => setPreview(null)} />}
     </div>
+  )
+}
+
+// Plățile din extras la care firma a lăsat observații pentru contabil
+function ObservatiiPlati({ plati }: { plati: Plata[] }) {
+  const cuObs = plati.filter(p => (p.observatii || '').trim())
+  if (!cuObs.length) return null
+  return (
+    <section className="mb-6 bg-white rounded-xl border border-amber-200 overflow-hidden">
+      <div className="px-4 py-3 border-b border-amber-100 bg-amber-50/60 flex items-center justify-between gap-3 flex-wrap">
+        <h2 className="text-sm font-bold text-[#0a1628] uppercase tracking-wide flex items-center gap-2">
+          <MessageSquare size={15} className="text-amber-500" /> Observații plăți
+        </h2>
+        <span className="text-xs text-slate-500">{cuObs.length} {cuObs.length === 1 ? 'plată' : 'plăți'} din extrasul de cont</span>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="text-left text-xs text-slate-400 bg-slate-50">
+              <th className="px-4 py-2 whitespace-nowrap">Data</th>
+              <th className="px-4 py-2">Operațiune</th>
+              <th className="px-4 py-2">Observații</th>
+              <th className="px-4 py-2 text-right whitespace-nowrap">Sumă (lei)</th>
+              <th className="px-4 py-2 whitespace-nowrap">Document</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-slate-50">
+            {cuObs.map(p => (
+              <tr key={p.id} className="align-top">
+                <td className="px-4 py-2.5 text-xs text-slate-500 whitespace-nowrap">{ziRo(p.data)}</td>
+                <td className="px-4 py-2.5 text-[#0a1628]">{p.descriere}</td>
+                <td className="px-4 py-2.5 text-slate-700 whitespace-pre-wrap">{p.observatii}</td>
+                <td className="px-4 py-2.5 text-right font-medium text-[#0a1628] whitespace-nowrap">{fmtRon(p.suma)}</td>
+                <td className="px-4 py-2.5 whitespace-nowrap">
+                  {p.acoperit
+                    ? <span className="text-xs font-medium text-emerald-700">✓ are document</span>
+                    : <span className="text-xs font-medium text-red-600">fără document</span>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </section>
   )
 }
 

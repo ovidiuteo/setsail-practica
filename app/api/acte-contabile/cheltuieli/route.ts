@@ -39,11 +39,12 @@ export async function POST(req: NextRequest) {
 export async function PATCH(req: NextRequest) {
   const body = await req.json().catch(() => null)
   if (!body) return NextResponse.json({ ok: false, error: 'Cerere invalidă.' }, { status: 400 })
-  const { entity, token, id, acoperit, data, descriere, suma, factura_doc_id } = body
+  const { entity, token, id, acoperit, data, descriere, suma, factura_doc_id, observatii } = body
   if (!isEntity(entity)) return NextResponse.json({ ok: false, error: 'invalid entity' }, { status: 400 })
   if (!id) return NextResponse.json({ ok: false, error: 'missing id' }, { status: 400 })
   if (!(await canAccess(entity, token))) return NextResponse.json({ ok: false, error: 'Acces refuzat.' }, { status: 401 })
-  const patch: { acoperit?: boolean; data?: string | null; descriere?: string; suma?: number; factura_doc_id?: string | null } = {}
+  const patch: { acoperit?: boolean; data?: string | null; descriere?: string; suma?: number; factura_doc_id?: string | null; observatii?: string } = {}
+  if (observatii !== undefined) patch.observatii = String(observatii).slice(0, 1000)
   if (factura_doc_id !== undefined) patch.factura_doc_id = typeof factura_doc_id === 'string' && factura_doc_id ? factura_doc_id : null
   if (typeof acoperit === 'boolean') patch.acoperit = acoperit
   if (descriere !== undefined) patch.descriere = String(descriere).slice(0, 300)

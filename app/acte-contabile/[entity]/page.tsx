@@ -63,6 +63,7 @@ type Cheltuiala = {
   sursa: 'extras' | 'manual'
   source_doc_id: string | null
   factura_doc_id: string | null
+  observatii: string
   created_at: string
 }
 
@@ -578,9 +579,13 @@ function CheltuieliPanel({ entity, token, month, items, setItems, analyzing, has
     await fetch(`/api/acte-contabile/cheltuieli?entity=${entity}&id=${c.id}&token=${encodeURIComponent(token || '')}`, { method: 'DELETE' }).catch(() => {})
   }
 
-  async function saveField(c: Cheltuiala, field: 'descriere' | 'suma' | 'data', value: string) {
-    const val = field === 'suma' ? (Number(value.replace(',', '.')) || 0) : value
-    if ((c as any)[field] === val) return
+  async function saveField(c: Cheltuiala, field: 'descriere' | 'suma' | 'data' | 'observatii', value: string) {
+    // suma e afișată românește (1.415,83): scoatem punctele de mii, virgula devine punct zecimal
+    const txt = value.trim()
+    const numar = Number(txt.includes(',') ? txt.replace(/\./g, '').replace(',', '.') : txt)
+    if (field === 'suma' && !isFinite(numar)) return
+    const val = field === 'suma' ? numar : value
+    if (field === 'suma' ? Math.abs(Number(c.suma) - numar) < 0.005 : (c as any)[field] === val) return
     setItems(prev => (prev || []).map(x => x.id === c.id ? { ...x, [field]: val } : x))
     await patch(c.id, { [field]: val })
   }
@@ -671,6 +676,7 @@ function CheltuieliPanel({ entity, token, month, items, setItems, analyzing, has
                 <th className="px-3 py-2 w-10 text-center">Bon/<br />factură</th>
                 <th className="px-3 py-2">Operațiune</th>
                 <th className="px-3 py-2 whitespace-nowrap">Data</th>
+                <th className="px-3 py-2 whitespace-nowrap" title="Apar și pe pagina contabilului, la „Observații plăți”">Observații <span className="font-normal text-slate-300">(văzute de contabil)</span></th>
                 <th className="px-3 py-2 text-right whitespace-nowrap">Sumă (lei)</th>
                 <th className="px-3 py-2"></th>
               </tr>
@@ -690,6 +696,9 @@ function CheltuieliPanel({ entity, token, month, items, setItems, analyzing, has
                   <td className="px-3 py-2 whitespace-nowrap">
                     <input type="date" defaultValue={c.data || ''} onBlur={e => saveField(c, 'data', e.target.value)}
                       className="bg-transparent border border-transparent hover:border-slate-200 focus:border-sky-300 rounded px-1 py-1 text-xs text-slate-500 focus:outline-none" />
+                  </td>
+                  <td className="px-3 py-2 min-w-[200px] max-w-[320px]">
+                    <ObservatieCell value={c.observatii || ''} onSave={v => saveField(c, 'observatii', v)} />
                   </td>
                   <td className="px-3 py-2 text-right whitespace-nowrap">
                     <input defaultValue={fmtRon(Number(c.suma))} onBlur={e => saveField(c, 'suma', e.target.value)}
@@ -750,6 +759,36 @@ function CheltuieliPanel({ entity, token, month, items, setItems, analyzing, has
         </div>
       )}
     </div>
+  )
+}
+
+// Observația unei plăți: text simplu; la click devine câmp editabil (Enter salvează, Shift+Enter rând nou, Esc renunță)
+function ObservatieCell({ value, onSave }: { value: string; onSave: (v: string) => void }) {
+  const [edit, setEdit] = useState(false)
+  const [text, setText] = useState(value)
+  useEffect(() => { if (!edit) setText(value) }, [value, edit])
+  function gata(salveaza: boolean) {
+    setEdit(false)
+    if (salveaza && text.trim() !== value.trim()) onSave(text.trim())
+    else setText(value)
+  }
+  if (!edit) {
+    return (
+      <button type="button" onClick={() => setEdit(true)} title="Click pentru a scrie o observație"
+        className={`w-full text-left rounded px-1.5 py-1 text-xs border border-transparent hover:border-slate-200 whitespace-pre-wrap ${value ? 'text-slate-700' : 'text-slate-300'}`}>
+        {value || '+ observație'}
+      </button>
+    )
+  }
+  return (
+    <textarea autoFocus value={text} rows={Math.max(2, text.split('\n').length)}
+      onChange={e => setText(e.target.value)} onBlur={() => gata(true)}
+      onKeyDown={e => {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); gata(true) }
+        if (e.key === 'Escape') gata(false)
+      }}
+      placeholder="ex. factura urmează, plată avans…"
+      className="w-full resize-y rounded px-1.5 py-1 text-xs text-slate-700 border border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-100" />
   )
 }
 
