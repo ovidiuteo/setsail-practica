@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { Loader2, ShieldAlert, FileText, Download, Eye, X, FolderArchive, FileSpreadsheet, MessageSquare } from 'lucide-react'
+import { Loader2, ShieldAlert, FileText, Download, Eye, X, FolderArchive, FileSpreadsheet } from 'lucide-react'
 
 type Doc = {
   id: string
@@ -129,7 +129,6 @@ export default function ContabilPage({ params }: { params: { token: string } }) 
       </header>
 
       <main className="max-w-4xl mx-auto px-5 py-6">
-        <ObservatiiPlati plati={plati} />
         {docs.length === 0 ? (
           <div className="text-center text-slate-400 py-20 bg-white rounded-xl border border-slate-200">Niciun document încărcat pentru această lună.</div>
         ) : (
@@ -167,6 +166,7 @@ export default function ContabilPage({ params }: { params: { token: string } }) 
             ))}
           </div>
         )}
+        <ObservatiiPlati plati={plati} />
         <p className="text-xs text-slate-400 text-center mt-6">Acces doar pentru vizualizare și descărcare. Pentru modificări, contactează emitentul.</p>
       </main>
 
@@ -175,45 +175,28 @@ export default function ContabilPage({ params }: { params: { token: string } }) 
   )
 }
 
-// Plățile din extras la care firma a lăsat observații pentru contabil
+// Plățile din extras la care firma a lăsat observații pentru contabil — aceeași formă ca grupurile de documente
 function ObservatiiPlati({ plati }: { plati: Plata[] }) {
   const cuObs = plati.filter(p => (p.observatii || '').trim())
   if (!cuObs.length) return null
   return (
-    <section className="mb-6 bg-white rounded-xl border border-amber-200 overflow-hidden">
-      <div className="px-4 py-3 border-b border-amber-100 bg-amber-50/60 flex items-center justify-between gap-3 flex-wrap">
-        <h2 className="text-sm font-bold text-[#0a1628] uppercase tracking-wide flex items-center gap-2">
-          <MessageSquare size={15} className="text-amber-500" /> Observații plăți
-        </h2>
-        <span className="text-xs text-slate-500">{cuObs.length} {cuObs.length === 1 ? 'plată' : 'plăți'} din extrasul de cont</span>
-      </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-xs text-slate-400 bg-slate-50">
-              <th className="px-4 py-2 whitespace-nowrap">Data</th>
-              <th className="px-4 py-2">Operațiune</th>
-              <th className="px-4 py-2">Observații</th>
-              <th className="px-4 py-2 text-right whitespace-nowrap">Sumă (lei)</th>
-              <th className="px-4 py-2 whitespace-nowrap">Document</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-slate-50">
-            {cuObs.map(p => (
-              <tr key={p.id} className="align-top">
-                <td className="px-4 py-2.5 text-xs text-slate-500 whitespace-nowrap">{ziRo(p.data)}</td>
-                <td className="px-4 py-2.5 text-[#0a1628]">{p.descriere}</td>
-                <td className="px-4 py-2.5 text-slate-700 whitespace-pre-wrap">{p.observatii}</td>
-                <td className="px-4 py-2.5 text-right font-medium text-[#0a1628] whitespace-nowrap">{fmtRon(p.suma)}</td>
-                <td className="px-4 py-2.5 whitespace-nowrap">
-                  {p.acoperit
-                    ? <span className="text-xs font-medium text-emerald-700">✓ are document</span>
-                    : <span className="text-xs font-medium text-red-600">fără document</span>}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+    <section className="mt-6">
+      <h2 className="text-sm font-bold text-[#0a1628] mb-2 uppercase tracking-wide">Observații plăți <span className="text-xs font-normal text-slate-400">({cuObs.length})</span></h2>
+      <div className="bg-white rounded-xl border border-slate-200 divide-y divide-slate-50">
+        {cuObs.map(p => (
+          <div key={p.id} className="flex items-center justify-between gap-3 px-4 py-3">
+            <div className="min-w-0">
+              <div className="font-medium text-[#0a1628]">{p.descriere}</div>
+              <div className="text-xs text-slate-400">{ziRo(p.data)} · {fmtRon(p.suma)} lei</div>
+              <div className="text-sm text-slate-600 mt-1 whitespace-pre-wrap">{p.observatii}</div>
+            </div>
+            <div className="shrink-0">
+              {p.acoperit
+                ? <span className="px-2.5 py-1 rounded-lg text-xs font-medium border border-emerald-200 text-emerald-700 bg-emerald-50">✓ are document</span>
+                : <span className="px-2.5 py-1 rounded-lg text-xs font-medium border border-red-200 text-red-600 bg-red-50">fără document</span>}
+            </div>
+          </div>
+        ))}
       </div>
     </section>
   )
