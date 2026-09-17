@@ -34,6 +34,7 @@ type Cheltuiala = {
   acoperit: boolean
   sursa: 'extras' | 'manual'
   source_doc_id: string | null
+  factura_doc_id: string | null
   created_at: string
 }
 
@@ -427,7 +428,9 @@ function MonthSection({ m, entity, token, groupDocs, monthSlotDocs, monthHasFile
 
       {(hasExtras || (chelt && chelt.length > 0)) && (
         <CheltuieliPanel entity={entity} token={token} month={m} items={chelt} setItems={setChelt}
-          analyzing={analyzing} hasExtras={hasExtras} onReanalyze={analyzeExtras} />
+          analyzing={analyzing} hasExtras={hasExtras} onReanalyze={analyzeExtras}
+          docs={groupDocs} onPreview={d => setPreview(d)}
+          onDocAdded={d => setDocs(prev => [d, ...(prev || [])])} />
       )}
 
       <SectionAddDoc entity={entity} token={token} month={m}
@@ -466,13 +469,24 @@ function MonthSection({ m, entity, token, groupDocs, monthSlotDocs, monthHasFile
   )
 }
 
-function CheltuieliPanel({ entity, token, month, items, setItems, analyzing, hasExtras, onReanalyze }: {
+function CheltuieliPanel({ entity, token, month, items, setItems, analyzing, hasExtras, onReanalyze, docs, onPreview, onDocAdded }: {
   entity: string; token: string | null; month: string
   items: Cheltuiala[] | null; setItems: (u: (prev: Cheltuiala[] | null) => Cheltuiala[] | null) => void
   analyzing: boolean; hasExtras: boolean; onReanalyze: () => void
+  docs: Doc[]; onPreview: (d: Doc) => void; onDocAdded: (d: Doc) => void
 }) {
   const [doarNeacoperite, setDoarNeacoperite] = useState(true)
   const [adding, setAdding] = useState(false)
+  const [facturaPentru, setFacturaPentru] = useState<Cheltuiala | null>(null)
+
+  // Factura încărcată pentru o cheltuială: documentul intră în lună, iar cheltuiala e bifată și legată de el
+  async function facturaIncarcata(c: Cheltuiala, d: Doc) {
+    onDocAdded(d)
+    setItems(prev => (prev || []).map(x => x.id === c.id ? { ...x, acoperit: true, factura_doc_id: d.id } : x))
+    setFacturaPentru(null)
+    const ok = await patch(c.id, { acoperit: true, factura_doc_id: d.id })
+    if (!ok) alert('Factura s-a încărcat, dar cheltuiala nu a putut fi bifată. Bifeaz-o manual.')
+  }
   const [nd, setNd] = useState({ data: '', descriere: '', suma: '' })
 
   const fmtRon = (n: number) => n.toLocaleString('ro-RO', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
@@ -605,8 +619,25 @@ function CheltuieliPanel({ entity, token, month, items, setItems, analyzing, has
                     <input defaultValue={fmtRon(Number(c.suma))} onBlur={e => saveField(c, 'suma', e.target.value)}
                       className="w-24 text-right bg-transparent border border-transparent hover:border-slate-200 focus:border-sky-300 rounded px-1 py-1 text-sm font-medium text-[#0a1628] focus:outline-none" />
                   </td>
-                  <td className="px-3 py-2 text-right">
-                    <button onClick={() => remove(c)} className="p-1 rounded text-slate-300 hover:text-red-500 hover:bg-red-50" title="Șterge">
+                  <td className="px-3 py-2 text-right whitespace-nowrap">
+                    {(() => {
+                      const factura = c.factura_doc_id ? docs.find(d => d.id === c.factura_doc_id) : undefined
+                      if (factura) return (
+                        <button onClick={() => onPreview(factura)} title={factura.file_name || 'Factura'}
+                          className="inline-flex items-center gap-1 px-2 py-1 mr-1 rounded-lg text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100">
+                          <FileText size={12} /> Factura
+                        </button>
+                      )
+                      if (!c.acoperit) return (
+                        <button onClick={() => setFacturaPentru(c)}
+                          className="inline-flex items-center gap-1 px-2 py-1 mr-1 rounded-lg text-xs font-medium text-[#0a1628] hover:brightness-95"
+                          style={{ background: '#f5c842' }}>
+                          <Upload size={12} /> Adaugă factură
+                        </button>
+                      )
+                      return null
+                    })()}
+                    <button onClick={() => remove(c)} className="p-1 rounded text-slate-300 hover:text-red-500 hover:bg-red-50 align-middle" title="Șterge">
                       <Trash2 size={13} />
                     </button>
                   </td>
@@ -614,6 +645,32 @@ function CheltuieliPanel({ entity, token, month, items, setItems, analyzing, has
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {facturaPentru && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center p-4 overflow-y-auto"
+          onClick={e => { if (e.target === e.currentTarget) setFacturaPentru(null) }}>
+          <div className="w-full max-w-3xl my-10">
+            <div className="bg-[#0a1628] text-white rounded-t-2xl px-5 py-3 flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-xs text-white/60">Factură / bon pentru cheltuiala</div>
+                <div className="font-semibold truncate">{facturaPentru.descriere}</div>
+                <div className="text-xs text-white/70">
+                  {facturaPentru.data ? new Date(facturaPentru.data).toLocaleDateString('ro-RO') + ' · ' : ''}{fmtRon(Number(facturaPentru.suma))} lei · {LUNA_LABEL(month)}
+                </div>
+              </div>
+              <button onClick={() => setFacturaPentru(null)} className="text-white/60 hover:text-white"><X size={18} /></button>
+            </div>
+            <UploadBox entity={entity} token={token} fixedLuna={month} compact
+              initial={{
+                categorie: 'factura',
+                nume: facturaPentru.descriere,
+                dataDoc: facturaPentru.data || '',
+                note: `Cheltuială din extras: ${facturaPentru.descriere} — ${fmtRon(Number(facturaPentru.suma))} lei`,
+              }}
+              onUploaded={d => facturaIncarcata(facturaPentru, d)} />
+          </div>
         </div>
       )}
     </div>
@@ -1487,15 +1544,17 @@ function ContractePanel({ entity, token }: { entity: string; token: string | nul
   )
 }
 
-function UploadBox({ entity, token, onUploaded, fixedLuna, compact }: {
+function UploadBox({ entity, token, onUploaded, fixedLuna, compact, initial }: {
   entity: string; token: string | null; onUploaded: (d: Doc) => void
   fixedLuna?: string; compact?: boolean
+  // valori precompletate (ex. factura pentru o cheltuială din extras)
+  initial?: { categorie?: string; nume?: string; dataDoc?: string; note?: string }
 }) {
-  const [categorie, setCategorie] = useState('factura')
+  const [categorie, setCategorie] = useState(initial?.categorie || 'factura')
   const [luna, setLuna] = useState(fixedLuna || currentLuna())
-  const [nume, setNume] = useState('')
-  const [dataDoc, setDataDoc] = useState('')
-  const [note, setNote] = useState('')
+  const [nume, setNume] = useState(initial?.nume || '')
+  const [dataDoc, setDataDoc] = useState(initial?.dataDoc || '')
+  const [note, setNote] = useState(initial?.note || '')
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState('')
   const [ok, setOk] = useState('')

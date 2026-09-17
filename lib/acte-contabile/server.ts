@@ -218,6 +218,7 @@ export type Cheltuiala = {
   acoperit: boolean
   sursa: 'extras' | 'manual'
   source_doc_id: string | null
+  factura_doc_id: string | null   // factura/bonul încărcat pentru cheltuială
   created_at: string
 }
 
@@ -244,9 +245,10 @@ export async function insertCheltuiala(c: {
 }
 
 export async function updateCheltuiala(entity: Entity, id: string, patch: {
-  acoperit?: boolean; data?: string | null; descriere?: string; suma?: number
+  acoperit?: boolean; data?: string | null; descriere?: string; suma?: number; factura_doc_id?: string | null
 }): Promise<{ ok: boolean; row?: Cheltuiala; error?: string }> {
   const upd: Record<string, unknown> = {}
+  if (patch.factura_doc_id !== undefined) upd.factura_doc_id = patch.factura_doc_id
   if (patch.acoperit !== undefined) upd.acoperit = patch.acoperit
   if (patch.data !== undefined) upd.data = patch.data
   if (patch.descriere !== undefined) upd.descriere = patch.descriere
@@ -267,12 +269,22 @@ export async function deleteCheltuiala(entity: Entity, id: string): Promise<{ ok
 // Înlocuiește cheltuielile auto-extrase (sursa='extras') pentru o lună; păstrează cele manuale
 export async function replaceCheltuieliExtras(entity: Entity, luna: string, sourceDocId: string | null, rows: { data: string | null; descriere: string; suma: number; acoperit?: boolean }[]): Promise<Cheltuiala[]> {
   const sb = acteServiceClient()
+  // La re-analiză păstrăm factura legată (și bifa) pentru aceeași operațiune: aceeași dată, sumă și descriere
+  const { data: vechi } = await sb.from('acte_contabile_cheltuieli').select('data, suma, descriere, factura_doc_id')
+    .eq('entity', entity).eq('luna', luna).eq('sursa', 'extras').not('factura_doc_id', 'is', null)
+  const cheie = (x: { data: string | null; suma: number; descriere: string }) => `${x.data || ''}|${Number(x.suma).toFixed(2)}|${x.descriere.trim().toLowerCase()}`
+  const facturi = new Map<string, string>()
+  for (const v of (vechi || []) as { data: string | null; suma: number; descriere: string; factura_doc_id: string }[]) facturi.set(cheie(v), v.factura_doc_id)
   await sb.from('acte_contabile_cheltuieli').delete().eq('entity', entity).eq('luna', luna).eq('sursa', 'extras')
   if (rows.length === 0) return []
-  const payload = rows.map(r => ({
-    entity, luna, data: r.data, descriere: r.descriere, suma: r.suma,
-    acoperit: r.acoperit ?? false, sursa: 'extras' as const, source_doc_id: sourceDocId,
-  }))
+  const payload = rows.map(r => {
+    const factura = facturi.get(cheie(r)) || null
+    return {
+      entity, luna, data: r.data, descriere: r.descriere, suma: r.suma,
+      acoperit: factura ? true : (r.acoperit ?? false), sursa: 'extras' as const, source_doc_id: sourceDocId,
+      factura_doc_id: factura,
+    }
+  })
   const { data } = await sb.from('acte_contabile_cheltuieli').insert(payload).select()
   return (data ?? []) as Cheltuiala[]
 }
