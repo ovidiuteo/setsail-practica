@@ -6,10 +6,11 @@ export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
 // Teste grilă ANR (doar admin).
-//   GET                                   -> { sectiuni, intrebari }
-//   POST { action:'save', id?, sectiune_id, intrebare, raspunsuri, explicatie? }
+//   GET                                   -> { sectiuni, intrebari, config, structura }
+//   POST { action:'save', id?, sectiune_id, intrebare, raspunsuri, explicatie?, imagine? }
+//   POST { action:'imagine', nume, data (data URL) } -> { imagine } (în bucket-ul public grila-imagini)
 //   POST { action:'delete', id }
-//   POST { action:'import', sectiune_id, intrebari:[{ intrebare, raspunsuri }] }
+//   POST { action:'import', sectiune_id, intrebari:[{ intrebare, raspunsuri, explicatie? }], sursa? }
 
 type Raspuns = { text: string; corect: boolean }
 
@@ -39,13 +40,16 @@ function curataRaspunsuri(v: unknown): Raspuns[] | string {
 export async function GET(req: NextRequest) {
   if (!admin(req)) return NextResponse.json({ error: 'Neautorizat' }, { status: 401 })
   const sb = svc()
-  const [s, i] = await Promise.all([
+  const [s, i, c, t] = await Promise.all([
     sb.from('grila_sectiuni').select('id, cod, nume, parent_id, categorii, ordine').order('ordine'),
-    sb.from('grila_intrebari').select('id, sectiune_id, nr, intrebare, raspunsuri, explicatie, sursa, activ, updated_at')
+    sb.from('grila_intrebari').select('id, sectiune_id, nr, intrebare, raspunsuri, explicatie, sursa, imagine, activ, updated_at')
       .order('nr', { ascending: true, nullsFirst: false }).order('created_at'),
+    sb.from('grila_test_config').select('categorie, total, minim'),
+    sb.from('grila_test_structura').select('categorie, sectiune_id, nr_intrebari'),
   ])
-  if (s.error || i.error) return NextResponse.json({ error: (s.error || i.error)!.message }, { status: 500 })
-  return NextResponse.json({ sectiuni: s.data, intrebari: i.data })
+  const eroare = s.error || i.error || c.error || t.error
+  if (eroare) return NextResponse.json({ error: eroare.message }, { status: 500 })
+  return NextResponse.json({ sectiuni: s.data, intrebari: i.data, config: c.data, structura: t.data })
 }
 
 export async function POST(req: NextRequest) {
@@ -66,9 +70,10 @@ export async function POST(req: NextRequest) {
     if (!intrebare) return NextResponse.json({ error: 'Scrie întrebarea.' }, { status: 400 })
     const raspunsuri = curataRaspunsuri(body.raspunsuri)
     if (typeof raspunsuri === 'string') return NextResponse.json({ error: raspunsuri }, { status: 400 })
-    const camp = { intrebare, raspunsuri, explicatie: txt(body.explicatie), updated_at: new Date().toISOString() }
+    const imagine = body.imagine ? txt(body.imagine, 200) : null
+    const camp = { intrebare, raspunsuri, explicatie: txt(body.explicatie), imagine, updated_at: new Date().toISOString() }
     if (body.id) {
-      const { data, error } = await sb.from('grila_intrebari').update(camp).eq('id', String(body.id)).select().maybeSingle()
+      const { data, error } = await sb.from('grila_intrebari').update({ ...camp, sectiune_id: String(body.sectiune_id || '') || undefined }).eq('id', String(body.id)).select().maybeSingle()
       if (error) return NextResponse.json({ error: error.message }, { status: 500 })
       return NextResponse.json({ intrebare: data })
     }
@@ -78,6 +83,19 @@ export async function POST(req: NextRequest) {
       .insert({ ...camp, sectiune_id: sectiuneId, nr: await urmatorulNr(sectiuneId) }).select().maybeSingle()
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ intrebare: data })
+  }
+
+  if (body.action === 'imagine') {
+    const m = /^data:(image\/(png|jpe?g|webp|gif));base64,(.+)$/.exec(String(body.data || ''))
+    if (!m) return NextResponse.json({ error: 'Imagine invalidă (PNG, JPG, WEBP sau GIF).' }, { status: 400 })
+    const buf = Buffer.from(m[3], 'base64')
+    if (buf.length > 3 * 1024 * 1024) return NextResponse.json({ error: 'Imaginea are peste 3 MB.' }, { status: 400 })
+    const ext = m[2] === 'jpeg' ? 'jpg' : m[2]
+    const baza = txt(body.nume, 80).replace(/\.[^.]+$/, '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9-]+/g, '-').replace(/^-+|-+$/g, '') || 'imagine'
+    const nume = `${baza}-${Date.now().toString(36)}.${ext}`
+    const { error } = await sb.storage.from('grila-imagini').upload(nume, buf, { contentType: m[1] })
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ imagine: nume })
   }
 
   if (body.action === 'delete') {
@@ -98,7 +116,7 @@ export async function POST(req: NextRequest) {
       const raspunsuri = curataRaspunsuri(q?.raspunsuri)
       if (!intrebare) { erori.push(`rândul ${idx + 1}: lipsește întrebarea`); return }
       if (typeof raspunsuri === 'string') { erori.push(`rândul ${idx + 1}: ${raspunsuri}`); return }
-      randuri.push({ sectiune_id: sectiuneId, nr: nr++, intrebare, raspunsuri, sursa: txt(body.sursa, 200) })
+      randuri.push({ sectiune_id: sectiuneId, nr: nr++, intrebare, raspunsuri, explicatie: txt(q?.explicatie), sursa: txt(body.sursa, 200) })
     })
     if (erori.length) return NextResponse.json({ error: 'Importul nu s-a făcut:\n' + erori.slice(0, 10).join('\n') }, { status: 400 })
     if (!randuri.length) return NextResponse.json({ error: 'Nicio întrebare de importat.' }, { status: 400 })
