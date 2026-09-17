@@ -186,8 +186,7 @@ function ObservatiiPlati({ plati }: { plati: Plata[] }) {
         {cuObs.map(p => (
           <div key={p.id} className="flex items-center justify-between gap-3 px-4 py-3">
             <div className="min-w-0">
-              <div className="font-medium text-[#0a1628]">{p.descriere} - {p.observatii.trim().replace(/s*
-s*/g, " ")}</div>
+              <div className="font-medium text-[#0a1628]">{p.descriere} - {p.observatii.trim().replace(/\s*\n\s*/g, ' ')}</div>
               <div className="text-xs text-slate-400">{ziRo(p.data)} · {fmtRon(p.suma)} lei</div>
             </div>
             <div className="shrink-0">
