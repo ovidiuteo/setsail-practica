@@ -2,7 +2,7 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useEffect } from 'react'
-import { Ship, Calendar, Users, Settings, Anchor, Building2, Mail, PenTool, LogOut, Ticket, Award } from 'lucide-react'
+import { Ship, Calendar, Users, Settings, Anchor, Building2, Mail, PenTool, LogOut, Ticket, Award, SquareCheckBig } from 'lucide-react'
 import GoogleGIcon from '@/components/GoogleGIcon'
 
 const nav = [
@@ -11,6 +11,7 @@ const nav = [
   { href: '/admin/cursanti',    label: 'Cursanți',          icon: Users },
   { href: '/admin/vouchere',    label: 'Vouchere',          icon: Ticket },
   { href: '/admin/diplome',     label: 'Diplome',           icon: Award },
+  { href: '/admin/teste-grila', label: 'Teste grilă ANR',   icon: SquareCheckBig },
   { href: '/admin/emailuri',    label: 'Emailuri',          icon: Mail },
   { href: '/admin/gmail',       label: 'Gmail Templates',   icon: GoogleGIcon },
   { href: '/admin/semnaturi',   label: 'Semnături',         icon: PenTool },
@@ -35,6 +36,7 @@ const ADMIN_TAB_TITLES: Record<string, string> = {
   '/admin/diplome/coada':              'Tipărire listă diplome',
   '/admin/diplome/sabloane':           'Șabloane diplome',
   '/admin/diplome/print':              'Print diplome',
+  '/admin/teste-grila':                'Teste grilă ANR',
   '/admin/emailuri':                   'Emailuri',
   '/admin/emailuri/reguli':            'Reguli email',
   '/admin/gmail':                      'Gmail Templates',
