@@ -723,8 +723,8 @@ export default function RosterPage() {
         ) : tab === 'verify' ? (
           <VerifyTab sessionId={id} token={token} rows={rows} onRowUpdate={rowUpdate} esteRadio={esteRadio} onCategorie={saveCategorie} />
         ) : (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 w-max min-w-full">
-            <table className="w-full text-sm border-collapse">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 w-max">
+            <table className="w-max text-sm border-collapse [&_th]:px-[1.5ch] [&_td]:px-[1.5ch] [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap [&_th]:w-auto [&_th]:min-w-0">
               <thead>
                 <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
                   {/* Plicul: cine primește mailurile. All / None bifează toată lista. */}
@@ -1586,8 +1586,8 @@ function LeaduriTab({ sessionId, token, variant = 'full', onEnrolled }: {
   const full = variant === 'full'
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 w-max min-w-full">
-      <table className="w-full text-sm border-collapse">
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 w-max">
+      <table className="w-max text-sm border-collapse [&_th]:px-[1.5ch] [&_td]:px-[1.5ch] [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap [&_th]:w-auto [&_th]:min-w-0">
         <thead>
           <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
             <th className="px-3 py-2.5 w-8">#</th>
