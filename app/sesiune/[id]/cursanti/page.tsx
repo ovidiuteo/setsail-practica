@@ -569,8 +569,10 @@ export default function RosterPage() {
   )
 
   return (
-    <div className="min-h-screen bg-gray-50 p-4 sm:p-8">
-      <div className="max-w-7xl mx-auto">
+    // Listele nu mai au lățime maximă: tabelul se întinde cât toate coloanele, iar pagina
+    // scrollează orizontal. La Verify by ID rămâne pe lățimea ecranului (imaginea actului).
+    <div className={`min-h-screen bg-gray-50 p-4 sm:p-8 ${tab === 'verify' ? '' : 'w-max min-w-full'}`}>
+      <div>
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
             <div className="flex items-center gap-4 flex-wrap">
@@ -719,9 +721,9 @@ export default function RosterPage() {
         ) : rows.length === 0 ? (
           <div className="text-center text-gray-400 py-16">Niciun cursant în sesiune.</div>
         ) : tab === 'verify' ? (
-          <VerifyTab sessionId={id} token={token} rows={rows} onRowUpdate={rowUpdate} />
+          <VerifyTab sessionId={id} token={token} rows={rows} onRowUpdate={rowUpdate} esteRadio={esteRadio} onCategorie={saveCategorie} />
         ) : (
-          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 w-max min-w-full">
             <table className="w-full text-sm border-collapse">
               <thead>
                 <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
@@ -1584,7 +1586,7 @@ function LeaduriTab({ sessionId, token, variant = 'full', onEnrolled }: {
   const full = variant === 'full'
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-x-auto">
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 w-max min-w-full">
       <table className="w-full text-sm border-collapse">
         <thead>
           <tr className="bg-gray-50 text-left text-xs font-semibold text-gray-500 uppercase tracking-wide">
@@ -1650,9 +1652,11 @@ function LeaduriTab({ sessionId, token, variant = 'full', onEnrolled }: {
   )
 }
 
-function VerifyTab({ sessionId, token, rows, onRowUpdate }: {
+function VerifyTab({ sessionId, token, rows, onRowUpdate, esteRadio, onCategorie }: {
   sessionId: string; token: string; rows: Row[]
   onRowUpdate: (id: string, partial: Partial<Row>) => void
+  esteRadio: boolean                                  // radio: Obținere/Prelungire LRC; ANR: categoria C/D
+  onCategorie: (studentId: string, v: string) => void
 }) {
   const [index, setIndex] = useState(0)
   const [form, setForm] = useState<Record<string, string>>({})
@@ -1762,8 +1766,13 @@ function VerifyTab({ sessionId, token, rows, onRowUpdate }: {
             )
           })}
           <div className="pt-3 mt-1 border-t border-gray-100">
-            <span className="block text-[11px] uppercase tracking-wide text-gray-400 mb-1">Obținere / Prelungire LRC</span>
-            <LrcSelect value={cur.obtinere_prelungire || ''} onConfirm={saveLrc} />
+            {esteRadio ? (<>
+              <span className="block text-[11px] uppercase tracking-wide text-gray-400 mb-1">Obținere / Prelungire LRC</span>
+              <LrcSelect value={cur.obtinere_prelungire || ''} onConfirm={saveLrc} />
+            </>) : (<>
+              <span className="block text-[11px] uppercase tracking-wide text-gray-400 mb-1">Categorie</span>
+              <CategorieSelect value={cur.class_caa} onConfirm={v => onCategorie(cur.id, v)} />
+            </>)}
           </div>
         </div>
       </div>
