@@ -46,6 +46,15 @@ export const MAIL_VAR_GROUPS: MailVarGroup[] = [
     ],
   },
   {
+    category: 'Linkurile seriei', icon: '🔗', vars: [
+      { key: 'link_zoom', label: 'Link Zoom (cursul online)' },
+      { key: 'link_whatsapp', label: 'Link grup WhatsApp al seriei' },
+      { key: 'link_arhiva_video', label: 'Link arhivă video' },
+      { key: 'link_materiale', label: 'Link manuale | prezentări | teste grilă' },
+      { key: 'link_comunitate', label: 'Link comunitate SetSail — Toți într-o barcă' },
+    ],
+  },
+  {
     category: 'Date de contact', icon: '📞', vars: [
       { key: 'pers_cont_1', label: 'Persoană contact 1' },
       { key: 'pers_cont_2', label: 'Persoană contact 2' },
@@ -209,6 +218,12 @@ export function mailVarValues(ctx: MailVarCtx): Record<string, string> {
     zi_sapt_curs_3: cursDay(csd, 3).zi,
     zz_llll_curs_2: cursDay(csd, 2).data,
     zz_llll_curs_3: cursDay(csd, 3).data,
+    // Linkurile seriei (completate în „Editează sesiunea"); goale dacă lipsesc
+    link_zoom: String(sess.zoom_url || '').trim(),
+    link_whatsapp: String(sess.whatsapp_url || '').trim(),
+    link_arhiva_video: String(sess.arhiva_video_url || '').trim(),
+    link_materiale: String(sess.materiale_url || '').trim(),
+    link_comunitate: String(sess.comunitate_url || '').trim(),
     // Intervalele de programare la practică
     ore_practica: practiceSlots(sess).ore,
     intervale_practica: practiceSlots(sess).intervale,
