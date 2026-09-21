@@ -8,6 +8,23 @@ import { scopeForSession } from '@/lib/timeline-scope'
 
 type Step = 'login' | 'confirm' | 'done'
 
+// Un link pe un rând: iconiță, titlu și adresa
+function LinkRand({ r }: { r: { url: string; titlu: string; fundal: string; icon: React.ReactNode } }) {
+  return (
+    <a href={r.url} target="_blank" rel="noopener noreferrer"
+      className="flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-gray-200 hover:border-blue-300 hover:bg-blue-50/40 transition-all">
+      <span className="shrink-0 w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: r.fundal }}>
+        {r.icon}
+      </span>
+      <span className="flex-1 min-w-0">
+        <span className="block text-sm font-medium text-gray-800">{r.titlu}</span>
+        <span className="block text-xs text-gray-400 truncate">{r.url.replace(/^https?:\/\//, '')}</span>
+      </span>
+      <ExternalLink size={15} className="shrink-0 text-gray-300" />
+    </a>
+  )
+}
+
 export default function PortalPage() {
   const [step, setStep] = useState<Step>('login')
   const [code, setCode] = useState('')
@@ -58,11 +75,11 @@ export default function PortalPage() {
 
   // Linkurile seriei arătate cursantului — fiecare apare doar dacă e completat în sesiune
   const resurse = ([
-    { cheie: 'zoom_url', titlu: 'Zoom — cursul online', fundal: '#2d8cff', icon: <Video size={17} className="text-white" /> },
-    { cheie: 'whatsapp_url', titlu: 'Grup WhatsApp al seriei', fundal: '#25d366', icon: <MessageCircle size={17} className="text-white" /> },
-    { cheie: 'arhiva_video_url', titlu: 'Arhivă video', fundal: '#7c3aed', icon: <Film size={17} className="text-white" /> },
-    { cheie: 'materiale_url', titlu: 'Manuale | prezentări | teste grilă', fundal: '#0a1628', icon: <Ship size={17} className="text-white" /> },
-    { cheie: 'comunitate_url', titlu: 'SetSail — Toți într-o barcă · comunitate absolvenți SetSail', fundal: '#25d366', icon: <Users size={17} className="text-white" /> },
+    { cheie: 'zoom_url', titlu: 'Zoom — cursul online', fundal: '#2d8cff', icon: <Video size={17} className="text-white" />, iconMare: <Video size={30} className="text-white" /> },
+    { cheie: 'whatsapp_url', titlu: 'Grup WhatsApp al seriei', fundal: '#25d366', icon: <MessageCircle size={17} className="text-white" />, iconMare: <MessageCircle size={30} className="text-white" /> },
+    { cheie: 'arhiva_video_url', titlu: 'Arhivă video', fundal: '#7c3aed', icon: <Film size={17} className="text-white" />, iconMare: <Film size={30} className="text-white" /> },
+    { cheie: 'materiale_url', titlu: 'Manuale | prezentări | teste grilă', fundal: '#0a1628', icon: <Ship size={17} className="text-white" />, iconMare: <Ship size={30} className="text-white" /> },
+    { cheie: 'comunitate_url', titlu: 'SetSail — Toți într-o barcă · comunitate absolvenți SetSail', fundal: '#25d366', icon: <Users size={17} className="text-white" />, iconMare: <Users size={30} className="text-white" /> },
   ] as const)
     .map(r => ({ ...r, url: String((session as any)?.[r.cheie] || '').trim() }))
     .filter(r => r.url)
@@ -1412,19 +1429,37 @@ export default function PortalPage() {
               <div className="bg-white rounded-2xl p-6 shadow-2xl">
                 <h2 className="font-bold text-gray-900 mb-1">Linkuri utile</h2>
                 <p className="text-xs text-gray-400 mb-4">Cursul online, materialele și grupurile seriei.</p>
+
+                {/* Zoom sus, pe toată lățimea */}
                 <div className="space-y-2">
-                  {resurse.map(r => (
-                    <a key={r.cheie} href={r.url} target="_blank" rel="noopener noreferrer"
-                      className="flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-gray-200 hover:border-blue-300 hover:bg-blue-50/40 transition-all">
-                      <span className="shrink-0 w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: r.fundal }}>
-                        {r.icon}
-                      </span>
-                      <span className="flex-1 min-w-0">
-                        <span className="block text-sm font-medium text-gray-800">{r.titlu}</span>
-                        <span className="block text-xs text-gray-400 truncate">{r.url.replace(/^https?:\/\//, '')}</span>
-                      </span>
-                      <ExternalLink size={15} className="shrink-0 text-gray-300" />
-                    </a>
+                  {resurse.filter(r => r.cheie === 'zoom_url').map(r => (
+                    <LinkRand key={r.cheie} r={r} />
+                  ))}
+                </div>
+
+                {/* Cele două grupuri de WhatsApp — pătrate mari, unul lângă altul */}
+                {resurse.some(r => r.cheie === 'whatsapp_url' || r.cheie === 'comunitate_url') && (
+                  <div className="grid grid-cols-2 gap-2 mt-2">
+                    {(['whatsapp_url', 'comunitate_url'] as const).map(cheie => {
+                      const r = resurse.find(x => x.cheie === cheie)
+                      if (!r) return null
+                      return (
+                        <a key={r.cheie} href={r.url} target="_blank" rel="noopener noreferrer"
+                          className="flex flex-col items-center justify-center text-center gap-2 p-4 min-h-[9rem] rounded-xl border-2 border-gray-200 hover:border-green-400 hover:bg-green-50/40 transition-all">
+                          <span className="shrink-0 w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: r.fundal }}>
+                            {r.iconMare}
+                          </span>
+                          <span className="text-sm font-medium text-gray-800 leading-tight">{r.titlu}</span>
+                        </a>
+                      )
+                    })}
+                  </div>
+                )}
+
+                {/* Restul — arhiva video, manuale — dedesubt */}
+                <div className="space-y-2 mt-2">
+                  {resurse.filter(r => !['zoom_url', 'whatsapp_url', 'comunitate_url'].includes(r.cheie)).map(r => (
+                    <LinkRand key={r.cheie} r={r} />
                   ))}
                 </div>
               </div>
