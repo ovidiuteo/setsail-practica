@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback, useRef, Fragment } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import LivrareCell, { livrareRang } from '@/components/LivrareCell'
 import CopyColoana from '@/components/CopyColoana'
+import { buildAttendanceHtml, buildQrPdfHtml } from '@/lib/print-docs'
 import { parseStudentsText } from '@/lib/import-parse'
 import type { SyncResult } from '@/lib/skipper-result'
 import SkipperSyncModal from '@/components/SkipperSyncModal'
@@ -321,7 +322,7 @@ export default function RosterPage() {
   const [draft, setDraft] = useState('')
   const [saving, setSaving] = useState(false)
   const [ciFor, setCiFor] = useState<{ row: Row; doc: DocKey } | null>(null)
-  const [tab, setTab] = useState<'cursanti' | 'adrese' | 'verify' | 'leaduri'>('cursanti')
+  const [tab, setTab] = useState<'cursanti' | 'adrese' | 'verify' | 'leaduri' | 'administrativ'>('cursanti')
   const [docsVisible, setDocsVisible] = useState(false)
   const [addOpen, setAddOpen] = useState<null | 'manual' | 'paste'>(null)
   const [title, setTitle] = useState('Cursanți — sesiune')
@@ -714,7 +715,7 @@ export default function RosterPage() {
 
         {/* Taburi */}
         <div className="mb-4 flex gap-1 border-b border-gray-200">
-          {([['cursanti', 'Lista cursanți'], ['adrese', 'Lista verificare adrese'], ['verify', 'Verify by ID'], ['leaduri', 'Leaduri radio']] as const).map(([k, lbl]) => (
+          {([['cursanti', 'Lista cursanți'], ['adrese', 'Lista verificare adrese'], ['verify', 'Verify by ID'], ['leaduri', 'Leaduri radio'], ['administrativ', 'Administrativ']] as const).map(([k, lbl]) => (
             <button key={k} onClick={() => setTab(k)}
               className={`px-4 py-2 text-sm font-medium -mb-px border-b-2 ${tab === k ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
               {lbl}
@@ -722,7 +723,9 @@ export default function RosterPage() {
           ))}
         </div>
 
-        {tab === 'leaduri' ? (
+        {tab === 'administrativ' ? (
+          <AdministrativTab sessionId={id} token={token} />
+        ) : tab === 'leaduri' ? (
           <LeaduriTab key={`f-${leadsRefresh}`} sessionId={id} token={token} onEnrolled={() => { load(); setLeadsRefresh(n => n + 1) }} />
         ) : rows === null ? (
           <div className="text-center text-gray-400 py-16">Se încarcă…</div>
@@ -1565,6 +1568,62 @@ const LEAD_STATUS_STYLE: Record<string, string> = {
 const LEAD_STATUSES = ['nou', 'contactat', 'inscris', 'respins', 'arhivat']
 const GROUP_LABEL: Record<string, string> = { next: 'Următoarea serie', past: 'Serii trecute', future: 'Serii viitoare' }
 type SessionOpt = { id: string; label: string; group: string }
+
+// Tab „Administrativ": foaia de prezență (catalog) și pagina A4 cu cele 3 coduri QR,
+// aceleași ca în pagina de admin a sesiunii.
+function AdministrativTab({ sessionId, token }: { sessionId: string; token: string }) {
+  const [date, setDate] = useState<any>(null)
+  const [eroare, setEroare] = useState('')
+
+  useEffect(() => {
+    fetch(`/api/roster/administrativ?session_id=${sessionId}&token=${encodeURIComponent(token)}`)
+      .then(r => r.json())
+      .then(j => j.error ? setEroare('Nu am putut încărca datele.') : setDate(j))
+      .catch(() => setEroare('Conexiune eșuată.'))
+  }, [sessionId, token])
+
+  function tipareste(html: string) {
+    const w = window.open('', '_blank')
+    if (!w) { alert('Browserul a blocat fereastra nouă. Permite pop-up-urile pentru acest site.'); return }
+    w.document.write(html); w.document.close()
+  }
+
+  if (eroare) return <div className="text-center text-red-500 py-16 text-sm">{eroare}</div>
+  if (!date) return <div className="text-center text-gray-400 py-16">Se încarcă…</div>
+
+  const qrGata = !!(date.qr?.portal && date.qr?.skipper && date.qr?.whatsapp)
+  const lipsa = ['portal', 'skipper', 'whatsapp'].filter(k => !date.qr?.[k])
+
+  return (
+    <div className="grid sm:grid-cols-2 gap-4 max-w-3xl">
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+        <h3 className="font-semibold text-sm text-gray-900 mb-1">Catalog (foaie de prezență)</h3>
+        <p className="text-xs text-gray-400 mb-3">
+          {date.catalog.grupa} · {date.catalog.nume.length} cursanți · {date.catalog.zile.length} zile
+        </p>
+        <button onClick={() => tipareste(buildAttendanceHtml(date.catalog.titlu, date.catalog.grupa, date.catalog.zile, date.catalog.nume))}
+          disabled={!date.catalog.nume.length}
+          className="px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50" style={{ background: '#0a1628' }}>
+          Generează catalog
+        </button>
+      </div>
+
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+        <h3 className="font-semibold text-sm text-gray-900 mb-1">Coduri QR grup (A4)</h3>
+        <p className="text-xs text-gray-400 mb-3">
+          {qrGata
+            ? `${date.qr.luna} ${date.qr.an} · portal, platformă, WhatsApp`
+            : `Lipsesc QR-urile: ${lipsa.join(', ')} — se încarcă din pagina de admin a sesiunii.`}
+        </p>
+        <button onClick={() => tipareste(buildQrPdfHtml(date.qr.luna, date.qr.an, date.qr, date.qr.wa))}
+          disabled={!qrGata}
+          className="px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50" style={{ background: '#0B3D6B' }}>
+          Generează QR codes
+        </button>
+      </div>
+    </div>
+  )
+}
 
 function LeaduriTab({ sessionId, token, variant = 'full', onEnrolled }: {
   sessionId: string; token: string
