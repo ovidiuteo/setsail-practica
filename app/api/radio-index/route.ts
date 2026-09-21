@@ -48,13 +48,18 @@ export async function GET(req: NextRequest) {
 
   // Seriile încheiate nu mai apar: nici cele marcate „Finalizată", nici cele cu
   // examenul deja trecut (o ciornă veche rămasă nemarcată e tot o serie încheiată).
+  // Excepție: o serie trecută pusă înapoi pe „Activă"/„Focus" rămâne în listă
+  // ZILE_DUPA zile după examen — mai sunt de terminat documente după serie.
+  const ZILE_DUPA = 60
+  const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
   const today = new Date(); today.setHours(0, 0, 0, 0)
-  const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
+  const todayIso = iso(today)
+  const recentIso = iso(new Date(today.getFullYear(), today.getMonth(), today.getDate() - ZILE_DUPA))
 
   const { data, error } = await sb.from('sessions')
     .select('id, class_caa, session_date, course_start_date, status, timeline_scope, is_clone, session_type, roster_token, locations(name)')
     .in('status', LIVE)
-    .gte('session_date', todayIso)
+    .or(`session_date.gte.${todayIso},and(status.in.(active,focus),session_date.gte.${recentIso})`)
     .order('session_date', { ascending: true })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 

@@ -33,6 +33,14 @@ function interval(s: Row): string {
   return `${end.getDate()} ${luna(end)} ${end.getFullYear()}`
 }
 
+// Serie cu examenul deja trecut (rămâne în listă cât e pusă pe activ/focus)
+function incheiata(s: Row): boolean {
+  if (!s.session_date) return false
+  const azi = new Date(); azi.setHours(0, 0, 0, 0)
+  const [y, m, d] = s.session_date.slice(0, 10).split('-').map(Number)
+  return new Date(y, m - 1, d) < azi
+}
+
 export default function SeriiRadioPage() {
   return (
     <Suspense fallback={<div className="min-h-screen bg-gray-50 p-8 text-center text-gray-400">Se încarcă…</div>}>
@@ -54,7 +62,7 @@ function SeriiRadio() {
     setRows(j.sessions || [])
     setSectiuni(j.sectiuni || [])
   }, [token])
-  useEffect(() => { load(); document.title = 'Serii radio' }, [load])
+  useEffect(() => { load(); document.title = 'Serii SetSail' }, [load])
 
   if (denied) return (
     <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0b1220', color: '#cdd9e5', fontFamily: 'system-ui', textAlign: 'center', padding: 24 }}>
@@ -67,7 +75,7 @@ function SeriiRadio() {
       <div className="max-w-3xl mx-auto">
         {/* Fără titlu de pagină — titlurile sunt cele patru secțiuni */}
         <p className="text-sm text-gray-500 mb-5">
-          Seriile în lucru (focus, active și ciorne). Apasă pe o serie pentru lista de cursanți.
+          Seriile în lucru (focus, active și ciorne), plus seriile active la care examenul a trecut de curând. Apasă pe o serie pentru lista de cursanți.
         </p>
 
         {rows === null ? (
@@ -104,6 +112,9 @@ function SeriiRadio() {
                                 {s.location ? ` · ${s.location}` : ''}
                               </div>
                             </div>
+                            {incheiata(s) && (
+                              <span className="shrink-0 text-xs font-medium px-2 py-1 rounded-lg border bg-slate-50 text-slate-500 border-slate-200">încheiată</span>
+                            )}
                             <span className={`shrink-0 text-xs font-medium px-2 py-1 rounded-lg border ${st.cls}`}>{st.label}</span>
                             <span className="shrink-0 text-gray-300">›</span>
                           </a>
