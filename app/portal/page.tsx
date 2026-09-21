@@ -737,6 +737,8 @@ export default function PortalPage() {
   // „Aceeași adresă ca domiciliul" completează câmpul cu adresa din acte; restul se scriu de mână
   function alegeLivrare(tip: TipLivrare) {
     setLivrare(v => {
+      // al doilea click pe aceeași opțiune o deselectează
+      if (v.tip === tip) return { ...v, tip: null, adresa: '' }
       const adresa = tip === 'domiciliu'
         ? [form.address, form.city, form.county].map(x => String(x || '').trim()).filter(Boolean).join(', ')
         : (v.tip === 'domiciliu' ? '' : v.adresa)
@@ -1368,7 +1370,7 @@ export default function PortalPage() {
                       placeholder={livrare.tip === 'easybox' ? 'ex. Easybox Kaufland Băneasa, Șos. București-Ploiești 44, București' : 'stradă, număr, bloc, scară, apartament, localitate, județ'}
                       className={inputCls} />
                   </div>
-                  <div className="grid sm:grid-cols-3 gap-3">
+                  <div className="space-y-3">
                     <div>
                       <label className={labelCls}>Persoană de contact curier</label>
                       <input value={livrare.contact} onChange={e => setLivrare(v => ({ ...v, contact: e.target.value }))}
