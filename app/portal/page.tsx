@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Ship, RotateCcw, Check, Upload, Loader2, CheckCircle, AlertCircle, Camera, ChevronDown, ChevronUp, FileText, RadioTower, AlertTriangle } from 'lucide-react'
+import { Ship, RotateCcw, Check, Upload, Loader2, CheckCircle, AlertCircle, Camera, ChevronDown, ChevronUp, FileText, RadioTower, AlertTriangle, Video, MessageCircle, Film, Users, ExternalLink } from 'lucide-react'
 import CIImageEditor from '@/components/CIImageEditor'
 import PracticeBooking from '@/components/PracticeBooking'
 import { scopeForSession } from '@/lib/timeline-scope'
@@ -55,6 +55,17 @@ export default function PortalPage() {
     phone: '', birth_date: '', ci_series: '', ci_number: '',
     address: '', county: '', city: '', country: 'Romania', email: '', cnp: '', full_name: '', expiry_date: '', nationality: ''
   })
+
+  // Linkurile seriei arătate cursantului — fiecare apare doar dacă e completat în sesiune
+  const resurse = ([
+    { cheie: 'zoom_url', titlu: 'Zoom — cursul online', fundal: '#2d8cff', icon: <Video size={17} className="text-white" /> },
+    { cheie: 'whatsapp_url', titlu: 'Grup WhatsApp al seriei', fundal: '#25d366', icon: <MessageCircle size={17} className="text-white" /> },
+    { cheie: 'arhiva_video_url', titlu: 'Arhivă video', fundal: '#7c3aed', icon: <Film size={17} className="text-white" /> },
+    { cheie: 'materiale_url', titlu: 'Manuale | prezentări | teste grilă', fundal: '#0a1628', icon: <Ship size={17} className="text-white" /> },
+    { cheie: 'comunitate_url', titlu: 'Comunitate SetSail — grup absolvenți', fundal: '#128c7e', icon: <Users size={17} className="text-white" /> },
+  ] as const)
+    .map(r => ({ ...r, url: String((session as any)?.[r.cheie] || '').trim() }))
+    .filter(r => r.url)
 
   // Adresa de corespondență pentru materialele de curs
   type TipLivrare = 'sala' | 'domiciliu' | 'easybox' | 'alta'
@@ -1393,6 +1404,29 @@ export default function PortalPage() {
                     <img src={student.lrc_certificat_data} alt="Certificat LRC" className="w-full max-h-64 object-contain" />
                   </div>
                 )}
+              </div>
+            )}
+
+            {/* ── Linkuri utile (doar cele completate în sesiune) ── */}
+            {resurse.length > 0 && (
+              <div className="bg-white rounded-2xl p-6 shadow-2xl">
+                <h2 className="font-bold text-gray-900 mb-1">Linkuri utile</h2>
+                <p className="text-xs text-gray-400 mb-4">Cursul online, materialele și grupurile seriei.</p>
+                <div className="space-y-2">
+                  {resurse.map(r => (
+                    <a key={r.cheie} href={r.url} target="_blank" rel="noopener noreferrer"
+                      className="flex items-center gap-3 px-4 py-3 rounded-xl border-2 border-gray-200 hover:border-blue-300 hover:bg-blue-50/40 transition-all">
+                      <span className="shrink-0 w-9 h-9 rounded-lg flex items-center justify-center" style={{ background: r.fundal }}>
+                        {r.icon}
+                      </span>
+                      <span className="flex-1 min-w-0">
+                        <span className="block text-sm font-medium text-gray-800">{r.titlu}</span>
+                        <span className="block text-xs text-gray-400 truncate">{r.url.replace(/^https?:\/\//, '')}</span>
+                      </span>
+                      <ExternalLink size={15} className="shrink-0 text-gray-300" />
+                    </a>
+                  ))}
+                </div>
               </div>
             )}
 

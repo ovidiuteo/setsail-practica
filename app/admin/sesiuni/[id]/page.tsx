@@ -4108,6 +4108,11 @@ export default function SessionDetailPage() {
       nr_document_ancom: (sess as any).nr_document_ancom || '',
       location_detail: sess.location_detail || '',
       skipper_url: (sess as any).skipper_url || '',
+      zoom_url: (sess as any).zoom_url || '',
+      whatsapp_url: (sess as any).whatsapp_url || '',
+      arhiva_video_url: (sess as any).arhiva_video_url || '',
+      materiale_url: (sess as any).materiale_url || '',
+      comunitate_url: (sess as any).comunitate_url || '',
       timeline_scope: (sess as any).timeline_scope || '',
     })
   }
@@ -4636,10 +4641,15 @@ export default function SessionDetailPage() {
                 ['Examinare practică în locația aprobată', 'notif_locatie_examinare', 'text'],
                 ['Locație detaliată', 'location_detail', 'text'],
                 ['Link skipper.setsail.ro', 'skipper_url', 'text'],
+                ['Link Zoom (portal cursant)', 'zoom_url', 'text'],
+                ['Link grup WhatsApp (portal cursant)', 'whatsapp_url', 'text'],
+                ['Link arhivă video (portal cursant)', 'arhiva_video_url', 'text'],
+                ['Link manuale / prezentări / teste (portal cursant)', 'materiale_url', 'text'],
+                ['Link comunitate SetSail absolvenți (portal cursant)', 'comunitate_url', 'text'],
                 ['Categorie timeline', 'timeline_scope', 'select-scope'],
                 ['Clasa CAA', 'class_caa', 'select-class'],
               ].map(([label, key, type]) => (
-                <div key={key} className={(key==='location_detail'||key==='skipper_url'||key==='timeline_scope'||key==='notif_locatie_curs'||key==='notif_locatie_examinare')?'col-span-2':''}>
+                <div key={key} className={(key==='location_detail'||key==='skipper_url'||key.endsWith('_url')||key==='timeline_scope'||key==='notif_locatie_curs'||key==='notif_locatie_examinare')?'col-span-2':''}>
                   <div className={`text-xs mb-1 ${editFocusKey===key ? 'text-blue-600 font-medium' : 'text-gray-400'}`}>{label}</div>
                   {type==='select-class' ? (
                     <select className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs w-full focus:outline-none focus:ring-1 focus:ring-blue-400"
