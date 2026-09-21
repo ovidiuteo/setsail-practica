@@ -56,6 +56,11 @@ export default function PortalPage() {
     address: '', county: '', city: '', country: 'Romania', email: '', cnp: '', full_name: '', expiry_date: '', nationality: ''
   })
 
+  // Adresa de corespondență pentru materialele de curs
+  type TipLivrare = 'domiciliu' | 'easybox' | 'alta'
+  const [livrare, setLivrare] = useState<{ tip: TipLivrare | null; adresa: string; contact: string; telefon: string; email: string }>(
+    { tip: null, adresa: '', contact: '', telefon: '', email: '' })
+
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const drawing = useRef(false)
   const lastPos = useRef({ x: 0, y: 0 })
@@ -258,6 +263,14 @@ export default function PortalPage() {
       nationality: st.nationality || '',
       city: st.city || '',
       country: st.country || 'Romania',
+    })
+    setLivrare({
+      tip: (st.livrare_tip as any) || null,
+      adresa: st.livrare_adresa || '',
+      // implicit datele cursantului, modificabile
+      contact: st.livrare_contact || st.full_name || '',
+      telefon: st.livrare_telefon || st.phone || '',
+      email: st.livrare_email || st.email || emailInput.trim(),
     })
     setExistingSignature(st.signature_data || null)
     setDocType(st.doc_type || '')
@@ -721,6 +734,34 @@ export default function PortalPage() {
     }
   }
 
+  // „Aceeași adresă ca domiciliul" completează câmpul cu adresa din acte; restul se scriu de mână
+  function alegeLivrare(tip: TipLivrare) {
+    setLivrare(v => {
+      const adresa = tip === 'domiciliu'
+        ? [form.address, form.city, form.county].map(x => String(x || '').trim()).filter(Boolean).join(', ')
+        : (v.tip === 'domiciliu' ? '' : v.adresa)
+      return {
+        tip, adresa,
+        contact: v.contact || form.full_name || '',
+        telefon: v.telefon || form.phone || '',
+        email: v.email || form.email || '',
+      }
+    })
+  }
+
+  async function salveazaLivrare() {
+    if (!student?.id) return
+    const date = {
+      livrare_tip: livrare.tip,
+      livrare_adresa: livrare.adresa.trim(),
+      livrare_contact: livrare.contact.trim(),
+      livrare_telefon: livrare.telefon.trim(),
+      livrare_email: livrare.email.trim(),
+    }
+    await supabase.from('students').update(date).eq('id', student.id)
+    setStudent((prev: any) => prev ? { ...prev, ...date } : prev)
+  }
+
   async function saveAll() {
     setSaving(true)
 
@@ -747,6 +788,13 @@ export default function PortalPage() {
       city: form.city.trim(),
       country: form.country.trim() || 'Romania',
       id_document: `${form.ci_series.trim().toUpperCase()} ${form.ci_number.trim()}`,
+      ...(livrare.tip ? {
+        livrare_tip: livrare.tip,
+        livrare_adresa: livrare.adresa.trim(),
+        livrare_contact: livrare.contact.trim(),
+        livrare_telefon: livrare.telefon.trim(),
+        livrare_email: livrare.email.trim(),
+      } : {}),
       ...(classCaa.trim() ? { class_caa: classCaa.trim() } : {}),
       ...(docType ? { doc_type: docType } : {}),
     }
@@ -1287,6 +1335,63 @@ export default function PortalPage() {
                 )}
               </div>
             )}
+
+            {/* ── Adresa de corespondență pentru materialele de curs ── */}
+            <div className="bg-white rounded-2xl p-6 shadow-2xl">
+              <h2 className="font-bold text-gray-900 mb-1">Adresă de corespondență materiale de curs</h2>
+              <p className="text-xs text-gray-400 mb-4">Unde trimitem materialele. Datele de contact sunt ale dumneavoastră — le puteți modifica.</p>
+
+              <div className="grid sm:grid-cols-3 gap-2 mb-4">
+                {([
+                  { tip: 'domiciliu', titlu: 'Aceeași adresă ca domiciliul' },
+                  { tip: 'easybox', titlu: 'Easybox Sameday' },
+                  { tip: 'alta', titlu: 'Altă adresă' },
+                ] as const).map(o => (
+                  <button key={o.tip} type="button" onClick={() => alegeLivrare(o.tip)}
+                    className={`flex flex-col items-center justify-center gap-1.5 px-3 py-3 rounded-xl border-2 text-sm font-medium transition-all ${
+                      livrare.tip === o.tip ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-600 hover:border-blue-300 hover:bg-blue-50/40'}`}>
+                    {o.tip === 'easybox' && (
+                      <span className="px-2 py-0.5 rounded-md text-[11px] font-extrabold tracking-tight text-white" style={{ background: '#e62e2d' }}>sameday</span>
+                    )}
+                    <span className="text-center leading-tight">{o.titlu}</span>
+                  </button>
+                ))}
+              </div>
+
+              {livrare.tip && (
+                <div className="space-y-3">
+                  <div>
+                    <label className={labelCls}>
+                      {livrare.tip === 'easybox' ? 'Easybox ales (localitate, stradă, denumirea locker-ului)' : 'Adresa de livrare'}
+                    </label>
+                    <textarea rows={2} value={livrare.adresa}
+                      onChange={e => setLivrare(v => ({ ...v, adresa: e.target.value }))}
+                      placeholder={livrare.tip === 'easybox' ? 'ex. Easybox Kaufland Băneasa, Șos. București-Ploiești 44, București' : 'stradă, număr, bloc, scară, apartament, localitate, județ'}
+                      className={inputCls} />
+                  </div>
+                  <div className="grid sm:grid-cols-3 gap-3">
+                    <div>
+                      <label className={labelCls}>Persoană de contact curier</label>
+                      <input value={livrare.contact} onChange={e => setLivrare(v => ({ ...v, contact: e.target.value }))}
+                        placeholder="nume și prenume" className={inputCls} />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Telefon</label>
+                      <input value={livrare.telefon} onChange={e => setLivrare(v => ({ ...v, telefon: e.target.value }))}
+                        placeholder="07XX XXX XXX" className={inputCls} />
+                    </div>
+                    <div>
+                      <label className={labelCls}>Email</label>
+                      <input value={livrare.email} onChange={e => setLivrare(v => ({ ...v, email: e.target.value }))}
+                        placeholder="email@exemplu.ro" className={inputCls} />
+                    </div>
+                  </div>
+                  <div className="flex justify-end">
+                    <SaveDataButton onSave={salveazaLivrare} />
+                  </div>
+                </div>
+              )}
+            </div>
 
             {/* ── Radio: cerere de examen în locul semnăturii cu pixul ── */}
             {isRadioSession && (
