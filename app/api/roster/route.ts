@@ -43,6 +43,19 @@ async function authed(sb: ReturnType<typeof svc>, sessionId: string, token: stri
 
 const VERIFIERS = ['corina', 'paula', 'ruxandra'] as const
 
+// Seria și clonele ei formează grupele: seria principală = Grupa 1, clonele
+// = Grupa 2, 3… (în ordinea creării). Lista de cursanți le cuprinde pe toate.
+async function grupeSeriei(sb: ReturnType<typeof svc>, sessionId: string): Promise<{ ids: string[]; grupa: Map<string, number> }> {
+  const { data: s } = await sb.from('sessions').select('id, parent_session_id').eq('id', sessionId).maybeSingle()
+  const principalId = (s as any)?.parent_session_id || sessionId
+  const { data: clone } = await sb.from('sessions').select('id, created_at')
+    .eq('parent_session_id', principalId).eq('session_type', 'clone').order('created_at')
+  const ids = [principalId, ...((clone || []) as any[]).map(c => c.id)]
+  const grupa = new Map<string, number>()
+  ids.forEach((id, i) => grupa.set(id, i + 1))
+  return { ids, grupa }
+}
+
 // Documentele unui cursant, adresabile din pagină după cheie (recto = fața CI)
 const DOC_COLS: Record<string, string> = {
   recto: 'ci_image_data',
@@ -139,7 +152,7 @@ export async function GET(req: NextRequest) {
   // Câte alte serii mai are persoana — ca ștergerea să spună exact ce se întâmplă
   if (studentId && sp.get('action') === 'usage') {
     const { data: st } = await sb.from('students')
-      .select('cnp, email, full_name').eq('id', studentId).eq('session_id', sessionId).maybeSingle()
+      .select('cnp, email, full_name').eq('id', studentId).in('session_id', (await grupeSeriei(sb, sessionId)).ids).maybeSingle()
     if (!st) return NextResponse.json({ error: 'not found' }, { status: 404 })
     const others = await findPersonRows(sb, st, studentId)
     return NextResponse.json({
@@ -204,7 +217,7 @@ export async function GET(req: NextRequest) {
 
   if (studentId) {
     const col = docColumn(side)
-    const { data } = await sb.from('students').select(`${col}`).eq('id', studentId).eq('session_id', sessionId).maybeSingle()
+    const { data } = await sb.from('students').select(`${col}`).eq('id', studentId).in('session_id', (await grupeSeriei(sb, sessionId)).ids).maybeSingle()
     return NextResponse.json({ image: (data as any)?.[col] || null })
   }
 
@@ -221,17 +234,18 @@ export async function GET(req: NextRequest) {
   } as const
   type DocKey = keyof typeof DOC_COLS
 
+  const { ids: idSesiuni, grupa: grupaSesiunii } = await grupeSeriei(sb, sessionId)
   const [{ data, error }, docSets, { data: cereri }, { data: rezervari }] = await Promise.all([
     sb.from('students')
-      .select('id, full_name, email, phone, cnp, birth_date, address, city, county, ci_series, ci_number, expiry_date, nationality, country, class_caa, obtinere_prelungire, doc_type, communication_target, created_at, order_in_session, livrare_tip, livrare_adresa, livrare_contact, livrare_telefon, livrare_email, livrare_trimis_la')
-      .eq('session_id', sessionId),
+      .select('id, session_id, full_name, email, phone, cnp, birth_date, address, city, county, ci_series, ci_number, expiry_date, nationality, country, class_caa, obtinere_prelungire, doc_type, communication_target, created_at, order_in_session, livrare_tip, livrare_adresa, livrare_contact, livrare_telefon, livrare_email, livrare_trimis_la')
+      .in('session_id', idSesiuni),
     Promise.all((Object.entries(DOC_COLS) as [DocKey, string][]).map(async ([key, col]) => {
       const { data: ids } = await sb.from('students').select('id')
-        .eq('session_id', sessionId).not(col, 'is', null).neq(col, '')
+        .in('session_id', idSesiuni).not(col, 'is', null).neq(col, '')
       return [key, new Set((ids || []).map((r: any) => r.id))] as [DocKey, Set<string>]
     })),
-    sb.from('cerere_numbers').select('student_id, numar, data_cerere').eq('session_id', sessionId),
-    sb.from('practice_bookings').select('student_id, slot_from, slot_to').eq('session_id', sessionId),
+    sb.from('cerere_numbers').select('student_id, numar, data_cerere').in('session_id', idSesiuni),
+    sb.from('practice_bookings').select('student_id, slot_from, slot_to').in('session_id', idSesiuni),
   ])
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   const has = Object.fromEntries(docSets) as Record<DocKey, Set<string>>
@@ -249,6 +263,8 @@ export async function GET(req: NextRequest) {
     livrare_tip: r.livrare_tip || null, livrare_adresa: r.livrare_adresa || '',
     livrare_contact: r.livrare_contact || '', livrare_telefon: r.livrare_telefon || '', livrare_email: r.livrare_email || '',
     livrare_trimis_la: r.livrare_trimis_la || null,
+    // din ce grupă face parte (seria principală = 1, clonele 2, 3…)
+    grupa: grupaSesiunii.get(r.session_id) || 1,
     expiry_date: r.expiry_date || '', nationality: r.nationality || '', country: r.country || '',
     // Informația vine din clasă (sursa de adevăr); valoarea stocată e doar fallback dacă clasa nu o conține
     obtinere_prelungire: lrcFromClass(r.class_caa) || r.obtinere_prelungire || '',
@@ -378,14 +394,14 @@ export async function PATCH(req: NextRequest) {
   normalizeazaAct(updates)
   // id_document („SERIE NUMĂR") e folosit în documente — îl ținem în pas cu seria/numărul
   if ('ci_series' in updates || 'ci_number' in updates) {
-    const { data: act } = await sb.from('students').select('ci_series, ci_number').eq('id', student_id).eq('session_id', session_id).maybeSingle()
+    const { data: act } = await sb.from('students').select('ci_series, ci_number').eq('id', student_id).in('session_id', (await grupeSeriei(sb, session_id)).ids).maybeSingle()
     const serie = 'ci_series' in updates ? updates.ci_series : (act as any)?.ci_series || ''
     const numar = 'ci_number' in updates ? updates.ci_number : (act as any)?.ci_number || ''
     updates.id_document = `${serie} ${numar}`.trim() || null
     if (serie === 'PASS') updates.doc_type = 'pasaport'
   }
 
-  const { error } = await sb.from('students').update(updates).eq('id', student_id).eq('session_id', session_id)
+  const { error } = await sb.from('students').update(updates).eq('id', student_id).in('session_id', (await grupeSeriei(sb, session_id)).ids)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true })
 }
@@ -545,7 +561,7 @@ export async function POST(req: NextRequest) {
 
   const col = docColumn(side)
   const { error } = await sb.from('students')
-    .update({ [col]: imageData }).eq('id', student_id).eq('session_id', session_id)
+    .update({ [col]: imageData }).eq('id', student_id).in('session_id', (await grupeSeriei(sb, session_id)).ids)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ ok: true, flag: docFlag[String(side || 'recto')] || 'has_ci' })
 }
@@ -563,7 +579,7 @@ export async function DELETE(req: NextRequest) {
   if (student_id && doc) {
     const col = docColumn(doc)
     const { error } = await sb.from('students')
-      .update({ [col]: null }).eq('id', student_id).eq('session_id', session_id)
+      .update({ [col]: null }).eq('id', student_id).in('session_id', (await grupeSeriei(sb, session_id)).ids)
     if (error) return NextResponse.json({ error: error.message }, { status: 500 })
     return NextResponse.json({ ok: true, flag: docFlag[String(doc)] || '' })
   }

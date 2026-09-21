@@ -24,6 +24,7 @@ type Row = {
   ci_series: string; ci_number: string   // pașaport: seria PASS, numărul din 9 cifre
   livrare_tip: string | null; livrare_adresa: string; livrare_contact: string
   livrare_telefon: string; livrare_email: string; livrare_trimis_la: string | null
+  grupa: number                    // 1 = seria principală, 2/3 = clonele (grupele)
   expiry_date: string; nationality: string; country: string
 }
 
@@ -322,7 +323,10 @@ export default function RosterPage() {
   const [draft, setDraft] = useState('')
   const [saving, setSaving] = useState(false)
   const [ciFor, setCiFor] = useState<{ row: Row; doc: DocKey } | null>(null)
-  const [tab, setTab] = useState<'cursanti' | 'adrese' | 'verify' | 'leaduri' | 'administrativ'>('cursanti')
+  const [tab, setTab] = useState<'cursanti' | 'adrese' | 'verify' | 'leaduri' | 'administrativ' | 'grupa1' | 'grupa2' | 'grupa3'>('cursanti')
+  // Lista de cursanți: tabul principal și cele pe grupe arată același tabel
+  const esteLista = (t: string) => t === 'cursanti' || t.startsWith('grupa')
+  const grupaTab = tab.startsWith('grupa') ? Number(tab.slice(5)) : null
   const [docsVisible, setDocsVisible] = useState(false)
   const [addOpen, setAddOpen] = useState<null | 'manual' | 'paste'>(null)
   const [title, setTitle] = useState('Cursanți — sesiune')
@@ -445,7 +449,7 @@ export default function RosterPage() {
 
   // Coloana „SN" (intervalul de practică) apare doar în Lista cursanți și doar
   // când seria are intervale de practică stabilite
-  const arataSN = tab === 'cursanti' && !!practica
+  const arataSN = esteLista(tab) && !!practica
   // la C,D rămâne doar semnătura din coloanele de la final (fără cererea de examen)
   const docColsEnd = esteRadio ? DOC_COLS_END : DOC_COLS_END.filter(c => c.key !== 'cerere')
 
@@ -715,7 +719,8 @@ export default function RosterPage() {
 
         {/* Taburi */}
         <div className="mb-4 flex gap-1 border-b border-gray-200">
-          {([['cursanti', 'Lista cursanți'], ['adrese', 'Lista verificare adrese'], ['verify', 'Verify by ID'], ['leaduri', 'Leaduri radio'], ['administrativ', 'Administrativ']] as const).map(([k, lbl]) => (
+          {([['cursanti', 'Lista cursanți'], ['adrese', 'Lista verificare adrese'], ['verify', 'Verify by ID'], ['leaduri', 'Leaduri radio'], ['administrativ', 'Administrativ'],
+            ['grupa1', 'Grupa 1'], ['grupa2', 'Grupa 2'], ['grupa3', 'Grupa 3']] as const).map(([k, lbl]) => (
             <button key={k} onClick={() => setTab(k)}
               className={`px-4 py-2 text-sm font-medium -mb-px border-b-2 ${tab === k ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
               {lbl}
@@ -746,7 +751,8 @@ export default function RosterPage() {
                     </div>
                   </th>
                   <th className="px-3 py-2.5 w-8">#</th>
-                  {(tab === 'cursanti' ? PERSON_FIELDS : FIELDS).map(f => (
+                  {esteLista(tab) && <th className="px-2 py-2.5 text-center" title="Grupa (seria principală = 1, clonele 2 și 3)">GR</th>}
+                  {(esteLista(tab) ? PERSON_FIELDS : FIELDS).map(f => (
                     <Fragment key={f.key}>
                     <th className={`px-3 py-2.5 ${f.w || ''}`}>
                       {f.key === 'full_name' ? (
@@ -806,7 +812,7 @@ export default function RosterPage() {
                     </Fragment>
                   ))}
                   <th className="px-2 py-2.5 text-center whitespace-nowrap">CI</th>
-                  {tab === 'cursanti' ? <>
+                  {esteLista(tab) ? <>
                     {DOC_COLS_ID.map(c => (
                       <th key={c.key} title={c.full} className="px-1 py-2.5 text-center text-[10px] w-12 normal-case tracking-normal">{c.short}</th>
                     ))}
@@ -835,10 +841,10 @@ export default function RosterPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-50">
-                {sortRows(rows, sort, ordineInterval).map((row, i) => {
-                  const ok = tab === 'cursanti' && rowComplete(row, esteRadio)
+                {sortRows(grupaTab ? rows.filter(r => (r.grupa || 1) === grupaTab) : rows, sort, ordineInterval).map((row, i) => {
+                  const ok = esteLista(tab) && rowComplete(row, esteRadio)
                   return (
-                  <tr key={row.id} className={`hover:bg-gray-50/60 ${tab === 'cursanti' ? '[&>td]:py-1' : ''}`}>
+                  <tr key={row.id} className={`hover:bg-gray-50/60 ${esteLista(tab) ? '[&>td]:py-1' : ''}`}>
                     <td className="px-2 py-2 text-center">
                       <button onClick={() => toggleComm(row)} disabled={!row.email}
                         title={row.email ? (row.communication_target ? 'Email activ — intră în mailinguri' : 'Email inactiv') : 'Fără email'}
@@ -847,13 +853,21 @@ export default function RosterPage() {
                       </button>
                     </td>
                     <td className="px-3 py-2 text-gray-300 text-xs">{i + 1}</td>
-                    {(tab === 'cursanti' ? PERSON_FIELDS : FIELDS).map(f => {
+                    {esteLista(tab) && (
+                      <td className="px-2 py-2 text-center">
+                        <span title={`Grupa ${row.grupa || 1}`}
+                          className="inline-flex items-center justify-center min-w-[1.4rem] px-1 py-0.5 rounded-md text-[11px] font-semibold bg-slate-100 text-slate-600">
+                          {row.grupa || 1}
+                        </span>
+                      </td>
+                    )}
+                    {(esteLista(tab) ? PERSON_FIELDS : FIELDS).map(f => {
                       const editing = edit?.id === row.id && edit?.field === f.key
                       // de la CNP încolo, dacă e totul în regulă, fundal verde deschis
                       const green = ok && f.key === 'cnp'
                       return (
                         <Fragment key={f.key}>
-                        <td className={`${tab === 'cursanti' ? 'px-2 whitespace-nowrap' : 'px-3'} py-2 align-middle ${green ? 'bg-green-50' : ''}`}>
+                        <td className={`${esteLista(tab) ? 'px-2 whitespace-nowrap' : 'px-3'} py-2 align-middle ${green ? 'bg-green-50' : ''}`}>
                           {editing ? (
                             <div className="flex items-center gap-1">
                               <input autoFocus value={draft} onChange={e => setDraft(e.target.value)}
@@ -889,7 +903,7 @@ export default function RosterPage() {
                         {DOC_SHORT[row.doc_type] || (row.has_ci ? 'CI ✓' : 'CI +')}
                       </button>
                     </td>
-                    {tab === 'cursanti' ? <>
+                    {esteLista(tab) ? <>
                       {DOC_COLS_ID.map(c => (
                         <td key={c.key} className={`px-1 py-2 text-center ${ok ? 'bg-green-50' : ''}`}>
                           <button onClick={() => setCiFor({ row, doc: c.key })} title={c.full}
@@ -982,7 +996,7 @@ export default function RosterPage() {
 
         {/* Intervalele de practică: locuri ocupate și cine e pe fiecare.
             Între lista de cursanți și leaduri, doar când s-au stabilit intervalele. */}
-        {tab === 'cursanti' && practica && (
+        {esteLista(tab) && practica && (
           <div className="mt-8">
             <div className="flex items-baseline gap-2 flex-wrap mb-1">
               <h2 className="text-sm font-semibold text-gray-700">Intervale practică</h2>
@@ -1034,7 +1048,7 @@ export default function RosterPage() {
 
         {/* Leadurile de pe landing, sub lista de cursanți — cei înscriși deja
             (după email) nu mai apar aici */}
-        {tab === 'cursanti' && (
+        {esteLista(tab) && (
           <div className="mt-8">
             <h2 className="text-sm font-semibold text-gray-700 mb-1">Leaduri de pe landing</h2>
             <p className="text-xs text-gray-400 mb-3">
