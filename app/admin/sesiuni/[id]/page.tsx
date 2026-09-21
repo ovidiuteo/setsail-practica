@@ -8,6 +8,7 @@ import { samePerson, mergeCarry, fillGaps } from '@/lib/student-merge'
 import PracticeSlotsCard from '@/components/PracticeSlotsCard'
 import { applyMailTemplate } from '@/lib/mail-template'
 import LivrareCell, { livrareRang } from '@/components/LivrareCell'
+import CopyColoana from '@/components/CopyColoana'
 import { defaultExamTime, sessionDefaults } from '@/lib/session-defaults'
 import type { SyncResult } from '@/lib/skipper-result'
 import SkipperSyncModal from '@/components/SkipperSyncModal'
@@ -819,6 +820,10 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
                     <span className="flex items-center gap-0.5">
                       {label}
                       {sortCol===col ? (sortDir==='asc'?'↑':'↓') : <span className="text-gray-200 text-xs">↕</span>}
+                      {(col==='full_name'||col==='email') && (
+                        <CopyColoana titlu={col==='full_name' ? 'Copiază numele, în ordinea din listă' : 'Copiază emailurile, în ordinea din listă'}
+                          valori={getSorted(students.filter((st:Student)=>!st.only_sailing)).map((st:Student) => String((st as any)[col] || ''))} />
+                      )}
                     </span>
                   </th>
                 ))}

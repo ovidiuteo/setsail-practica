@@ -2,6 +2,7 @@
 import { useEffect, useState, useCallback, useRef, Fragment } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import LivrareCell, { livrareRang } from '@/components/LivrareCell'
+import CopyColoana from '@/components/CopyColoana'
 import { parseStudentsText } from '@/lib/import-parse'
 import type { SyncResult } from '@/lib/skipper-result'
 import SkipperSyncModal from '@/components/SkipperSyncModal'
@@ -773,6 +774,14 @@ export default function RosterPage() {
                             {sort.mode === 'alpha' && sort.dir === 'desc' ? 'Z-A' : 'A-Z'}
                             {sort.mode === 'alpha' && <span className="leading-none">{sort.dir === 'asc' ? '↑' : '↓'}</span>}
                           </button>
+                          <CopyColoana titlu="Copiază numele, în ordinea din listă"
+                            valori={sortRows(rows, sort, ordineInterval).map(r => r.full_name || '')} />
+                        </span>
+                      ) : f.key === 'email' ? (
+                        <span className="flex items-center gap-1.5">
+                          {f.label}
+                          <CopyColoana titlu="Copiază emailurile, în ordinea din listă"
+                            valori={sortRows(rows, sort, ordineInterval).map(r => r.email || '')} />
                         </span>
                       ) : f.label}
                     </th>
