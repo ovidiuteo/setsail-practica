@@ -1,6 +1,7 @@
 // Pagini printabile (A4) pentru o serie: foaia de prezență și pagina cu cele 3 coduri QR.
 // Folosite din pagina de admin și din lista de cursanți cu token.
 import { scopeForSession } from '@/lib/timeline-scope'
+import { lunea } from '@/lib/catalog-zile'
 
 export function titleCaseRo(s: string): string {
   return (s || '').toLocaleLowerCase('ro-RO').replace(/(^|[\s\-])([a-zăâîșț])/g, (_m, sep, ch) => sep + ch.toLocaleUpperCase('ro-RO'))
@@ -8,11 +9,16 @@ export function titleCaseRo(s: string): string {
 
 // Construiește foaia de prezență A4 landscape (HTML printabil)
 
-export function buildAttendanceHtml(titlu: string, grupa: string, zile: string[], names: string[]): string {
+export function buildAttendanceHtml(titlu: string, grupa: string, zile: string[], names: string[], zileIso: string[] = []): string {
   const esc = (s: string) => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   // „Mierc, 23.09" -> ziua pe primul rând, data dedesubt
-  // o săptămână nouă începe luni: linia din stânga coloanei e mai groasă
-  const clase = zile.map((z, i) => 'day' + (i > 0 && /^luni/i.test(String(z).trim()) ? ' saptamana' : ''))
+  // prima zi a unei săptămâni noi (nu neapărat luni) primește o linie mai groasă în stânga
+  const clase = zile.map((z, i) => {
+    if (i === 0) return 'day'
+    const acum = zileIso[i], inainte = zileIso[i - 1]
+    const saptNoua = acum && inainte ? lunea(acum) !== lunea(inainte) : /^luni/i.test(String(z).trim())
+    return 'day' + (saptNoua ? ' saptamana' : '')
+  })
   const dayCols = zile.map((z, i) => {
     const [zi, data] = String(z).split(',')
     return `<th class="${clase[i]}">${esc(zi.trim())}${data ? `<span class="d">${esc(data.trim())}</span>` : ''}</th>`
@@ -30,7 +36,7 @@ export function buildAttendanceHtml(titlu: string, grupa: string, zile: string[]
   @page { size: A4 landscape; margin: 12mm; }
   * { -webkit-print-color-adjust: exact; print-color-adjust: exact; box-sizing: border-box; }
   body { margin:0; font-family: Arial, Helvetica, sans-serif; color:#222; }
-  h1 { text-align:center; font-size:16pt; font-weight:bold; margin:0 0 16px; }
+  h1 { text-align:center; font-size:16pt; font-weight:bold; margin:42px 0 16px; }
   .grupa { font-weight:bold; font-size:12.5pt; margin:0 0 10px; }
   table { width:auto; border-collapse:collapse; table-layout:fixed; }
   th, td { border:1px solid #b9b9b9; padding:6px 8px; font-size:11pt; }
@@ -41,7 +47,7 @@ export function buildAttendanceHtml(titlu: string, grupa: string, zile: string[]
   th.day, td.day { width:${latZi}ch; white-space:nowrap; text-align:center; }
   th.day .d { display:block; font-weight:normal; font-size:9.5pt; }
   /* trecerea într-o săptămână nouă */
-  th.saptamana, td.saptamana { border-left-width:2.5px; border-left-color:#8a8a8a; }
+  th.saptamana, td.saptamana { border-left-width:1.5px; border-left-color:#8a8a8a; }
   tr { height:26px; }
 </style></head>
 <body>

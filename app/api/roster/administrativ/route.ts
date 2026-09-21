@@ -92,7 +92,7 @@ export async function GET(req: NextRequest) {
     } else {
       lista = [...lista].sort(ro)
     }
-    return { grupa: i + 1, eticheta: 'Grupa ' + (i + 1), titlu, zile, nume: lista }
+    return { grupa: i + 1, eticheta: 'Grupa ' + (i + 1), titlu, zile, zileIso: zileAlese, nume: lista }
   }))
 
   // QR-urile: cele salvate pe serie + skipper (default global) + comunitatea la seriile motor

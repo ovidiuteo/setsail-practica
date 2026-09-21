@@ -19,6 +19,14 @@ export function etichetaZi(iso: string): string {
   return `${ZI_SCURT[d.getDay()]}, ${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
+// Lunea săptămânii din care face parte ziua (ca să știm unde începe o săptămână nouă)
+export function lunea(iso: string): string {
+  const d = dinISO(iso)
+  if (!d) return iso
+  const delta = (d.getDay() + 6) % 7
+  return ziISO(new Date(d.getFullYear(), d.getMonth(), d.getDate() - delta))
+}
+
 // Toate zilele dintre start și final (inclusiv)
 export function zileIntre(start: string | null | undefined, final: string | null | undefined): string[] {
   const a = dinISO(start || ''), b = dinISO(final || '')

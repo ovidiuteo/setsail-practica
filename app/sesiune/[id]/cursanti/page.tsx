@@ -1692,7 +1692,7 @@ function AdministrativTab({ sessionId, token }: { sessionId: string; token: stri
         <div className="flex flex-wrap gap-2">
           {date.cataloage.map((c: any) => (
             <button key={c.grupa} disabled={!c.nume.length}
-              onClick={() => tipareste(buildAttendanceHtml(c.titlu, c.eticheta, c.zile, c.nume))}
+              onClick={() => tipareste(buildAttendanceHtml(c.titlu, c.eticheta, c.zile, c.nume, c.zileIso || []))}
               className="px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-40" style={{ background: '#0a1628' }}>
               Catalog {c.eticheta} <span className="opacity-60">({c.nume.length})</span>
             </button>

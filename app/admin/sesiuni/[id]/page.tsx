@@ -3337,7 +3337,7 @@ function AttendanceCard({ sess }: { sess: any }) {
 
   function generate() {
     const zile = zileAlese.length ? zileAlese.map(etichetaZi) : deriveZile()
-    const html = buildAttendanceHtml(titlu, grupa, zile, names)
+    const html = buildAttendanceHtml(titlu, grupa, zile, names, zileAlese)
     const w = window.open('', '_blank')
     if (w) { w.document.write(html); w.document.close() }
   }
