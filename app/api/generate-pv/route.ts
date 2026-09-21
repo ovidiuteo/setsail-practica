@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { getHeaderImage } from '@/lib/antete'
 import { fillDocTemplate, fragmentDefault, fragmentDefaultAlign, type DocAlign } from '@/lib/doc-templates'
-import { tintSignatureToBlue } from '@/lib/sign-tint'
 
 export async function POST(req: NextRequest) {
   const { session_id, clean } = await req.json()
@@ -109,17 +108,8 @@ export async function POST(req: NextRequest) {
     : '................................'
   const multiBoats = orderedBoats.length > 1
   const multiInstr = orderedInstr.length > 1
-  // La campul de semnatura din PV: doar PRIMUL instructor + semnatura lui
+  // La campul de semnatura din PV: doar numele PRIMULUI instructor (se semnează de mână)
   const firstInstructorName = orderedInstr[0]?.full_name || '................................'
-  function dataUrlToImage(dataUrl: string | null | undefined): { data: Buffer; type: 'png' | 'jpg' | 'gif' } | null {
-    const m = /^data:image\/(png|jpe?g|gif);base64,(.+)$/i.exec(dataUrl || '')
-    if (!m) return null
-    const t = m[1].toLowerCase()
-    return { data: Buffer.from(m[2], 'base64'), type: t === 'jpeg' || t === 'jpg' ? 'jpg' : (t as 'png' | 'gif') }
-  }
-  const _instrSig = orderedInstr[0]?.signature_data
-  const _instrSigBlue = _instrSig ? await tintSignatureToBlue(_instrSig) : null
-  const firstSignature = _instrSigBlue ? { data: _instrSigBlue, type: 'png' as const } : dataUrlToImage(_instrSig)
   const clasaCAA = session.class_caa || 'C/D'
 
   // Template-uri editabile (admin → Template-uri Documente); fallback la default-urile din lib
@@ -341,9 +331,8 @@ export async function POST(req: NextRequest) {
             children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: '............................  ...........................', size: 20 })] })] }),
           new TableCell({ borders: noBorders, width: { size: 1106, type: WidthType.DXA }, margins: cellM, children: [new Paragraph({ children: [] })] }),
           new TableCell({ borders: noBorders, width: { size: 4500, type: WidthType.DXA }, margins: { top: 240, bottom: 80, left: 100, right: 100 },
-            children: [ firstSignature
-              ? new Paragraph({ alignment: AlignmentType.CENTER, children: [new ImageRun({ data: firstSignature.data, type: firstSignature.type, transformation: { width: 130, height: 55 } })] })
-              : new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: '............................  ...........................', size: 20 })] }) ] }),
+            // PV-ul se semnează de mână: puncte de ambele părți, fără semnătura scanată a instructorului
+            children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: '............................  ...........................', size: 20 })] })] }),
         ]}),
         ...(locName.includes('snagov') ? [new TableRow({ children: [
           new TableCell({ borders: noBorders, width: { size: 4500, type: WidthType.DXA }, margins: cellM,
