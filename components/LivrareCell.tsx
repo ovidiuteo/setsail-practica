@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react'
-import { Presentation, Truck, Circle, X, Check, Loader2 } from 'lucide-react'
+import { Presentation, Circle, X, Check, Loader2 } from 'lucide-react'
 
 // Cum vrea cursantul materialele de curs (ales în portal): în sală, easybox Sameday
 // sau la o adresă prin curier. Iconița se vede în listele de cursanți; la easybox și
@@ -29,6 +29,18 @@ export function livrareRang(s: Livrare): number {
   return baza * 2 + (s.livrare_trimis_la ? 1 : 0)
 }
 
+// Curier: remorca plină, albastru
+function IconCurier({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="#2563eb" strokeWidth="1.8" strokeLinejoin="round">
+      <rect x="1.5" y="6" width="11" height="9.5" rx="1.5" fill="#2563eb" />
+      <path d="M12.5 9.5h4l4 3.5v2.5h-8z" fill="#fff" />
+      <circle cx="7" cy="18" r="2" fill="#fff" />
+      <circle cx="17.5" cy="18" r="2" fill="#fff" />
+    </svg>
+  )
+}
+
 // Sigla Sameday: pătrat roșu cu „s"
 function SiglaSameday({ size = 18 }: { size?: number }) {
   return (
@@ -40,7 +52,7 @@ function SiglaSameday({ size = 18 }: { size?: number }) {
 export function LivrareIcon({ tip, size = 18, trimis }: { tip?: string | null; size?: number; trimis?: boolean }) {
   const icon = tip === 'sala' ? <Presentation size={size} className="text-green-600" />
     : tip === 'easybox' ? <SiglaSameday size={size} />
-    : (tip === 'domiciliu' || tip === 'alta') ? <Truck size={size} className="text-blue-600" />
+    : (tip === 'domiciliu' || tip === 'alta') ? <IconCurier size={size} />
     : <Circle size={size} className="text-orange-400" />
   // pachet trimis: iconița stă într-un cerc verde
   if (!trimis) return icon
@@ -96,7 +108,7 @@ export default function LivrareCell({ s, nume, onTrimis }: {
             <div className="px-5 py-4 space-y-3 text-sm">
               <div>
                 <div className="text-[11px] uppercase tracking-wide text-gray-400 mb-0.5">
-                  {tip === 'easybox' ? 'Easybox ales' : 'Adresa de livrare'}
+                  {tip === 'easybox' ? 'Easybox ales' : tip === 'domiciliu' ? 'Adresa de livrare (DOMI)' : 'Adresa de livrare'}
                 </div>
                 <div className="text-gray-800 whitespace-pre-wrap">{s.livrare_adresa?.trim() || '—'}</div>
               </div>

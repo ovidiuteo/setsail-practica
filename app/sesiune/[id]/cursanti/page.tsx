@@ -35,6 +35,8 @@ type Practica = {
   neprogramati: string[]
 }
 
+type Tab = 'cursanti' | 'adrese' | 'verify' | 'leaduri' | 'administrativ' | 'grupa1' | 'grupa2' | 'grupa3'
+
 // Sortarea listei: alfabetic sau cronologic (când a intrat în serie), cu sens reversibil
 type SortMode = 'alpha' | 'time' | 'slot' | 'livrare'
 type Sort = { mode: SortMode; dir: 'asc' | 'desc' }
@@ -323,10 +325,13 @@ export default function RosterPage() {
   const [draft, setDraft] = useState('')
   const [saving, setSaving] = useState(false)
   const [ciFor, setCiFor] = useState<{ row: Row; doc: DocKey } | null>(null)
-  const [tab, setTab] = useState<'cursanti' | 'adrese' | 'verify' | 'leaduri' | 'administrativ' | 'grupa1' | 'grupa2' | 'grupa3'>('cursanti')
+  const [tab, setTab] = useState<Tab>('cursanti')
   // Lista de cursanți: tabul principal și cele pe grupe arată același tabel
   const esteLista = (t: string) => t === 'cursanti' || t.startsWith('grupa')
   const grupaTab = tab.startsWith('grupa') ? Number(tab.slice(5)) : null
+  // grupele care chiar au cursanți; la o serie fără clone nu arătăm taburi de grupă
+  const grupeCuCursanti = Array.from(new Set((rows || []).map(r => r.grupa || 1))).sort((a, b) => a - b)
+  const grupeVizibile = grupeCuCursanti.length > 1 ? grupeCuCursanti : []
   const [docsVisible, setDocsVisible] = useState(false)
   const [addOpen, setAddOpen] = useState<null | 'manual' | 'paste'>(null)
   const [title, setTitle] = useState('Cursanți — sesiune')
@@ -449,6 +454,9 @@ export default function RosterPage() {
 
   // Coloana „SN" (intervalul de practică) apare doar în Lista cursanți și doar
   // când seria are intervale de practică stabilite
+  useEffect(() => {
+    if (grupaTab && rows && !grupeVizibile.includes(grupaTab)) setTab('cursanti')
+  }, [grupaTab, rows, grupeVizibile])
   const arataSN = esteLista(tab) && !!practica
   // la C,D rămâne doar semnătura din coloanele de la final (fără cererea de examen)
   const docColsEnd = esteRadio ? DOC_COLS_END : DOC_COLS_END.filter(c => c.key !== 'cerere')
@@ -720,8 +728,8 @@ export default function RosterPage() {
         {/* Taburi */}
         <div className="mb-4 flex gap-1 border-b border-gray-200">
           {([['cursanti', 'Lista cursanți'], ['adrese', 'Lista verificare adrese'], ['verify', 'Verify by ID'], ['leaduri', 'Leaduri radio'], ['administrativ', 'Administrativ'],
-            ['grupa1', 'Grupa 1'], ['grupa2', 'Grupa 2'], ['grupa3', 'Grupa 3']] as const).map(([k, lbl]) => (
-            <button key={k} onClick={() => setTab(k)}
+            ...grupeVizibile.map(g => [('grupa' + g) as Tab, 'Grupa ' + g] as const)] as const).map(([k, lbl]) => (
+            <button key={k} onClick={() => setTab(k as Tab)}
               className={`px-4 py-2 text-sm font-medium -mb-px border-b-2 ${tab === k ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
               {lbl}
             </button>
