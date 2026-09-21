@@ -11,7 +11,7 @@ import LivrareCell, { livrareRang } from '@/components/LivrareCell'
 import CopyColoana from '@/components/CopyColoana'
 import { titleCaseRo, buildAttendanceHtml, whatsappText, buildQrPdfHtml } from '@/lib/print-docs'
 import CatalogZile from '@/components/CatalogZile'
-import { zileIntre, etichetaZi } from '@/lib/catalog-zile'
+import { zileIntre, etichetaZi, titluCatalog } from '@/lib/catalog-zile'
 import { defaultExamTime, sessionDefaults } from '@/lib/session-defaults'
 import type { SyncResult } from '@/lib/skipper-result'
 import SkipperSyncModal from '@/components/SkipperSyncModal'
@@ -3331,6 +3331,7 @@ function AttendanceCard({ sess }: { sess: any }) {
 
   async function salveazaZile(zile: string[]) {
     setZileAlese(zile)
+    if (zile.length) setTitlu(titluCatalog(zile))
     await supabase.from('sessions').update({ catalog_zile: zile }).eq('id', sess.parent_session_id || sess.id)
   }
 

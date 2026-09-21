@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { titleCaseRo, whatsappText } from '@/lib/print-docs'
-import { zileIntre, etichetaZi } from '@/lib/catalog-zile'
+import { zileIntre, etichetaZi, titluCatalog } from '@/lib/catalog-zile'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -69,12 +69,13 @@ export async function GET(req: NextRequest) {
   const { principal, clone } = fam
   const sd = principal.session_date
   const csd = principal.course_start_date || principal.practice_start_date || sd
-  const titlu = titluPrezenta(csd, sd)
   // zilele de curs: cele bifate în setările catalogului, altfel toate din interval
   const toateZilele = zileIntre(csd, sd)
   const aleseSalvate = Array.isArray(principal.catalog_zile) ? (principal.catalog_zile as string[]).filter(z => toateZilele.includes(z)) : null
   const zileAlese = aleseSalvate && aleseSalvate.length ? aleseSalvate : toateZilele
   const zile = zileAlese.length ? zileAlese.map(etichetaZi) : zileCurs(csd, sd)
+  // titlul urmează extremele zilelor bifate
+  const titlu = zileAlese.length ? titluCatalog(zileAlese) : titluPrezenta(csd, sd)
 
   const ro = (a: string, b: string) => a.localeCompare(b, 'ro', { sensitivity: 'base' })
   const nume = (arr: any[]) => (arr || []).filter((x: any) => (x.full_name || '').trim()).map((x: any) => titleCaseRo(x.full_name))

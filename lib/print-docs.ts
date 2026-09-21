@@ -18,6 +18,12 @@ export function buildAttendanceHtml(titlu: string, grupa: string, zile: string[]
     return `<th class="${clase[i]}">${esc(zi.trim())}${data ? `<span class="d">${esc(data.trim())}</span>` : ''}</th>`
   }).join('')
   const celuleZile = clase.map(c => `<td class="${c}"></td>`).join('')
+  // lățimi fixe: numele cât cel mai lung nume + 2 taburi (~16 caractere),
+  // zilele cât cel mai lat cap de coloană, mărit cu 50%
+  const maxNume = names.reduce((m, n) => Math.max(m, (n || '').length), 4)
+  const latNume = maxNume + 16
+  const maxZi = zile.reduce((m, z) => Math.max(m, ...String(z).split(',').map(x => x.trim().length)), 5)
+  const latZi = Math.ceil((maxZi + 2) * 1.5)
   const rows = names.map((n, i) => `<tr><td class="nr">${i + 1}</td><td class="name">${esc(n)}</td>${celuleZile}</tr>`).join('')
   return `<!DOCTYPE html><html lang="ro"><head><meta charset="utf-8"><title>${esc(titlu)}</title>
 <style>
@@ -26,13 +32,13 @@ export function buildAttendanceHtml(titlu: string, grupa: string, zile: string[]
   body { margin:0; font-family: Arial, Helvetica, sans-serif; color:#222; }
   h1 { text-align:center; font-size:16pt; font-weight:bold; margin:0 0 16px; }
   .grupa { font-weight:bold; font-size:12.5pt; margin:0 0 10px; }
-  table { width:100%; border-collapse:collapse; table-layout:auto; }
+  table { width:auto; border-collapse:collapse; table-layout:fixed; }
   th, td { border:1px solid #b9b9b9; padding:6px 8px; font-size:11pt; }
   th { background:#d9e7cd; font-weight:bold; text-align:center; }
   td.nr, th.nr { width:1%; white-space:nowrap; text-align:center; color:#333; }
-  td.name, th.name { text-align:left; width:100%; }
+  td.name, th.name { text-align:left; width:${latNume}ch; }
   /* coloanele zilelor: cât textul din cap, restul spațiului rămâne numelui */
-  th.day, td.day { width:1%; white-space:nowrap; text-align:center; }
+  th.day, td.day { width:${latZi}ch; white-space:nowrap; text-align:center; }
   th.day .d { display:block; font-weight:normal; font-size:9.5pt; }
   /* trecerea într-o săptămână nouă */
   th.saptamana, td.saptamana { border-left-width:2.5px; border-left-color:#8a8a8a; }
