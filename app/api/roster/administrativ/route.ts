@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { titleCaseRo, whatsappText } from '@/lib/print-docs'
-import { zileIntre, etichetaZi } from '@/components/CatalogZile'
+import { zileIntre, etichetaZi } from '@/lib/catalog-zile'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
