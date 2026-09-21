@@ -7,6 +7,7 @@ import { computeAddressChanges, AddressChange } from '@/lib/normalize-address'
 import { samePerson, mergeCarry, fillGaps } from '@/lib/student-merge'
 import PracticeSlotsCard from '@/components/PracticeSlotsCard'
 import { applyMailTemplate } from '@/lib/mail-template'
+import LivrareCell from '@/components/LivrareCell'
 import { defaultExamTime, sessionDefaults } from '@/lib/session-defaults'
 import type { SyncResult } from '@/lib/skipper-result'
 import SkipperSyncModal from '@/components/SkipperSyncModal'
@@ -44,6 +45,8 @@ type Student = {
   original_session_id: string; allocated_session_id: string
   only_sailing: boolean
   notes?: string
+  livrare_tip?: string | null; livrare_adresa?: string; livrare_contact?: string
+  livrare_telefon?: string; livrare_email?: string
   signature_pool?: boolean
   signature_random?: string
   verificare_ancom?: boolean
@@ -824,6 +827,7 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
                 <th className="px-2 py-2.5 text-gray-500 text-xs font-medium text-center cursor-pointer select-none hover:text-blue-600" onClick={()=>toggleSort('signature')}>
                   <span className="inline-flex items-center gap-0.5">Sem.{sortCol==='signature' ? (sortDir==='asc'?'↑':'↓') : <span className="text-gray-200">↕</span>}</span>
                 </th>
+                <th title="Cum primește materialele de curs" className="px-2 py-2.5 text-gray-500 text-xs font-medium text-center">Livrare</th>
                 <th className="w-24 px-2 py-2.5"></th>
               </tr>
             </thead>
@@ -963,6 +967,9 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
                             </svg>
                           </span>
                         )}
+                      </td>
+                      <td className="px-2 py-2 text-center">
+                        <LivrareCell s={s} nume={s.full_name} />
                       </td>
                       <td className="px-2 py-2">
                         <div className="flex gap-1 items-center relative">
@@ -3915,6 +3922,7 @@ function OnlySailingSection({ sessions, studentsMap, setStudentsMap, onCiPreview
                   <th className="px-2 py-2 text-left">Portal</th>
                   <th className="px-2 py-2 text-center">CI</th>
                   <th className="px-2 py-2 text-center">Sem.</th>
+                  <th className="px-2 py-2 text-center">Livrare</th>
                   <th className="px-2 py-2 w-20"/>
                 </tr>
               </thead>
@@ -3974,6 +3982,9 @@ function OnlySailingSection({ sessions, studentsMap, setStudentsMap, onCiPreview
                             <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M3 17c3-3 6 3 9 0s6-3 9 0"/><line x1="3" y1="12" x2="21" y2="12" strokeDasharray="2 2"/></svg>
                           </span>
                         )}
+                      </td>
+                      <td className="px-2 py-2 text-center">
+                        <LivrareCell s={s} nume={s.full_name} />
                       </td>
                       <td className="px-2 py-2 text-right">
                         <button onClick={()=>revoke(s)} className="text-xs text-orange-400 hover:text-red-500 hover:bg-red-50 px-2 py-1 rounded transition-colors">✕ Revocă</button>

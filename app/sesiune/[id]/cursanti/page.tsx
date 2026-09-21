@@ -1,6 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback, useRef, Fragment } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
+import LivrareCell from '@/components/LivrareCell'
 import { parseStudentsText } from '@/lib/import-parse'
 import type { SyncResult } from '@/lib/skipper-result'
 import SkipperSyncModal from '@/components/SkipperSyncModal'
@@ -19,6 +20,8 @@ type Row = {
   class_caa: string              // categoria: C / D / C,D
   phone: string
   ci_series: string; ci_number: string   // pașaport: seria PASS, numărul din 9 cifre
+  livrare_tip: string | null; livrare_adresa: string; livrare_contact: string
+  livrare_telefon: string; livrare_email: string
   expiry_date: string; nationality: string; country: string
 }
 
@@ -804,6 +807,7 @@ export default function RosterPage() {
                   </> : (
                     <th className="px-2 py-2.5 min-w-[150px]">{esteRadio ? 'Obținere / Prelungire LRC' : 'Categorie'}</th>
                   )}
+                  <th title="Cum primește materialele de curs" className="px-2 py-2.5 text-center text-[10px] normal-case tracking-normal">Livrare</th>
                   <th className="px-1 py-2.5 w-9"></th>
                   <th className="px-1 py-2.5 w-9"></th>
                 </tr>
@@ -907,6 +911,9 @@ export default function RosterPage() {
                           : <CategorieSelect value={row.class_caa} onConfirm={v => saveCategorie(row.id, v)} />}
                       </td>
                     )}
+                    <td className="px-2 py-2 text-center">
+                      <LivrareCell s={row} nume={row.full_name} />
+                    </td>
                     <td className="px-1 py-2 text-center">
                       <a href={portalLink(row.email)} target="_blank" rel="noopener noreferrer"
                         title="Deschide portalul cursantului"
