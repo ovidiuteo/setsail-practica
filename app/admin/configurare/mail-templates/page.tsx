@@ -2,7 +2,7 @@
 import { useEffect, useState, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
 import { Plus, Pencil, Trash2, X, Check, Eye, Code, Mail, Tag, ChevronDown, ChevronUp, Copy } from 'lucide-react'
-import { MAIL_VAR_GROUPS, mailVarValues, applyMailTemplate } from '@/lib/mail-template'
+import { MAIL_VAR_GROUPS, mailVarValues, applyMailTemplate, extractVars } from '@/lib/mail-template'
 
 type Template = {
   id: string
@@ -348,7 +348,7 @@ export default function MailTemplatesPage() {
   }
 
   function addVariable(v: string) {
-    const clean = v.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_')
+    const clean = v.trim().toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/^_+|_+$/g, '')
     if (!clean || (form.variables || []).includes(clean)) return
     setForm(f => ({ ...f, variables: [...(f.variables || []), clean] }))
     setVarInput('')
@@ -372,6 +372,11 @@ export default function MailTemplatesPage() {
     setCopied(v)
     setTimeout(() => setCopied(null), 1500)
   }
+
+  // Variabile folosite în text care nu există în catalog — la trimitere ar rămâne ca atare
+  const variabileNecunoscute = extractVars(
+    [form.subject || '', form.body_text || '', form.body_html || ''].join('\n'),
+  ).filter(k => !VARIABLES_INFO[k])
 
   const filtered = filterCat === 'all' ? templates : templates.filter(t => t.categorie === filterCat)
   const grouped = CATEGORII.reduce((acc, cat) => {
@@ -864,6 +869,33 @@ Folosește {{variabila}} pentru câmpuri dinamice."
                         sandbox="allow-same-origin"
                         title="Preview HTML"
                       />
+                    </div>
+                  )}
+
+                  {variabileNecunoscute.length > 0 && (
+                    <div className="mt-2 text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                      Nu recunosc {variabileNecunoscute.length === 1 ? 'variabila' : 'variabilele'}{' '}
+                      {variabileNecunoscute.map(k => '{{' + k + '}}').join(', ')} — la trimitere rămân așa, nu se înlocuiesc.
+                      {variabileNecunoscute.some(k => VARIABLES_INFO[k.replace(/^_+|_+$/g, '')]) && (
+                        <button type="button"
+                          onClick={() => setForm(f => {
+                            const repara = (t: string) => variabileNecunoscute.reduce((acc, k) => {
+                              const bun = k.replace(/^_+|_+$/g, '')
+                              return VARIABLES_INFO[bun] ? acc.split('{{' + k + '}}').join('{{' + bun + '}}') : acc
+                            }, t || '')
+                            return {
+                              ...f,
+                              subject: repara(f.subject || ''),
+                              body_text: repara(f.body_text || ''),
+                              body_html: repara(f.body_html || ''),
+                              variables: (f.variables || []).map(v => {
+                                const bun = v.replace(/^_+|_+$/g, '')
+                                return VARIABLES_INFO[bun] ? bun : v
+                              }),
+                            }
+                          })}
+                          className="ml-2 underline font-medium">Corectează</button>
+                      )}
                     </div>
                   )}
 
