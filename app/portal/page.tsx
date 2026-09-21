@@ -1411,8 +1411,8 @@ export default function PortalPage() {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
                 {([
                   { tip: 'sala', titlu: 'Nu e nevoie, mă prezint în sală' },
-                  { tip: 'domiciliu', titlu: 'Aceeași adresă ca domiciliul' },
                   { tip: 'easybox', titlu: 'Easybox Sameday' },
+                  { tip: 'domiciliu', titlu: 'Aceeași adresă ca domiciliul' },
                   { tip: 'alta', titlu: 'Altă adresă' },
                 ] as const).map(o => {
                   const ales = livrare.tip === o.tip
