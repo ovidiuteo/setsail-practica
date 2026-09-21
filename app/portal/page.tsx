@@ -57,9 +57,10 @@ export default function PortalPage() {
   })
 
   // Adresa de corespondență pentru materialele de curs
-  type TipLivrare = 'domiciliu' | 'easybox' | 'alta'
+  type TipLivrare = 'sala' | 'domiciliu' | 'easybox' | 'alta'
   const [livrare, setLivrare] = useState<{ tip: TipLivrare | null; adresa: string; contact: string; telefon: string; email: string }>(
     { tip: null, adresa: '', contact: '', telefon: '', email: '' })
+  const [livrareSalvata, setLivrareSalvata] = useState(false)   // badge „Date salvate"
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const drawing = useRef(false)
@@ -272,6 +273,7 @@ export default function PortalPage() {
       telefon: st.livrare_telefon || st.phone || '',
       email: st.livrare_email || st.email || emailInput.trim(),
     })
+    setLivrareSalvata(!!st.livrare_tip)
     setExistingSignature(st.signature_data || null)
     setDocType(st.doc_type || '')
     setClassCaa(st.class_caa || '')
@@ -738,31 +740,38 @@ export default function PortalPage() {
   function alegeLivrare(tip: TipLivrare) {
     setLivrare(v => {
       // al doilea click pe aceeași opțiune o deselectează
-      if (v.tip === tip) return { ...v, tip: null, adresa: '' }
-      const adresa = tip === 'domiciliu'
-        ? [form.address, form.city, form.county].map(x => String(x || '').trim()).filter(Boolean).join(', ')
-        : (v.tip === 'domiciliu' ? '' : v.adresa)
-      return {
-        tip, adresa,
-        contact: v.contact || form.full_name || '',
-        telefon: v.telefon || form.phone || '',
-        email: v.email || form.email || '',
-      }
+      const nou = v.tip === tip
+        ? { ...v, tip: null as TipLivrare | null, adresa: '' }
+        : {
+            tip: tip as TipLivrare | null,
+            adresa: tip === 'domiciliu'
+              ? [form.address, form.city, form.county].map(x => String(x || '').trim()).filter(Boolean).join(', ')
+              : tip === 'sala' ? '' : (v.tip === 'domiciliu' ? '' : v.adresa),
+            contact: v.contact || form.full_name || '',
+            telefon: v.telefon || form.phone || '',
+            email: v.email || form.email || '',
+          }
+      salveazaLivrareDate(nou)
+      return nou
     })
   }
 
-  async function salveazaLivrare() {
+  async function salveazaLivrareDate(v: { tip: TipLivrare | null; adresa: string; contact: string; telefon: string; email: string }) {
     if (!student?.id) return
     const date = {
-      livrare_tip: livrare.tip,
-      livrare_adresa: livrare.adresa.trim(),
-      livrare_contact: livrare.contact.trim(),
-      livrare_telefon: livrare.telefon.trim(),
-      livrare_email: livrare.email.trim(),
+      livrare_tip: v.tip,
+      livrare_adresa: v.adresa.trim(),
+      livrare_contact: v.contact.trim(),
+      livrare_telefon: v.telefon.trim(),
+      livrare_email: v.email.trim(),
     }
-    await supabase.from('students').update(date).eq('id', student.id)
+    const { error } = await supabase.from('students').update(date).eq('id', student.id)
+    if (error) return
     setStudent((prev: any) => prev ? { ...prev, ...date } : prev)
+    setLivrareSalvata(!!v.tip)
   }
+  // la ieșirea din câmp (fără buton de salvare)
+  const salveazaLivrare = () => { salveazaLivrareDate(livrare) }
 
   async function saveAll() {
     setSaving(true)
@@ -1033,6 +1042,16 @@ export default function PortalPage() {
                       : <span className="text-xs text-gray-300 px-2 text-center">Previzualizare document</span>}
                   </div>
                 </div>
+                  <div className="flex gap-2 mt-1.5">
+                    <label className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 bg-white hover:bg-gray-50 cursor-pointer">
+                      <Upload size={13} /> Alege fișier din telefon
+                      <input type="file" accept="image/*" className="hidden" onChange={handleCIUpload} />
+                    </label>
+                    <label className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 bg-white hover:bg-gray-50 cursor-pointer">
+                      <Camera size={13} /> Fă o poză
+                      <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleCIUpload} />
+                    </label>
+                  </div>
                 {ocrStatus === 'done' && (
                   <button
                     onClick={() => { setOcrStatus('idle'); if (ciInputRef.current) ciInputRef.current.click() }}
@@ -1082,6 +1101,16 @@ export default function PortalPage() {
                     <input type="file" accept="image/*" className="hidden"
                       onChange={e => handleExtraUpload(e, 'certificat_nastere_data', setCertNasStatus)} />
                   </label>
+                  <div className="flex gap-2 mt-1.5">
+                    <label className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 bg-white hover:bg-gray-50 cursor-pointer">
+                      <Upload size={13} /> Alege fișier din telefon
+                      <input type="file" accept="image/*" className="hidden" onChange={e => handleExtraUpload(e, 'certificat_nastere_data', setCertNasStatus)} />
+                    </label>
+                    <label className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 bg-white hover:bg-gray-50 cursor-pointer">
+                      <Camera size={13} /> Fă o poză
+                      <input type="file" accept="image/*" capture="environment" className="hidden" onChange={e => handleExtraUpload(e, 'certificat_nastere_data', setCertNasStatus)} />
+                    </label>
+                  </div>
                 </div>
               )}
 
@@ -1101,6 +1130,16 @@ export default function PortalPage() {
                     <input type="file" accept="image/*" className="hidden"
                       onChange={e => handleExtraUpload(e, 'ci_verso_data', setVersoStatus)} />
                   </label>
+                  <div className="flex gap-2 mt-1.5">
+                    <label className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 bg-white hover:bg-gray-50 cursor-pointer">
+                      <Upload size={13} /> Alege fișier din telefon
+                      <input type="file" accept="image/*" className="hidden" onChange={e => handleExtraUpload(e, 'ci_verso_data', setVersoStatus)} />
+                    </label>
+                    <label className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 bg-white hover:bg-gray-50 cursor-pointer">
+                      <Camera size={13} /> Fă o poză
+                      <input type="file" accept="image/*" capture="environment" className="hidden" onChange={e => handleExtraUpload(e, 'ci_verso_data', setVersoStatus)} />
+                    </label>
+                  </div>
                   <label className={`flex items-center justify-center gap-3 w-full px-4 py-3.5 rounded-xl border-2 border-dashed cursor-pointer transition-all ${
                     adevStatus === 'done' ? 'border-green-400 bg-green-50' :
                     adevStatus === 'saving' ? 'border-blue-300 bg-blue-50' :
@@ -1111,6 +1150,16 @@ export default function PortalPage() {
                     <input type="file" accept="image/*" className="hidden"
                       onChange={e => handleExtraUpload(e, 'adeverinta_adresa_data', setAdevStatus)} />
                   </label>
+                  <div className="flex gap-2 mt-1.5">
+                    <label className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 bg-white hover:bg-gray-50 cursor-pointer">
+                      <Upload size={13} /> Alege fișier din telefon
+                      <input type="file" accept="image/*" className="hidden" onChange={e => handleExtraUpload(e, 'adeverinta_adresa_data', setAdevStatus)} />
+                    </label>
+                    <label className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 bg-white hover:bg-gray-50 cursor-pointer">
+                      <Camera size={13} /> Fă o poză
+                      <input type="file" accept="image/*" capture="environment" className="hidden" onChange={e => handleExtraUpload(e, 'adeverinta_adresa_data', setAdevStatus)} />
+                    </label>
+                  </div>
                 </div>
               )}
 
@@ -1304,6 +1353,16 @@ export default function PortalPage() {
                    : <><Upload size={16} className="text-gray-400"/><span className="text-sm text-gray-600 font-medium">Apăsați pentru a încărca/scana CERTIFICATUL LRC</span></>}
                   <input type="file" accept="image/*" className="hidden" onChange={handleLrcUpload} />
                 </label>
+                  <div className="flex gap-2 mt-1.5">
+                    <label className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 bg-white hover:bg-gray-50 cursor-pointer">
+                      <Upload size={13} /> Alege fișier din telefon
+                      <input type="file" accept="image/*" className="hidden" onChange={handleLrcUpload} />
+                    </label>
+                    <label className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 bg-white hover:bg-gray-50 cursor-pointer">
+                      <Camera size={13} /> Fă o poză
+                      <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleLrcUpload} />
+                    </label>
+                  </div>
 
                 <div className="grid sm:grid-cols-3 gap-3">
                   <div>
@@ -1339,27 +1398,48 @@ export default function PortalPage() {
 
             {/* ── Adresa de corespondență pentru materialele de curs ── */}
             <div className="bg-white rounded-2xl p-6 shadow-2xl">
-              <h2 className="font-bold text-gray-900 mb-1">Adresă de corespondență materiale de curs</h2>
+              <div className="flex items-start justify-between gap-3 mb-1">
+                <h2 className="font-bold text-gray-900">Adresă de corespondență materiale de curs</h2>
+                {livrareSalvata && (
+                  <span className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-green-700 bg-green-50 border border-green-200">
+                    <CheckCircle size={13} /> Date salvate
+                  </span>
+                )}
+              </div>
               <p className="text-xs text-gray-400 mb-4">Unde trimitem materialele. Datele de contact sunt ale dumneavoastră — le puteți modifica.</p>
 
-              <div className="grid sm:grid-cols-3 gap-2 mb-4">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
                 {([
+                  { tip: 'sala', titlu: 'Nu e nevoie, mă prezint în sală' },
                   { tip: 'domiciliu', titlu: 'Aceeași adresă ca domiciliul' },
                   { tip: 'easybox', titlu: 'Easybox Sameday' },
                   { tip: 'alta', titlu: 'Altă adresă' },
-                ] as const).map(o => (
-                  <button key={o.tip} type="button" onClick={() => alegeLivrare(o.tip)}
-                    className={`flex flex-col items-center justify-center gap-1.5 px-3 py-3 rounded-xl border-2 text-sm font-medium transition-all ${
-                      livrare.tip === o.tip ? 'border-blue-500 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-600 hover:border-blue-300 hover:bg-blue-50/40'}`}>
-                    {o.tip === 'easybox' && (
-                      <span className="px-2 py-0.5 rounded-md text-[11px] font-extrabold tracking-tight text-white" style={{ background: '#e62e2d' }}>sameday</span>
-                    )}
-                    <span className="text-center leading-tight">{o.titlu}</span>
-                  </button>
-                ))}
+                ] as const).map(o => {
+                  const ales = livrare.tip === o.tip
+                  const verde = o.tip === 'sala'
+                  return (
+                    <button key={o.tip} type="button" onClick={() => alegeLivrare(o.tip)}
+                      className={`flex flex-col items-center justify-center gap-1.5 px-3 py-3 rounded-xl border-2 text-sm font-medium transition-all ${
+                        ales
+                          ? (verde ? 'border-green-500 bg-green-50 text-green-700' : 'border-blue-500 bg-blue-50 text-blue-700')
+                          : (verde ? 'border-green-500 text-green-700 hover:bg-green-50/60' : 'border-gray-200 text-gray-600 hover:border-blue-300 hover:bg-blue-50/40')}`}>
+                      {o.tip === 'easybox' && (
+                        <span className="px-2 py-0.5 rounded-md text-[11px] font-extrabold tracking-tight text-white" style={{ background: '#e62e2d' }}>sameday</span>
+                      )}
+                      <span className="text-center leading-tight">{o.titlu}</span>
+                    </button>
+                  )
+                })}
               </div>
 
-              {livrare.tip && (
+              {/* „Mă prezint în sală": nu mai cerem adresă */}
+              {livrare.tip === 'sala' && (
+                <div className="rounded-xl bg-green-50 border border-green-200 px-4 py-5 text-center">
+                  <p className="font-semibold text-green-800">Mulțumim, vă așteptăm la bord!</p>
+                </div>
+              )}
+
+              {livrare.tip && livrare.tip !== 'sala' && (
                 <div className="space-y-3">
                   <div>
                     <label className={labelCls}>
@@ -1367,6 +1447,7 @@ export default function PortalPage() {
                     </label>
                     <textarea rows={2} value={livrare.adresa}
                       onChange={e => setLivrare(v => ({ ...v, adresa: e.target.value }))}
+                      onBlur={salveazaLivrare}
                       placeholder={livrare.tip === 'easybox' ? 'ex. Easybox Kaufland Băneasa, Șos. București-Ploiești 44, București' : 'stradă, număr, bloc, scară, apartament, localitate, județ'}
                       className={inputCls} />
                   </div>
@@ -1374,21 +1455,18 @@ export default function PortalPage() {
                     <div>
                       <label className={labelCls}>Persoană de contact curier</label>
                       <input value={livrare.contact} onChange={e => setLivrare(v => ({ ...v, contact: e.target.value }))}
-                        placeholder="nume și prenume" className={inputCls} />
+                        onBlur={salveazaLivrare} placeholder="nume și prenume" className={inputCls} />
                     </div>
                     <div>
                       <label className={labelCls}>Telefon</label>
                       <input value={livrare.telefon} onChange={e => setLivrare(v => ({ ...v, telefon: e.target.value }))}
-                        placeholder="07XX XXX XXX" className={inputCls} />
+                        onBlur={salveazaLivrare} placeholder="07XX XXX XXX" className={inputCls} />
                     </div>
                     <div>
                       <label className={labelCls}>Email</label>
                       <input value={livrare.email} onChange={e => setLivrare(v => ({ ...v, email: e.target.value }))}
-                        placeholder="email@exemplu.ro" className={inputCls} />
+                        onBlur={salveazaLivrare} placeholder="email@exemplu.ro" className={inputCls} />
                     </div>
-                  </div>
-                  <div className="flex justify-end">
-                    <SaveDataButton onSave={salveazaLivrare} />
                   </div>
                 </div>
               )}
@@ -1447,6 +1525,16 @@ export default function PortalPage() {
                       : <span className="text-xs text-gray-300 px-2 text-center">Previzualizare cerere</span>}
                   </div>
                 </div>
+                  <div className="flex gap-2 mt-1.5">
+                    <label className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 bg-white hover:bg-gray-50 cursor-pointer">
+                      <Upload size={13} /> Alege fișier din telefon
+                      <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) setEditFile({ file: f, kind: 'cerere' }) }} />
+                    </label>
+                    <label className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 bg-white hover:bg-gray-50 cursor-pointer">
+                      <Camera size={13} /> Fă o poză
+                      <input type="file" accept="image/*" capture="environment" className="hidden" onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) setEditFile({ file: f, kind: 'cerere' }) }} />
+                    </label>
+                  </div>
 
                 <div className="flex items-center gap-3 my-3">
                   <div className="flex-1 h-px bg-gray-200" />
@@ -1472,6 +1560,16 @@ export default function PortalPage() {
                       : <span className="text-xs text-gray-300 px-2 text-center">Previzualizare semnătură</span>}
                   </div>
                 </div>
+                  <div className="flex gap-2 mt-1.5">
+                    <label className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 bg-white hover:bg-gray-50 cursor-pointer">
+                      <Upload size={13} /> Alege fișier din telefon
+                      <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) setEditFile({ file: f, kind: 'semnatura' }) }} />
+                    </label>
+                    <label className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 bg-white hover:bg-gray-50 cursor-pointer">
+                      <Camera size={13} /> Fă o poză
+                      <input type="file" accept="image/*" capture="environment" className="hidden" onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) setEditFile({ file: f, kind: 'semnatura' }) }} />
+                    </label>
+                  </div>
 
                 {/* Reîncărcare explicită — dacă semnătura a ieșit prost la procesare */}
                 {sigPhotoStatus === 'done' && (
