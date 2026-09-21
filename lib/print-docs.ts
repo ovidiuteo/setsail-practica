@@ -11,11 +11,14 @@ export function titleCaseRo(s: string): string {
 export function buildAttendanceHtml(titlu: string, grupa: string, zile: string[], names: string[]): string {
   const esc = (s: string) => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
   // „Mierc, 23.09" -> ziua pe primul rând, data dedesubt
-  const dayCols = zile.map(z => {
+  // o săptămână nouă începe luni: linia din stânga coloanei e mai groasă
+  const clase = zile.map((z, i) => 'day' + (i > 0 && /^luni/i.test(String(z).trim()) ? ' saptamana' : ''))
+  const dayCols = zile.map((z, i) => {
     const [zi, data] = String(z).split(',')
-    return `<th class="day">${esc(zi.trim())}${data ? `<span class="d">${esc(data.trim())}</span>` : ''}</th>`
+    return `<th class="${clase[i]}">${esc(zi.trim())}${data ? `<span class="d">${esc(data.trim())}</span>` : ''}</th>`
   }).join('')
-  const rows = names.map((n, i) => `<tr><td class="nr">${i + 1}</td><td class="name">${esc(n)}</td>${zile.map(() => '<td class="day"></td>').join('')}</tr>`).join('')
+  const celuleZile = clase.map(c => `<td class="${c}"></td>`).join('')
+  const rows = names.map((n, i) => `<tr><td class="nr">${i + 1}</td><td class="name">${esc(n)}</td>${celuleZile}</tr>`).join('')
   return `<!DOCTYPE html><html lang="ro"><head><meta charset="utf-8"><title>${esc(titlu)}</title>
 <style>
   @page { size: A4 landscape; margin: 12mm; }
@@ -31,6 +34,8 @@ export function buildAttendanceHtml(titlu: string, grupa: string, zile: string[]
   /* coloanele zilelor: cât textul din cap, restul spațiului rămâne numelui */
   th.day, td.day { width:1%; white-space:nowrap; text-align:center; }
   th.day .d { display:block; font-weight:normal; font-size:9.5pt; }
+  /* trecerea într-o săptămână nouă */
+  th.saptamana, td.saptamana { border-left-width:2.5px; border-left-color:#8a8a8a; }
   tr { height:26px; }
 </style></head>
 <body>

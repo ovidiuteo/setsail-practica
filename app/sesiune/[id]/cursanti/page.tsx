@@ -3,7 +3,7 @@ import { useEffect, useState, useCallback, useRef, Fragment } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
 import LivrareCell, { livrareRang } from '@/components/LivrareCell'
 import CopyColoana from '@/components/CopyColoana'
-import { buildAttendanceHtml, buildQrPdfHtml } from '@/lib/print-docs'
+import { buildAttendanceHtml, buildQrPdfHtml, titleCaseRo } from '@/lib/print-docs'
 import CatalogZile from '@/components/CatalogZile'
 import { Settings } from 'lucide-react'
 import { parseStudentsText } from '@/lib/import-parse'
@@ -241,6 +241,12 @@ function AutoWidthInput({ value, onChange, onBlur, className }: {
         className={`${className} col-start-1 row-start-1 w-full min-w-[8ch]`} />
     </span>
   )
+}
+
+// „BOTEZATU GHEORGHE" -> „Gheorghe"; numele de familie e primul cuvânt
+function prenume(nume: string): string {
+  const cuvinte = String(nume || '').trim().split(/s+/).filter(Boolean)
+  return titleCaseRo(cuvinte.length > 1 ? cuvinte.slice(1).join(' ') : (cuvinte[0] || ''))
 }
 
 const roDate = (d: string | null) => d ? new Date(d).toLocaleDateString('ro-RO') : ''
@@ -794,6 +800,8 @@ export default function RosterPage() {
                           </button>
                           <CopyColoana titlu="Copiază numele, în ordinea din listă"
                             valori={sortRows(rows, sort, ordineInterval).map(r => r.full_name || '')} />
+                          <CopyColoana eticheta="Prenume" titlu="Copiază doar prenumele, cu majusculă doar la prima literă"
+                            valori={sortRows(rows, sort, ordineInterval).map(r => prenume(r.full_name))} />
                         </span>
                       ) : f.key === 'email' ? (
                         <span className="flex items-center gap-1.5">

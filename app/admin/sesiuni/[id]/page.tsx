@@ -827,6 +827,13 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
                         <CopyColoana titlu={col==='full_name' ? 'Copiază numele, în ordinea din listă' : 'Copiază emailurile, în ordinea din listă'}
                           valori={getSorted(students.filter((st:Student)=>!st.only_sailing)).map((st:Student) => String((st as any)[col] || ''))} />
                       )}
+                      {col==='full_name' && (
+                        <CopyColoana eticheta="Prenume" titlu="Copiază doar prenumele, cu majusculă doar la prima literă"
+                          valori={getSorted(students.filter((st:Student)=>!st.only_sailing)).map((st:Student) => {
+                            const cuv = String(st.full_name || '').trim().split(/s+/).filter(Boolean)
+                            return titleCaseRo(cuv.length > 1 ? cuv.slice(1).join(' ') : (cuv[0] || ''))
+                          })} />
+                      )}
                     </span>
                   </th>
                 ))}
