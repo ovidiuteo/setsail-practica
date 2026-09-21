@@ -10,7 +10,11 @@ export function titleCaseRo(s: string): string {
 
 export function buildAttendanceHtml(titlu: string, grupa: string, zile: string[], names: string[]): string {
   const esc = (s: string) => (s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-  const dayCols = zile.map(z => `<th class="day">${esc(z)}</th>`).join('')
+  // „Mierc, 23.09" -> ziua pe primul rând, data dedesubt
+  const dayCols = zile.map(z => {
+    const [zi, data] = String(z).split(',')
+    return `<th class="day">${esc(zi.trim())}${data ? `<span class="d">${esc(data.trim())}</span>` : ''}</th>`
+  }).join('')
   const rows = names.map((n, i) => `<tr><td class="nr">${i + 1}</td><td class="name">${esc(n)}</td>${zile.map(() => '<td class="day"></td>').join('')}</tr>`).join('')
   return `<!DOCTYPE html><html lang="ro"><head><meta charset="utf-8"><title>${esc(titlu)}</title>
 <style>
@@ -19,19 +23,21 @@ export function buildAttendanceHtml(titlu: string, grupa: string, zile: string[]
   body { margin:0; font-family: Arial, Helvetica, sans-serif; color:#222; }
   h1 { text-align:center; font-size:16pt; font-weight:bold; margin:0 0 16px; }
   .grupa { font-weight:bold; font-size:12.5pt; margin:0 0 10px; }
-  table { width:100%; border-collapse:collapse; table-layout:fixed; }
+  table { width:100%; border-collapse:collapse; table-layout:auto; }
   th, td { border:1px solid #b9b9b9; padding:6px 8px; font-size:11pt; }
   th { background:#d9e7cd; font-weight:bold; text-align:center; }
-  td.nr, th.nr { width:34px; text-align:center; color:#333; }
-  td.name { text-align:left; }
-  th.day, td.day { width:120px; }
+  td.nr, th.nr { width:1%; white-space:nowrap; text-align:center; color:#333; }
+  td.name, th.name { text-align:left; width:100%; }
+  /* coloanele zilelor: cât textul din cap, restul spațiului rămâne numelui */
+  th.day, td.day { width:1%; white-space:nowrap; text-align:center; }
+  th.day .d { display:block; font-weight:normal; font-size:9.5pt; }
   tr { height:26px; }
 </style></head>
 <body>
   <h1>${esc(titlu)}</h1>
   <div class="grupa">${esc(grupa)}</div>
   <table>
-    <thead><tr><th class="nr">Nr.</th><th>Nume</th>${dayCols}</tr></thead>
+    <thead><tr><th class="nr">Nr.</th><th class="name">Nume</th>${dayCols}</tr></thead>
     <tbody>${rows}</tbody>
   </table>
   <script>window.onload=function(){setTimeout(function(){window.focus();window.print();},350);};<\/script>

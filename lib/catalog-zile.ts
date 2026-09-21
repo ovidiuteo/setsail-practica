@@ -9,12 +9,14 @@ export function dinISO(s: string): Date | null {
   return y && m && d ? new Date(y, m - 1, d) : null
 }
 
-// „Luni, 21.09"
+// Zilele scurtate pentru capul de tabel al catalogului
+const ZI_SCURT = ['Dum', 'Luni', 'Marți', 'Mierc', 'Joi', 'Vineri', 'Sâmb']
+
+// „Mierc, 23.09" — ziua scurtată și data
 export function etichetaZi(iso: string): string {
   const d = dinISO(iso)
   if (!d) return iso
-  const zi = d.toLocaleDateString('ro-RO', { weekday: 'long' })
-  return `${zi.charAt(0).toLocaleUpperCase('ro-RO')}${zi.slice(1)}, ${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}`
+  return `${ZI_SCURT[d.getDay()]}, ${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}`
 }
 
 // Toate zilele dintre start și final (inclusiv)
