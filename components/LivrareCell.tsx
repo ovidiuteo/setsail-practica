@@ -1,10 +1,10 @@
 'use client'
 import { useState } from 'react'
-import { Presentation, Truck, Circle, X } from 'lucide-react'
+import { Presentation, Truck, Circle, X, Check, Loader2 } from 'lucide-react'
 
 // Cum vrea cursantul materialele de curs (ales în portal): în sală, easybox Sameday
 // sau la o adresă prin curier. Iconița se vede în listele de cursanți; la easybox și
-// adresă, click pe ea deschide datele de contact pentru curier.
+// adresă, click pe ea deschide datele de contact și butonul „Trimis".
 
 export type Livrare = {
   livrare_tip?: string | null
@@ -12,6 +12,7 @@ export type Livrare = {
   livrare_contact?: string | null
   livrare_telefon?: string | null
   livrare_email?: string | null
+  livrare_trimis_la?: string | null
 }
 
 const TITLU: Record<string, string> = {
@@ -19,6 +20,13 @@ const TITLU: Record<string, string> = {
   easybox: 'Easybox Sameday',
   domiciliu: 'Curier, la adresa de domiciliu',
   alta: 'Curier, la altă adresă',
+}
+
+// Ordinea la sortare: neales → sală → easybox → adresă; pachetele trimise trec după cele netrimise
+export function livrareRang(s: Livrare): number {
+  const tip = s.livrare_tip || ''
+  const baza = tip === 'sala' ? 1 : tip === 'easybox' ? 2 : (tip === 'domiciliu' || tip === 'alta') ? 3 : 0
+  return baza * 2 + (s.livrare_trimis_la ? 1 : 0)
 }
 
 // Sigla Sameday: pătrat roșu cu „s"
@@ -29,27 +37,47 @@ function SiglaSameday({ size = 18 }: { size?: number }) {
   )
 }
 
-export function LivrareIcon({ tip, size = 18 }: { tip?: string | null; size?: number }) {
-  if (tip === 'sala') return <Presentation size={size} className="text-green-600" />
-  if (tip === 'easybox') return <SiglaSameday size={size} />
-  if (tip === 'domiciliu' || tip === 'alta') return <Truck size={size} className="text-blue-600" />
-  return <Circle size={size} className="text-orange-400" />
+export function LivrareIcon({ tip, size = 18, trimis }: { tip?: string | null; size?: number; trimis?: boolean }) {
+  const icon = tip === 'sala' ? <Presentation size={size} className="text-green-600" />
+    : tip === 'easybox' ? <SiglaSameday size={size} />
+    : (tip === 'domiciliu' || tip === 'alta') ? <Truck size={size} className="text-blue-600" />
+    : <Circle size={size} className="text-orange-400" />
+  // pachet trimis: iconița stă într-un cerc verde
+  if (!trimis) return icon
+  return (
+    <span className="inline-flex items-center justify-center rounded-full bg-green-100 ring-2 ring-green-500"
+      style={{ width: size + 12, height: size + 12 }}>{icon}</span>
+  )
 }
 
-export default function LivrareCell({ s, nume }: { s: Livrare; nume?: string }) {
+export default function LivrareCell({ s, nume, onTrimis }: {
+  s: Livrare
+  nume?: string
+  // marchează / anulează trimiterea pachetului; primește data ISO sau null
+  onTrimis?: (trimisLa: string | null) => Promise<void> | void
+}) {
   const [deschis, setDeschis] = useState(false)
+  const [salvez, setSalvez] = useState(false)
   const tip = s.livrare_tip || null
-  const titlu = tip ? TITLU[tip] || tip : 'Nu a ales cum primește materialele'
+  const trimis = !!s.livrare_trimis_la
+  const titlu = (tip ? TITLU[tip] || tip : 'Nu a ales cum primește materialele')
+    + (trimis ? ' · pachet trimis' : '')
   const areDetalii = tip === 'easybox' || tip === 'domiciliu' || tip === 'alta'
 
+  async function schimbaTrimis() {
+    if (!onTrimis) return
+    setSalvez(true)
+    try { await onTrimis(trimis ? null : new Date().toISOString()) } finally { setSalvez(false) }
+  }
+
   if (!areDetalii) {
-    return <span title={titlu} className="inline-flex items-center justify-center"><LivrareIcon tip={tip} /></span>
+    return <span title={titlu} className="inline-flex items-center justify-center"><LivrareIcon tip={tip} trimis={trimis} /></span>
   }
   return (
     <>
       <button type="button" onClick={e => { e.stopPropagation(); setDeschis(true) }} title={titlu}
         className="p-1 rounded hover:bg-gray-100 transition-colors">
-        <LivrareIcon tip={tip} />
+        <LivrareIcon tip={tip} trimis={trimis} />
       </button>
       {deschis && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
@@ -57,10 +85,10 @@ export default function LivrareCell({ s, nume }: { s: Livrare; nume?: string }) 
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm" onClick={e => e.stopPropagation()}>
             <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-gray-100">
               <div className="flex items-center gap-2 min-w-0">
-                <LivrareIcon tip={tip} size={20} />
+                <LivrareIcon tip={tip} size={20} trimis={trimis} />
                 <div className="min-w-0">
                   <div className="font-semibold text-gray-900 truncate">{nume || 'Livrare materiale'}</div>
-                  <div className="text-xs text-gray-400">{titlu}</div>
+                  <div className="text-xs text-gray-400">{TITLU[tip] || tip}</div>
                 </div>
               </div>
               <button onClick={() => setDeschis(false)} className="text-gray-400 hover:text-gray-700"><X size={18} /></button>
@@ -91,6 +119,23 @@ export default function LivrareCell({ s, nume }: { s: Livrare; nume?: string }) 
                 </div>
               </div>
             </div>
+            {onTrimis && (
+              <div className="px-5 py-4 border-t border-gray-100 flex items-center justify-between gap-3 flex-wrap">
+                {trimis && (
+                  <span className="text-xs text-green-700">
+                    Trimis {new Date(s.livrare_trimis_la as string).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric' })}
+                  </span>
+                )}
+                <button onClick={schimbaTrimis} disabled={salvez}
+                  className={`ml-auto flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium disabled:opacity-60 ${
+                    trimis
+                      ? 'border border-gray-200 text-gray-600 hover:bg-gray-50'
+                      : 'text-white bg-green-600 hover:bg-green-700'}`}>
+                  {salvez ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+                  {trimis ? 'Anulează trimiterea' : 'Trimis'}
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}

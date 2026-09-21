@@ -7,7 +7,7 @@ import { computeAddressChanges, AddressChange } from '@/lib/normalize-address'
 import { samePerson, mergeCarry, fillGaps } from '@/lib/student-merge'
 import PracticeSlotsCard from '@/components/PracticeSlotsCard'
 import { applyMailTemplate } from '@/lib/mail-template'
-import LivrareCell from '@/components/LivrareCell'
+import LivrareCell, { livrareRang } from '@/components/LivrareCell'
 import { defaultExamTime, sessionDefaults } from '@/lib/session-defaults'
 import type { SyncResult } from '@/lib/skipper-result'
 import SkipperSyncModal from '@/components/SkipperSyncModal'
@@ -46,7 +46,7 @@ type Student = {
   only_sailing: boolean
   notes?: string
   livrare_tip?: string | null; livrare_adresa?: string; livrare_contact?: string
-  livrare_telefon?: string; livrare_email?: string
+  livrare_telefon?: string; livrare_email?: string; livrare_trimis_la?: string | null
   signature_pool?: boolean
   signature_random?: string
   verificare_ancom?: boolean
@@ -333,6 +333,7 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
   function sortRank(s: Student, col: string): number | null {
     if (col === 'ci') return s.ci_image_data ? 1 : 0
     if (col === 'signature') return s.signature_data ? 2 : ((s as any).signature_random ? 1 : 0)
+    if (col === 'livrare') return livrareRang(s)
     return null
   }
   function getSorted(list: Student[]) {
@@ -827,7 +828,11 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
                 <th className="px-2 py-2.5 text-gray-500 text-xs font-medium text-center cursor-pointer select-none hover:text-blue-600" onClick={()=>toggleSort('signature')}>
                   <span className="inline-flex items-center gap-0.5">Sem.{sortCol==='signature' ? (sortDir==='asc'?'↑':'↓') : <span className="text-gray-200">↕</span>}</span>
                 </th>
-                <th title="Cum primește materialele de curs" className="px-2 py-2.5 text-gray-500 text-xs font-medium text-center">Livrare</th>
+                <th title="Cum primește materialele de curs — click pentru sortare"
+                  className="px-2 py-2.5 text-gray-500 text-xs font-medium text-center cursor-pointer select-none hover:text-blue-600"
+                  onClick={()=>toggleSort('livrare')}>
+                  <span className="inline-flex items-center gap-0.5">Livrare{sortCol==='livrare' ? (sortDir==='asc'?'↑':'↓') : <span className="text-gray-200">↕</span>}</span>
+                </th>
                 <th className="w-24 px-2 py-2.5"></th>
               </tr>
             </thead>
@@ -969,7 +974,11 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
                         )}
                       </td>
                       <td className="px-2 py-2 text-center">
-                        <LivrareCell s={s} nume={s.full_name} />
+                        <LivrareCell s={s} nume={s.full_name}
+                          onTrimis={async v => {
+                            await supabase.from('students').update({ livrare_trimis_la: v }).eq('id', s.id)
+                            setStudents(students.map(x => x.id === s.id ? { ...x, livrare_trimis_la: v } : x))
+                          }} />
                       </td>
                       <td className="px-2 py-2">
                         <div className="flex gap-1 items-center relative">
@@ -3984,7 +3993,11 @@ function OnlySailingSection({ sessions, studentsMap, setStudentsMap, onCiPreview
                         )}
                       </td>
                       <td className="px-2 py-2 text-center">
-                        <LivrareCell s={s} nume={s.full_name} />
+                        <LivrareCell s={s} nume={s.full_name}
+                          onTrimis={async v => {
+                            await supabase.from('students').update({ livrare_trimis_la: v }).eq('id', s.id)
+                            setStudentsMap((prev:any) => { const upd = { ...prev }; for (const sid of Object.keys(upd)) { upd[sid] = upd[sid].map((st:Student) => st.id === s.id ? { ...st, livrare_trimis_la: v } : st) } return upd })
+                          }} />
                       </td>
                       <td className="px-2 py-2 text-right">
                         <button onClick={()=>revoke(s)} className="text-xs text-orange-400 hover:text-red-500 hover:bg-red-50 px-2 py-1 rounded transition-colors">✕ Revocă</button>

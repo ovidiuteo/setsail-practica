@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback, useRef, Fragment } from 'react'
 import { useParams, useSearchParams } from 'next/navigation'
-import LivrareCell from '@/components/LivrareCell'
+import LivrareCell, { livrareRang } from '@/components/LivrareCell'
 import { parseStudentsText } from '@/lib/import-parse'
 import type { SyncResult } from '@/lib/skipper-result'
 import SkipperSyncModal from '@/components/SkipperSyncModal'
@@ -21,7 +21,7 @@ type Row = {
   phone: string
   ci_series: string; ci_number: string   // pașaport: seria PASS, numărul din 9 cifre
   livrare_tip: string | null; livrare_adresa: string; livrare_contact: string
-  livrare_telefon: string; livrare_email: string
+  livrare_telefon: string; livrare_email: string; livrare_trimis_la: string | null
   expiry_date: string; nationality: string; country: string
 }
 
@@ -33,7 +33,7 @@ type Practica = {
 }
 
 // Sortarea listei: alfabetic sau cronologic (când a intrat în serie), cu sens reversibil
-type SortMode = 'alpha' | 'time' | 'slot'
+type SortMode = 'alpha' | 'time' | 'slot' | 'livrare'
 type Sort = { mode: SortMode; dir: 'asc' | 'desc' }
 // ordinea intervalelor („10:00–12:00" -> 0, „12:00–14:00" -> 1 …), pentru sortarea după SN
 function sortRows(rows: Row[], s: Sort, ordineInterval: Map<string, number> = new Map()): Row[] {
@@ -42,6 +42,10 @@ function sortRows(rows: Row[], s: Sort, ordineInterval: Map<string, number> = ne
   const dupaNume = (a: Row, b: Row) => (a.full_name || '').localeCompare(b.full_name || '', 'ro', { sensitivity: 'base' })
   return [...rows].sort((a, b) => {
     if (s.mode === 'alpha') return semn * dupaNume(a, b)
+    if (s.mode === 'livrare') {
+      const d = livrareRang(a) - livrareRang(b)
+      return d ? semn * d : dupaNume(a, b)
+    }
     if (s.mode === 'slot') {
       // neprogramații rămân la final, în ambele sensuri
       const ia = a.practice_slot ? (ordineInterval.get(a.practice_slot) ?? 999) : null
@@ -807,7 +811,13 @@ export default function RosterPage() {
                   </> : (
                     <th className="px-2 py-2.5 min-w-[150px]">{esteRadio ? 'Obținere / Prelungire LRC' : 'Categorie'}</th>
                   )}
-                  <th title="Cum primește materialele de curs" className="px-2 py-2.5 text-center text-[10px] normal-case tracking-normal">Livrare</th>
+                  <th className="px-2 py-2.5 text-center text-[10px] normal-case tracking-normal">
+                    <button onClick={() => setSort(s => ({ mode: 'livrare', dir: s.mode === 'livrare' && s.dir === 'asc' ? 'desc' : 'asc' }))}
+                      title="Cum primește materialele de curs — click pentru sortare"
+                      className={`inline-flex items-center gap-0.5 ${sort.mode === 'livrare' ? 'text-blue-600 font-semibold' : 'hover:text-blue-600'}`}>
+                      Livrare {sort.mode === 'livrare' ? (sort.dir === 'asc' ? '↑' : '↓') : <span className="text-gray-300">↕</span>}
+                    </button>
+                  </th>
                   <th className="px-1 py-2.5 w-9"></th>
                   <th className="px-1 py-2.5 w-9"></th>
                 </tr>
@@ -912,7 +922,14 @@ export default function RosterPage() {
                       </td>
                     )}
                     <td className="px-2 py-2 text-center">
-                      <LivrareCell s={row} nume={row.full_name} />
+                      <LivrareCell s={row} nume={row.full_name}
+                        onTrimis={async v => {
+                          await fetch('/api/roster', {
+                            method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ session_id: id, token, student_id: row.id, field: 'livrare_trimis_la', value: v }),
+                          })
+                          rowUpdate(row.id, { livrare_trimis_la: v } as Partial<Row>)
+                        }} />
                     </td>
                     <td className="px-1 py-2 text-center">
                       <a href={portalLink(row.email)} target="_blank" rel="noopener noreferrer"

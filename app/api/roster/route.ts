@@ -20,6 +20,7 @@ const EDITABLE = new Set([
   'full_name', 'email', 'cnp', 'birth_date', 'address', 'city', 'county', 'obtinere_prelungire',
   'communication_target', 'class_caa', 'phone',
   'ci_series', 'ci_number', 'expiry_date', 'nationality', 'country',
+  'livrare_trimis_la',
 ])
 
 // Seria/numărul actului: seria cu majuscule, fără spații; pașaportul are seria PASS
@@ -222,7 +223,7 @@ export async function GET(req: NextRequest) {
 
   const [{ data, error }, docSets, { data: cereri }, { data: rezervari }] = await Promise.all([
     sb.from('students')
-      .select('id, full_name, email, phone, cnp, birth_date, address, city, county, ci_series, ci_number, expiry_date, nationality, country, class_caa, obtinere_prelungire, doc_type, communication_target, created_at, order_in_session, livrare_tip, livrare_adresa, livrare_contact, livrare_telefon, livrare_email')
+      .select('id, full_name, email, phone, cnp, birth_date, address, city, county, ci_series, ci_number, expiry_date, nationality, country, class_caa, obtinere_prelungire, doc_type, communication_target, created_at, order_in_session, livrare_tip, livrare_adresa, livrare_contact, livrare_telefon, livrare_email, livrare_trimis_la')
       .eq('session_id', sessionId),
     Promise.all((Object.entries(DOC_COLS) as [DocKey, string][]).map(async ([key, col]) => {
       const { data: ids } = await sb.from('students').select('id')
@@ -247,6 +248,7 @@ export async function GET(req: NextRequest) {
     // cum vrea materialele de curs (ales în portal)
     livrare_tip: r.livrare_tip || null, livrare_adresa: r.livrare_adresa || '',
     livrare_contact: r.livrare_contact || '', livrare_telefon: r.livrare_telefon || '', livrare_email: r.livrare_email || '',
+    livrare_trimis_la: r.livrare_trimis_la || null,
     expiry_date: r.expiry_date || '', nationality: r.nationality || '', country: r.country || '',
     // Informația vine din clasă (sursa de adevăr); valoarea stocată e doar fallback dacă clasa nu o conține
     obtinere_prelungire: lrcFromClass(r.class_caa) || r.obtinere_prelungire || '',
