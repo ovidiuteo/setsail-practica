@@ -62,7 +62,7 @@ export default function PortalPage() {
     { cheie: 'whatsapp_url', titlu: 'Grup WhatsApp al seriei', fundal: '#25d366', icon: <MessageCircle size={17} className="text-white" /> },
     { cheie: 'arhiva_video_url', titlu: 'Arhivă video', fundal: '#7c3aed', icon: <Film size={17} className="text-white" /> },
     { cheie: 'materiale_url', titlu: 'Manuale | prezentări | teste grilă', fundal: '#0a1628', icon: <Ship size={17} className="text-white" /> },
-    { cheie: 'comunitate_url', titlu: 'Comunitate SetSail — grup absolvenți', fundal: '#128c7e', icon: <Users size={17} className="text-white" /> },
+    { cheie: 'comunitate_url', titlu: 'SetSail — Toți într-o barcă · comunitate absolvenți SetSail', fundal: '#25d366', icon: <Users size={17} className="text-white" /> },
   ] as const)
     .map(r => ({ ...r, url: String((session as any)?.[r.cheie] || '').trim() }))
     .filter(r => r.url)
