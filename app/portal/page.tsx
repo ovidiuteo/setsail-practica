@@ -1019,7 +1019,6 @@ export default function PortalPage() {
                       ref={ciInputRef}
                       type="file"
                       accept="image/*"
-                      capture="environment"
                       className="hidden"
                       onChange={handleCIUpload}
                       disabled={ocrStatus === 'loading'}
@@ -1078,7 +1077,7 @@ export default function PortalPage() {
                     {certNasStatus === 'saving' ? <><Loader2 size={16} className="text-blue-500 animate-spin"/><span className="text-sm text-blue-600 font-medium">Se salvează...</span></>
                      : certNasStatus === 'done' ? <><CheckCircle size={16} className="text-green-600"/><span className="text-sm text-green-700 font-medium">Certificat de naștere încărcat ✓ (apăsați pentru a înlocui)</span></>
                      : <><Upload size={16} className="text-gray-400"/><span className="text-sm text-gray-600 font-medium">Apăsați pentru a încărca/poza CERTIFICATUL DE NAȘTERE</span></>}
-                    <input type="file" accept="image/*" capture="environment" className="hidden"
+                    <input type="file" accept="image/*" className="hidden"
                       onChange={e => handleExtraUpload(e, 'certificat_nastere_data', setCertNasStatus)} />
                   </label>
                 </div>
@@ -1097,7 +1096,7 @@ export default function PortalPage() {
                     {versoStatus === 'saving' ? <><Loader2 size={16} className="text-blue-500 animate-spin"/><span className="text-sm text-blue-600 font-medium">Se salvează...</span></>
                      : versoStatus === 'done' ? <><CheckCircle size={16} className="text-green-600"/><span className="text-sm text-green-700 font-medium">Verso CI încărcat ✓ (apăsați pentru a înlocui)</span></>
                      : <><Upload size={16} className="text-gray-400"/><span className="text-sm text-gray-600 font-medium">Apăsați pentru a încărca VERSO CI</span></>}
-                    <input type="file" accept="image/*" capture="environment" className="hidden"
+                    <input type="file" accept="image/*" className="hidden"
                       onChange={e => handleExtraUpload(e, 'ci_verso_data', setVersoStatus)} />
                   </label>
                   <label className={`flex items-center justify-center gap-3 w-full px-4 py-3.5 rounded-xl border-2 border-dashed cursor-pointer transition-all ${
@@ -1107,7 +1106,7 @@ export default function PortalPage() {
                     {adevStatus === 'saving' ? <><Loader2 size={16} className="text-blue-500 animate-spin"/><span className="text-sm text-blue-600 font-medium">Se salvează...</span></>
                      : adevStatus === 'done' ? <><CheckCircle size={16} className="text-green-600"/><span className="text-sm text-green-700 font-medium">Adeverință adresă încărcată ✓ (apăsați pentru a înlocui)</span></>
                      : <><Upload size={16} className="text-gray-400"/><span className="text-sm text-gray-600 font-medium">Apăsați pentru a încărca/poza adeverința adresă</span></>}
-                    <input type="file" accept="image/*" capture="environment" className="hidden"
+                    <input type="file" accept="image/*" className="hidden"
                       onChange={e => handleExtraUpload(e, 'adeverinta_adresa_data', setAdevStatus)} />
                   </label>
                 </div>
@@ -1301,7 +1300,7 @@ export default function PortalPage() {
                    : lrcStatus === 'done' ? <><CheckCircle size={16} className="text-green-600"/><span className="text-sm text-green-700 font-medium">Certificat LRC încărcat ✓ (apăsați pentru a înlocui)</span></>
                    : lrcStatus === 'error' ? <><Upload size={16} className="text-red-400"/><span className="text-sm text-red-600 font-medium">Încărcare eșuată — încercați din nou</span></>
                    : <><Upload size={16} className="text-gray-400"/><span className="text-sm text-gray-600 font-medium">Apăsați pentru a încărca/scana CERTIFICATUL LRC</span></>}
-                  <input type="file" accept="image/*" capture="environment" className="hidden" onChange={handleLrcUpload} />
+                  <input type="file" accept="image/*" className="hidden" onChange={handleLrcUpload} />
                 </label>
 
                 <div className="grid sm:grid-cols-3 gap-3">
@@ -1437,7 +1436,7 @@ export default function PortalPage() {
                     {cerereSemnStatus === 'saving' ? <><Loader2 size={20} className="text-blue-500 animate-spin"/><span className="text-xs text-blue-600 font-medium">Se salvează...</span></>
                      : cerereSemnStatus === 'done' ? <><CheckCircle size={22} className="text-green-600"/><span className="text-xs text-green-700 font-medium">Cerere semnată încărcată ✓<br/>(apăsați pentru a înlocui)</span></>
                      : <><Upload size={22} className="text-gray-400"/><span className="text-xs text-gray-600 font-medium">2. Încărcați cererea SEMNATĂ (poză sau scan)</span></>}
-                    <input type="file" accept="image/*" capture="environment" className="hidden"
+                    <input type="file" accept="image/*" className="hidden"
                       onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) setEditFile({ file: f, kind: 'cerere' }) }} />
                   </label>
                   <div className="flex-1 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 aspect-[210/297] overflow-hidden flex items-center justify-center">
@@ -1462,7 +1461,7 @@ export default function PortalPage() {
                     {sigPhotoStatus === 'saving' ? <><Loader2 size={18} className="text-blue-500 animate-spin"/><span className="text-xs text-blue-600 font-medium">Se procesează...</span></>
                      : sigPhotoStatus === 'done' ? <><CheckCircle size={18} className="text-green-600"/><span className="text-xs text-green-700 font-medium">Semnătură încărcată ✓<br/>(apăsați pentru a înlocui)</span></>
                      : <><Upload size={18} className="text-gray-400"/><span className="text-xs text-gray-600 font-medium">Încărcați o POZĂ cu semnătura de pe hârtie</span></>}
-                    <input type="file" accept="image/*" capture="environment" className="hidden"
+                    <input type="file" accept="image/*" className="hidden"
                       onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) setEditFile({ file: f, kind: 'semnatura' }) }} />
                   </label>
                   <div className="flex-1 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 aspect-[3/1] overflow-hidden flex items-center justify-center p-1">
@@ -1477,7 +1476,7 @@ export default function PortalPage() {
                   <label className="mt-2 flex items-center justify-center gap-2 w-full px-4 py-2.5 rounded-xl border-2 border-amber-400 text-amber-700 bg-amber-50/50 hover:bg-amber-50 cursor-pointer transition-all">
                     <RotateCcw size={14} />
                     <span className="text-sm font-medium">Înlocuiește semnătura</span>
-                    <input type="file" accept="image/*" capture="environment" className="hidden"
+                    <input type="file" accept="image/*" className="hidden"
                       onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) setEditFile({ file: f, kind: 'semnatura' }) }} />
                   </label>
                 )}
