@@ -187,6 +187,38 @@ export default function PortalPage() {
     form.phone, form.email,
   ]
   const detailsComplete = detailVals.every(v => String(v || '').trim() !== '')
+  // Actul scanat + toate datele completate: secțiunea de date (și semnătura) coboară la baza paginii, pliate
+  const dateGata = detailsComplete && !!student?.ci_image_data
+  const [dateDesfasurate, setDateDesfasurate] = useState(false)
+  const [semnaturaDesfasurata, setSemnaturaDesfasurata] = useState(false)
+  const ascundeDate = dateGata && !dateDesfasurate
+  const semnaturaGata = !!existingSignature || signatureSaved
+  const ascundeSemnatura = dateGata && semnaturaGata && !semnaturaDesfasurata
+
+  // Titlul paginii după completare: numele cursantului și seria
+  const numeCursant = String(student?.full_name || '')
+    .toLowerCase()
+    .replace(/(^|[\s\-])([a-zăâîșț])/g, (_m, sep, c) => sep + c.toUpperCase())
+  const locSerie = (() => {
+    const scope = session ? scopeForSession(session) : ''
+    if (scope === 'practica_cds_limanu') return 'București/Limanu'
+    if (scope === 'intensiv_cds_limanu') return 'Limanu'
+    if (scope === 'curs_cd_snagov') return 'București/Snagov'
+    return String(session?.locations?.name || '').trim()
+  })()
+  const sesiuneRezumat = (() => {
+    const zi = (d, cuAn) => {
+      if (!d) return ''
+      const [y, m, dd] = String(d).slice(0, 10).split('-').map(Number)
+      if (!y || !m || !dd) return ''
+      return new Date(y, m - 1, dd).toLocaleDateString('ro-RO',
+        cuAn ? { day: 'numeric', month: 'long', year: 'numeric' } : { day: 'numeric', month: 'long' })
+    }
+    const start = zi(session?.course_start_date, false)
+    const final = zi(session?.session_date, true)
+    const perioada = start && final ? start + ' – ' + final : (final || start)
+    return [perioada, locSerie].filter(Boolean).join(' · ')
+  })()
 
   // Avertisment cand cursantul schimba email-ul (afecteaza accesul la portal)
   const emailChanged = !!student && form.email.trim().toLowerCase() !== String(student.email || '').trim().toLowerCase()
@@ -909,10 +941,15 @@ export default function PortalPage() {
               ? <RadioTower size={28} style={{ color: '#0a1628' }} />
               : <Ship size={28} style={{ color: '#0a1628' }} />}
           </div>
-          <h1 className="text-2xl font-bold text-white" style={{ fontFamily: 'Georgia, serif' }}>SetSail</h1>
-          <p className="text-white/50 text-sm mt-1">
-            {isRadioSession ? 'Portal curs GMDSS/LRC' : 'Portal examen practic'}
-          </p>
+          {dateGata && step === 'confirm' ? (<>
+            <h1 className="text-2xl font-bold text-white" style={{ fontFamily: 'Georgia, serif' }}>{numeCursant}</h1>
+            {sesiuneRezumat && <p className="text-white/60 text-sm mt-1">Sesiune: {sesiuneRezumat}</p>}
+          </>) : (<>
+            <h1 className="text-2xl font-bold text-white" style={{ fontFamily: 'Georgia, serif' }}>SetSail</h1>
+            <p className="text-white/50 text-sm mt-1">
+              {isRadioSession ? 'Portal curs GMDSS/LRC' : 'Portal examen practic'}
+            </p>
+          </>)}
         </div>
 
         {/* ── LOGIN ── */}
@@ -951,12 +988,25 @@ export default function PortalPage() {
 
         {/* ── CONFIRM ── */}
         {step === 'confirm' && student && (
-          <div className="space-y-4">
+          <div className="flex flex-col gap-4">
 
             {/* Date personale */}
-            <div className="bg-white rounded-2xl p-6 shadow-2xl">
-              <h2 className="font-bold text-gray-900 mb-1">Date personale</h2>
-              <p className="text-xs text-gray-400 mb-3">Incarcati act identitate si semnati</p>
+            <div className={'bg-white rounded-2xl p-6 shadow-2xl ' + (dateGata ? 'order-[90]' : '')}>
+              {dateGata ? (
+                <button type="button" onClick={() => setDateDesfasurate(v => !v)}
+                  className="w-full flex items-center justify-between gap-2 text-left">
+                  <span className="flex items-center gap-2">
+                    <CheckCircle size={16} className="text-green-600" />
+                    <span className="font-bold text-gray-900">Date personale</span>
+                    <span className="text-xs text-gray-400">act de identitate și date — complet</span>
+                  </span>
+                  {dateDesfasurate ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+                </button>
+              ) : (<>
+                <h2 className="font-bold text-gray-900 mb-1">Date personale</h2>
+                <p className="text-xs text-gray-400 mb-3">Incarcati act identitate si semnati</p>
+              </>)}
+              <div className={ascundeDate ? 'hidden' : dateGata ? 'mt-4' : ''}>
             {student?.portal_status === 'signed' && (
               <div className="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-xl text-xs text-purple-700 flex items-center gap-2">
                 <CheckCircle size={14} className="shrink-0" />
@@ -1358,6 +1408,7 @@ export default function PortalPage() {
                   </div>
                 )}
               </div>
+              </div>
             </div>
 
             {/* ── Certificat LRC existent — doar la prelungirea valabilității ── */}
@@ -1426,7 +1477,7 @@ export default function PortalPage() {
 
             {/* ── Linkuri utile (doar cele completate în sesiune) ── */}
             {resurse.length > 0 && (
-              <div className="bg-white rounded-2xl p-6 shadow-2xl">
+              <div className={'bg-white rounded-2xl p-6 shadow-2xl ' + (dateGata ? 'order-[-10]' : '')}>
                 <h2 className="font-bold text-gray-900 mb-1">Linkuri utile</h2>
                 <p className="text-xs text-gray-400 mb-4">Cursul online, materialele și grupurile seriei.</p>
 
@@ -1663,9 +1714,22 @@ export default function PortalPage() {
 
             {/* Semnătură (canvas) — nu la radio, unde se semnează pe cerere */}
             {!isRadioSession && (
-            <div className="bg-white rounded-2xl p-6 shadow-2xl">
-              <h2 className="font-bold text-gray-900 mb-1">Semnătură</h2>
-              <p className="text-xs text-gray-400 mb-3">Semnați în zona de mai jos cu degetul sau mouse-ul</p>
+            <div className={'bg-white rounded-2xl p-6 shadow-2xl ' + (dateGata ? 'order-[95]' : '')}>
+              {dateGata && semnaturaGata ? (
+                <button type="button" onClick={() => setSemnaturaDesfasurata(v => !v)}
+                  className="w-full flex items-center justify-between gap-2 text-left">
+                  <span className="flex items-center gap-2">
+                    <CheckCircle size={16} className="text-green-600" />
+                    <span className="font-bold text-gray-900">Semnătură</span>
+                    <span className="text-xs text-gray-400">salvată</span>
+                  </span>
+                  {semnaturaDesfasurata ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+                </button>
+              ) : (<>
+                <h2 className="font-bold text-gray-900 mb-1">Semnătură</h2>
+                <p className="text-xs text-gray-400 mb-3">Semnați în zona de mai jos cu degetul sau mouse-ul</p>
+              </>)}
+              <div className={ascundeSemnatura ? 'hidden' : (dateGata && semnaturaGata) ? 'mt-4' : ''}>
 
               <div className={`border-2 rounded-xl overflow-hidden mb-3 transition-all ${signatureSaved ? 'border-green-500' : 'border-dashed border-gray-200'} bg-white`}>
                 <canvas ref={canvasRef} width={460} height={160}
@@ -1698,6 +1762,7 @@ export default function PortalPage() {
                   <CheckCircle size={11} /> Semnătura a fost salvată în baza de date
                 </p>
               )}
+              </div>
             </div>
             )}
 
