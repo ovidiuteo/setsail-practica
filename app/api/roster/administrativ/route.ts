@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { titleCaseRo, whatsappText } from '@/lib/print-docs'
+import { zileIntre, etichetaZi } from '@/components/CatalogZile'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -44,12 +45,12 @@ function titluPrezenta(start: string | null, final: string | null): string {
 // Seria principală + clonele ei, în ordinea creării (Grupa 1, 2, 3…)
 async function familie(sb: ReturnType<typeof svc>, sessionId: string) {
   const { data: s } = await sb.from('sessions')
-    .select('id, roster_token, parent_session_id, session_date, course_start_date, practice_start_date, class_caa, timeline_scope')
+    .select('id, roster_token, parent_session_id, session_date, course_start_date, practice_start_date, class_caa, timeline_scope, catalog_zile')
     .eq('id', sessionId).maybeSingle()
   if (!s) return null
   const principalId = (s as any).parent_session_id || (s as any).id
   const { data: principal } = await sb.from('sessions')
-    .select('id, session_date, course_start_date, practice_start_date, class_caa, timeline_scope')
+    .select('id, session_date, course_start_date, practice_start_date, class_caa, timeline_scope, catalog_zile')
     .eq('id', principalId).maybeSingle()
   const { data: clone } = await sb.from('sessions')
     .select('id, session_date, course_start_date, practice_start_date')
@@ -69,7 +70,11 @@ export async function GET(req: NextRequest) {
   const sd = principal.session_date
   const csd = principal.course_start_date || principal.practice_start_date || sd
   const titlu = titluPrezenta(csd, sd)
-  const zile = zileCurs(csd, sd)
+  // zilele de curs: cele bifate în setările catalogului, altfel toate din interval
+  const toateZilele = zileIntre(csd, sd)
+  const aleseSalvate = Array.isArray(principal.catalog_zile) ? (principal.catalog_zile as string[]).filter(z => toateZilele.includes(z)) : null
+  const zileAlese = aleseSalvate && aleseSalvate.length ? aleseSalvate : toateZilele
+  const zile = zileAlese.length ? zileAlese.map(etichetaZi) : zileCurs(csd, sd)
 
   const ro = (a: string, b: string) => a.localeCompare(b, 'ro', { sensitivity: 'base' })
   const nume = (arr: any[]) => (arr || []).filter((x: any) => (x.full_name || '').trim()).map((x: any) => titleCaseRo(x.full_name))
@@ -103,6 +108,7 @@ export async function GET(req: NextRequest) {
   const acum = new Date()
 
   return NextResponse.json({
+    interval: { start: csd || null, final: sd || null, zile_alese: zileAlese },
     cataloage,
     qr: {
       luna: (q as any)?.luna || dRo(sd || acum.toISOString(), { month: 'long' }).toUpperCase(),
@@ -124,6 +130,16 @@ export async function POST(req: NextRequest) {
   const fam = await familie(sb, String(body.session_id || ''))
   if (!fam || !body.token || fam.sess.roster_token !== body.token)
     return NextResponse.json({ error: 'unauthorized' }, { status: 403 })
+
+  // zilele bifate pentru catalog (se țin pe seria principală)
+  if (Array.isArray(body.catalog_zile)) {
+    const valide = (body.catalog_zile as any[]).filter(z => typeof z === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(z))
+    const { error } = await sb.from('sessions').update({ catalog_zile: valide }).eq('id', fam.principal.id)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    if (!body.portal && !body.skipper && !body.whatsapp && body.luna === undefined) {
+      return NextResponse.json({ ok: true, catalog_zile: valide })
+    }
+  }
 
   const img = (v: unknown) => typeof v === 'string' && /^data:image\/(png|jpe?g|webp|gif);base64,/.test(v) ? v : null
   const portal = img(body.portal)

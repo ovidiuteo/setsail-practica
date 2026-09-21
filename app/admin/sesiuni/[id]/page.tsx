@@ -10,6 +10,7 @@ import { applyMailTemplate } from '@/lib/mail-template'
 import LivrareCell, { livrareRang } from '@/components/LivrareCell'
 import CopyColoana from '@/components/CopyColoana'
 import { titleCaseRo, buildAttendanceHtml, whatsappText, buildQrPdfHtml } from '@/lib/print-docs'
+import CatalogZile, { zileIntre, etichetaZi } from '@/components/CatalogZile'
 import { defaultExamTime, sessionDefaults } from '@/lib/session-defaults'
 import type { SyncResult } from '@/lib/skipper-result'
 import SkipperSyncModal from '@/components/SkipperSyncModal'
@@ -3240,6 +3241,7 @@ function RosterLinkCard({ sess }: { sess: any }) {
 // Title Case pentru afișarea numelor (păstrează diacritice, capitalizează după spațiu/cratimă)
 function AttendanceCard({ sess }: { sess: any }) {
   const [open, setOpen] = useState(false)
+  const [zileOpen, setZileOpen] = useState(false)
   const [names, setNames] = useState<string[]>([])
   const sd = sess.session_date
   const csd = sess.course_start_date || sess.practice_start_date || sd
@@ -3266,7 +3268,12 @@ function AttendanceCard({ sess }: { sess: any }) {
   }
   const [titlu, setTitlu] = useState(buildTitlu(csd, sd))
   const [grupa, setGrupa] = useState('Grupa 1')
-  const [zileStr, setZileStr] = useState(deriveZile().join(', '))
+  // zilele bifate (date ISO) — implicit toate din intervalul curs → practică
+  const toateZilele = zileIntre(csd, sd)
+  const [zileAlese, setZileAlese] = useState<string[]>(
+    Array.isArray((sess as any).catalog_zile) && (sess as any).catalog_zile.length
+      ? ((sess as any).catalog_zile as string[]).filter(z => toateZilele.includes(z))
+      : toateZilele)
 
   useEffect(() => {
     if (!open) return
@@ -3314,8 +3321,13 @@ function AttendanceCard({ sess }: { sess: any }) {
     })()
   }, [open, sess.id])
 
+  async function salveazaZile(zile: string[]) {
+    setZileAlese(zile)
+    await supabase.from('sessions').update({ catalog_zile: zile }).eq('id', sess.parent_session_id || sess.id)
+  }
+
   function generate() {
-    const zile = zileStr.split(',').map(z => z.trim()).filter(Boolean)
+    const zile = zileAlese.length ? zileAlese.map(etichetaZi) : deriveZile()
     const html = buildAttendanceHtml(titlu, grupa, zile, names)
     const w = window.open('', '_blank')
     if (w) { w.document.write(html); w.document.close() }
@@ -3344,9 +3356,18 @@ function AttendanceCard({ sess }: { sess: any }) {
                 <input value={titlu} onChange={e => setTitlu(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" /></label>
               <label className="block"><span className="block text-xs text-gray-500 mb-1">Grupă</span>
                 <input value={grupa} onChange={e => setGrupa(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" /></label>
-              <label className="block"><span className="block text-xs text-gray-500 mb-1">Zile (coloane, separate prin virgulă)</span>
-                <input value={zileStr} onChange={e => setZileStr(e.target.value)} className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm" /></label>
+              <div>
+                <span className="block text-xs text-gray-500 mb-1">Zile (coloane pe catalog)</span>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-xs text-gray-600">{zileAlese.length ? zileAlese.map(etichetaZi).join(' · ') : 'nicio zi bifată'}</span>
+                  <button onClick={() => setZileOpen(true)} className="px-2 py-1 rounded-lg border border-gray-200 text-xs text-gray-600 hover:bg-gray-50">Alege zilele</button>
+                </div>
+              </div>
               <p className="text-xs text-gray-400">{names.length} cursanți (alfabetic)</p>
+              {zileOpen && (
+                <CatalogZile start={csd} final={sd} alese={zileAlese}
+                  onSalveaza={salveazaZile} onClose={() => setZileOpen(false)} />
+              )}
             </div>
             <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100">
               <button onClick={() => setOpen(false)} className="px-4 py-2 rounded-lg text-sm border border-gray-200 text-gray-600 hover:bg-gray-50">Renunță</button>

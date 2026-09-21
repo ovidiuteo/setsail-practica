@@ -4,6 +4,8 @@ import { useParams, useSearchParams } from 'next/navigation'
 import LivrareCell, { livrareRang } from '@/components/LivrareCell'
 import CopyColoana from '@/components/CopyColoana'
 import { buildAttendanceHtml, buildQrPdfHtml } from '@/lib/print-docs'
+import CatalogZile from '@/components/CatalogZile'
+import { Settings } from 'lucide-react'
 import { parseStudentsText } from '@/lib/import-parse'
 import type { SyncResult } from '@/lib/skipper-result'
 import SkipperSyncModal from '@/components/SkipperSyncModal'
@@ -1602,8 +1604,9 @@ function AdministrativTab({ sessionId, token }: { sessionId: string; token: stri
   const [modificat, setModificat] = useState(false)
   const [salvez, setSalvez] = useState(false)
   const [salvatLa, setSalvatLa] = useState<string | null>(null)
+  const [setari, setSetari] = useState(false)
 
-  useEffect(() => {
+  const incarca = useCallback(() => {
     fetch(`/api/roster/administrativ?session_id=${sessionId}&token=${encodeURIComponent(token)}`)
       .then(r => r.json())
       .then(j => {
@@ -1614,6 +1617,16 @@ function AdministrativTab({ sessionId, token }: { sessionId: string; token: stri
       })
       .catch(() => setEroare('Conexiune eșuată.'))
   }, [sessionId, token])
+  useEffect(() => { incarca() }, [incarca])
+
+  // zilele bifate în setări; catalogul se reîncarcă cu noile coloane
+  async function salveazaZile(zile: string[]) {
+    await fetch('/api/roster/administrativ', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId, token, catalog_zile: zile }),
+    })
+    incarca()
+  }
 
   function tipareste(html: string) {
     const w = window.open('', '_blank')
@@ -1655,8 +1668,19 @@ function AdministrativTab({ sessionId, token }: { sessionId: string; token: stri
   return (
     <div className="grid lg:grid-cols-2 gap-4 max-w-4xl">
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
-        <h3 className="font-semibold text-sm text-gray-900 mb-1">Catalog (foaie de prezență)</h3>
-        <p className="text-xs text-gray-400 mb-3">{date.cataloage[0]?.titlu} · {date.cataloage[0]?.zile.length} zile</p>
+        <div className="flex items-center gap-2 mb-1">
+          <h3 className="font-semibold text-sm text-gray-900">Catalog (foaie de prezență)</h3>
+          <button onClick={() => setSetari(true)} title="Setări catalog — zilele de curs"
+            className="p-1 rounded-lg border border-gray-200 text-gray-500 hover:text-gray-800 hover:bg-gray-50">
+            <Settings size={13} />
+          </button>
+        </div>
+        <p className="text-xs text-gray-400 mb-3">{date.cataloage[0]?.titlu} · {date.cataloage[0]?.zile.length} zile: {date.cataloage[0]?.zile.join(' · ')}</p>
+        {setari && (
+          <CatalogZile start={date.interval?.start} final={date.interval?.final}
+            alese={date.interval?.zile_alese || []}
+            onSalveaza={salveazaZile} onClose={() => setSetari(false)} />
+        )}
         <div className="flex flex-wrap gap-2">
           {date.cataloage.map((c: any) => (
             <button key={c.grupa} disabled={!c.nume.length}
