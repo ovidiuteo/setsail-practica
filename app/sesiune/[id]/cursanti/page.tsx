@@ -759,7 +759,6 @@ export default function RosterPage() {
                     </div>
                   </th>
                   <th className="px-3 py-2.5 w-8">#</th>
-                  {esteLista(tab) && <th className="px-2 py-2.5 text-center" title="Grupa (seria principală = 1, clonele 2 și 3)">GR</th>}
                   {(esteLista(tab) ? PERSON_FIELDS : FIELDS).map(f => (
                     <Fragment key={f.key}>
                     <th className={`px-3 py-2.5 ${f.w || ''}`}>
@@ -831,6 +830,9 @@ export default function RosterPage() {
                     </> : (
                       <th className="px-2 py-2.5 whitespace-nowrap">Categorie</th>
                     )}
+                    {grupeVizibile.length > 0 && (
+                      <th className="px-2 py-2.5 text-center" title="Grupa (seria principală = 1, clonele 2 și 3)">GR</th>
+                    )}
                     {docColsEnd.map(c => (
                       <th key={c.key} title={c.full} className="px-1 py-2.5 text-center text-[10px] w-14 normal-case tracking-normal">{c.short}</th>
                     ))}
@@ -861,14 +863,6 @@ export default function RosterPage() {
                       </button>
                     </td>
                     <td className="px-3 py-2 text-gray-300 text-xs">{i + 1}</td>
-                    {esteLista(tab) && (
-                      <td className="px-2 py-2 text-center">
-                        <span title={`Grupa ${row.grupa || 1}`}
-                          className="inline-flex items-center justify-center min-w-[1.4rem] px-1 py-0.5 rounded-md text-[11px] font-semibold bg-slate-100 text-slate-600">
-                          {row.grupa || 1}
-                        </span>
-                      </td>
-                    )}
                     {(esteLista(tab) ? PERSON_FIELDS : FIELDS).map(f => {
                       const editing = edit?.id === row.id && edit?.field === f.key
                       // de la CNP încolo, dacă e totul în regulă, fundal verde deschis
@@ -938,6 +932,14 @@ export default function RosterPage() {
                       </> : (
                         <td className={`px-2 py-2 ${ok ? 'bg-green-50' : ''}`}>
                           <CategorieSelect value={row.class_caa} onConfirm={v => saveCategorie(row.id, v)} />
+                        </td>
+                      )}
+                      {grupeVizibile.length > 0 && (
+                        <td className={`px-2 py-2 text-center ${ok ? 'bg-green-50' : ''}`}>
+                          <span title={`Grupa ${row.grupa || 1}`}
+                            className="inline-flex items-center justify-center min-w-[1.4rem] px-1 py-0.5 rounded-md text-[11px] font-semibold bg-slate-100 text-slate-600">
+                            {row.grupa || 1}
+                          </span>
                         </td>
                       )}
                       {docColsEnd.map(c => (
@@ -1591,16 +1593,25 @@ const LEAD_STATUSES = ['nou', 'contactat', 'inscris', 'respins', 'arhivat']
 const GROUP_LABEL: Record<string, string> = { next: 'Următoarea serie', past: 'Serii trecute', future: 'Serii viitoare' }
 type SessionOpt = { id: string; label: string; group: string }
 
-// Tab „Administrativ": foaia de prezență (catalog) și pagina A4 cu cele 3 coduri QR,
-// aceleași ca în pagina de admin a sesiunii.
+// Tab „Administrativ": foile de prezență (câte una pe grupă) și pagina A4 cu
+// cele 3 coduri QR, care se pot și încărca de aici.
 function AdministrativTab({ sessionId, token }: { sessionId: string; token: string }) {
   const [date, setDate] = useState<any>(null)
   const [eroare, setEroare] = useState('')
+  const [qr, setQr] = useState<{ portal?: string; skipper?: string; whatsapp?: string; luna: string; an: string }>({ luna: '', an: '' })
+  const [modificat, setModificat] = useState(false)
+  const [salvez, setSalvez] = useState(false)
+  const [salvatLa, setSalvatLa] = useState<string | null>(null)
 
   useEffect(() => {
     fetch(`/api/roster/administrativ?session_id=${sessionId}&token=${encodeURIComponent(token)}`)
       .then(r => r.json())
-      .then(j => j.error ? setEroare('Nu am putut încărca datele.') : setDate(j))
+      .then(j => {
+        if (j.error) { setEroare('Nu am putut încărca datele.'); return }
+        setDate(j)
+        setQr({ portal: j.qr.portal || undefined, skipper: j.qr.skipper || undefined, whatsapp: j.qr.whatsapp || undefined, luna: j.qr.luna, an: j.qr.an })
+        setSalvatLa(j.qr.salvat_la || null)
+      })
       .catch(() => setEroare('Conexiune eșuată.'))
   }, [sessionId, token])
 
@@ -1610,38 +1621,89 @@ function AdministrativTab({ sessionId, token }: { sessionId: string; token: stri
     w.document.write(html); w.document.close()
   }
 
+  function alege(slot: 'portal' | 'skipper' | 'whatsapp', f?: File) {
+    if (!f) return
+    const fr = new FileReader()
+    fr.onload = () => { setQr(v => ({ ...v, [slot]: String(fr.result) })); setModificat(true) }
+    fr.readAsDataURL(f)
+  }
+
+  async function salveaza() {
+    setSalvez(true)
+    try {
+      const r = await fetch('/api/roster/administrativ', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId, token, ...qr }),
+      })
+      const j = await r.json()
+      if (!r.ok || j.error) { alert(j.error || 'Salvarea a eșuat.'); return }
+      setSalvatLa(j.salvat_la); setModificat(false)
+    } catch { alert('Conexiune eșuată.') }
+    finally { setSalvez(false) }
+  }
+
   if (eroare) return <div className="text-center text-red-500 py-16 text-sm">{eroare}</div>
   if (!date) return <div className="text-center text-gray-400 py-16">Se încarcă…</div>
 
-  const qrGata = !!(date.qr?.portal && date.qr?.skipper && date.qr?.whatsapp)
-  const lipsa = ['portal', 'skipper', 'whatsapp'].filter(k => !date.qr?.[k])
+  const qrGata = !!(qr.portal && qr.skipper && qr.whatsapp)
+  const SLOTURI: { key: 'portal' | 'skipper' | 'whatsapp'; label: string }[] = [
+    { key: 'portal', label: 'QR portal cursant' },
+    { key: 'skipper', label: 'QR platforma SetSail' },
+    { key: 'whatsapp', label: date.qr.wa?.comunitate ? 'QR comunitate WhatsApp' : 'QR grup WhatsApp' },
+  ]
 
   return (
-    <div className="grid sm:grid-cols-2 gap-4 max-w-3xl">
+    <div className="grid lg:grid-cols-2 gap-4 max-w-4xl">
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
         <h3 className="font-semibold text-sm text-gray-900 mb-1">Catalog (foaie de prezență)</h3>
-        <p className="text-xs text-gray-400 mb-3">
-          {date.catalog.grupa} · {date.catalog.nume.length} cursanți · {date.catalog.zile.length} zile
-        </p>
-        <button onClick={() => tipareste(buildAttendanceHtml(date.catalog.titlu, date.catalog.grupa, date.catalog.zile, date.catalog.nume))}
-          disabled={!date.catalog.nume.length}
-          className="px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50" style={{ background: '#0a1628' }}>
-          Generează catalog
-        </button>
+        <p className="text-xs text-gray-400 mb-3">{date.cataloage[0]?.titlu} · {date.cataloage[0]?.zile.length} zile</p>
+        <div className="flex flex-wrap gap-2">
+          {date.cataloage.map((c: any) => (
+            <button key={c.grupa} disabled={!c.nume.length}
+              onClick={() => tipareste(buildAttendanceHtml(c.titlu, c.eticheta, c.zile, c.nume))}
+              className="px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-40" style={{ background: '#0a1628' }}>
+              Catalog {c.eticheta} <span className="opacity-60">({c.nume.length})</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
         <h3 className="font-semibold text-sm text-gray-900 mb-1">Coduri QR grup (A4)</h3>
-        <p className="text-xs text-gray-400 mb-3">
-          {qrGata
-            ? `${date.qr.luna} ${date.qr.an} · portal, platformă, WhatsApp`
-            : `Lipsesc QR-urile: ${lipsa.join(', ')} — se încarcă din pagina de admin a sesiunii.`}
-        </p>
-        <button onClick={() => tipareste(buildQrPdfHtml(date.qr.luna, date.qr.an, date.qr, date.qr.wa))}
-          disabled={!qrGata}
-          className="px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50" style={{ background: '#0B3D6B' }}>
-          Generează QR codes
-        </button>
+        <p className="text-xs text-gray-400 mb-3">Încarcă cele 3 coduri; le așez în triunghi pe o pagină A4 printabilă.</p>
+        <div className="grid grid-cols-3 gap-2 mb-3">
+          {SLOTURI.map(slot => (
+            <label key={slot.key} className="flex flex-col items-center gap-1.5 p-2 rounded-lg border-2 border-dashed border-gray-200 hover:border-blue-300 hover:bg-blue-50/40 cursor-pointer text-center">
+              <span className="w-full aspect-square rounded bg-gray-50 flex items-center justify-center overflow-hidden">
+                {qr[slot.key]
+                  ? <img src={qr[slot.key]} alt={slot.label} className="w-full h-full object-contain" />
+                  : <span className="text-[11px] text-gray-300">fără QR</span>}
+              </span>
+              <span className="text-[11px] text-gray-500 leading-tight">{slot.label}</span>
+              <input type="file" accept="image/*" className="hidden"
+                onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; alege(slot.key, f) }} />
+            </label>
+          ))}
+        </div>
+        <div className="flex gap-2 mb-3">
+          <input value={qr.luna} onChange={e => { setQr(v => ({ ...v, luna: e.target.value })); setModificat(true) }}
+            placeholder="LUNA" className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-sm" />
+          <input value={qr.an} onChange={e => { setQr(v => ({ ...v, an: e.target.value })); setModificat(true) }}
+            placeholder="An" className="w-24 px-3 py-2 rounded-lg border border-gray-200 text-sm" />
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <button onClick={() => tipareste(buildQrPdfHtml(qr.luna, qr.an, qr as any, date.qr.wa))} disabled={!qrGata}
+            className="px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-40" style={{ background: '#0B3D6B' }}>
+            Generează QR codes
+          </button>
+          <button onClick={salveaza} disabled={salvez || !modificat}
+            className="px-4 py-2 rounded-lg text-sm font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-40">
+            {salvez ? 'Se salvează…' : 'Salvează'}
+          </button>
+          {!modificat && salvatLa && (
+            <span className="text-xs text-green-700">salvat {new Date(salvatLa).toLocaleDateString('ro-RO')}</span>
+          )}
+        </div>
       </div>
     </div>
   )

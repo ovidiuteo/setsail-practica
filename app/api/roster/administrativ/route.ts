@@ -5,9 +5,10 @@ import { titleCaseRo, whatsappText } from '@/lib/print-docs'
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 
-// Datele pentru tab-ul „Administrativ" din lista cu token: foaia de prezență și
-// pagina cu cele 3 coduri QR (aceleași ca în pagina de admin a sesiunii).
-//   GET ?session_id=&token= -> { catalog: {...}, qr: {...} }
+// Tab-ul „Administrativ" din lista cu token: foile de prezență (câte una pe grupă)
+// și pagina A4 cu cele 3 coduri QR — aceleași ca în pagina de admin a sesiunii.
+//   GET  ?session_id=&token=                        -> { cataloage: [...], qr: {...} }
+//   POST { session_id, token, portal?, skipper?, whatsapp?, luna?, an? } -> salvează QR-urile
 
 function svc() {
   return createClient(
@@ -40,57 +41,59 @@ function titluPrezenta(start: string | null, final: string | null): string {
   return `Prezență ${a && b ? a + '-' + b + ' ' : ''}${luna} ${an}`.replace(/\s+/g, ' ').trim()
 }
 
+// Seria principală + clonele ei, în ordinea creării (Grupa 1, 2, 3…)
+async function familie(sb: ReturnType<typeof svc>, sessionId: string) {
+  const { data: s } = await sb.from('sessions')
+    .select('id, roster_token, parent_session_id, session_date, course_start_date, practice_start_date, class_caa, timeline_scope')
+    .eq('id', sessionId).maybeSingle()
+  if (!s) return null
+  const principalId = (s as any).parent_session_id || (s as any).id
+  const { data: principal } = await sb.from('sessions')
+    .select('id, session_date, course_start_date, practice_start_date, class_caa, timeline_scope')
+    .eq('id', principalId).maybeSingle()
+  const { data: clone } = await sb.from('sessions')
+    .select('id, session_date, course_start_date, practice_start_date')
+    .eq('parent_session_id', principalId).eq('session_type', 'clone').order('created_at')
+  return { sess: s as any, principal: (principal || s) as any, clone: (clone || []) as any[] }
+}
+
 export async function GET(req: NextRequest) {
   const sb = svc()
   const sessionId = req.nextUrl.searchParams.get('session_id') || ''
   const token = req.nextUrl.searchParams.get('token') || ''
-  const { data: sess } = await sb.from('sessions')
-    .select('id, roster_token, session_date, course_start_date, practice_start_date, class_caa, timeline_scope, parent_session_id, session_type, is_clone')
-    .eq('id', sessionId).maybeSingle()
-  if (!sessionId || !token || !sess?.roster_token || sess.roster_token !== token)
+  const fam = await familie(sb, sessionId)
+  if (!sessionId || !token || !fam || fam.sess.roster_token !== token)
     return NextResponse.json({ error: 'unauthorized' }, { status: 403 })
 
-  const s = sess as any
-  const sd = s.session_date
-  const csd = s.course_start_date || s.practice_start_date || sd
-  const parentId = s.parent_session_id || null
-
-  // Grupa: seria principală = Grupa 1, clonele = Grupa 2, 3, …
-  let grupaNr = 1
-  if (parentId) {
-    const { data: cl } = await sb.from('sessions').select('id, created_at')
-      .eq('parent_session_id', parentId).eq('session_type', 'clone').order('created_at')
-    const idx = (cl || []).findIndex((x: any) => x.id === s.id)
-    grupaNr = idx >= 0 ? idx + 2 : 2
-  }
+  const { principal, clone } = fam
+  const sd = principal.session_date
+  const csd = principal.course_start_date || principal.practice_start_date || sd
+  const titlu = titluPrezenta(csd, sd)
+  const zile = zileCurs(csd, sd)
 
   const ro = (a: string, b: string) => a.localeCompare(b, 'ro', { sensitivity: 'base' })
   const nume = (arr: any[]) => (arr || []).filter((x: any) => (x.full_name || '').trim()).map((x: any) => titleCaseRo(x.full_name))
 
-  const { data: own } = await sb.from('students')
-    .select('full_name, order_in_session').eq('session_id', s.id).eq('only_sailing', false).order('order_in_session')
-  let numeLista = nume(own)
-  if (grupaNr === 2 && parentId) {
-    // lista 2: cursanții ei, apoi cei de la sailing (înregistrați pe seria principală)
-    const { data: sail } = await sb.from('students').select('full_name').eq('session_id', parentId).eq('only_sailing', true)
-    numeLista = [...numeLista, ...nume(sail).sort(ro)]
-  } else {
-    numeLista = [...numeLista].sort(ro)
-  }
-
-  // titlul listei 2 e cel al seriei principale
-  let titlu = titluPrezenta(csd, sd)
-  if (parentId) {
-    const { data: p } = await sb.from('sessions')
-      .select('session_date, course_start_date, practice_start_date').eq('id', parentId).maybeSingle()
-    if (p) titlu = titluPrezenta((p as any).course_start_date || (p as any).practice_start_date || (p as any).session_date, (p as any).session_date)
-  }
+  const grupe = [principal, ...clone]
+  const cataloage = await Promise.all(grupe.map(async (g: any, i: number) => {
+    const { data: own } = await sb.from('students')
+      .select('full_name, order_in_session').eq('session_id', g.id).eq('only_sailing', false).order('order_in_session')
+    let lista = nume(own)
+    if (i === 1) {
+      // grupa 2 primește și cursanții de sailing, înregistrați pe seria principală
+      const { data: sail } = await sb.from('students').select('full_name').eq('session_id', principal.id).eq('only_sailing', true)
+      lista = [...lista, ...nume(sail).sort(ro)]
+    } else {
+      lista = [...lista].sort(ro)
+    }
+    return { grupa: i + 1, eticheta: 'Grupa ' + (i + 1), titlu, zile, nume: lista }
+  }))
 
   // QR-urile: cele salvate pe serie + skipper (default global) + comunitatea la seriile motor
-  const wa = whatsappText(s)
+  const wa = whatsappText(principal)
   const [{ data: sk }, { data: q }] = await Promise.all([
     sb.from('setsail_documents').select('file_data').eq('tip', 'qr_skipper').maybeSingle(),
-    sb.from('session_qr').select('portal, whatsapp, luna, an').eq('session_id', s.id).maybeSingle(),
+    sb.from('session_qr').select('portal, whatsapp, luna, an, updated_at').eq('session_id', principal.id).maybeSingle(),
   ])
   let whatsapp = (q as any)?.whatsapp || null
   if (!whatsapp && wa.comunitate) {
@@ -100,14 +103,48 @@ export async function GET(req: NextRequest) {
   const acum = new Date()
 
   return NextResponse.json({
-    catalog: { titlu, grupa: 'Grupa ' + grupaNr, zile: zileCurs(csd, sd), nume: numeLista },
+    cataloage,
     qr: {
       luna: (q as any)?.luna || dRo(sd || acum.toISOString(), { month: 'long' }).toUpperCase(),
       an: (q as any)?.an || String(sd ? new Date(sd).getFullYear() : acum.getFullYear()),
       portal: (q as any)?.portal || null,
       skipper: (sk as any)?.file_data || null,
       whatsapp,
+      salvat_la: (q as any)?.updated_at || null,
       wa,
     },
   })
+}
+
+// Salvează QR-urile seriei (și pe cel de skipper ca default global)
+export async function POST(req: NextRequest) {
+  const sb = svc()
+  const body = await req.json().catch(() => null)
+  if (!body) return NextResponse.json({ error: 'Cerere invalidă' }, { status: 400 })
+  const fam = await familie(sb, String(body.session_id || ''))
+  if (!fam || !body.token || fam.sess.roster_token !== body.token)
+    return NextResponse.json({ error: 'unauthorized' }, { status: 403 })
+
+  const img = (v: unknown) => typeof v === 'string' && /^data:image\/(png|jpe?g|webp|gif);base64,/.test(v) ? v : null
+  const portal = img(body.portal)
+  const skipper = img(body.skipper)
+  const whatsapp = img(body.whatsapp)
+  const acum = new Date().toISOString()
+
+  const { error } = await sb.from('session_qr').upsert({
+    session_id: fam.principal.id,
+    portal, whatsapp,
+    luna: String(body.luna || '').slice(0, 30),
+    an: String(body.an || '').slice(0, 10),
+    updated_at: acum,
+  }, { onConflict: 'session_id' })
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // QR-ul platformei e același pentru toate seriile: îl ținem ca default global
+  if (skipper) {
+    const { data } = await sb.from('setsail_documents').select('id').eq('tip', 'qr_skipper').maybeSingle()
+    if ((data as any)?.id) await sb.from('setsail_documents').update({ file_data: skipper, label: 'QR skipper', file_name: 'qr_skipper.png' }).eq('id', (data as any).id)
+    else await sb.from('setsail_documents').insert({ tip: 'qr_skipper', file_data: skipper, label: 'QR skipper', file_name: 'qr_skipper.png' })
+  }
+  return NextResponse.json({ ok: true, salvat_la: acum })
 }
