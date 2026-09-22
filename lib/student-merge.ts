@@ -71,12 +71,18 @@ export async function findPersonRows(
 export async function stergeDinSerie(sb: any, sessionId: string, studentId: string): Promise<{
   ok: boolean; error?: string; still_in_other_series: number
 }> {
+  // cursantul poate fi în oricare grupă a seriei: principala sau una din clonele ei
+  const { data: sess } = await sb.from('sessions').select('id, parent_session_id').eq('id', sessionId).maybeSingle()
+  const principalId = sess?.parent_session_id || sessionId
+  const { data: clone } = await sb.from('sessions').select('id').eq('parent_session_id', principalId)
+  const grupe = [principalId, ...((clone || []) as any[]).map(c => c.id)]
+
   const { data: st } = await sb.from('students')
-    .select('cnp, email, full_name').eq('id', studentId).eq('session_id', sessionId).maybeSingle()
+    .select('cnp, email, full_name').eq('id', studentId).in('session_id', grupe).maybeSingle()
   if (!st) return { ok: false, error: 'not found', still_in_other_series: 0 }
 
   const others = await findPersonRows(sb, st, studentId)
-  const { error } = await sb.from('students').delete().eq('id', studentId).eq('session_id', sessionId)
+  const { error } = await sb.from('students').delete().eq('id', studentId).in('session_id', grupe)
   if (error) return { ok: false, error: error.message, still_in_other_series: others.length }
   return { ok: true, still_in_other_series: others.length }
 }
