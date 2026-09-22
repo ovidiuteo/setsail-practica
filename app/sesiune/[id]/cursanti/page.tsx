@@ -5,6 +5,7 @@ import LivrareCell, { livrareRang } from '@/components/LivrareCell'
 import CopyColoana from '@/components/CopyColoana'
 import { buildAttendanceHtml, buildQrPdfHtml, titleCaseRo } from '@/lib/print-docs'
 import CatalogZile from '@/components/CatalogZile'
+import ConfirmariSerie from '@/components/ConfirmariSerie'
 import { Settings } from 'lucide-react'
 import { parseStudentsText } from '@/lib/import-parse'
 import type { SyncResult } from '@/lib/skipper-result'
@@ -745,7 +746,10 @@ export default function RosterPage() {
         </div>
 
         {tab === 'administrativ' ? (
-          <AdministrativTab sessionId={id} token={token} />
+          <div className="space-y-4">
+            <AdministrativTab sessionId={id} token={token} />
+            <ConfirmariSerie sessionId={id} token={token} />
+          </div>
         ) : tab === 'leaduri' ? (
           <LeaduriTab key={`f-${leadsRefresh}`} sessionId={id} token={token} onEnrolled={() => { load(); setLeadsRefresh(n => n + 1) }} />
         ) : rows === null ? (
