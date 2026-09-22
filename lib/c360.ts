@@ -3,6 +3,7 @@
 // Folosit de /api/c360/admin (admin) și /api/c360/portal (cod serie + email).
 import { createClient, SupabaseClient } from '@supabase/supabase-js'
 import { scopeForSession, timelineScopeLabel } from '@/lib/timeline-scope'
+import { urlAbsolut } from './url-absolut'
 
 export function svc360(): SupabaseClient {
   return createClient(
@@ -211,7 +212,7 @@ export async function incarca360(sb: SupabaseClient, seed: any, opts: { admin: b
   for (const i of inscrieri) {
     const s = sessions.get(i.sessionId)
     for (const [k, tip, titlu] of RES) {
-      const url = String(s?.[k] || '').trim()
+      const url = urlAbsolut(s?.[k])
       if (url && !seen.has(url)) { seen.add(url); resurse.push({ tip, titlu: inscrieri.length > 1 ? `${titlu} · ${i.program}` : titlu, url }) }
     }
   }

@@ -18,6 +18,7 @@ import SkipperSyncModal from '@/components/SkipperSyncModal'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
 import { ArrowLeft, Download, FileText, Users, Copy, Plus, Trash2, Check, X, Pencil, GitBranch, ArrowRight, UserX, Mail, ChevronDown, Database } from 'lucide-react'
+import { urlAbsolut } from '@/lib/url-absolut'
 
 function applyTemplate(text: string, sess: any, contacts?: any[], instructors?: { full_name: string }[], setsailInfo?: Record<string, string>): string {
   return applyMailTemplate(text, {
@@ -4091,6 +4092,9 @@ export default function SessionDetailPage() {
     for (const col of nullableEmpty) {
       if (payload[col] === '') payload[col] = null
     }
+    // linkurile pentru cursanți se salvează cu https:// în față
+    for (const col of ['zoom_url', 'whatsapp_url', 'arhiva_video_url', 'materiale_url', 'comunitate_url'])
+      if (col in payload) payload[col] = urlAbsolut(payload[col])
     const { error } = await supabase.from('sessions').update(payload).eq('id', sid)
     if (error) {
       alert('Eroare la salvare: ' + error.message)

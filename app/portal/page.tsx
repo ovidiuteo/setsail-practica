@@ -5,6 +5,7 @@ import { Ship, RotateCcw, Check, Upload, Loader2, CheckCircle, AlertCircle, Came
 import CIImageEditor from '@/components/CIImageEditor'
 import PracticeBooking from '@/components/PracticeBooking'
 import { scopeForSession } from '@/lib/timeline-scope'
+import { urlAbsolut } from '@/lib/url-absolut'
 
 type Step = 'login' | 'confirm' | 'done'
 
@@ -81,7 +82,7 @@ export default function PortalPage() {
     { cheie: 'materiale_url', titlu: 'Manuale | prezentări | teste grilă', fundal: '#0a1628', icon: <Ship size={17} className="text-white" />, iconMare: <Ship size={30} className="text-white" /> },
     { cheie: 'comunitate_url', titlu: 'SetSail — Toți într-o barcă · comunitate absolvenți SetSail', fundal: '#25d366', icon: <Users size={17} className="text-white" />, iconMare: <Users size={30} className="text-white" /> },
   ] as const)
-    .map(r => ({ ...r, url: String((session as any)?.[r.cheie] || '').trim() }))
+    .map(r => ({ ...r, url: urlAbsolut((session as any)?.[r.cheie]) }))
     .filter(r => r.url)
 
   // Adresa de corespondență pentru materialele de curs

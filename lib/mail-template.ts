@@ -3,6 +3,7 @@
 import { buildSlots, configFromSession } from './practice-slots'
 import { scopeForSession } from './timeline-scope'
 import { defaultExamTime } from './session-defaults'
+import { urlAbsolut } from './url-absolut'
 
 export type MailVarCtx = {
   origin?: string
@@ -219,11 +220,11 @@ export function mailVarValues(ctx: MailVarCtx): Record<string, string> {
     zz_llll_curs_2: cursDay(csd, 2).data,
     zz_llll_curs_3: cursDay(csd, 3).data,
     // Linkurile seriei (completate în „Editează sesiunea"); goale dacă lipsesc
-    link_zoom: String(sess.zoom_url || '').trim(),
-    link_whatsapp: String(sess.whatsapp_url || '').trim(),
-    link_arhiva_video: String(sess.arhiva_video_url || '').trim(),
-    link_materiale: String(sess.materiale_url || '').trim(),
-    link_comunitate: String(sess.comunitate_url || '').trim(),
+    link_zoom: urlAbsolut(sess.zoom_url),
+    link_whatsapp: urlAbsolut(sess.whatsapp_url),
+    link_arhiva_video: urlAbsolut(sess.arhiva_video_url),
+    link_materiale: urlAbsolut(sess.materiale_url),
+    link_comunitate: urlAbsolut(sess.comunitate_url),
     // Intervalele de programare la practică
     ore_practica: practiceSlots(sess).ore,
     intervale_practica: practiceSlots(sess).intervale,
