@@ -56,6 +56,7 @@ function adminTabTitle(path: string): string {
   if (/^\/admin\/sesiuni\/[^/]+\/clone$/.test(path))  return 'Clonează sesiune'
   if (/^\/admin\/sesiuni\/[^/]+\/examen$/.test(path)) return 'Examen sesiune'
   if (/^\/admin\/sesiuni\/[^/]+$/.test(path))         return 'Sesiune'       // pagina suprascrie cu data
+  if (/^\/admin\/cursanti\/360\/[^/]+$/.test(path))   return 'Cursant 360'   // pagina suprascrie cu numele
   if (/^\/admin\/cursanti\/[^/]+$/.test(path))        return 'Fișă cursant'  // pagina suprascrie cu numele
   return 'SetSail Admin'
 }

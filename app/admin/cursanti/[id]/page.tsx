@@ -400,6 +400,12 @@ export default function CursantAdminPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {/* Fișa Cursant 360 (în paralel cu fișa clasică) */}
+            <Link href={`/admin/cursanti/360/${student.id}`}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold"
+              style={{ background: '#0a1628', color: '#f5c842' }}>
+              360°
+            </Link>
             {/* Adeverință VHF (radio) */}
             <AdeverintaVhf student={student} session={session} />
             {/* Diplome: câte un buton per serie */}
