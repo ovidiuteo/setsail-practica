@@ -140,7 +140,7 @@ export default function CursantiPage() {
           return (
             <tr key={s.id} className="hover:bg-gray-50 transition-colors">
               <td className="px-4 py-3 text-gray-400 text-xs">{i + 1}</td>
-              <td className="px-4 py-3 font-medium text-gray-900">{s.full_name}</td>
+              <td className="px-4 py-3 font-medium text-gray-900"><NumePortal s={s} /></td>
               <td className="px-4 py-3 font-mono text-xs text-gray-500">{s.cnp || '—'}</td>
               <td className="px-4 py-3 text-xs">
                 {s.ci_series && s.ci_number
@@ -165,12 +165,23 @@ export default function CursantiPage() {
                 </span>
               </td>
               <td className="px-2 py-3">
-                {s.session_id && (
-                  <Link href={`/admin/sesiuni/${s._session?.parent_session_id || s.session_id}`}
-                    className="text-gray-300 hover:text-gray-600 transition-colors">
-                    <ExternalLink size={13} />
+                <div className="flex items-center gap-1 justify-end whitespace-nowrap">
+                  {s.session_id && (
+                    <Link href={`/admin/sesiuni/${s._session?.parent_session_id || s.session_id}`} title="Seria cursantului"
+                      className="px-2 py-1 rounded-md text-[11px] font-semibold border border-gray-200 text-gray-500 hover:bg-gray-100 hover:text-gray-800 transition-colors">
+                      Serie
+                    </Link>
+                  )}
+                  <Link href={`/admin/cursanti/${s.id}`} title="Fișa cursantului (admin)"
+                    className="px-2 py-1 rounded-md text-[11px] font-semibold border border-gray-200 text-gray-500 hover:bg-gray-100 hover:text-gray-800 transition-colors">
+                    Admin
                   </Link>
-                )}
+                  <Link href={`/admin/cursanti/360/${s.id}`} title="Fișa Cursant 360"
+                    className="px-2 py-1 rounded-md text-[11px] font-bold transition-opacity hover:opacity-80"
+                    style={{ background: '#0a1628', color: '#f5c842' }}>
+                    360
+                  </Link>
+                </div>
               </td>
             </tr>
           )
@@ -189,7 +200,7 @@ export default function CursantiPage() {
         return (
           <tr key={s.id} className="hover:bg-amber-50/30 transition-colors">
             <td className="px-4 py-3 text-gray-400 text-xs">{i + 1}</td>
-            <td className="px-4 py-3 font-medium text-gray-900">{s.full_name}</td>
+            <td className="px-4 py-3 font-medium text-gray-900"><NumePortal s={s} /></td>
             <td className="px-4 py-3 text-xs">
               {origParent ? (
                 <Link href={`/admin/sesiuni/${origParent.id}`} className="flex items-center gap-1 text-red-500 hover:underline">
@@ -347,5 +358,17 @@ export default function CursantiPage() {
         </div>
       )}
     </div>
+  )
+}
+// Numele cursantului deschide Portalul Cursant 360 (codul seriei + emailul lui)
+function NumePortal({ s }: { s: any }) {
+  const cod = s._session?.access_code
+  if (!cod || !s.email) return <>{s.full_name}</>
+  return (
+    <a href={`/portal360?cod=${encodeURIComponent(cod)}&email=${encodeURIComponent(s.email)}`}
+      target="_blank" rel="noopener noreferrer" title="Portal Cursant 360"
+      className="hover:underline hover:text-blue-700">
+      {s.full_name}
+    </a>
   )
 }
