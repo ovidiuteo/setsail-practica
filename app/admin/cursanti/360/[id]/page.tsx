@@ -51,7 +51,7 @@ export default function Cursant360Admin() {
 
   const wrap = `${fDisplay.variable} ${fBody.variable}`
   if (err) return <div className={`${wrap} p-10 text-red-700 flex items-center gap-2`} style={{ fontFamily: 'var(--c360-body)' }}><AlertCircle size={18} />{err}</div>
-  if (!d) return <div className={`${wrap} p-10 flex items-center gap-2`} style={{ color: C.muted }}><Loader2 className="animate-spin" size={18} />Se încarcă fișa 360…</div>
+  if (!d) return <div className={`${wrap} p-10 flex items-center gap-2 min-h-screen`} style={{ color: '#B7C4D6', background: '#13294B' }}><Loader2 className="animate-spin" size={18} />Se încarcă fișa 360…</div>
 
   const p = d.persoana
   const f = d.financiar
@@ -59,10 +59,10 @@ export default function Cursant360Admin() {
   const cur = d.inscrieri[0]
 
   return (
-    <div className={`${wrap} flex min-h-screen`} style={{ fontFamily: 'var(--c360-body), system-ui, sans-serif', color: C.ink, background: '#EEF0EC' }}>
+    <div className={`${wrap} flex min-h-screen`} style={{ fontFamily: 'var(--c360-body), system-ui, sans-serif', color: C.ink, background: '#13294B' }}>
       {/* Bara 360 */}
       <nav aria-label="Secțiuni Cursant 360" className="hidden lg:flex flex-col gap-1 shrink-0 sticky top-0 h-screen overflow-y-auto"
-        style={{ width: 232, background: C.navy, color: '#C9D3E0', padding: '24px 14px' }}>
+        style={{ width: 232, background: C.navy, color: '#C9D3E0', padding: '24px 14px', borderRight: '1px solid rgba(255,255,255,.08)' }}>
         <div className="flex items-center gap-3 px-2 pb-6">
           <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: C.gold, color: C.navy }}><Ship size={18} /></div>
           <div><div className="text-white text-lg font-semibold" style={disp}>Cursant 360</div><div className="text-[11px]" style={{ color: '#8FA0B8' }}>SetSail · practica</div></div>
@@ -81,16 +81,16 @@ export default function Cursant360Admin() {
       <main className="flex-1 min-w-0 px-5 lg:px-10 py-7 flex flex-col gap-5">
         {/* Bara de sus */}
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2 text-[13px]" style={{ color: C.muted }}>
-            <Link href="/admin/cursanti" className="hover:underline" style={{ color: C.sea }}>Cursanți</Link><span>/</span>
+          <div className="flex items-center gap-2 text-[13px]" style={{ color: '#B7C4D6' }}>
+            <Link href="/admin/cursanti" className="hover:underline" style={{ color: '#7CC7E6' }}>Cursanți</Link><span>/</span>
             {cur && <><span>{cur.program}</span><span>/</span></>}
-            <span className="font-semibold" style={{ color: C.ink }}>{p.full_name}</span>
+            <span className="font-semibold" style={{ color: '#FFFFFF' }}>{p.full_name}</span>
           </div>
           <CautaCursant onPick={sid => router.push(`/admin/cursanti/360/${sid}`)} />
         </div>
 
         {/* Antet */}
-        <section id="prezentare" className="relative overflow-hidden rounded-2xl p-6 lg:p-7 flex flex-wrap gap-6 items-center scroll-mt-4" style={{ background: C.navy, color: '#fff' }}>
+        <section id="prezentare" className="relative overflow-hidden rounded-2xl p-6 lg:p-7 flex flex-wrap gap-6 items-center scroll-mt-4" style={{ background: C.navy, color: '#fff', border: '1px solid rgba(255,255,255,.12)' }}>
           <div aria-hidden className="absolute rounded-full" style={{ right: -60, top: -80, width: 340, height: 340, border: '1px solid rgba(245,200,66,.18)' }} />
           <div aria-hidden className="absolute rounded-full" style={{ right: 40, top: -20, width: 220, height: 220, border: '1px solid rgba(46,168,216,.22)' }} />
           <div className="w-[84px] h-[84px] rounded-3xl flex items-center justify-center text-3xl font-semibold shrink-0" style={{ ...disp, background: C.gold, color: C.navy }}>{initiale(p.full_name)}</div>
