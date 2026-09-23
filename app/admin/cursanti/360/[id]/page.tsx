@@ -4,7 +4,7 @@ import Link from 'next/link'
 import { useParams, useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import type { Cursant360 } from '@/lib/c360'
-import { fDisplay, fBody, C, disp, fmtData, fmtBani, fmtSume, initiale } from '@/components/c360/ui'
+import { fDisplay, fBody, C, disp, fmtData, fmtBani, fmtSume, initiale, contorInscriere } from '@/components/c360/ui'
 import {
   Ship, LayoutGrid, IdCard, Wallet, BookOpen, Anchor, CalendarDays, Award, StickyNote, ArrowLeft,
   Search, Mail, Phone, MapPin, Link2, Check, Copy, Plus, Trash2, FileText, Video, MessageCircle,
@@ -358,6 +358,7 @@ function Inscrieri({ d }: { d: Cursant360 }) {
                 <div className="text-xs" style={{ color: C.muted }}>{i.locatie || '—'} · cod serie <span className="font-mono">{i.codSerie || '—'}</span> · {i.tipSesiune || 'serie'}</div>
               </div>
               <div className="flex gap-2 items-center">
+                <Contor i={i} />
                 <StareSesiune s={i.stareSesiune} />
                 <Link href={`/admin/sesiuni/${i.sessionId}`} className="text-xs font-bold flex items-center gap-1" style={{ color: C.sea }}>Sesiunea<ExternalLink size={12} /></Link>
               </div>
@@ -380,6 +381,16 @@ function Inscrieri({ d }: { d: Cursant360 }) {
       })}
     </section>
   )
+}
+
+// „Finalizat pe …” sau „x zile până la curs / practică”
+function Contor({ i }: { i: Cursant360['inscrieri'][number] }) {
+  const c = contorInscriere(i)
+  if (!c) return null
+  const stil = c.ton === 'gata' ? { background: '#F1F2EE', color: '#3D4654' }
+    : c.ton === 'curent' ? { background: C.warnBg, color: C.warn }
+      : { background: C.seaBg, color: C.sea }
+  return <span className="px-2.5 py-1 rounded-full text-xs font-bold" style={stil}>{c.text}</span>
 }
 
 function StareSesiune({ s }: { s: string }) {

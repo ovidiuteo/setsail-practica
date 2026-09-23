@@ -33,6 +33,31 @@ export function fmtSume(s: Record<string, number>): string {
   return e.map(([m, v]) => fmtBani(v, m)).join(' · ')
 }
 
+// Câte zile mai sunt până la o dată („azi” = 0, negativ = a trecut)
+export function zilePana(d: string | null | undefined): number | null {
+  if (!d) return null
+  const t = Date.parse((d.length === 10 ? d : d.slice(0, 10)) + 'T12:00:00')
+  if (isNaN(t)) return null
+  const azi = new Date(); azi.setHours(12, 0, 0, 0)
+  return Math.round((t - azi.getTime()) / 86400000)
+}
+
+export const zileText = (n: number) => `${n} ${n === 1 ? 'zi' : 'zile'}`
+
+// Contorul unei înscrieri: cât mai e până la curs / practică sau când s-a încheiat
+export function contorInscriere(i: { dataCurs: string | null; dataExamen: string | null }):
+  { text: string; ton: 'gata' | 'curent' | 'viitor' } | null {
+  const zCurs = zilePana(i.dataCurs), zExamen = zilePana(i.dataExamen)
+  if (zExamen != null && zExamen < 0) return { text: `Finalizat pe ${fmtData(i.dataExamen)}`, ton: 'gata' }
+  if (zCurs != null && zCurs > 0) return { text: `${zileText(zCurs)} până la curs · ${fmtData(i.dataCurs)}`, ton: 'viitor' }
+  if (zCurs === 0) return { text: `Cursul începe azi`, ton: 'curent' }
+  if (zExamen != null) return {
+    text: zExamen === 0 ? 'Practica / examenul e azi' : `${zileText(zExamen)} până la practică · ${fmtData(i.dataExamen)}`,
+    ton: zExamen === 0 ? 'curent' : 'viitor',
+  }
+  return null
+}
+
 export function initiale(n: string): string {
   const p = n.trim().split(/\s+/).filter(Boolean)
   return ((p[0]?.[0] || '') + (p.length > 1 ? p[p.length - 1][0] : '')).toUpperCase() || '?'
