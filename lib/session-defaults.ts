@@ -42,6 +42,10 @@ export function defaultNotifClasa(_sess?: any): string {
   return 'C/D/Manevra ambarcatiunii cu vele'
 }
 
+// Linkuri care nu se schimbă de la o serie la alta
+export const LINK_COMUNITATE = 'https://chat.whatsapp.com/BjW9s8RwmGYBRGigrs4m5D'
+export const LINK_MATERIALE  = 'https://skipper.setsail.ro/'
+
 // Toate valorile care se scriu pe sesiune la creare
 export function sessionDefaults(sess: any): Record<string, string> {
   return {
@@ -49,5 +53,8 @@ export function sessionDefaults(sess: any): Record<string, string> {
     notif_clasa: defaultNotifClasa(sess),
     notif_locatie_curs: defaultLocatieCurs(sess),
     notif_locatie_examinare: defaultLocatieExaminare(sess),
+    comunitate_url: LINK_COMUNITATE,
+    // manualele și prezentările sunt pentru cursurile ANR, nu pentru radio
+    ...(isRadioSess(sess) ? {} : { materiale_url: LINK_MATERIALE }),
   }
 }
