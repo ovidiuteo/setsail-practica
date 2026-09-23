@@ -747,6 +747,16 @@ export default function EmailuriPage() {
                 </div>
               </div>
               {filterList(pending).map(e => <PendingCard key={e.id} email={e} />)}
+              {/* Același Commit și la baza listei — ca să nu fie nevoie de scroll înapoi sus */}
+              {Object.keys(proposals).length > 0 && (
+                <div className="flex justify-end">
+                  <button onClick={commitProposals} disabled={committing}
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+                    style={{ background: '#0a1628' }}>
+                    {committing ? <><RefreshCw size={13} className="animate-spin" /> Se aplică...</> : <><Check size={13} /> Commit ({Object.keys(proposals).length})</>}
+                  </button>
+                </div>
+              )}
             </>
           )}
         </div>
@@ -1049,13 +1059,20 @@ export default function EmailuriPage() {
                 <div className={`p-3 rounded-xl text-sm ${fetchResult.error ? 'bg-red-50 border border-red-100 text-red-700' : 'bg-green-50 border border-green-100'}`}>
                   {fetchResult.error ? <p>❌ {fetchResult.error}</p> : (
                     <div className="space-y-1">
-                      <p className="font-medium text-green-800">✅ Batch #{fetchResult.batchNumber} importat</p>
+                      <p className="font-medium text-green-800">
+                        {fetchResult.stats?.imported
+                          ? `✅ Batch #${fetchResult.batchNumber} importat`
+                          : 'Niciun email nou de importat'}
+                      </p>
                       <div className="text-xs text-green-700 space-y-0.5">
-                        <p>📥 Importate: <strong>{fetchResult.stats?.imported}</strong></p>
-                        <p>✅ Whitelist: <strong>{fetchResult.stats?.whitelist}</strong></p>
-                        <p>⏳ Pending: <strong>{fetchResult.stats?.pending}</strong></p>
-                        <p>· Existente: <strong>{fetchResult.stats?.skipped}</strong></p>
-                        <p>✗ Blacklist ignorate: <strong>{fetchResult.stats?.blacklisted}</strong></p>
+                        <p>📬 Citite din INBOX: <strong>{fetchResult.stats?.citite ?? 0}</strong></p>
+                        <p>📥 Importate: <strong>{fetchResult.stats?.imported ?? 0}</strong></p>
+                        <p>✅ Whitelist: <strong>{fetchResult.stats?.whitelist ?? 0}</strong></p>
+                        <p>⏳ Pending: <strong>{fetchResult.stats?.pending ?? 0}</strong></p>
+                        <p>· Existente: <strong>{fetchResult.stats?.skipped ?? 0}</strong></p>
+                        <p>📅 În afara perioadei: <strong>{fetchResult.stats?.vechi ?? 0}</strong></p>
+                        <p>✗ Blacklist ignorate: <strong>{fetchResult.stats?.blacklisted ?? 0}</strong></p>
+                        {fetchResult.stats?.errors > 0 && <p className="text-red-600">⚠ Erori: <strong>{fetchResult.stats.errors}</strong></p>}
                       </div>
                     </div>
                   )}

@@ -6,6 +6,10 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY!
 )
 
+export const runtime = 'nodejs'
+export const dynamic = 'force-dynamic'
+export const maxDuration = 300   // importul a durat peste 4 minute la 77 de mesaje
+
 // ─── IMAP fetch logic (server-side) ──────────────────────────────────────────
 
 async function loadRules() {
@@ -100,7 +104,9 @@ export async function POST(req: NextRequest) {
       fetchRange = `${start}:*`
     }
 
-    const stats = { imported: 0, skipped: 0, blacklisted: 0, errors: 0, whitelist: 0, pending: 0 }
+    // „vechi" = mesaje sărite de filtrul de dată (mai vechi decât ultimul fetch sau
+    // în afara intervalului cerut); fără ele, un fetch fără nimic nou arăta doar zerouri
+    const stats = { citite: 0, imported: 0, skipped: 0, blacklisted: 0, errors: 0, whitelist: 0, pending: 0, vechi: 0 }
     const fromDate = dateFrom ? new Date(dateFrom) : null
     const toDate   = dateTo   ? new Date(dateTo)   : null
 
@@ -109,12 +115,13 @@ export async function POST(req: NextRequest) {
         try {
           const parsed      = await simpleParser(message.source)
           const receivedAt  = parsed.date || new Date()
+          stats.citite++
 
           // Filtrare după dată
-          if (mode === 'new' && lastFetchDate && receivedAt <= lastFetchDate) continue
+          if (mode === 'new' && lastFetchDate && receivedAt <= lastFetchDate) { stats.vechi++; continue }
           if (mode === 'interval') {
-            if (fromDate && receivedAt < fromDate) continue
-            if (toDate   && receivedAt > toDate)   continue
+            if (fromDate && receivedAt < fromDate) { stats.vechi++; continue }
+            if (toDate   && receivedAt > toDate)   { stats.vechi++; continue }
           }
 
           const messageId   = parsed.messageId || `yahoo-uid-${message.uid}`
@@ -169,7 +176,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      batchNumber,
+      batchNumber: stats.imported ? batchNumber : null,   // fără emailuri noi nu s-a deschis niciun batch
       stats,
       lastFetchDate: lastFetchDate?.toISOString() || null,
     })
