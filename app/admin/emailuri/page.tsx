@@ -5,7 +5,7 @@ import {
   Mail, CheckCircle, Clock, Ban, Search, RefreshCw,
   ChevronDown, ChevronUp, Send, Sparkles, Pin, PinOff,
   Filter, X, Check, ChevronRight, CheckSquare, Square,
-  Download, Calendar, Copy, Ship
+  Download, Calendar, Copy, Ship, Anchor
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -31,11 +31,16 @@ type Email = {
   reply_sent_at: string | null
   attachments: any[]
   batch_number: number | null
-  tema: 'expeditii' | 'altele' | null
+  tema: 'expeditii' | 'nautic' | 'altele' | null
   tema_motiv: string | null
 }
 
 type Tab = 'pending' | 'whitelist' | 'analyzed' | 'conversations'
+
+// Emailurile trimise automat de aplicația nautic-admin (expedițiile) pleacă de pe
+// adresa Resend, deci se recunosc după expeditor, nu după conținut.
+const ADRESE_NAUTIC = ['onboarding@resend.dev']
+const esteNautic = (adresa: string) => ADRESE_NAUTIC.includes(String(adresa || '').trim().toLowerCase())
 
 const priorityConfig: Record<string, { label: string; color: string; bg: string }> = {
   high:   { label: 'Urgentă', color: '#ef4444', bg: '#fef2f2' },
@@ -105,7 +110,7 @@ export default function EmailuriPage() {
   const [cooldown, setCooldown]             = useState(0)
 
   // Whitelist: împărțirea pe temă
-  const [temaFiltru, setTemaFiltru]   = useState<'toate' | 'expeditii' | 'altele' | 'neclasificate'>('toate')
+  const [temaFiltru, setTemaFiltru]   = useState<'toate' | 'expeditii' | 'nautic' | 'altele' | 'neclasificate'>('toate')
   const [temaLucru, setTemaLucru]     = useState(false)
   const [temaNota, setTemaNota]       = useState<string | null>(null)
 
@@ -317,9 +322,19 @@ export default function EmailuriPage() {
   // Împarte whitelistul în „despre expediții" și restul. Implicit se ocupă doar
   // de emailurile neclasificate; cu toate=true le ia de la capăt pe toate.
   async function clasificaTeme(toate = false) {
-    const deLucru = toate ? whitelistTot : whitelistTot.filter(e => !e.tema)
-    if (!deLucru.length) { setTemaNota('Toate emailurile sunt deja împărțite.'); return }
+    const tot = toate ? whitelistTot : whitelistTot.filter(e => !e.tema)
+    // Emailurile trimise de nautic-admin se recunosc după expeditor, fără AI
+    const nautic = tot.filter(e => esteNautic(e.from_address) && e.tema !== 'nautic')
+    const deLucru = tot.filter(e => !esteNautic(e.from_address))
+    if (!deLucru.length && !nautic.length) { setTemaNota('Toate emailurile sunt deja împărțite.'); return }
     setTemaLucru(true); setTemaNota(null)
+    for (const e of nautic) {
+      await supabase.from('emails').update({ tema: 'nautic', tema_motiv: 'trimis de nautic-admin' }).eq('id', e.id)
+    }
+    if (!deLucru.length) {
+      setTemaNota(`${nautic.length} de la Nautic Admin`)
+      await loadEmails(); setTemaLucru(false); return
+    }
     try {
       const res = await fetch('/api/analyze-email', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -335,7 +350,9 @@ export default function EmailuriPage() {
       }
       const expeditii = rezultate.filter(r => r.tema === 'expeditii').length
       const fara = deLucru.length - rezultate.length
-      setTemaNota(`${expeditii} despre expediții · ${rezultate.length - expeditii} altele${fara ? ` · ${fara} fără răspuns de la AI` : ''}`)
+      setTemaNota(`${expeditii} despre expediții · ${rezultate.length - expeditii} altele`
+        + (nautic.length ? ` · ${nautic.length} Nautic Admin` : '')
+        + (fara ? ` · ${fara} fără răspuns de la AI` : ''))
       await loadEmails()
     } catch (err) {
       console.error(err); setTemaNota('Eroare la clasificare.')
@@ -344,7 +361,7 @@ export default function EmailuriPage() {
   }
 
   // Corectare manuală a temei unui email
-  async function setTema(email: Email, tema: 'expeditii' | 'altele') {
+  async function setTema(email: Email, tema: 'expeditii' | 'nautic' | 'altele') {
     const nou = email.tema === tema ? null : tema
     await supabase.from('emails').update({ tema: nou, tema_motiv: null }).eq('id', email.id)
     setEmails(es => es.map(e => e.id === email.id ? { ...e, tema: nou, tema_motiv: null } : e))
@@ -479,11 +496,13 @@ export default function EmailuriPage() {
               {email.batch_number && <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-400">#{email.batch_number}</span>}
               {email.status === 'whitelist' && email.tema && (
                 // click pe etichetă = mutare în cealaltă categorie, dacă AI-ul a greșit
-                <button onClick={e => { e.stopPropagation(); setTema(email, email.tema === 'expeditii' ? 'altele' : 'expeditii') }}
-                  title={email.tema_motiv ? `${email.tema_motiv} — click pentru cealaltă categorie` : 'Click pentru cealaltă categorie'}
+                <button onClick={e => { e.stopPropagation(); setTema(email, email.tema === 'expeditii' ? 'altele' : email.tema === 'altele' ? 'nautic' : 'expeditii') }}
+                  title={email.tema_motiv ? `${email.tema_motiv} — click pentru altă categorie` : 'Click pentru altă categorie'}
                   className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
-                    email.tema === 'expeditii' ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-500'}`}>
-                  {email.tema === 'expeditii' ? <><Ship size={10} /> expediții</> : 'altele'}
+                    email.tema === 'expeditii' ? 'bg-blue-50 text-blue-700'
+                    : email.tema === 'nautic' ? 'bg-indigo-50 text-indigo-700' : 'bg-gray-100 text-gray-500'}`}>
+                  {email.tema === 'expeditii' ? <><Ship size={10} /> expediții</>
+                    : email.tema === 'nautic' ? <><Anchor size={10} /> Nautic Admin</> : 'altele'}
                 </button>
               )}
             </div>
@@ -836,6 +855,7 @@ export default function EmailuriPage() {
               {([
                 ['toate', 'Toate', whitelistTot.length],
                 ['expeditii', 'Despre expediții', whitelistTot.filter(e => e.tema === 'expeditii').length],
+                ['nautic', 'Nautic Admin', whitelistTot.filter(e => e.tema === 'nautic').length],
                 ['altele', 'Altele', whitelistTot.filter(e => e.tema === 'altele').length],
                 ['neclasificate', 'Neîmpărțite', whitelistTot.filter(e => !e.tema).length],
               ] as const).map(([id, label, nr]) => (
@@ -844,6 +864,7 @@ export default function EmailuriPage() {
                     temaFiltru === id ? 'border-[#0a1628] bg-[#0a1628] text-white' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
                   }`}>
                   {id === 'expeditii' && <Ship size={12} />}
+                  {id === 'nautic' && <Anchor size={12} />}
                   {label}
                   <span className={`px-1.5 rounded-full ${temaFiltru === id ? 'bg-white/20' : 'bg-gray-100 text-gray-500'}`}>{nr}</span>
                 </button>

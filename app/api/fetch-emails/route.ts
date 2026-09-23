@@ -6,6 +6,9 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_KEY!
 )
 
+// Expeditorii aplicației nautic-admin (expedițiile) — emailurile lor au secțiunea lor
+const ADRESE_NAUTIC = ['onboarding@resend.dev']
+
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
 export const maxDuration = 300   // importul a durat peste 4 minute la 77 de mesaje
@@ -156,6 +159,9 @@ export async function POST(req: NextRequest) {
             imap_uid:      message.uid,
             attachments:   attachments,
             status:        isWhitelisted ? 'whitelist' : 'pending',
+            // emailurile aplicației nautic-admin merg direct în secțiunea lor
+            tema:          ADRESE_NAUTIC.includes(fromAddress) ? 'nautic' : null,
+            tema_motiv:    ADRESE_NAUTIC.includes(fromAddress) ? 'trimis de nautic-admin' : null,
             is_processed:  false,
             is_pinned:     false,
             is_replied:    false,
