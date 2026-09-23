@@ -5,7 +5,7 @@ import {
   Mail, CheckCircle, Clock, Ban, Search, RefreshCw,
   ChevronDown, ChevronUp, Send, Sparkles, Pin, PinOff,
   Filter, X, Check, ChevronRight, CheckSquare, Square,
-  Download, Calendar, Copy, Ship, Anchor
+  Download, Calendar, Copy, Ship, Anchor, Users, MessageSquare, Banknote, CalendarCheck
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -41,6 +41,24 @@ type Tab = 'pending' | 'whitelist' | 'analyzed' | 'conversations'
 // adresa Resend, deci se recunosc după expeditor, nu după conținut.
 const ADRESE_NAUTIC = ['onboarding@resend.dev']
 const esteNautic = (adresa: string) => ADRESE_NAUTIC.includes(String(adresa || '').trim().toLowerCase())
+
+// Cardurile din secțiunea Nautic Admin, în ordine alfabetică. Felul emailului se
+// vede din subiectul pus de aplicație („Crewlist complet:", „Plata declarata:"…);
+// ce nu se potrivește nicăieri intră la Mesaje.
+const GRUPE_NAUTIC = [
+  { id: 'crewlist',  label: 'Crewlist',  icon: Users },
+  { id: 'mesaje',    label: 'Mesaje',    icon: MessageSquare },
+  { id: 'plati',     label: 'Plăți',     icon: Banknote },
+  { id: 'rezervari', label: 'Rezervări', icon: CalendarCheck },
+] as const
+
+function grupaNautic(subject: string | null): typeof GRUPE_NAUTIC[number]['id'] {
+  const s = String(subject || '').toLowerCase()
+  if (s.includes('crewlist')) return 'crewlist'
+  if (s.includes('plata') || s.includes('plăți') || s.includes('plati')) return 'plati'
+  if (s.includes('rezervare') || s.includes('rezervari') || s.includes('rezervări')) return 'rezervari'
+  return 'mesaje'
+}
 
 const priorityConfig: Record<string, { label: string; color: string; bg: string }> = {
   high:   { label: 'Urgentă', color: '#ef4444', bg: '#fef2f2' },
@@ -113,6 +131,7 @@ export default function EmailuriPage() {
   const [temaFiltru, setTemaFiltru]   = useState<'toate' | 'expeditii' | 'nautic' | 'altele' | 'neclasificate'>('toate')
   const [temaLucru, setTemaLucru]     = useState(false)
   const [temaNota, setTemaNota]       = useState<string | null>(null)
+  const [grupeDeschise, setGrupeDeschise] = useState<Set<string>>(new Set())
 
   // ── Load ──────────────────────────────────────────────────────────────────
 
@@ -927,6 +946,33 @@ export default function EmailuriPage() {
                 </div>
               </div>
 
+              {/* Nautic Admin: emailurile stau strânse în carduri, pe felul lor */}
+              {temaFiltru === 'nautic' ? GRUPE_NAUTIC.map(g => {
+                const ale = filterList(whitelistVisible.filter(e => grupaNautic(e.subject) === g.id))
+                const deschis = grupeDeschise.has(g.id)
+                return (
+                  <div key={g.id} className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+                    <button onClick={() => setGrupeDeschise(s => {
+                      const n = new Set(s); n.has(g.id) ? n.delete(g.id) : n.add(g.id); return n
+                    })}
+                      className="w-full flex items-center justify-between px-4 py-3 hover:bg-gray-50">
+                      <span className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                        <g.icon size={14} className="text-indigo-500" /> {g.label}
+                        <span className="px-1.5 py-0.5 rounded-full text-xs bg-gray-100 text-gray-500 font-medium">{ale.length}</span>
+                      </span>
+                      {deschis ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+                    </button>
+                    {deschis && (
+                      <div className="px-3 pb-3 space-y-2 bg-gray-50/60">
+                        {ale.length === 0
+                          ? <p className="text-xs text-gray-400 px-1 py-3">Niciun email aici.</p>
+                          : ale.map(e => <EmailCard key={e.id} email={e} showCheckbox />)}
+                      </div>
+                    )}
+                  </div>
+                )
+              }) : <>
+
               {pinnedEmails.length > 0 && (
                 <div className="space-y-2">
                   <div className="flex items-center gap-2 px-1">
@@ -947,6 +993,7 @@ export default function EmailuriPage() {
                   {filterList(unpinnedEmails).map(e => <EmailCard key={e.id} email={e} showCheckbox />)}
                 </div>
               )}
+              </>}
             </>
           )}
         </div>
