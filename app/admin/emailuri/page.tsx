@@ -100,6 +100,7 @@ export default function EmailuriPage() {
   const [fetchDateTo, setFetchDateTo]       = useState('')
   const [fetching, setFetching]             = useState(false)
   const [fetchResult, setFetchResult]       = useState<any>(null)
+  const [cooldown, setCooldown]             = useState(0)
 
   // ── Load ──────────────────────────────────────────────────────────────────
 
@@ -162,7 +163,15 @@ export default function EmailuriPage() {
       setFetchResult({ error: 'Eroare de conexiune' })
     }
     setFetching(false)
+    setCooldown(10)   // 10 secunde de pauză, ca două fetch-uri să nu se suprapună
   }
+
+  // Numărătoarea inversă a pauzei de după fetch
+  useEffect(() => {
+    if (cooldown <= 0) return
+    const t = setTimeout(() => setCooldown(c => c - 1), 1000)
+    return () => clearTimeout(t)
+  }, [cooldown])
 
   // ── Actions ───────────────────────────────────────────────────────────────
 
@@ -1084,10 +1093,12 @@ export default function EmailuriPage() {
               <button onClick={() => setShowFetch(false)} className="px-4 py-2 text-sm text-gray-500 hover:text-gray-700">
                 {fetchResult?.success ? 'Închide' : 'Anulează'}
               </button>
-              <button onClick={fetchEmails} disabled={fetching || (fetchMode === 'interval' && !fetchDateFrom)}
+              <button onClick={fetchEmails} disabled={fetching || cooldown > 0 || (fetchMode === 'interval' && !fetchDateFrom)}
                 className="flex items-center gap-2 px-5 py-2 rounded-lg text-sm font-medium text-white hover:opacity-90 disabled:opacity-40"
                 style={{ background: '#0a1628' }}>
-                {fetching ? <><RefreshCw size={13} className="animate-spin" /> Se importă...</> : <><Download size={13} /> Fetch</>}
+                {fetching ? <><RefreshCw size={13} className="animate-spin" /> Se importă...</>
+                  : cooldown > 0 ? <><Clock size={13} /> Așteaptă {cooldown}s</>
+                  : <><Download size={13} /> Fetch</>}
               </button>
             </div>
           </div>
