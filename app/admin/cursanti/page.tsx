@@ -2,8 +2,19 @@
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
-import { Search, Upload, ExternalLink, CheckCircle, Clock, XCircle, GitBranch, UserX } from 'lucide-react'
+import { Search, Upload, ExternalLink, CheckCircle, Clock, XCircle, GitBranch, UserX, ArrowUp, ArrowDown, ArrowUpDown } from 'lucide-react'
 import { grupeazaPersoane } from '@/lib/persoana'
+
+// Coloanele după care se poate sorta, în ordinea din tabel
+const COLOANE = [
+  { id: 'full_name', label: 'Nume și prenume' },
+  { id: 'cnp',       label: 'CNP' },
+  { id: 'ci',        label: 'CI' },
+  { id: 'email',     label: 'Email' },
+  { id: 'class_caa', label: 'Clasa' },
+  { id: 'sesiune',   label: 'Sesiune' },
+  { id: 'status',    label: 'Status portal' },
+] as const
 
 const portalMap: Record<string, { label: string; color: string; icon: any }> = {
   pending: { label: 'Neconectat', color: '#9ca3af', icon: Clock },
@@ -22,6 +33,8 @@ export default function CursantiPage() {
   const [allSessions, setAllSessions] = useState<any[]>([]) // toate sesiunile
   const [studentCounts, setStudentCounts] = useState<Record<string,number>>({})
   const [sessMapState, setSessMapState] = useState<Record<string,any>>({})
+  const [sortCol, setSortCol] = useState('full_name')
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('asc')
 
   useEffect(() => {
     async function load() {
@@ -137,8 +150,34 @@ export default function CursantiPage() {
   const pending = students.filter(s => s.portal_status === 'pending' && s._session?.session_type !== 'absent').length
   const absentCount = students.filter(s => s._session?.session_type === 'absent').length
 
+  // Sortarea după capul de tabel: primul click A-Z, al doilea Z-A
+  function sorteaza(col: string) {
+    if (sortCol === col) setSortDir(d => (d === 'asc' ? 'desc' : 'asc'))
+    else { setSortCol(col); setSortDir('asc') }
+  }
+  function valoareSort(s: any, col: string): string {
+    switch (col) {
+      case 'ci':       return `${s.ci_series || ''} ${s.ci_number || ''}`.trim()
+      case 'sesiune':  return s._session?.session_date || ''
+      case 'status':   return portalMap[s.portal_status]?.label || ''
+      default:         return String(s[col] ?? '')
+    }
+  }
+  function sorteazaRanduri(rows: any[]) {
+    const semn = sortDir === 'asc' ? 1 : -1
+    return [...rows].sort((a, b) => {
+      const va = valoareSort(a, sortCol), vb = valoareSort(b, sortCol)
+      // rândurile fără valoare stau mereu la coadă, în ambele sensuri
+      if (!va && !vb) return 0
+      if (!va) return 1
+      if (!vb) return -1
+      return semn * va.localeCompare(vb, 'ro', { numeric: true })
+    })
+  }
+
   // Randeaza tabelul cu linie de demarcatie intre principal si clona
-  function renderTable(rows: any[], showDivider = false, dividerLabel = '') {
+  function renderTable(randuri: any[], showDivider = false, dividerLabel = '') {
+    const rows = sorteazaRanduri(randuri)
     if (rows.length === 0) return null
     const inCls = "border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none bg-white"
     return (
@@ -370,13 +409,20 @@ export default function CursantiPage() {
               <thead>
                 <tr className="bg-gray-50 border-b border-gray-100">
                   <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">#</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Nume și prenume</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">CNP</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">CI</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Email</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Clasa</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Sesiune</th>
-                  <th className="text-left px-4 py-3 text-xs font-medium text-gray-500">Status portal</th>
+                  {COLOANE.map(c => {
+                    const activ = sortCol === c.id
+                    return (
+                      <th key={c.id} className="text-left px-4 py-3 text-xs font-medium text-gray-500">
+                        <button onClick={() => sorteaza(c.id)} title="Sortează A-Z / Z-A"
+                          className={`flex items-center gap-1 hover:text-gray-800 ${activ ? 'text-gray-900' : ''}`}>
+                          {c.label}
+                          {activ
+                            ? (sortDir === 'asc' ? <ArrowUp size={11} /> : <ArrowDown size={11} />)
+                            : <ArrowUpDown size={11} className="opacity-30" />}
+                        </button>
+                      </th>
+                    )
+                  })}
                   <th className="w-8"></th>
                 </tr>
               </thead>
