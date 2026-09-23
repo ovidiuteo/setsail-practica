@@ -108,6 +108,60 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // ── Tip 1b: tema emailului — despre expediții sau restul ──────────────────
+  // Aici clasificăm fiecare email în parte (nu expeditorul): același om scrie și
+  // despre cursuri, și despre expediții.
+  if (type === 'tema') {
+    try {
+      const rezultate: any[] = []
+      const batchSize = 12
+
+      for (let start = 0; start < (emails || []).length; start += batchSize) {
+        const batch = (emails as any[]).slice(start, start + batchSize)
+        const lista = batch.map((e: any) =>
+          `ID:${e.id}\n  de la: ${clean(e.from_address, 80)}\n  subiect: ${clean(e.subject, 100)}\n  preview: ${clean(e.body_text, 200)}`
+        ).join('\n\n')
+
+        const prompt = [
+          'Esti asistentul SetSail. SetSail are doua activitati:',
+          '1) EXPEDITII / croaziere pe mare: inscrieri si intrebari despre expeditii, flotile, charter, ambarcatiuni inchiriate, marine, skipperi, cabine, echipaj, transport si cazare pentru expeditii, oferte de charter de la agentii sau baze nautice, Olanda, Venetia, Croatia, Grecia, Cyclades.',
+          '2) SCOALA: cursuri de navigatie si radio, practica, examene ANR sau ANCOM, brevete, certificate, diplome, facturi si plati pentru cursuri, administrativ.',
+          '',
+          'Pentru fiecare email de mai jos spune daca este despre EXPEDITII sau despre altceva.',
+          '',
+          lista,
+          '',
+          `Raspunde DOAR cu un JSON array cu exact ${batch.length} obiecte, in aceeasi ordine.`,
+          '"id" se copiaza EXACT. "tema" e "expeditii" sau "altele".',
+          '[{"id":"uuid","tema":"expeditii","reason":"motiv scurt max 8 cuvinte"}]',
+        ].join('\n')
+
+        let parsed: any[] = []
+        try {
+          parsed = JSON.parse(await callClaude(prompt, 3000))
+          if (!Array.isArray(parsed)) parsed = []
+        } catch (e: any) {
+          console.error('tema batch error:', e?.message)
+          parsed = []
+        }
+
+        const idValide = new Set(batch.map((e: any) => String(e.id)))
+        for (const p of parsed) {
+          const tema = String(p?.tema || '').trim().toLowerCase()
+          const id = String(p?.id || '').trim()
+          if (!idValide.has(id)) continue
+          if (tema !== 'expeditii' && tema !== 'altele') continue
+          rezultate.push({ id, tema, reason: clean(p?.reason, 60) })
+        }
+      }
+
+      return NextResponse.json({ rezultate })
+    } catch (err: any) {
+      console.error('tema error:', err?.message)
+      return NextResponse.json({ error: 'Claude error', detail: err?.message }, { status: 500 })
+    }
+  }
+
   // ── Tip 2: analiză completă email ─────────────────────────────────────────
   if (type === 'analyze') {
     try {

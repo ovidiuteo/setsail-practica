@@ -5,7 +5,7 @@ import {
   Mail, CheckCircle, Clock, Ban, Search, RefreshCw,
   ChevronDown, ChevronUp, Send, Sparkles, Pin, PinOff,
   Filter, X, Check, ChevronRight, CheckSquare, Square,
-  Download, Calendar, Copy
+  Download, Calendar, Copy, Ship
 } from 'lucide-react'
 import Link from 'next/link'
 
@@ -31,6 +31,8 @@ type Email = {
   reply_sent_at: string | null
   attachments: any[]
   batch_number: number | null
+  tema: 'expeditii' | 'altele' | null
+  tema_motiv: string | null
 }
 
 type Tab = 'pending' | 'whitelist' | 'analyzed' | 'conversations'
@@ -102,13 +104,18 @@ export default function EmailuriPage() {
   const [fetchResult, setFetchResult]       = useState<any>(null)
   const [cooldown, setCooldown]             = useState(0)
 
+  // Whitelist: împărțirea pe temă
+  const [temaFiltru, setTemaFiltru]   = useState<'toate' | 'expeditii' | 'altele' | 'neclasificate'>('toate')
+  const [temaLucru, setTemaLucru]     = useState(false)
+  const [temaNota, setTemaNota]       = useState<string | null>(null)
+
   // ── Load ──────────────────────────────────────────────────────────────────
 
   const loadEmails = useCallback(async () => {
     setLoading(true)
     const { data } = await supabase
       .from('emails')
-      .select('id,from_address,from_name,subject,body_text,received_at,status,is_processed,is_pinned,is_replied,category,ai_summary,ai_sentiment,ai_priority,reply_suggestion_1,reply_suggestion_2,reply_suggestion_3,reply_sent,reply_sent_at,attachments,batch_number')
+      .select('id,from_address,from_name,subject,body_text,received_at,status,is_processed,is_pinned,is_replied,category,ai_summary,ai_sentiment,ai_priority,reply_suggestion_1,reply_suggestion_2,reply_suggestion_3,reply_sent,reply_sent_at,attachments,batch_number,tema,tema_motiv')
       .in('status', ['analyzed', 'pending', 'whitelist'])
       .eq('is_replied', false)
       .order('received_at', { ascending: false })
@@ -122,7 +129,11 @@ export default function EmailuriPage() {
 
   const pending        = emails.filter(e => e.status === 'pending')
   const whitelistAll   = emails.filter(e => e.status === 'whitelist')
-  const whitelistVisible = whitelistAll.filter(e => e.is_pinned || !e.is_processed)
+  const whitelistTot   = whitelistAll.filter(e => e.is_pinned || !e.is_processed)
+  // Împărțirea whitelistului pe temă: despre expediții sau restul (butonul AI o face)
+  const whitelistVisible = temaFiltru === 'toate' ? whitelistTot
+    : temaFiltru === 'neclasificate' ? whitelistTot.filter(e => !e.tema)
+    : whitelistTot.filter(e => e.tema === temaFiltru)
   const pinnedEmails   = whitelistVisible.filter(e => e.is_pinned)
   const unpinnedEmails = whitelistVisible.filter(e => !e.is_pinned)
   const analyzed       = emails.filter(e => e.status === 'analyzed')
@@ -303,6 +314,42 @@ export default function EmailuriPage() {
     setCommitting(false); loadEmails()
   }
 
+  // Împarte whitelistul în „despre expediții" și restul. Implicit se ocupă doar
+  // de emailurile neclasificate; cu toate=true le ia de la capăt pe toate.
+  async function clasificaTeme(toate = false) {
+    const deLucru = toate ? whitelistTot : whitelistTot.filter(e => !e.tema)
+    if (!deLucru.length) { setTemaNota('Toate emailurile sunt deja împărțite.'); return }
+    setTemaLucru(true); setTemaNota(null)
+    try {
+      const res = await fetch('/api/analyze-email', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: 'tema',
+          emails: deLucru.map(e => ({ id: e.id, from_address: e.from_address, subject: e.subject, body_text: e.body_text })),
+        }),
+      })
+      const data = await res.json()
+      const rezultate: { id: string; tema: 'expeditii' | 'altele'; reason: string }[] = data.rezultate || []
+      for (const r of rezultate) {
+        await supabase.from('emails').update({ tema: r.tema, tema_motiv: r.reason || null }).eq('id', r.id)
+      }
+      const expeditii = rezultate.filter(r => r.tema === 'expeditii').length
+      const fara = deLucru.length - rezultate.length
+      setTemaNota(`${expeditii} despre expediții · ${rezultate.length - expeditii} altele${fara ? ` · ${fara} fără răspuns de la AI` : ''}`)
+      await loadEmails()
+    } catch (err) {
+      console.error(err); setTemaNota('Eroare la clasificare.')
+    }
+    setTemaLucru(false)
+  }
+
+  // Corectare manuală a temei unui email
+  async function setTema(email: Email, tema: 'expeditii' | 'altele') {
+    const nou = email.tema === tema ? null : tema
+    await supabase.from('emails').update({ tema: nou, tema_motiv: null }).eq('id', email.id)
+    setEmails(es => es.map(e => e.id === email.id ? { ...e, tema: nou, tema_motiv: null } : e))
+  }
+
   // ── Batch Query ───────────────────────────────────────────────────────────
 
   function openBatchQuery() {
@@ -430,6 +477,15 @@ export default function EmailuriPage() {
               {email.category && <span className="px-2 py-0.5 rounded-full text-xs bg-gray-100 text-gray-600">{categoryLabel[email.category] || email.category}</span>}
               {email.reply_sent && <span className="flex items-center gap-1 text-xs text-green-600"><Send size={10} /> Trimis</span>}
               {email.batch_number && <span className="text-xs px-1.5 py-0.5 rounded bg-gray-100 text-gray-400">#{email.batch_number}</span>}
+              {email.status === 'whitelist' && email.tema && (
+                // click pe etichetă = mutare în cealaltă categorie, dacă AI-ul a greșit
+                <button onClick={e => { e.stopPropagation(); setTema(email, email.tema === 'expeditii' ? 'altele' : 'expeditii') }}
+                  title={email.tema_motiv ? `${email.tema_motiv} — click pentru cealaltă categorie` : 'Click pentru cealaltă categorie'}
+                  className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                    email.tema === 'expeditii' ? 'bg-blue-50 text-blue-700' : 'bg-gray-100 text-gray-500'}`}>
+                  {email.tema === 'expeditii' ? <><Ship size={10} /> expediții</> : 'altele'}
+                </button>
+              )}
             </div>
             <div className="text-sm font-medium text-gray-800 truncate">{email.subject}</div>
             {email.ai_summary && !expanded && <div className="text-xs text-gray-500 mt-0.5 truncate">{email.ai_summary}</div>}
@@ -639,7 +695,7 @@ export default function EmailuriPage() {
 
   const tabs = [
     { id: 'pending'   as Tab, label: 'Pending',    count: pending.length,          icon: Clock },
-    { id: 'whitelist' as Tab, label: 'Whitelist',  count: whitelistVisible.length,  icon: CheckCircle },
+    { id: 'whitelist' as Tab, label: 'Whitelist',  count: whitelistTot.length,  icon: CheckCircle },
     { id: 'analyzed'  as Tab, label: 'Analizate',  count: analyzed.length,          icon: Sparkles },
     { id: 'conversations' as Tab, label: 'Conversations', icon: Mail },
   ]
@@ -653,7 +709,7 @@ export default function EmailuriPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900" style={{ fontFamily: 'Georgia, serif' }}>Emailuri</h1>
           <p className="text-gray-500 text-sm mt-1">
-            {pending.length} pending · {whitelistVisible.length} whitelist · {analyzed.length} analizate
+            {pending.length} pending · {whitelistTot.length} whitelist · {analyzed.length} analizate
           </p>
         </div>
         <div className="flex gap-2">
@@ -774,11 +830,46 @@ export default function EmailuriPage() {
       {/* ── Tab: Whitelist ── */}
       {tab === 'whitelist' && (
         <div className="space-y-3">
+          {/* Împărțirea pe temă */}
+          <div className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="flex gap-1.5 flex-wrap">
+              {([
+                ['toate', 'Toate', whitelistTot.length],
+                ['expeditii', 'Despre expediții', whitelistTot.filter(e => e.tema === 'expeditii').length],
+                ['altele', 'Altele', whitelistTot.filter(e => e.tema === 'altele').length],
+                ['neclasificate', 'Neîmpărțite', whitelistTot.filter(e => !e.tema).length],
+              ] as const).map(([id, label, nr]) => (
+                <button key={id} onClick={() => setTemaFiltru(id)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border ${
+                    temaFiltru === id ? 'border-[#0a1628] bg-[#0a1628] text-white' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                  }`}>
+                  {id === 'expeditii' && <Ship size={12} />}
+                  {label}
+                  <span className={`px-1.5 rounded-full ${temaFiltru === id ? 'bg-white/20' : 'bg-gray-100 text-gray-500'}`}>{nr}</span>
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2 flex-wrap">
+              {temaNota && <span className="text-xs text-gray-500">{temaNota}</span>}
+              <button onClick={() => clasificaTeme(false)} disabled={temaLucru}
+                className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 text-gray-700 hover:bg-gray-50 disabled:opacity-50">
+                {temaLucru ? <><RefreshCw size={12} className="animate-spin" /> Împart...</> : <><Sparkles size={12} /> AI: despre expediții</>}
+              </button>
+              {whitelistTot.some(e => e.tema) && (
+                <button onClick={() => clasificaTeme(true)} disabled={temaLucru}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs border border-gray-200 text-gray-500 hover:bg-gray-50 disabled:opacity-50"
+                  title="Reia clasificarea pentru toate emailurile din whitelist">
+                  <RefreshCw size={12} /> Reia tot
+                </button>
+              )}
+            </div>
+          </div>
+
           {loading ? <div className="py-12 text-center text-gray-400">Se încarcă...</div>
           : whitelistVisible.length === 0 ? (
             <div className="py-12 text-center text-gray-400">
               <CheckCircle size={32} className="mx-auto mb-3 opacity-30" />
-              <p className="text-sm">Niciun email în whitelist.</p>
+              <p className="text-sm">{temaFiltru === 'toate' ? 'Niciun email în whitelist.' : 'Niciun email în această categorie.'}</p>
             </div>
           ) : (
             <>
