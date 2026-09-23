@@ -1844,6 +1844,23 @@ Set Sail NauticSchool
     }
   }
 
+  // Câmpurile notificării oglindesc sesiunea: dacă schimbi clasa, ora sau locațiile
+  // din „Editează sesiunea" (dublu-click pe câmp), se văd imediat și aici. Ce e scris
+  // direct în notificare rămâne doar cât timp sesiunea nu are valoarea ei.
+  useEffect(() => {
+    const impl = sessionDefaults(sess)
+    const dinSesiune = (k: string) => String((sess as any)[k] || '').trim()
+    setNotifForm(f => ({
+      ...f,
+      ora_examinare: dinSesiune('exam_time') || f.ora_examinare || examTime(),
+      clasa: dinSesiune('notif_clasa') || f.clasa || impl.notif_clasa,
+      locatie_curs: dinSesiune('notif_locatie_curs') || f.locatie_curs || impl.notif_locatie_curs,
+      locatie_examinare: dinSesiune('notif_locatie_examinare') || f.locatie_examinare || impl.notif_locatie_examinare,
+    }))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [(sess as any).notif_clasa, (sess as any).class_caa, (sess as any).exam_time,
+      (sess as any).notif_locatie_curs, (sess as any).notif_locatie_examinare])
+
   async function ensureNotification(): Promise<string|null> {
     // Folosim upsert cu on_conflict=session_id — creaza daca nu exista, nu face nimic daca exista
     const { data: existing } = await supabase
@@ -2566,7 +2583,7 @@ Set Sail NauticSchool
                     Clasă <span className="text-gray-300 font-normal">(dublu-click = editează sesiunea)</span>
                   </label>
                   <input className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs focus:outline-none focus:ring-1 focus:ring-blue-400"
-                    value={notifForm.clasa} placeholder="C/D/Manevra ambarcatiunii cu vele"
+                    value={notifForm.clasa} placeholder={sessionDefaults(sess).notif_clasa}
                     onChange={e=>setNotifForm(f=>({...f,clasa:e.target.value}))}
                     onDoubleClick={()=>{
                       onEditSession(sess, 'notif_clasa')

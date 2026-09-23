@@ -36,9 +36,14 @@ export function defaultLocatieExaminare(sess: any): string {
   return `din ${String(sess?.locations?.name || '')}`
 }
 
-// Clasa, așa cum apare în notificarea ANR. Aceeași pentru orice sesiune —
-// dacă e nevoie de altceva, se schimbă pe sesiune, din „Editează sesiunea".
-export function defaultNotifClasa(_sess?: any): string {
+// Clasa, așa cum apare în notificarea ANR. La seriile C+D se cere și manevra
+// ambarcațiunii cu vele; la celelalte clase (A, B, C sau D singure) e chiar clasa.
+// Dacă e nevoie de altceva, se schimbă pe sesiune, din „Editează sesiunea".
+export function defaultNotifClasa(sess?: any): string {
+  const clasa = String(sess?.class_caa || '').toUpperCase()
+  const are = (c: string) => new RegExp(`(^|[^A-Z])${c}([^A-Z]|$)`).test(clasa)
+  if (are('C') && are('D')) return 'C/D/Manevra ambarcatiunii cu vele'
+  for (const c of ['A', 'B', 'C', 'D']) if (are(c)) return c
   return 'C/D/Manevra ambarcatiunii cu vele'
 }
 
