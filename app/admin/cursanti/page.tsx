@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
 import Link from 'next/link'
 import { Search, Upload, ExternalLink, CheckCircle, Clock, XCircle, GitBranch, UserX } from 'lucide-react'
+import { grupeazaPersoane } from '@/lib/persoana'
 
 const portalMap: Record<string, { label: string; color: string; icon: any }> = {
   pending: { label: 'Neconectat', color: '#9ca3af', icon: Clock },
@@ -28,7 +29,7 @@ export default function CursantiPage() {
         // DOAR coloanele folosite în listă: `select('*')` aducea și imaginile CI
         // (base64) — ~41 MB pentru toți cursanții, ceea ce bloca încărcarea paginii.
         supabase.from('students')
-          .select('id, full_name, cnp, ci_series, ci_number, email, class_caa, portal_status, session_id, original_session_id')
+          .select('id, full_name, cnp, ci_series, ci_number, email, phone, class_caa, portal_status, session_id, original_session_id')
           .order('full_name'),
         supabase.from('sessions')
           .select('id, session_date, session_type, parent_session_id, locations(name, county), boats(name), access_code, status')
@@ -113,7 +114,25 @@ export default function CursantiPage() {
     return result
   }
 
+  // Un rând per persoană: fișele din serii diferite ale aceluiași om se strâng
+  // într-una singură, cu toate seriile lui la coloana Sesiune. Fișa de bază e cea
+  // din seria cea mai recentă, iar câmpurile goale se completează din celelalte.
+  function unificaPersoane(rows: any[]) {
+    return grupeazaPersoane(rows, r => r).map(fise => {
+      const dupaData = [...fise].sort((a, b) =>
+        String(b._session?.session_date || '').localeCompare(String(a._session?.session_date || '')))
+      const baza = { ...dupaData[0] }
+      for (const camp of ['cnp', 'ci_series', 'ci_number', 'email', 'phone', 'class_caa'] as const) {
+        if (!baza[camp]) baza[camp] = dupaData.find(f => f[camp])?.[camp] || baza[camp]
+      }
+      baza._fise = dupaData
+      return baza
+    }).sort((a, b) => String(a.full_name || '').localeCompare(String(b.full_name || ''), 'ro'))
+  }
+
   const filtered = getFiltered()
+  // în lista cu toate sesiunile numărăm oameni, nu înscrieri
+  const randuriAfisate = filterSession === 'all' ? unificaPersoane(filtered) : filtered
   const signed  = students.filter(s => s.portal_status === 'signed' && s._session?.session_type !== 'absent').length
   const pending = students.filter(s => s.portal_status === 'pending' && s._session?.session_type !== 'absent').length
   const absentCount = students.filter(s => s._session?.session_type === 'absent').length
@@ -150,7 +169,24 @@ export default function CursantiPage() {
               <td className="px-4 py-3 text-xs text-gray-500">{s.email || '—'}</td>
               <td className="px-4 py-3 text-xs text-gray-500">{s.class_caa?.replace(',','+') || '—'}</td>
               <td className="px-4 py-3 text-xs text-gray-500">
-                {s._session ? (
+                {(s._fise?.length || 1) > 1 ? (
+                  // același om, mai multe serii — toate una sub alta
+                  <div className="space-y-0.5">
+                    {s._fise.map((f: any) => (
+                      <div key={f.id}>
+                        {f._session ? (
+                          <Link href={`/admin/sesiuni/${f._session.parent_session_id || f._session.id}`} className="hover:underline">
+                            {new Date(f._session.session_date).toLocaleDateString('ro-RO', { day: '2-digit', month: 'short', year: '2-digit' })}
+                            {f._session.session_type === 'clone' && <span className="text-blue-400 ml-1">⎇</span>}
+                            {f._session.session_type === 'absent' && <span className="text-red-400 ml-1">✗</span>}
+                            {' · '}{f._session.locations?.name}
+                          </Link>
+                        ) : <span className="text-red-400">—</span>}
+                      </div>
+                    ))}
+                    <div className="text-[10px] text-gray-400">{s._fise.length} serii</div>
+                  </div>
+                ) : s._session ? (
                   <span>
                     {new Date(s._session.session_date).toLocaleDateString('ro-RO', { day: '2-digit', month: 'short' })}
                     {s._session.session_type === 'clone' && <span className="text-blue-400 ml-1">⎇</span>}
@@ -257,8 +293,8 @@ export default function CursantiPage() {
       return result
     }
 
-    // Toate (fara absenti)
-    return renderTable(filtered)
+    // Toate (fara absenti) — o linie per persoană, nu per înscriere
+    return renderTable(randuriAfisate)
   }
 
   return (
@@ -267,7 +303,7 @@ export default function CursantiPage() {
         <div>
           <h1 className="text-2xl font-bold text-gray-900" style={{ fontFamily: 'Georgia, serif' }}>Cursanți</h1>
           <p className="text-gray-500 text-sm mt-1">
-            {students.filter(s=>s._session?.session_type!=='absent').length} cursanți · {signed} semnați · {pending} în așteptare
+            {unificaPersoane(students.filter(s=>s._session?.session_type!=='absent')).length} cursanți · {signed} semnați · {pending} în așteptare
             {absentCount > 0 && <> · <span className="text-red-500">{absentCount} absenți</span></>}
           </p>
         </div>
@@ -354,7 +390,7 @@ export default function CursantiPage() {
 
       {filtered.length > 0 && (
         <div className="mt-3 text-xs text-gray-400 text-right">
-          {filtered.length} cursanți afișați
+          {randuriAfisate.length} cursanți afișați
         </div>
       )}
     </div>
