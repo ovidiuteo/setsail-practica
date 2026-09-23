@@ -84,6 +84,10 @@ const UTILITIES = [
 ]
 
 type UtilityKey = 'energie' | 'gaze' | 'apa' | 'gunoi' | 'internet'
+
+// Utilitățile la care factura scade dacă scade consumul — gunoiul și internetul
+// se plătesc la fel, oricât ai consuma.
+const AJUSTABILE = ['energie', 'gaze', 'apa']
 type Row = { luna: number; [key: string]: string | number | null }
 
 /* ─── inline input ───────────────────────────────────────────────── */
@@ -187,6 +191,9 @@ export default function CasaBelvederePage() {
 
   const grandTotalLei = UTILITIES.reduce((sum, u) =>
     included[u.key as UtilityKey] ? sum + utilityTotals[u.key] : sum, 0)
+  // Cheltuiala pe care o poți micșora consumând mai puțin: energie, gaze, apă rece
+  const ajustabilLei = AJUSTABILE.reduce((sum, k) =>
+    included[k as UtilityKey] ? sum + (utilityTotals[k] || 0) : sum, 0)
   const grandTotalEur = grandTotalLei / 5.25
 
   const pageStyle: React.CSSProperties = {
@@ -402,6 +409,51 @@ export default function CasaBelvederePage() {
                       </tr>
                     )
                   })}
+
+                  {/* Subtotalul pe utilitățile la care consumul se poate reduce */}
+                  {!loading && (
+                    <tr>
+                      <td style={{ padding: '12px 16px', background: '#275189' }}>
+                        <div style={{ fontFamily: "'Manrope', sans-serif", fontSize: 11, fontWeight: 800, color: '#fff', letterSpacing: 1.2, textTransform: 'uppercase' }}>
+                          Ajustabil prin economii
+                        </div>
+                        <div style={{ fontSize: 10, color: '#BBD4F0', marginTop: 2 }}>energie · gaze · apă rece</div>
+                      </td>
+                      {UTILITIES.map((u, i) => {
+                        const inSubtotal = AJUSTABILE.includes(u.key)
+                        const total = utilityTotals[u.key]
+                        return (
+                          <td key={u.key} style={{
+                            padding: '12px 10px', textAlign: 'center',
+                            background: inSubtotal ? (i % 2 === 0 ? '#9FC2E8' : '#BBD4F0') : '#EDEAE4',
+                            opacity: !inSubtotal || included[u.key as UtilityKey] ? 1 : 0.35, transition: 'opacity .2s',
+                          }}>
+                            {inSubtotal && total > 0 ? (
+                              <span style={{ fontFamily: monoFont, fontSize: 13, fontWeight: 700, color: '#1B3A66' }}>
+                                {total.toFixed(0)}&nbsp;<span style={{ fontSize: 10, fontWeight: 400 }}>lei</span>
+                              </span>
+                            ) : (
+                              <span style={{ color: inSubtotal ? '#1B3A66' : '#D4D0CA', fontSize: 14, opacity: inSubtotal ? 0.5 : 1 }}>—</span>
+                            )}
+                          </td>
+                        )
+                      })}
+                      <td style={{ padding: '12px', textAlign: 'center', background: '#275189' }}>
+                        {ajustabilLei > 0 ? (
+                          <>
+                            <div style={{ fontFamily: monoFont, fontSize: 15, fontWeight: 800, color: '#fff' }}>
+                              {ajustabilLei.toFixed(0)}&nbsp;<span style={{ fontSize: 11, fontWeight: 400, color: '#BBD4F0' }}>lei</span>
+                            </div>
+                            <div style={{ fontFamily: monoFont, fontSize: 11, color: '#BBD4F0', marginTop: 3 }}>
+                              {(ajustabilLei / 5.25).toFixed(2)}&nbsp;<span style={{ opacity: 0.75 }}>eur</span>
+                            </div>
+                          </>
+                        ) : (
+                          <span style={{ color: '#BBD4F0', fontSize: 14 }}>—</span>
+                        )}
+                      </td>
+                    </tr>
+                  )}
 
                   {/* Footer / TOTAL row */}
                   {!loading && (
