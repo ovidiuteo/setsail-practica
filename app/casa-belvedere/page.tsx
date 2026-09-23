@@ -317,7 +317,12 @@ export default function CasaBelvederePage() {
                       return sum + (isNaN(v) ? 0 : v)
                     }, 0)
                     const rowHasTotal = UTILITIES.some(u => included[u.key as UtilityKey] && row[`${u.key}_valoare`] != null && row[`${u.key}_valoare`] !== '')
-                    const rowTotalEur = rowTotalLei / 5.25
+                    // cât din luna asta se poate micșora consumând mai puțin
+                    const rowAjustabilLei = AJUSTABILE.reduce((sum, k) => {
+                      if (!included[k as UtilityKey]) return sum
+                      const v = parseFloat(String(row[`${k}_valoare`] ?? ''))
+                      return sum + (isNaN(v) ? 0 : v)
+                    }, 0)
                     const rowBg = idx % 2 === 1 ? '#FDFCFA' : '#fff'
 
                     return (
@@ -398,9 +403,11 @@ export default function CasaBelvederePage() {
                               <div style={{ fontFamily: monoFont, fontSize: 15, fontWeight: 700, color: '#2A2722' }}>
                                 {rowTotalLei.toFixed(0)}&nbsp;<span style={{ fontSize: 10, fontWeight: 400, color: '#ABA69E' }}>lei</span>
                               </div>
-                              <div style={{ fontFamily: monoFont, fontSize: 11, color: '#8C8680', marginTop: 2 }}>
-                                {rowTotalEur.toFixed(2)}&nbsp;<span style={{ opacity: 0.75 }}>eur</span>
-                              </div>
+                              {rowAjustabilLei > 0 && (
+                                <div style={{ fontFamily: monoFont, fontSize: 12, fontWeight: 700, color: '#275189', marginTop: 2 }}>
+                                  {rowAjustabilLei.toFixed(0)}&nbsp;<span style={{ fontSize: 10, fontWeight: 600, opacity: 0.8 }}>lei ajustabil</span>
+                                </div>
+                              )}
                             </>
                           ) : (
                             <span style={{ color: '#D4D0CA', fontSize: 14 }}>—</span>
