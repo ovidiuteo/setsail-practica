@@ -56,6 +56,58 @@ type Student = {
   signature_random?: string
   verificare_ancom?: boolean
 }
+// Modalul „Editează sesiunea": câmpurile grupate pe zone, două zone pe rând.
+// Tipuri: 'date' și 'scurt' ocupă o jumătate de rând, 'text' și 'select-scope' tot rândul.
+const REFS_SESIUNE = {
+  'ref-locatie':    { lista: 'locations',   nume: 'name',      extra: 'county' },
+  'ref-barca':      { lista: 'boats',       nume: 'name',      extra: null },
+  'ref-evaluator':  { lista: 'evaluators',  nume: 'full_name', extra: null },
+  'ref-instructor': { lista: 'instructors', nume: 'full_name', extra: null },
+} as const
+
+const GRUPE_SESIUNE: { titlu: string; campuri: [string, string, string][] }[] = [
+  { titlu: 'Calendar și ore', campuri: [
+    ['Data start curs', 'course_start_date', 'date'],
+    ['Data start practică', 'practice_start_date', 'date'],
+    ['Data practică', 'session_date', 'date'],
+    ['Ora start practică', 'practice_start_time', 'scurt'],
+    ['Ora examinare', 'exam_time', 'scurt'],
+  ]},
+  { titlu: 'Locație și ambarcațiuni', campuri: [
+    ['Locație', 'location_id', 'ref-locatie'],
+    ['Ambarcațiune', 'boat_id', 'ref-barca'],
+    ['Ambarcațiune 2', 'boat_id_2', 'ref-barca'],
+    ['Ambarcațiune 3', 'boat_id_3', 'ref-barca'],
+    ['Locație detaliată', 'location_detail', 'text'],
+  ]},
+  { titlu: 'Instructori și evaluator', campuri: [
+    ['Evaluator ANR', 'evaluator_id', 'ref-evaluator'],
+    ['Instructor', 'instructor_id', 'ref-instructor'],
+    ['Instructor 2', 'instructor_id_2', 'ref-instructor'],
+    ['Instructor 3', 'instructor_id_3', 'ref-instructor'],
+  ]},
+  { titlu: 'Clasificare', campuri: [
+    ['Clasa CAA', 'class_caa', 'select-class'],
+    ['Categorie timeline', 'timeline_scope', 'select-scope'],
+  ]},
+  { titlu: 'Documente și notificări', campuri: [
+    ['Nr. documente PV', 'nr_document_ancom', 'scurt'],
+    ['Nr. înștiintare reg ANR', 'nr_instiintare_anr', 'scurt'],
+    ['Nr. înștiințări', 'request_number', 'scurt'],
+    ['Clasă (notificare ANR)', 'notif_clasa', 'scurt'],
+    ['Cursuri în locația aprobată din', 'notif_locatie_curs', 'text'],
+    ['Examinare practică în locația aprobată', 'notif_locatie_examinare', 'text'],
+  ]},
+  { titlu: 'Linkuri pentru cursanți', campuri: [
+    ['Link skipper.setsail.ro', 'skipper_url', 'text'],
+    ['Link Zoom', 'zoom_url', 'text'],
+    ['Link grup WhatsApp', 'whatsapp_url', 'text'],
+    ['Link arhivă video', 'arhiva_video_url', 'text'],
+    ['Link manuale / prezentări / teste', 'materiale_url', 'text'],
+    ['Link comunitate SetSail absolvenți', 'comunitate_url', 'text'],
+  ]},
+]
+
 type Session = { id: string; session_date: string; course_start_date?: string; status: string; session_type: string; access_code: string; class_caa: string; request_number?: string; location_detail?: string; parent_session_id?: string; is_clone?: boolean; locations?: any; boats?: any; evaluators?: any; instructors?: any; contact_person_ids?: string[]; practice_start_date?: string; practice_start_time?: string; skipper_url?: string }
 
 // Extrage id-ul seriei din linkul skipper, ex. https://skipper.setsail.ro/admin/groups/224 -> "224"
@@ -4587,84 +4639,63 @@ export default function SessionDetailPage() {
       {/* Modal editare sesiune */}
       {editingSession && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg p-6">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-5xl max-h-[90vh] flex flex-col p-6">
             <h3 className="font-semibold text-gray-900 mb-1">Editează sesiunea</h3>
             <p className="text-xs text-gray-400 mb-4">
               Câmpurile care arată o valoare estompată au o valoare implicită după locație — dublu-click pe câmp o completează.
             </p>
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                ['Data start curs', 'course_start_date', 'date'],
-                ['Data start practică', 'practice_start_date', 'date'],
-                ['Data practică', 'session_date', 'date'],
-                ['Nr. documente PV', 'nr_document_ancom', 'text'],
-                ['Nr. înștiintare reg ANR', 'nr_instiintare_anr', 'text'],
-                ['Nr. înștiințări', 'request_number', 'text'],
-                ['Ora examinare', 'exam_time', 'text'],
-                ['Ora start practică', 'practice_start_time', 'text'],
-                ['Clasă (notificare ANR)', 'notif_clasa', 'text'],
-                ['Cursuri în locația aprobată din', 'notif_locatie_curs', 'text'],
-                ['Examinare practică în locația aprobată', 'notif_locatie_examinare', 'text'],
-                ['Locație detaliată', 'location_detail', 'text'],
-                ['Link skipper.setsail.ro', 'skipper_url', 'text'],
-                ['Link Zoom (portal cursant)', 'zoom_url', 'text'],
-                ['Link grup WhatsApp (portal cursant)', 'whatsapp_url', 'text'],
-                ['Link arhivă video (portal cursant)', 'arhiva_video_url', 'text'],
-                ['Link manuale / prezentări / teste (portal cursant)', 'materiale_url', 'text'],
-                ['Link comunitate SetSail absolvenți (portal cursant)', 'comunitate_url', 'text'],
-                ['Categorie timeline', 'timeline_scope', 'select-scope'],
-                ['Clasa CAA', 'class_caa', 'select-class'],
-              ].map(([label, key, type]) => (
-                <div key={key} className={(key==='location_detail'||key==='skipper_url'||key.endsWith('_url')||key==='timeline_scope'||key==='notif_locatie_curs'||key==='notif_locatie_examinare')?'col-span-2':''}>
-                  <div className={`text-xs mb-1 ${editFocusKey===key ? 'text-blue-600 font-medium' : 'text-gray-400'}`}>{label}</div>
-                  {type==='select-class' ? (
-                    <select className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs w-full focus:outline-none focus:ring-1 focus:ring-blue-400"
-                      value={editSessionValues[key]} onChange={e=>setEditSessionValues((v:any)=>({...v,[key]:e.target.value}))}>
-                      {['A','B','C','D','C,D','Radio','Obtinere LRC','Prelungire LRC'].map(c=><option key={c} value={c}>{c}</option>)}
-                    </select>
-                  ) : type==='select-scope' ? (
-                    <select className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs w-full focus:outline-none focus:ring-1 focus:ring-blue-400"
-                      value={editSessionValues[key]||''} onChange={e=>setEditSessionValues((v:any)=>({...v,[key]:e.target.value}))}>
-                      <option value="">— Selectează categoria —</option>
-                      {TIMELINE_SCOPES.map(sc=><option key={sc.value} value={sc.value}>{sc.label}</option>)}
-                    </select>
-                  ) : (
-                    <input type={type}
-                      autoFocus={editFocusKey===key}
-                      // câmpurile cu valoare implicită o arată estompat; dublu-click o completează
-                      placeholder={defaultCampSesiune(key as string) || undefined}
-                      title={defaultCampSesiune(key as string) ? 'Dublu-click pentru valoarea implicită' : undefined}
-                      onDoubleClick={()=>{
-                        const d = defaultCampSesiune(key as string)
-                        if (d) setEditSessionValues((v:any)=>({...v,[key]:d}))
-                      }}
-                      className={`border rounded-lg px-2.5 py-1.5 text-xs w-full focus:outline-none focus:ring-1 focus:ring-blue-400 ${
-                        editFocusKey===key ? 'border-blue-400 ring-1 ring-blue-200' : 'border-gray-200'}`}
-                      value={editSessionValues[key]||''} onChange={e=>setEditSessionValues((v:any)=>({...v,[key]:e.target.value}))}/>
-                  )}
-                </div>
-              ))}
-              {[
-                ['Locație', 'location_id', refs.locations, 'name', 'county'],
-                ['Ambarcațiune', 'boat_id', refs.boats, 'name', null],
-                ['Ambarcațiune 2', 'boat_id_2', refs.boats, 'name', null],
-                ['Ambarcațiune 3', 'boat_id_3', refs.boats, 'name', null],
-                ['Evaluator ANR', 'evaluator_id', refs.evaluators, 'full_name', null],
-                ['Instructor', 'instructor_id', refs.instructors, 'full_name', null],
-                ['Instructor 2', 'instructor_id_2', refs.instructors, 'full_name', null],
-                ['Instructor 3', 'instructor_id_3', refs.instructors, 'full_name', null],
-              ].map(([label, key, options, nameField, extraField]: any) => (
-                <div key={key}>
-                  <div className="text-xs text-gray-400 mb-1">{label}</div>
-                  <select className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs w-full focus:outline-none focus:ring-1 focus:ring-blue-400"
-                    value={editSessionValues[key]||''} onChange={e=>setEditSessionValues((v:any)=>({...v,[key]:e.target.value}))}>
-                    <option value="">— Selectează —</option>
-                    {options.map((o:any)=><option key={o.id} value={o.id}>{o[nameField]}{extraField&&o[extraField]?`, ${o[extraField]}`:''}</option>)}
-                  </select>
+            {/* Câmpurile stau pe zone, în două coloane, ca modalul să fie lat și nu lung */}
+            <div className="overflow-y-auto pr-1 lg:columns-2 lg:gap-4">
+              {GRUPE_SESIUNE.map(grup => (
+                <div key={grup.titlu} className="rounded-xl border border-gray-100 bg-gray-50/60 p-4 mb-4 break-inside-avoid">
+                  <div className="text-xs font-semibold text-gray-700 mb-3">{grup.titlu}</div>
+                  <div className="grid grid-cols-2 gap-3">
+                    {grup.campuri.map(([label, key, type]) => {
+                      const ref = REFS_SESIUNE[type as keyof typeof REFS_SESIUNE]
+                      return (
+                        <div key={key} className={type === 'text' || type === 'select-scope' ? 'col-span-2' : ''}>
+                          <div className={`text-xs mb-1 ${editFocusKey===key ? 'text-blue-600 font-medium' : 'text-gray-400'}`}>{label}</div>
+                          {type==='select-class' ? (
+                            <select className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs w-full bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
+                              value={editSessionValues[key]} onChange={e=>setEditSessionValues((v:any)=>({...v,[key]:e.target.value}))}>
+                              {['A','B','C','D','C,D','Radio','Obtinere LRC','Prelungire LRC'].map(c=><option key={c} value={c}>{c}</option>)}
+                            </select>
+                          ) : type==='select-scope' ? (
+                            <select className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs w-full bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
+                              value={editSessionValues[key]||''} onChange={e=>setEditSessionValues((v:any)=>({...v,[key]:e.target.value}))}>
+                              <option value="">— Selectează categoria —</option>
+                              {TIMELINE_SCOPES.map(sc=><option key={sc.value} value={sc.value}>{sc.label}</option>)}
+                            </select>
+                          ) : ref ? (
+                            <select className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs w-full bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
+                              value={editSessionValues[key]||''} onChange={e=>setEditSessionValues((v:any)=>({...v,[key]:e.target.value}))}>
+                              <option value="">— Selectează —</option>
+                              {((refs as any)[ref.lista] || []).map((o:any)=>(
+                                <option key={o.id} value={o.id}>{o[ref.nume]}{ref.extra && o[ref.extra] ? `, ${o[ref.extra]}` : ''}</option>
+                              ))}
+                            </select>
+                          ) : (
+                            <input type={type==='date'?'date':'text'}
+                              autoFocus={editFocusKey===key}
+                              // câmpurile cu valoare implicită o arată estompat; dublu-click o completează
+                              placeholder={defaultCampSesiune(key as string) || undefined}
+                              title={defaultCampSesiune(key as string) ? 'Dublu-click pentru valoarea implicită' : undefined}
+                              onDoubleClick={()=>{
+                                const d = defaultCampSesiune(key as string)
+                                if (d) setEditSessionValues((v:any)=>({...v,[key]:d}))
+                              }}
+                              className={`border rounded-lg px-2.5 py-1.5 text-xs w-full bg-white focus:outline-none focus:ring-1 focus:ring-blue-400 ${
+                                editFocusKey===key ? 'border-blue-400 ring-1 ring-blue-200' : 'border-gray-200'}`}
+                              value={editSessionValues[key]||''} onChange={e=>setEditSessionValues((v:any)=>({...v,[key]:e.target.value}))}/>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
                 </div>
               ))}
             </div>
-            <div className="flex justify-end gap-2 mt-4">
+            <div className="flex justify-end gap-2 mt-4 shrink-0">
               <button onClick={()=>{setEditingSession(null); setEditFocusKey(null)}} className="px-4 py-2 rounded-lg text-xs border border-gray-200 text-gray-500 hover:bg-gray-50">Anulează</button>
               <button onClick={()=>saveEditSession(editingSession)} disabled={savingSession}
                 className="px-4 py-2 rounded-lg text-xs font-medium text-white disabled:opacity-50" style={{background:'#059669'}}>
