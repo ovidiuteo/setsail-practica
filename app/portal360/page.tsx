@@ -48,8 +48,8 @@ function Portal360() {
     const s = citeste<{ cod: string; email: string } | null>(STORE, null)
     const qc = (sp.get('cod') || '').toUpperCase().trim()
     const qe = (sp.get('email') || '').trim()
-    // Link din admin (cod + email): intră direct ca acel cursant, fără să-l memoreze
-    if (qc && qe) { intra(qc, qe, false); setPornit(true); return }
+    // Link cu cod + email (din admin sau trimis cursantului): intră direct
+    if (qc && qe) { intra(qc, qe); setPornit(true); return }
     if (s?.cod && s?.email && (!qc || qc === s.cod)) { setCod(s.cod); setEmail(s.email); intra(s.cod, s.email, false).then(() => scrie(STORE, s)) }
     setPornit(true)
     // eslint-disable-next-line react-hooks/exhaustive-deps

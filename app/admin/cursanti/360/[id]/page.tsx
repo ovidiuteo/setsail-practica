@@ -42,10 +42,18 @@ export default function Cursant360Admin() {
   }, [id])
   useEffect(() => { incarca() }, [incarca])
 
-  function copiazaLink() {
+  // Linkul portalului cursantului: codul seriei + emailul lui, ca să intre direct
+  function linkPortal(abs = false): string {
     const cod = d?.inscrieri.find(i => i.codSerie)?.codSerie
-    if (!cod) return
-    navigator.clipboard.writeText(`${location.origin}/portal360?cod=${encodeURIComponent(cod)}`)
+    if (!cod) return ''
+    const email = d?.persoana.email || ''
+    const q = `cod=${encodeURIComponent(cod)}${email ? `&email=${encodeURIComponent(email)}` : ''}`
+    return `${abs ? location.origin : ''}/portal360?${q}`
+  }
+  function copiazaLink() {
+    const url = linkPortal(true)
+    if (!url) return
+    navigator.clipboard.writeText(url)
     setCopiat(true); setTimeout(() => setCopiat(false), 1800)
   }
 
@@ -109,9 +117,16 @@ export default function Cursant360Admin() {
           </div>
           <div className="flex flex-wrap gap-2 relative">
             {p.email && <a href={`mailto:${p.email}`} className="h-10 px-4 rounded-xl flex items-center gap-2 text-sm font-semibold" style={{ background: C.gold, color: C.navy }}><Mail size={16} />Trimite email</a>}
-            <button onClick={copiazaLink} className="h-10 px-4 rounded-xl flex items-center gap-2 text-sm font-semibold border" style={{ borderColor: 'rgba(255,255,255,.28)' }}>
-              {copiat ? <Check size={16} /> : <Link2 size={16} />}{copiat ? 'Copiat' : 'Link portal 360'}
-            </button>
+            <div className="flex rounded-xl border overflow-hidden" style={{ borderColor: 'rgba(255,255,255,.28)' }}>
+              <a href={linkPortal()} target="_blank" rel="noopener noreferrer" title="Intră în portalul cursantului"
+                className="h-10 pl-4 pr-3 flex items-center gap-2 text-sm font-semibold hover:bg-white/10">
+                <ExternalLink size={16} />Portal 360
+              </a>
+              <button onClick={copiazaLink} title="Copiază linkul pentru cursant"
+                className="h-10 px-3 flex items-center gap-2 text-sm font-semibold border-l hover:bg-white/10" style={{ borderColor: 'rgba(255,255,255,.28)' }}>
+                {copiat ? <Check size={16} /> : <Link2 size={16} />}{copiat ? 'Copiat' : 'Link'}
+              </button>
+            </div>
             <a href="#financiar" className="h-10 px-4 rounded-xl flex items-center gap-2 text-sm font-semibold border" style={{ borderColor: 'rgba(255,255,255,.28)' }}><Plus size={16} />Adaugă plată</a>
           </div>
         </section>
