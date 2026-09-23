@@ -440,14 +440,9 @@ export default function CasaBelvederePage() {
                       })}
                       <td style={{ padding: '12px', textAlign: 'center', background: '#275189' }}>
                         {ajustabilLei > 0 ? (
-                          <>
-                            <div style={{ fontFamily: monoFont, fontSize: 15, fontWeight: 800, color: '#fff' }}>
-                              {ajustabilLei.toFixed(0)}&nbsp;<span style={{ fontSize: 11, fontWeight: 400, color: '#BBD4F0' }}>lei</span>
-                            </div>
-                            <div style={{ fontFamily: monoFont, fontSize: 11, color: '#BBD4F0', marginTop: 3 }}>
-                              {(ajustabilLei / 5.25).toFixed(2)}&nbsp;<span style={{ opacity: 0.75 }}>eur</span>
-                            </div>
-                          </>
+                          <div style={{ fontFamily: monoFont, fontSize: 15, fontWeight: 800, color: '#fff' }}>
+                            {ajustabilLei.toFixed(0)}&nbsp;<span style={{ fontSize: 11, fontWeight: 400, color: '#BBD4F0' }}>lei</span>
+                          </div>
                         ) : (
                           <span style={{ color: '#BBD4F0', fontSize: 14 }}>—</span>
                         )}
@@ -489,6 +484,12 @@ export default function CasaBelvederePage() {
                             <div style={{ fontFamily: monoFont, fontSize: 16, fontWeight: 800, color: '#fff' }}>
                               {grandTotalLei.toFixed(0)}&nbsp;<span style={{ fontSize: 11, fontWeight: 400, color: '#A8DEC0' }}>lei</span>
                             </div>
+                            {/* cât din total se poate reduce prin economii */}
+                            {ajustabilLei > 0 && (
+                              <div style={{ fontFamily: monoFont, fontSize: 13, fontWeight: 800, color: '#8FC4FF', marginTop: 3 }}>
+                                {ajustabilLei.toFixed(0)}&nbsp;<span style={{ fontSize: 10, fontWeight: 600, opacity: 0.85 }}>lei ajustabil</span>
+                              </div>
+                            )}
                             <div style={{ fontFamily: monoFont, fontSize: 11, color: '#A8DEC0', marginTop: 3 }}>
                               {grandTotalEur.toFixed(2)}&nbsp;<span style={{ opacity: 0.75 }}>eur</span>
                             </div>
