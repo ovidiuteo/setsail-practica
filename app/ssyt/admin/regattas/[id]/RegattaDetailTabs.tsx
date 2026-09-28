@@ -32,6 +32,8 @@ export default function RegattaDetailTabs(props: {
   roles: any[]
   docTypes: any[]
   journals: any[]
+  seasonId: string
+  isLastRegatta: boolean
 }) {
   const [tab, setTab] = useState<TabKey>('overview')
   const router = useRouter()
@@ -75,7 +77,7 @@ export default function RegattaDetailTabs(props: {
         {tab === 'overview' && <RegattaOverviewTab regatta={props.regatta} onSaved={refresh} />}
         {tab === 'crewlist' && <CrewlistTab regattaId={props.regatta.id} participation={props.participation} teams={props.teams} allParticipants={props.allParticipants} roles={props.roles} onChange={refresh} />}
         {tab === 'documents' && <DocumentsTab regattaId={props.regatta.id} documents={props.documents} docTypes={props.docTypes} onChange={refresh} />}
-        {tab === 'results' && <ResultsTab regattaId={props.regatta.id} results={props.results} teams={props.teams} onChange={refresh} />}
+        {tab === 'results' && <ResultsTab regattaId={props.regatta.id} results={props.results} teams={props.teams} seasonId={props.seasonId} isLastRegatta={props.isLastRegatta} onChange={refresh} />}
         {tab === 'media' && <MediaTab regattaId={props.regatta.id} media={props.media} onChange={refresh} />}
         {tab === 'journals' && <JournalsTab journals={props.journals} teams={props.teams} />}
       </div>

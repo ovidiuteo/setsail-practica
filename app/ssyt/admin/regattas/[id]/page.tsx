@@ -34,6 +34,17 @@ export default async function AdminRegattaDetailPage({ params }: { params: { id:
     supabase.from('ssyt_team_regatta_journal').select('id, team_id, content, updated_at, team:ssyt_teams(id, name, short_name, color_primary)').eq('regatta_id', regatta.id),
   ])
 
+  // Ultima regată din sezon? (publicarea rezultatelor ei ascunde clasamentul general)
+  const { data: lastReg } = await supabase
+    .from('ssyt_regattas')
+    .select('id')
+    .eq('season_id', regatta.season_id)
+    .neq('status', 'draft')
+    .order('start_date', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  const isLastRegatta = lastReg?.id === regatta.id
+
   const eventTypeColors: Record<string, string> = {
     regatta: '#FF6B35',
     training: '#00A8B5',
@@ -91,6 +102,8 @@ export default async function AdminRegattaDetailPage({ params }: { params: { id:
         roles={rolesRes.data || []}
         docTypes={docTypesRes.data || []}
         journals={journalsRes.data || []}
+        seasonId={regatta.season_id}
+        isLastRegatta={isLastRegatta}
       />
     </div>
   )

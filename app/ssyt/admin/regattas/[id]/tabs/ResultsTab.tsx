@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { Plus, Trophy, Trash2, X, Save, ClipboardPaste, ListOrdered } from 'lucide-react'
 import { supabase } from '@/lib/ssyt/supabase'
+import { createSupabaseBrowserClient } from '@/lib/ssyt/supabase-browser'
 import EditableField from '@/components/ssyt/EditableField'
 
 function escapeRegex(s: string) {
@@ -78,9 +79,9 @@ function parseClassification(text: string, teams: any[]): { rows: ParsedRow[]; f
 }
 
 export default function ResultsTab({
-  regattaId, results, teams, onChange,
+  regattaId, results, teams, seasonId, isLastRegatta, onChange,
 }: {
-  regattaId: string; results: any[]; teams: any[]; onChange: () => void
+  regattaId: string; results: any[]; teams: any[]; seasonId?: string; isLastRegatta?: boolean; onChange: () => void
 }) {
   const [showNew, setShowNew] = useState(false)
 
@@ -110,7 +111,7 @@ export default function ResultsTab({
 
   return (
     <div className="space-y-8">
-      <ImportSection regattaId={regattaId} teams={teams} onChange={onChange} />
+      <ImportSection regattaId={regattaId} teams={teams} seasonId={seasonId} isLastRegatta={isLastRegatta} onChange={onChange} />
 
       <OurBoatsClassification results={results} />
 
@@ -200,7 +201,7 @@ export default function ResultsTab({
   )
 }
 
-function ImportSection({ regattaId, teams, onChange }: { regattaId: string; teams: any[]; onChange: () => void }) {
+function ImportSection({ regattaId, teams, seasonId, isLastRegatta, onChange }: { regattaId: string; teams: any[]; seasonId?: string; isLastRegatta?: boolean; onChange: () => void }) {
   const [open, setOpen] = useState(false)
   const [text, setText] = useState('')
   const [saving, setSaving] = useState(false)
@@ -229,8 +230,24 @@ function ImportSection({ regattaId, teams, onChange }: { regattaId: string; team
     const { error: err } = await supabase
       .from('ssyt_results')
       .upsert(payload, { onConflict: 'regatta_id,team_id' })
+    if (err) { setSaving(false); setError(err.message); return }
+
+    // Publicarea ultimei regate ascunde clasamentul general pe public (reveal la festivitate)
+    if (isLastRegatta && seasonId) {
+      try {
+        const sb = createSupabaseBrowserClient()
+        const { data: { session } } = await sb.auth.getSession()
+        if (session?.access_token) {
+          await fetch('/api/ssyt/admin/leaderboard-visibility', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+            body: JSON.stringify({ season_id: seasonId, visible: false }),
+          })
+        }
+      } catch { /* best-effort */ }
+    }
+
     setSaving(false)
-    if (err) { setError(err.message); return }
     setText('')
     setOpen(false)
     onChange()
@@ -249,6 +266,12 @@ function ImportSection({ regattaId, teams, onChange }: { regattaId: string; team
 
       {open && (
         <div className="mt-4">
+          {isLastRegatta && (
+            <div className="rounded-lg p-2.5 mb-3 text-xs flex items-start gap-2" style={{ background: 'rgba(245,158,11,0.1)', color: '#92400E' }}>
+              <span>⚠️</span>
+              <span>Aceasta e <strong>ultima regată</strong> din sezon — la import, clasamentul general devine <strong>invizibil pe public</strong> (pentru reveal la festivitate). Îl poți reactiva din pagina Leaderboard.</span>
+            </div>
+          )}
           <p className="text-xs text-gray-500 mb-2">
             Lipește tabelul clasamentului general (din softul de regatta / PDF). Detectăm automat bărcile noastre după nume
             și extragem scorurile per cursă (R1, R2…), Total și Net. Scorurile trebuie să aibă zecimale (ex. <code>1.0</code>).

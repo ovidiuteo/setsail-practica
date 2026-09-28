@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { Trophy, Settings, Anchor } from 'lucide-react'
 import { supabase, getActiveSeason, getSeasonLeaderboard } from '@/lib/ssyt/supabase'
 import { effectiveRegattaStatus, regattaStatusColor } from '@/lib/ssyt/regatta-status'
+import LeaderboardVisibilityToggle from './LeaderboardVisibilityToggle'
 
 export const revalidate = 0
 
@@ -37,15 +38,18 @@ export default async function AdminLeaderboardPage() {
             Clasamentul intern SSYT este calculat automat din rezultatele introduse la regate.
           </p>
         </div>
-        <Link
-          href="/ssyt/leaderboard"
-          target="_blank"
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-md font-medium text-sm hover:bg-gray-50 transition"
-          style={{ background: '#fff', border: '1px solid #e5e7eb', color: '#0a1628' }}
-        >
-          <Trophy size={14} />
-          Vezi public
-        </Link>
+        <div className="flex items-center gap-2">
+          <LeaderboardVisibilityToggle seasonId={season.id} initialVisible={!!(season as any).leaderboard_public} />
+          <Link
+            href="/ssyt/leaderboard"
+            target="_blank"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-md font-medium text-sm hover:bg-gray-50 transition"
+            style={{ background: '#fff', border: '1px solid #e5e7eb', color: '#0a1628' }}
+          >
+            <Trophy size={14} />
+            Vezi public
+          </Link>
+        </div>
       </div>
 
       {/* Notice scoring */}

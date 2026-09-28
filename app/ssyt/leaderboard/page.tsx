@@ -49,7 +49,13 @@ export default async function LeaderboardPage() {
         </p>
       </div>
 
-      {leaderboard.length === 0 ? (
+      {!(season as any).leaderboard_public ? (
+        <div className="rounded-xl p-16 text-center text-gray-500" style={{ background: '#fff', border: '1px dashed #e5e7eb' }}>
+          <Trophy size={32} className="mx-auto mb-4 opacity-30" />
+          <p className="font-medium" style={{ color: '#0a1628' }}>Clasamentul general nu este public momentan.</p>
+          <p className="text-sm mt-1">Va fi publicat de organizatori. Revino mai târziu.</p>
+        </div>
+      ) : leaderboard.length === 0 ? (
         <div className="rounded-xl p-16 text-center text-gray-500" style={{ background: '#fff', border: '1px dashed #e5e7eb' }}>
           <Trophy size={32} className="mx-auto mb-4 opacity-30" />
           <p>Clasamentul va fi disponibil după prima regatta.</p>
