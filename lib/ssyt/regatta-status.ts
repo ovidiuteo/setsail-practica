@@ -13,7 +13,7 @@ export function effectiveRegattaStatus(r: RegattaStatusInput): string {
   const today = new Date(); today.setHours(0, 0, 0, 0)
   const start = new Date(r.start_date); start.setHours(0, 0, 0, 0)
   const end = r.end_date ? new Date(r.end_date) : start; end.setHours(0, 0, 0, 0)
-  if (today > end) return 'passed'
+  if (today > end) return 'completed'
   if (today >= start && today <= end) return 'live'
   return 'upcoming'
 }
