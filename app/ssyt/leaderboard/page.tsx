@@ -3,7 +3,7 @@ import { Trophy, Anchor, Users } from 'lucide-react'
 import { supabase, getActiveSeason, getSeasonLeaderboard } from '@/lib/ssyt/supabase'
 import { effectiveRegattaStatus, regattaStatusColor } from '@/lib/ssyt/regatta-status'
 
-export const revalidate = 60
+export const dynamic = 'force-dynamic'
 
 export default async function LeaderboardPage() {
   const season = await getActiveSeason()
