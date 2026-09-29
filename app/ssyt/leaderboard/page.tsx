@@ -228,12 +228,11 @@ function PodiumCard({ row }: { row: any }) {
 }
 
 function PositionBadge({ position }: { position: number }) {
-  // 1 auriu, 2 argintiu, 3 bronz, 4 bleu
+  // Culori apropiate de medaliile de la podium (1 auriu, 2 argintiu, 3 bronz); 4 rămâne gri
   const medal: Record<number, string> = {
-    1: '#D4AF37', // auriu
-    2: '#A8A9AD', // argintiu
-    3: '#CD7F32', // bronz
-    4: '#38BDF8', // bleu
+    1: '#FCC419', // auriu (ca 🥇)
+    2: '#C0C0C0', // argintiu (ca 🥈)
+    3: '#CD7F32', // bronz (ca 🥉)
   }
   const bg = medal[position]
   if (bg) {
