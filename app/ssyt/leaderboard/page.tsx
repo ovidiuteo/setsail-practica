@@ -228,16 +228,24 @@ function PodiumCard({ row }: { row: any }) {
 }
 
 function PositionBadge({ position }: { position: number }) {
-  // Culori apropiate de medaliile de la podium (1 auriu, 2 argintiu, 3 bronz); 4 rămâne gri
-  const medal: Record<number, string> = {
-    1: '#FCC419', // auriu (ca 🥇)
-    2: '#C0C0C0', // argintiu (ca 🥈)
-    3: '#CD7F32', // bronz (ca 🥉)
+  // Aspect metalic apropiat de medaliile de la podium (1 auriu, 2 argintiu, 3 bronz); 4 rămâne gri
+  const medal: Record<number, { bg: string; ring: string }> = {
+    1: { bg: 'linear-gradient(135deg, #FFF3B0 0%, #FCC419 45%, #B8860B 100%)', ring: '#E0A800' },
+    2: { bg: 'linear-gradient(135deg, #FBFBFB 0%, #C0C4C8 45%, #8A8E93 100%)', ring: '#A9AEB4' },
+    3: { bg: 'linear-gradient(135deg, #F0B27A 0%, #CD7F32 45%, #8C5A22 100%)', ring: '#B5702B' },
   }
-  const bg = medal[position]
-  if (bg) {
+  const m = medal[position]
+  if (m) {
     return (
-      <span className="inline-flex items-center justify-center w-8 h-8 rounded-full font-bold text-white" style={{ background: bg }}>
+      <span
+        className="inline-flex items-center justify-center w-8 h-8 rounded-full font-bold text-white"
+        style={{
+          background: m.bg,
+          border: `1px solid ${m.ring}`,
+          boxShadow: 'inset 0 1px 1px rgba(255,255,255,0.55), inset 0 -2px 3px rgba(0,0,0,0.25), 0 1px 2px rgba(0,0,0,0.2)',
+          textShadow: '0 1px 1px rgba(0,0,0,0.35)',
+        }}
+      >
         {position}
       </span>
     )
