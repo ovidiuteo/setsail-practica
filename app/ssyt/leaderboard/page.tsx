@@ -228,10 +228,18 @@ function PodiumCard({ row }: { row: any }) {
 }
 
 function PositionBadge({ position }: { position: number }) {
-  if (position === 1) {
+  // 1 auriu, 2 argintiu, 3 bronz, 4 bleu
+  const medal: Record<number, string> = {
+    1: '#D4AF37', // auriu
+    2: '#A8A9AD', // argintiu
+    3: '#CD7F32', // bronz
+    4: '#38BDF8', // bleu
+  }
+  const bg = medal[position]
+  if (bg) {
     return (
-      <span className="inline-flex items-center justify-center w-8 h-8 rounded-full font-bold text-white" style={{ background: '#FF6B35' }}>
-        1
+      <span className="inline-flex items-center justify-center w-8 h-8 rounded-full font-bold text-white" style={{ background: bg }}>
+        {position}
       </span>
     )
   }
