@@ -54,13 +54,28 @@ export async function POST(req: NextRequest) {
   const supabase = client()
   const body = await req.json().catch(() => ({}))
   if (!(await seasonForToken(body.token, supabase))) return NextResponse.json({ error: 'Token invalid.' }, { status: 401 })
+
+  const { data: last } = await supabase.from('ssyt_review_questions').select('position').order('position', { ascending: false }).limit(1).maybeSingle()
+  let position = (last?.position ?? 0)
+
+  // Import în bloc: body.labels = string[]  (fiecare devine întrebare de tip text)
+  if (Array.isArray(body.labels)) {
+    const rows = body.labels
+      .map((l: any) => (l || '').toString().trim())
+      .filter(Boolean)
+      .map((label: string) => ({ label: label.slice(0, 1000), qtype: 'text', max_value: 5, position: ++position }))
+    if (rows.length === 0) return NextResponse.json({ error: 'Nicio întrebare validă.' }, { status: 400 })
+    const { error } = await supabase.from('ssyt_review_questions').insert(rows)
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ success: true, added: rows.length })
+  }
+
+  // Adăugare simplă
   const label = (body.label || '').toString().trim()
   if (!label) return NextResponse.json({ error: 'Lipsește textul întrebării.' }, { status: 400 })
   const qtype = body.qtype === 'number' ? 'number' : 'text'
   const max_value = Math.min(Math.max(parseInt(body.max_value, 10) || 5, 2), 10)
-  const { data: last } = await supabase.from('ssyt_review_questions').select('position').order('position', { ascending: false }).limit(1).maybeSingle()
-  const position = (last?.position ?? 0) + 1
-  const { error } = await supabase.from('ssyt_review_questions').insert({ label, qtype, max_value, position })
+  const { error } = await supabase.from('ssyt_review_questions').insert({ label, qtype, max_value, position: position + 1 })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ success: true })
 }

@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Plus, Trash2, Save, X, Edit2, Loader2, ArrowUp, ArrowDown, Check } from 'lucide-react'
+import { Plus, Trash2, Save, X, Edit2, Loader2, ArrowUp, ArrowDown, Check, FileDown } from 'lucide-react'
 
 type Q = { id: string; position: number; label: string; qtype: 'text' | 'number'; max_value: number; active: boolean }
 
@@ -100,7 +100,45 @@ function ReviewQuestionsInner() {
         {questions.length === 0 && <p className="text-sm text-gray-400 italic">Nicio întrebare. Adaugă prima mai jos.</p>}
       </div>
 
-      <NewQuestion busy={busy} onSave={call} />
+      <div className="flex flex-wrap items-center gap-2">
+        <NewQuestion busy={busy} onSave={call} />
+        <ImportBox busy={busy} onImport={(labels) => call('POST', { labels })} />
+      </div>
+    </div>
+  )
+}
+
+function ImportBox({ busy, onImport }: { busy: boolean; onImport: (labels: string[]) => Promise<boolean> }) {
+  const [open, setOpen] = useState(false)
+  const [text, setText] = useState('')
+
+  // curăță numerotarea de la început: "1.", "2)", "-", "•"
+  const labels = text.split('\n').map((l) => l.replace(/^\s*(\d+[.)]|[-•*])\s*/, '').trim()).filter(Boolean)
+
+  if (!open) {
+    return (
+      <button onClick={() => setOpen(true)} className="inline-flex items-center gap-2 px-4 py-2 rounded-md font-medium text-sm" style={{ background: '#fff', border: '1px solid #FF6B35', color: '#FF6B35' }}>
+        <FileDown size={14} /> Import întrebări
+      </button>
+    )
+  }
+  return (
+    <div className="w-full rounded-lg p-4 mt-1" style={{ background: '#fff', border: '2px solid #FF6B35' }}>
+      <h3 className="text-sm font-medium mb-1" style={{ color: '#0a1628' }}>Import întrebări</h3>
+      <p className="text-xs text-gray-400 mb-2">Câte o întrebare pe linie (cu sau fără „1.", „2."). Se adaugă ca tip <strong>text</strong>; poți schimba în „cifre" după.</p>
+      <textarea value={text} onChange={(e) => setText(e.target.value)} rows={6}
+        placeholder={'1. Cum a fost experiența?\n2. Ce ai schimba?\n3. Recomanzi programul?'}
+        className="w-full px-3 py-2 border rounded-md text-sm mb-2" style={{ borderColor: '#d1d5db' }} autoFocus />
+      <div className="flex items-center gap-2 justify-between">
+        <span className="text-xs text-gray-500">{labels.length} întreb{labels.length === 1 ? 'are' : 'ări'} detectate</span>
+        <div className="flex items-center gap-2">
+          <button onClick={() => { setOpen(false); setText('') }} className="px-3 py-1.5 text-sm text-gray-600"><X size={14} className="inline mr-1" />Anulează</button>
+          <button onClick={async () => { if (labels.length && await onImport(labels)) { setOpen(false); setText('') } }} disabled={busy || labels.length === 0}
+            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium text-white disabled:opacity-50" style={{ background: '#FF6B35' }}>
+            {busy ? <Loader2 size={14} className="animate-spin" /> : <FileDown size={14} />} Importă {labels.length || ''}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }
