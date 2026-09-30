@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState, useCallback } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { Plus, Trash2, Save, X, Edit2, Loader2, GripVertical, ArrowUp, ArrowDown } from 'lucide-react'
+import { Plus, Trash2, Save, X, Edit2, Loader2, ArrowUp, ArrowDown, Check } from 'lucide-react'
 
 type Q = { id: string; position: number; label: string; qtype: 'text' | 'number'; max_value: number; active: boolean }
 
@@ -10,6 +10,9 @@ export const dynamic = 'force-dynamic'
 export default function ReviewQuestionsAdmin() {
   const token = useSearchParams().get('token') || ''
   const [questions, setQuestions] = useState<Q[]>([])
+  const [intro, setIntro] = useState('')
+  const [skipper, setSkipper] = useState('')
+  const [textsSaved, setTextsSaved] = useState(false)
   const [loading, setLoading] = useState(true)
   const [authErr, setAuthErr] = useState(false)
   const [busy, setBusy] = useState(false)
@@ -20,9 +23,24 @@ export default function ReviewQuestionsAdmin() {
     if (!res.ok) { setAuthErr(true); setLoading(false); return }
     const d = await res.json()
     setQuestions(d.questions || [])
+    setIntro(d.texts?.intro || '')
+    setSkipper(d.texts?.skipper || '')
     setAuthErr(false)
     setLoading(false)
   }, [token])
+
+  async function saveTexts() {
+    setBusy(true)
+    const res = await fetch('/api/ssyt/review-questions', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, intro, skipper }),
+    })
+    setBusy(false)
+    if (!res.ok) { const e = await res.json().catch(() => ({})); alert(e.error || 'Eroare'); return }
+    setTextsSaved(true)
+    setTimeout(() => setTextsSaved(false), 2500)
+  }
 
   useEffect(() => { if (token) load(); else { setAuthErr(true); setLoading(false) } }, [token, load])
 
@@ -52,6 +70,20 @@ export default function ReviewQuestionsAdmin() {
       <p className="text-xs font-medium uppercase tracking-wider mb-1" style={{ color: '#FF6B35' }}>SSYT 2026</p>
       <h1 className="text-3xl font-semibold tracking-tight mb-1" style={{ color: '#0a1628', letterSpacing: '-0.02em' }}>Întrebări review</h1>
       <p className="text-sm text-gray-500 mb-6">Adaugă, modifică sau șterge întrebările din formularul de review. Tip <strong>text</strong> = casetă de răspuns; tip <strong>cifre</strong> = buline (1…N).</p>
+
+      {/* Texte personalizate întâmpinare */}
+      <div className="rounded-lg p-4 mb-6" style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
+        <h2 className="text-sm font-medium uppercase tracking-wider text-gray-500 mb-3">Texte întâmpinare</h2>
+        <label className="block text-sm font-medium mb-1" style={{ color: '#0a1628' }}>Text de întâmpinare (toți participanții)</label>
+        <p className="text-xs text-gray-400 mb-1.5">Apare sub „Ahoy, [nume]". Lasă gol pentru textul implicit.</p>
+        <textarea value={intro} onChange={(e) => setIntro(e.target.value)} rows={3} placeholder="Mulțumim pentru participarea la SSYT 2026…" className="w-full px-3 py-2 border rounded-md text-sm mb-3" style={{ borderColor: '#d1d5db' }} />
+        <label className="block text-sm font-medium mb-1" style={{ color: '#0a1628' }}>Text suplimentar pentru skipper</label>
+        <p className="text-xs text-gray-400 mb-1.5">Apare doar dacă participantul e skipperul echipei sale.</p>
+        <textarea value={skipper} onChange={(e) => setSkipper(e.target.value)} rows={3} placeholder="Ca skipper, ne-ar ajuta mult și un gând despre cum a fost să conduci echipa…" className="w-full px-3 py-2 border rounded-md text-sm mb-3" style={{ borderColor: '#d1d5db' }} />
+        <button onClick={saveTexts} disabled={busy} className="inline-flex items-center gap-1.5 px-4 py-2 rounded-md text-sm font-medium text-white disabled:opacity-50" style={{ background: '#FF6B35' }}>
+          {textsSaved ? <Check size={14} /> : <Save size={14} />} {textsSaved ? 'Salvat' : 'Salvează textele'}
+        </button>
+      </div>
 
       <div className="space-y-3 mb-6">
         {questions.map((q, i) => (

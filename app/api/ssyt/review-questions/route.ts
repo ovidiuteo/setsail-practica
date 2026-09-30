@@ -10,31 +10,50 @@ function client() {
   return createClient(URL, SERVICE, { auth: { persistSession: false, autoRefreshToken: false } })
 }
 
-async function validToken(token: string | null, supabase: any): Promise<boolean> {
-  if (!token) return false
+// Întoarce sezonul (id + texte) pentru token, sau null
+async function seasonForToken(token: string | null | undefined, supabase: any) {
+  if (!token) return null
   const { data } = await supabase
     .from('ssyt_seasons')
-    .select('review_questions_token')
+    .select('id, review_intro_text, review_skipper_text')
     .not('review_questions_token', 'is', null)
     .eq('review_questions_token', token)
     .maybeSingle()
-  return !!data
+  return data || null
 }
 
-// GET ?token= — listă întrebări
+// GET ?token= — listă întrebări + texte
 export async function GET(req: NextRequest) {
   const supabase = client()
   const token = req.nextUrl.searchParams.get('token')
-  if (!(await validToken(token, supabase))) return NextResponse.json({ error: 'Token invalid.' }, { status: 401 })
+  const season = await seasonForToken(token, supabase)
+  if (!season) return NextResponse.json({ error: 'Token invalid.' }, { status: 401 })
   const { data } = await supabase.from('ssyt_review_questions').select('*').order('position').order('created_at')
-  return NextResponse.json({ questions: data || [] })
+  return NextResponse.json({
+    questions: data || [],
+    texts: { intro: season.review_intro_text || '', skipper: season.review_skipper_text || '' },
+  })
+}
+
+// PATCH { token, intro, skipper } — salvează textele de întâmpinare
+export async function PATCH(req: NextRequest) {
+  const supabase = client()
+  const body = await req.json().catch(() => ({}))
+  const season = await seasonForToken(body.token, supabase)
+  if (!season) return NextResponse.json({ error: 'Token invalid.' }, { status: 401 })
+  const { error } = await supabase.from('ssyt_seasons').update({
+    review_intro_text: (body.intro || '').toString().slice(0, 2000) || null,
+    review_skipper_text: (body.skipper || '').toString().slice(0, 2000) || null,
+  }).eq('id', season.id)
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+  return NextResponse.json({ success: true })
 }
 
 // POST { token, label, qtype, max_value } — adaugă
 export async function POST(req: NextRequest) {
   const supabase = client()
   const body = await req.json().catch(() => ({}))
-  if (!(await validToken(body.token, supabase))) return NextResponse.json({ error: 'Token invalid.' }, { status: 401 })
+  if (!(await seasonForToken(body.token, supabase))) return NextResponse.json({ error: 'Token invalid.' }, { status: 401 })
   const label = (body.label || '').toString().trim()
   if (!label) return NextResponse.json({ error: 'Lipsește textul întrebării.' }, { status: 400 })
   const qtype = body.qtype === 'number' ? 'number' : 'text'
@@ -50,7 +69,7 @@ export async function POST(req: NextRequest) {
 export async function PUT(req: NextRequest) {
   const supabase = client()
   const body = await req.json().catch(() => ({}))
-  if (!(await validToken(body.token, supabase))) return NextResponse.json({ error: 'Token invalid.' }, { status: 401 })
+  if (!(await seasonForToken(body.token, supabase))) return NextResponse.json({ error: 'Token invalid.' }, { status: 401 })
   if (!body.id) return NextResponse.json({ error: 'id lipsă.' }, { status: 400 })
   const upd: any = {}
   if (body.label !== undefined) upd.label = (body.label || '').toString().trim()
@@ -67,7 +86,7 @@ export async function PUT(req: NextRequest) {
 export async function DELETE(req: NextRequest) {
   const supabase = client()
   const body = await req.json().catch(() => ({}))
-  if (!(await validToken(body.token, supabase))) return NextResponse.json({ error: 'Token invalid.' }, { status: 401 })
+  if (!(await seasonForToken(body.token, supabase))) return NextResponse.json({ error: 'Token invalid.' }, { status: 401 })
   if (!body.id) return NextResponse.json({ error: 'id lipsă.' }, { status: 400 })
   const { error } = await supabase.from('ssyt_review_questions').delete().eq('id', body.id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

@@ -14,18 +14,31 @@ export default async function ReviewPersonPage({ params }: { params: { email: st
     .ilike('email', email)
     .maybeSingle()
 
-  // Echipa participantului (pentru culoare + nume în întâmpinare)
+  // Echipa participantului (pentru culoare + nume în întâmpinare) + dacă e skipper
   let team: { name: string; color_primary: string | null } | null = null
+  let isSkipper = false
   if (participant) {
     const { data: mem } = await supabase
       .from('ssyt_team_memberships')
-      .select('team:ssyt_teams(name, color_primary)')
+      .select('team:ssyt_teams(name, color_primary, skipper_id)')
       .eq('participant_id', participant.id)
       .eq('status', 'active')
       .maybeSingle()
     const t = Array.isArray((mem as any)?.team) ? (mem as any).team[0] : (mem as any)?.team
-    if (t) team = { name: t.name, color_primary: t.color_primary }
+    if (t) { team = { name: t.name, color_primary: t.color_primary }; isSkipper = t.skipper_id === participant.id }
   }
+
+  // Texte personalizate întâmpinare (din sezonul activ)
+  const { data: seasonTexts } = await supabase
+    .from('ssyt_seasons')
+    .select('review_intro_text, review_skipper_text')
+    .in('status', ['planning', 'active'])
+    .order('year', { ascending: false })
+    .limit(1)
+    .maybeSingle()
+  const introText = seasonTexts?.review_intro_text?.trim()
+    || 'Mulțumim pentru participarea la SSYT 2026 și pentru că ne acorzi timp să răspunzi la întrebări și să lași un review.'
+  const skipperText = isSkipper ? (seasonTexts?.review_skipper_text?.trim() || '') : ''
 
   if (!participant) {
     return (
@@ -62,10 +75,13 @@ export default async function ReviewPersonPage({ params }: { params: { email: st
         {team && (
           <p className="text-xs uppercase tracking-wider text-white/70 mb-3">Echipa {team.name.replace(/^Team\s+/i, '')}</p>
         )}
-        <p className="text-white/85 leading-relaxed mt-3">
-          Mulțumim pentru participarea la <strong>SSYT 2026</strong> și pentru că ne acorzi timp să răspunzi
-          la întrebări și să lași un review.
-        </p>
+        <p className="text-white/85 leading-relaxed mt-3 whitespace-pre-wrap">{introText}</p>
+        {skipperText && (
+          <div className="mt-3 rounded-lg px-3 py-2.5" style={{ background: 'rgba(255,255,255,0.14)' }}>
+            <div className="text-[10px] uppercase tracking-wider text-white/70 mb-1">Pentru skipper</div>
+            <p className="text-white/90 leading-relaxed whitespace-pre-wrap">{skipperText}</p>
+          </div>
+        )}
         <p className="mt-3 font-semibold text-white">Fair Winds Always! ⛵</p>
       </div>
 
