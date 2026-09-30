@@ -68,14 +68,27 @@ export default function ReviewForm({ email, initial }: { email: string; initial?
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
           <div>
             <span className="block text-xs text-gray-500 mb-1">Regate</span>
-            <select
-              value={form.regattas_count}
-              onChange={(e) => setForm((f) => ({ ...f, regattas_count: e.target.value }))}
-              className={inputCls}
-              style={{ borderColor: '#d1d5db' }}
-            >
-              {['1', '2', '3', '4', '5'].map((n) => <option key={n} value={n}>{n}</option>)}
-            </select>
+            <div className="flex items-center gap-2">
+              {['1', '2', '3', '4', '5'].map((n) => {
+                const active = form.regattas_count === n
+                return (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setForm((f) => ({ ...f, regattas_count: n }))}
+                    className="w-10 h-10 rounded-full font-semibold transition flex items-center justify-center"
+                    style={{
+                      background: active ? '#FF6B35' : '#fff',
+                      color: active ? '#fff' : '#6B7280',
+                      border: `2px solid ${active ? '#FF6B35' : '#d1d5db'}`,
+                    }}
+                    aria-pressed={active}
+                  >
+                    {n}
+                  </button>
+                )
+              })}
+            </div>
           </div>
           <div>
             <span className="block text-xs text-gray-500 mb-1">Antrenamente</span>
