@@ -39,9 +39,16 @@ export default async function ReviewPersonPage({ params }: { params: { email: st
     )
   }
 
+  const { data: questions } = await supabase
+    .from('ssyt_review_questions')
+    .select('id, label, qtype, max_value')
+    .eq('active', true)
+    .order('position')
+    .order('created_at')
+
   const { data: existing } = await supabase
     .from('ssyt_reviews')
-    .select('regattas_count, training_count, q_experienta, q_placut_schimbat, q_echipa, review_text')
+    .select('regattas_count, training_count, review_text, answers')
     .ilike('email', email)
     .maybeSingle()
 
@@ -68,7 +75,7 @@ export default async function ReviewPersonPage({ params }: { params: { email: st
         </div>
       )}
 
-      <ReviewForm email={email} initial={existing || undefined} />
+      <ReviewForm email={email} questions={(questions || []) as any} initial={(existing || undefined) as any} />
     </div>
   )
 }

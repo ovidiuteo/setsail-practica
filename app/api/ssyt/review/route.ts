@@ -24,15 +24,24 @@ export async function POST(req: NextRequest) {
     .maybeSingle()
   if (!participant) return NextResponse.json({ error: 'Nu am găsit un participant cu acest email.' }, { status: 404 })
 
+  // answers: map question_id -> răspuns (limitat)
+  let answers: Record<string, string> | null = null
+  if (body.answers && typeof body.answers === 'object') {
+    answers = {}
+    for (const [k, v] of Object.entries(body.answers)) {
+      if (v == null || v === '') continue
+      answers[k] = v.toString().slice(0, 5000)
+    }
+    if (Object.keys(answers).length === 0) answers = null
+  }
+
   const payload = {
     participant_id: participant.id,
     email,
     regattas_count: (body.regattas_count || '').toString().slice(0, 500) || null,
     training_count: (body.training_count || '').toString().slice(0, 500) || null,
-    q_experienta: (body.q_experienta || '').toString().slice(0, 5000) || null,
-    q_placut_schimbat: (body.q_placut_schimbat || '').toString().slice(0, 5000) || null,
-    q_echipa: (body.q_echipa || '').toString().slice(0, 5000) || null,
     review_text: (body.review_text || '').toString().slice(0, 8000) || null,
+    answers,
     updated_at: new Date().toISOString(),
   }
 
