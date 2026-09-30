@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { MessageSquareQuote } from 'lucide-react'
 import { createClient } from '@supabase/supabase-js'
+import PublicLinkBar from '@/components/ssyt/admin/PublicLinkBar'
 
 export const revalidate = 0
 export const dynamic = 'force-dynamic'
@@ -33,9 +34,11 @@ export default async function AdminReviewsPage() {
         </h1>
         <p className="text-sm text-gray-500 mt-1">
           {rows.length} {rows.length === 1 ? 'răspuns' : 'răspunsuri'} de la participanți ·
-          formular public: <code className="text-xs bg-gray-100 px-1.5 py-0.5 rounded">/ssyt/review</code>
+          formular public de review.
         </p>
       </div>
+
+      <PublicLinkBar publicPath="/ssyt/review" label="Formular reviews" />
 
       {rows.length === 0 ? (
         <div className="rounded-lg p-12 text-center text-gray-500" style={{ background: '#fff', border: '1px dashed #e5e7eb' }}>
