@@ -13,8 +13,8 @@ type Initial = {
 
 export default function ReviewForm({ email, initial }: { email: string; initial?: Initial }) {
   const [form, setForm] = useState({
-    regattas_count: initial?.regattas_count || '',
-    training_count: initial?.training_count || '',
+    regattas_count: initial?.regattas_count || '1',
+    training_yes: initial?.training_count === 'Da',
     q_experienta: initial?.q_experienta || '',
     q_placut_schimbat: initial?.q_placut_schimbat || '',
     q_echipa: initial?.q_echipa || '',
@@ -30,10 +30,11 @@ export default function ReviewForm({ email, initial }: { email: string; initial?
   async function submit() {
     setSaving(true)
     setError(null)
+    const { training_yes, ...rest } = form
     const res = await fetch('/api/ssyt/review', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, ...form }),
+      body: JSON.stringify({ email, ...rest, training_count: training_yes ? 'Da' : 'Nu' }),
     })
     setSaving(false)
     if (!res.ok) {
@@ -64,14 +65,29 @@ export default function ReviewForm({ email, initial }: { email: string; initial?
       {/* Q1 */}
       <div className="rounded-lg p-5" style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
         <label className={labelCls} style={{ color: '#0a1628' }}>1. La câte regate ai participat? Dar la antrenamente?</label>
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 items-start">
           <div>
             <span className="block text-xs text-gray-500 mb-1">Regate</span>
-            <input value={form.regattas_count} onChange={set('regattas_count')} placeholder="ex: 4" className={inputCls} style={{ borderColor: '#d1d5db' }} />
+            <select
+              value={form.regattas_count}
+              onChange={(e) => setForm((f) => ({ ...f, regattas_count: e.target.value }))}
+              className={inputCls}
+              style={{ borderColor: '#d1d5db' }}
+            >
+              {['1', '2', '3', '4', '5'].map((n) => <option key={n} value={n}>{n}</option>)}
+            </select>
           </div>
           <div>
             <span className="block text-xs text-gray-500 mb-1">Antrenamente</span>
-            <input value={form.training_count} onChange={set('training_count')} placeholder="ex: 6" className={inputCls} style={{ borderColor: '#d1d5db' }} />
+            <label className="inline-flex items-center gap-2 px-3 py-2 border rounded-md text-sm cursor-pointer select-none" style={{ borderColor: '#d1d5db' }}>
+              <input
+                type="checkbox"
+                checked={form.training_yes}
+                onChange={(e) => setForm((f) => ({ ...f, training_yes: e.target.checked }))}
+                className="w-4 h-4 accent-[#FF6B35]"
+              />
+              <span>{form.training_yes ? 'Da, am participat' : 'Nu am participat'}</span>
+            </label>
           </div>
         </div>
       </div>

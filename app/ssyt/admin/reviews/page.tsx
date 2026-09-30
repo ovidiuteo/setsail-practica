@@ -62,7 +62,7 @@ export default async function AdminReviewsPage() {
                 </span>
               </div>
               <div className="p-5 space-y-3 text-sm">
-                <Field label="Regate / Antrenamente" value={[r.regattas_count && `${r.regattas_count} regate`, r.training_count && `${r.training_count} antrenamente`].filter(Boolean).join(' · ') || null} />
+                <Field label="Regate / Antrenamente" value={[r.regattas_count && `${r.regattas_count} regate`, r.training_count && `antrenamente: ${r.training_count}`].filter(Boolean).join(' · ') || null} />
                 <Field label="Experiența generală" value={r.q_experienta} />
                 <Field label="Ce i-a plăcut / ce ar schimba" value={r.q_placut_schimbat} />
                 <Field label="Colaborarea în echipă" value={r.q_echipa} />

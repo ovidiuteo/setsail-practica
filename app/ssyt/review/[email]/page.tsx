@@ -14,6 +14,19 @@ export default async function ReviewPersonPage({ params }: { params: { email: st
     .ilike('email', email)
     .maybeSingle()
 
+  // Echipa participantului (pentru culoare + nume în întâmpinare)
+  let team: { name: string; color_primary: string | null } | null = null
+  if (participant) {
+    const { data: mem } = await supabase
+      .from('ssyt_team_memberships')
+      .select('team:ssyt_teams(name, color_primary)')
+      .eq('participant_id', participant.id)
+      .eq('status', 'active')
+      .maybeSingle()
+    const t = Array.isArray((mem as any)?.team) ? (mem as any).team[0] : (mem as any)?.team
+    if (t) team = { name: t.name, color_primary: t.color_primary }
+  }
+
   if (!participant) {
     return (
       <div className="max-w-2xl mx-auto px-6 py-16 text-center">
@@ -37,13 +50,16 @@ export default async function ReviewPersonPage({ params }: { params: { email: st
   return (
     <div className="max-w-2xl mx-auto px-6 py-10">
       {/* Mesaj de bun venit */}
-      <div className="rounded-2xl p-6 md:p-8 mb-8 text-white" style={{ background: '#0a1628' }}>
-        <p className="text-lg font-semibold mb-3">Ahoy, {firstName}, 👋</p>
-        <p className="text-white/85 leading-relaxed">
+      <div className="rounded-2xl p-6 md:p-8 mb-8 text-white" style={{ background: team?.color_primary || '#0a1628' }}>
+        <p className="text-lg font-semibold">Ahoy, {firstName}, 👋</p>
+        {team && (
+          <p className="text-xs uppercase tracking-wider text-white/70 mb-3">Echipa {team.name.replace(/^Team\s+/i, '')}</p>
+        )}
+        <p className="text-white/85 leading-relaxed mt-3">
           Mulțumim pentru participarea la <strong>SSYT 2026</strong> și pentru că ne acorzi timp să răspunzi
           la întrebări și să lași un review.
         </p>
-        <p className="mt-3 font-medium" style={{ color: '#FF6B35' }}>Fair Winds Always! ⛵</p>
+        <p className="mt-3 font-semibold text-white">Fair Winds Always! ⛵</p>
       </div>
 
       {existing && (
