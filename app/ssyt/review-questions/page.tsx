@@ -1,5 +1,5 @@
 'use client'
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Plus, Trash2, Save, X, Edit2, Loader2, ArrowUp, ArrowDown, Check } from 'lucide-react'
 
@@ -8,6 +8,14 @@ type Q = { id: string; position: number; label: string; qtype: 'text' | 'number'
 export const dynamic = 'force-dynamic'
 
 export default function ReviewQuestionsAdmin() {
+  return (
+    <Suspense fallback={<div className="max-w-2xl mx-auto px-6 py-16 text-center text-gray-400">Se încarcă…</div>}>
+      <ReviewQuestionsInner />
+    </Suspense>
+  )
+}
+
+function ReviewQuestionsInner() {
   const token = useSearchParams().get('token') || ''
   const [questions, setQuestions] = useState<Q[]>([])
   const [intro, setIntro] = useState('')
