@@ -87,15 +87,15 @@ export default async function PortalHome() {
       {participant.email && (
         <Link
           href={`/ssyt/review/${encodeURIComponent(participant.email)}`}
-          className="flex items-center gap-3 mb-6 rounded-lg p-4 text-white hover:opacity-95 transition"
-          style={{ background: '#FF6B35' }}
+          className="flex items-center gap-3 mb-6 rounded-lg p-4 hover:shadow-md transition"
+          style={{ background: '#fff', border: '1px solid #e5e7eb' }}
         >
-          <MessageSquareQuote size={22} className="flex-shrink-0" />
+          <MessageSquareQuote size={20} className="flex-shrink-0" style={{ color: '#FF6B35' }} />
           <div className="flex-1">
-            <div className="font-semibold">Lasă un review SSYT 2026</div>
-            <div className="text-xs text-white/85">Răspunde la 4 întrebări și lasă-ne un gând despre sezon.</div>
+            <div className="font-semibold" style={{ color: '#0a1628' }}>Lasă un <span style={{ color: '#FF6B35' }}>review</span> SSYT 2026</div>
+            <div className="text-xs text-gray-500">Răspunde la 4 întrebări și lasă-ne un gând despre sezon.</div>
           </div>
-          <span className="text-sm">→</span>
+          <span className="text-xs uppercase tracking-wider text-gray-400">→</span>
         </Link>
       )}
 
