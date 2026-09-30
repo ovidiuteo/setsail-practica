@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
-import { AlertCircle } from 'lucide-react'
+import { AlertCircle, MessageSquareQuote } from 'lucide-react'
 import { getPortalSession, getPortalSupabase } from '@/lib/ssyt/portal-session'
 
 export const dynamic = 'force-dynamic'
@@ -81,6 +81,21 @@ export default async function PortalHome() {
             </div>
             <span className="text-xs uppercase tracking-wider text-gray-400">vezi detalii →</span>
           </div>
+        </Link>
+      )}
+
+      {participant.email && (
+        <Link
+          href={`/ssyt/review/${encodeURIComponent(participant.email)}`}
+          className="flex items-center gap-3 mb-6 rounded-lg p-4 text-white hover:opacity-95 transition"
+          style={{ background: '#FF6B35' }}
+        >
+          <MessageSquareQuote size={22} className="flex-shrink-0" />
+          <div className="flex-1">
+            <div className="font-semibold">Lasă un review SSYT 2026</div>
+            <div className="text-xs text-white/85">Răspunde la 4 întrebări și lasă-ne un gând despre sezon.</div>
+          </div>
+          <span className="text-sm">→</span>
         </Link>
       )}
 
