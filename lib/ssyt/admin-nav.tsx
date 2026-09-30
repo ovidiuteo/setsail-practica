@@ -16,6 +16,7 @@ import {
   UserCog,
   Shield,
   BarChart3,
+  MessageSquareQuote,
 } from 'lucide-react'
 
 export type NavItem = { href: string; label: string; icon: any }
@@ -34,6 +35,7 @@ export const ADMIN_NAV: NavItem[] = [
   { href: '/ssyt/admin/financial', label: 'Situație financiară', icon: Wallet },
   { href: '/ssyt/admin/results', label: 'Rezultate', icon: Trophy },
   { href: '/ssyt/admin/leaderboard', label: 'Leaderboard', icon: Trophy },
+  { href: '/ssyt/admin/reviews', label: 'Reviews', icon: MessageSquareQuote },
   { href: '/ssyt/admin/badges', label: 'Badge-uri', icon: Award },
   { href: '/ssyt/admin/media', label: 'Media', icon: ImageIcon },
   { href: '/ssyt/admin/documents', label: 'Documente', icon: FileText },
