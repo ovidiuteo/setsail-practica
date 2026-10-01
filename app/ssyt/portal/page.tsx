@@ -57,6 +57,14 @@ export default async function PortalHome() {
   const partMap: Record<string, any> = {}
   for (const p of participations || []) partMap[p.regatta_id] = p
 
+  // Butonul de review vizibil în portal? (toggle din admin)
+  const { data: seasonFlag } = await supabase
+    .from('ssyt_seasons')
+    .select('review_button_visible')
+    .eq('id', seasonId)
+    .maybeSingle()
+  const reviewButtonVisible = seasonFlag?.review_button_visible !== false
+
   return (
     <div className="max-w-6xl mx-auto px-6 py-8">
       <div className="mb-6">
@@ -84,7 +92,7 @@ export default async function PortalHome() {
         </Link>
       )}
 
-      {participant.email && (
+      {participant.email && reviewButtonVisible && (
         <Link
           href={`/ssyt/review/${encodeURIComponent(participant.email)}`}
           className="flex items-center gap-3 mb-6 rounded-lg p-4 hover:shadow-md transition"

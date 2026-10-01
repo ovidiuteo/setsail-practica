@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { MessageSquareQuote, Settings2 } from 'lucide-react'
 import { createClient } from '@supabase/supabase-js'
 import PublicLinkBar from '@/components/ssyt/admin/PublicLinkBar'
+import ReviewButtonToggle from './ReviewButtonToggle'
 
 export const revalidate = 0
 export const dynamic = 'force-dynamic'
@@ -17,7 +18,7 @@ export default async function AdminReviewsPage() {
       participant:ssyt_participants(id, full_name)
     `).order('updated_at', { ascending: false }),
     admin.from('ssyt_review_questions').select('id, label, position, active').order('position').order('created_at'),
-    admin.from('ssyt_seasons').select('review_questions_token').in('status', ['planning', 'active']).order('year', { ascending: false }).limit(1).maybeSingle(),
+    admin.from('ssyt_seasons').select('id, review_questions_token, review_button_visible').in('status', ['planning', 'active']).order('year', { ascending: false }).limit(1).maybeSingle(),
   ])
 
   const rows = (reviews || []).map((r: any) => ({ ...r, participant: Array.isArray(r.participant) ? r.participant[0] : r.participant }))
@@ -37,13 +38,16 @@ export default async function AdminReviewsPage() {
             {rows.length} {rows.length === 1 ? 'răspuns' : 'răspunsuri'} de la participanți.
           </p>
         </div>
-        {token && (
-          <Link href={`/ssyt/review-questions?token=${encodeURIComponent(token)}`} target="_blank"
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-md font-medium text-sm hover:bg-gray-50 transition"
-            style={{ background: '#fff', border: '1px solid #e5e7eb', color: '#0a1628' }}>
-            <Settings2 size={14} /> Administrează întrebările
-          </Link>
-        )}
+        <div className="flex items-center gap-2 flex-wrap">
+          {season?.id && <ReviewButtonToggle seasonId={season.id} initialVisible={season.review_button_visible !== false} />}
+          {token && (
+            <Link href={`/ssyt/review-questions?token=${encodeURIComponent(token)}`} target="_blank"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-md font-medium text-sm hover:bg-gray-50 transition"
+              style={{ background: '#fff', border: '1px solid #e5e7eb', color: '#0a1628' }}>
+              <Settings2 size={14} /> Administrează întrebările
+            </Link>
+          )}
+        </div>
       </div>
 
       <PublicLinkBar publicPath="/ssyt/review" label="Formular reviews" />
