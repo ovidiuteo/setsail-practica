@@ -58,6 +58,7 @@ export default function PortalPage() {
   const [cerereNr, setCerereNr] = useState('')
   const [cerereData, setCerereData] = useState('')
   const [cerereSemnStatus, setCerereSemnStatus] = useState<'idle' | 'saving' | 'done'>('idle')
+  const [cerereSemnBusy, setCerereSemnBusy] = useState(false)
   const [sigPhotoStatus, setSigPhotoStatus] = useState<'idle' | 'saving' | 'done'>('idle')
 
   // Verifica daca acest cursant a finalizat deja examenul (status submitted/graded)
@@ -494,6 +495,32 @@ export default function PortalPage() {
       alert('Eroare: ' + (e?.message || e))
     }
     setCerereBusy(false)
+  }
+
+  // Cererea cu semnatura cursantului pusa de noi pe ea: primeste numar, se salveaza
+  // ca document (tine loc de scanul cererii semnate) si se descarca.
+  async function genereazaCerereSemnata() {
+    if (!student?.id || !session?.access_code) return
+    setCerereSemnBusy(true)
+    try {
+      const r = await fetch('/api/cerere-examen', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ student_id: student.id, access_code: session.access_code, semnata: true }),
+      })
+      const j = await r.json().catch(() => ({}))
+      if (!r.ok || j.error) { alert('Nu am putut genera cererea semnată: ' + (j.error || 'eroare')); return }
+      setCerereNr(String(j.numar || ''))
+      setCerereData(j.data || '')
+      setCerereSemnStatus('done')
+      setStudent((prev: any) => prev ? { ...prev, cerere_semnata_data: j.pdf } : prev)
+      const a = document.createElement('a')
+      a.href = j.pdf
+      a.download = j.filename || 'Cerere examen radio semnata.pdf'
+      a.click()
+    } catch (e: any) {
+      alert('Eroare: ' + (e?.message || e))
+    }
+    setCerereSemnBusy(false)
   }
 
   // Curata o poza de semnatura facuta pe hartie: prag adaptiv -> trasee inchise
@@ -1621,6 +1648,15 @@ export default function PortalPage() {
                   {cerereBusy ? <><Loader2 size={15} className="animate-spin" /> Se pregătește cererea…</>
                     : <><FileText size={15} /> 1. Descarcă cererea de examen</>}
                 </button>
+                {/* Cine și-a încărcat semnătura primește cererea gata semnată, fără print și scan */}
+                {existingSignature && (
+                  <button onClick={genereazaCerereSemnata} disabled={cerereSemnBusy || cerereMissing.length > 0}
+                    className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-semibold text-white disabled:opacity-40 disabled:cursor-not-allowed mb-2"
+                    style={{ background: '#1d4ed8' }}>
+                    {cerereSemnBusy ? <><Loader2 size={15} className="animate-spin" /> Se generează…</>
+                      : <><FileText size={15} /> Generează cererea semnată</>}
+                  </button>
+                )}
                 {cerereNr && (
                   <p className="text-xs text-green-700 text-center mb-4 flex items-center justify-center gap-1">
                     <CheckCircle size={11} /> Cererea dumneavoastră: <b>nr. {cerereNr}</b> din {cerereData}
@@ -1641,9 +1677,16 @@ export default function PortalPage() {
                       onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) setEditFile({ file: f, kind: 'cerere' }) }} />
                   </label>
                   <div className="flex-1 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 aspect-[210/297] overflow-hidden flex items-center justify-center">
-                    {student?.cerere_semnata_data
-                      ? <img src={student.cerere_semnata_data} alt="Cererea semnată" className="w-full h-full object-contain" />
-                      : <span className="text-xs text-gray-300 px-2 text-center">Previzualizare cerere</span>}
+                    {!student?.cerere_semnata_data
+                      ? <span className="text-xs text-gray-300 px-2 text-center">Previzualizare cerere</span>
+                      : String(student.cerere_semnata_data).startsWith('data:application/pdf')
+                        // cererea generată de noi e PDF, nu poză
+                        ? <a href={student.cerere_semnata_data} target="_blank" rel="noopener noreferrer"
+                            className="flex flex-col items-center gap-2 text-center px-3">
+                            <FileText size={28} className="text-blue-600" />
+                            <span className="text-xs text-blue-700 font-medium underline">Deschide cererea semnată (PDF)</span>
+                          </a>
+                        : <img src={student.cerere_semnata_data} alt="Cererea semnată" className="w-full h-full object-contain" />}
                   </div>
                 </div>
                   <div className="flex gap-2 mt-1.5">

@@ -30,7 +30,9 @@ async function nextNumber(sb: any): Promise<number> {
 
 export async function POST(req: NextRequest) {
   const sb = svc()
-  const { student_id, access_code } = await req.json().catch(() => ({}))
+  // semnata = cererea se generează cu semnătura cursantului deja pusă pe ea și se
+  // salvează ca document (nu mai e nevoie să o printeze, semneze și scaneze)
+  const { student_id, access_code, semnata } = await req.json().catch(() => ({}))
   if (!student_id || !access_code)
     return NextResponse.json({ error: 'date lipsă' }, { status: 400 })
 
@@ -43,6 +45,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 403 })
 
   const isPrelungire = /prelungire/i.test(String((st as any).class_caa || ''))
+
+  // Varianta semnată are nevoie de semnătura cursantului
+  const areSemnatura = !!((st as any).signature_data || (st as any).signature_random)
+  if (semnata && !areSemnatura)
+    return NextResponse.json({ error: 'Încărcați întâi o poză cu semnătura dumneavoastră.' }, { status: 400 })
 
   // Termenul de depunere e cu 7 zile înainte de începerea cursului. Cine descarcă
   // mai târziu primește tot numărul următor, dar cererea rămâne datată la termen.
@@ -91,6 +98,18 @@ export async function POST(req: NextRequest) {
       cerereNr: numar ?? undefined,
     })
     const nume = String((st as any).full_name || 'cursant').replace(/[\\/:*?"<>|]+/g, ' ').trim()
+
+    if (semnata) {
+      // o salvăm ca document al cursantului, în locul scanului cererii semnate
+      const dataUrl = 'data:application/pdf;base64,' + Buffer.from(pdf).toString('base64')
+      const { error } = await sb.from('students').update({ cerere_semnata_data: dataUrl }).eq('id', student_id)
+      if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+      return NextResponse.json({
+        ok: true, numar, data: cerereDate, pdf: dataUrl,
+        filename: `Cerere examen radio semnata - ${nume}.pdf`,
+      })
+    }
+
     return new NextResponse(pdf as unknown as BodyInit, {
       headers: {
         'Content-Type': 'application/pdf',

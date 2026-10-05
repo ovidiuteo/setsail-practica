@@ -2198,6 +2198,11 @@ function CiModal({ sessionId, token, row, doc, onClose, onRowUpdate }: {
             )}
             <div className="absolute top-2 left-2 text-xs bg-black/60 text-white px-2 py-1 rounded pointer-events-none">Trage pentru a selecta zona, apoi „Aplică"</div>
           </div>
+        ) : String(img).startsWith('data:application/pdf') ? (
+          // cererea semnată generată din portal e PDF — se deschide, nu se decupează
+          <div className="w-full h-[75vh] bg-white rounded shadow-2xl overflow-hidden">
+            <iframe src={img!} title="Document PDF" className="w-full h-full" />
+          </div>
         ) : (
           <img src={img} alt="CI" style={{ transform: `scale(${zoom})`, transformOrigin: 'top center' }} className="shadow-2xl rounded transition-transform" />
         )}
