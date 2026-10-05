@@ -93,8 +93,8 @@ export default function LivrareCell({ s, nume, onTrimis }: {
       </button>
       {deschis && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
-          onClick={e => { e.stopPropagation(); setDeschis(false) }}>
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm" onClick={e => e.stopPropagation()}>
+          onClick={e => e.stopPropagation()}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-sm">
             <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-gray-100">
               <div className="flex items-center gap-2 min-w-0">
                 <LivrareIcon tip={tip} size={20} trimis={trimis} />

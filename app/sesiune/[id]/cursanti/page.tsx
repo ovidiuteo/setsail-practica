@@ -1191,8 +1191,7 @@ function SkipperLinkModal({ sessionId, token, initial, onClose, onSaved }: {
   }
 
   return (
-    <div className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center p-4"
-      onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+    <div className="fixed inset-0 z-[60] bg-black/40 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-lg">
         <div className="px-5 py-3 border-b border-gray-100 flex items-center justify-between">
           <h3 className="font-semibold text-sm text-gray-900">Link grupă skipper.setsail.ro</h3>
@@ -1275,8 +1274,7 @@ function MailModal({ sessionId, token, emails, onClose }: {
   }, {})
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center p-4 overflow-y-auto"
-      onClick={e => { if (e.target === e.currentTarget) onClose() }}>
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center p-4 overflow-y-auto">
       <div className="bg-white rounded-xl shadow-xl w-full max-w-3xl my-8">
         <div className="flex items-center justify-between px-5 py-3 border-b border-gray-100">
           <div>
@@ -2176,7 +2174,7 @@ function CiModal({ sessionId, token, row, doc, onClose, onRowUpdate }: {
   }
 
   return (
-    <div onClick={onClose} className="fixed inset-0 z-50 bg-black/80 flex flex-col">
+    <div className="fixed inset-0 z-50 bg-black/80 flex flex-col">
       {/* Toolbar */}
       <div onClick={e => e.stopPropagation()} className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-gray-900 text-gray-100">
         <div className="flex items-center gap-2 min-w-0">

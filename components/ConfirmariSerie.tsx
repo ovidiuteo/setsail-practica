@@ -227,8 +227,8 @@ export default function ConfirmariSerie({ sessionId, token }: { sessionId: strin
       )}
 
       {importOpen && (
-        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setImportOpen(false)}>
-          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md" onClick={e => e.stopPropagation()}>
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
             <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
               <h3 className="font-semibold text-gray-900">Import itemuri</h3>
               <button onClick={() => setImportOpen(false)} className="text-gray-400 hover:text-gray-700"><X size={18} /></button>
