@@ -110,10 +110,14 @@ export async function POST(req: NextRequest) {
       })
     }
 
+    // Antetele HTTP acceptă doar Latin-1: „CĂTĂLIN" ar arunca eroare, așa că numele
+    // din filename se trece fără diacritice, iar varianta completă merge în filename*.
+    const fisier = `Cerere examen radio - ${nume}.pdf`
+    const fisierAscii = fisier.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\x20-\x7E]/g, '')
     return new NextResponse(pdf as unknown as BodyInit, {
       headers: {
         'Content-Type': 'application/pdf',
-        'Content-Disposition': `attachment; filename="Cerere examen radio - ${nume}.pdf"`,
+        'Content-Disposition': `attachment; filename="${fisierAscii}"; filename*=UTF-8''${encodeURIComponent(fisier)}`,
         'X-Cerere-Nr': String(numar ?? ''),
         'X-Cerere-Data': cerereDate,
       },
