@@ -41,7 +41,8 @@ type Practica = {
 type Tab = 'cursanti' | 'adrese' | 'verify' | 'leaduri' | 'administrativ' | 'grupa1' | 'grupa2' | 'grupa3'
 
 // Sortarea listei: alfabetic sau cronologic (când a intrat în serie), cu sens reversibil
-type SortMode = 'alpha' | 'time' | 'slot' | 'livrare'
+// „camp:<coloană>" sortează după orice câmp al rândului (text, număr sau bifă)
+type SortMode = 'alpha' | 'time' | 'slot' | 'livrare' | `camp:${string}`
 type Sort = { mode: SortMode; dir: 'asc' | 'desc' }
 // ordinea intervalelor („10:00–12:00" -> 0, „12:00–14:00" -> 1 …), pentru sortarea după SN
 function sortRows(rows: Row[], s: Sort, ordineInterval: Map<string, number> = new Map()): Row[] {
@@ -50,6 +51,29 @@ function sortRows(rows: Row[], s: Sort, ordineInterval: Map<string, number> = ne
   const dupaNume = (a: Row, b: Row) => (a.full_name || '').localeCompare(b.full_name || '', 'ro', { sensitivity: 'base' })
   return [...rows].sort((a, b) => {
     if (s.mode === 'alpha') return semn * dupaNume(a, b)
+    if (s.mode.startsWith('camp:')) {
+      const k = s.mode.slice(5) as keyof Row
+      const va = (a as any)[k], vb = (b as any)[k]
+      // bifele: cele puse întâi la crescător; numerele numeric; restul alfabetic
+      if (typeof va === 'boolean' || typeof vb === 'boolean') {
+        const d = (vb ? 1 : 0) - (va ? 1 : 0)
+        return d ? semn * d : dupaNume(a, b)
+      }
+      const na = typeof va === 'number' ? va : null, nb = typeof vb === 'number' ? vb : null
+      if (na !== null || nb !== null) {
+        // fără valoare = la coadă, în ambele sensuri
+        if (na === null && nb === null) return dupaNume(a, b)
+        if (na === null) return 1
+        if (nb === null) return -1
+        return na !== nb ? semn * (na - nb) : dupaNume(a, b)
+      }
+      const ta = String(va ?? '').trim(), tb = String(vb ?? '').trim()
+      if (!ta && !tb) return dupaNume(a, b)
+      if (!ta) return 1
+      if (!tb) return -1
+      const d = ta.localeCompare(tb, 'ro', { sensitivity: 'base', numeric: true })
+      return d ? semn * d : dupaNume(a, b)
+    }
     if (s.mode === 'livrare') {
       const d = livrareRang(a) - livrareRang(b)
       return d ? semn * d : dupaNume(a, b)
@@ -372,6 +396,21 @@ export default function RosterPage() {
   const toggleSort = (mode: SortMode) => setSort(s => s.mode === mode
     ? { mode, dir: s.dir === 'asc' ? 'desc' : 'asc' }
     : { mode, dir: mode === 'time' ? 'desc' : 'asc' })
+
+  // Cap de coloană sortabil: primul click sortează crescător, al doilea invers
+  const CapSortabil = ({ camp, children }: { camp: keyof Row; children: React.ReactNode }) => {
+    const mod = `camp:${String(camp)}` as SortMode
+    const activ = sort.mode === mod
+    return (
+      <button onClick={() => toggleSort(mod)} title="Sortează după această coloană (click = invers)"
+        className={`inline-flex items-center gap-0.5 uppercase tracking-wide ${activ ? 'text-blue-700 font-semibold' : 'hover:text-gray-800'}`}>
+        {children}
+        <span className="text-[10px] leading-none">
+          {activ ? (sort.dir === 'asc' ? '↑' : '↓') : <span className="text-gray-300">↕</span>}
+        </span>
+      </button>
+    )
+  }
 
   const load = useCallback(async () => {
     const r = await fetch(`/api/roster?session_id=${id}&token=${encodeURIComponent(token)}`)
@@ -812,8 +851,9 @@ export default function RosterPage() {
                           {f.label}
                           <CopyColoana titlu="Copiază emailurile, în ordinea din listă"
                             valori={sortRows(rows, sort, ordineInterval).map(r => r.email || '')} />
+                          <CapSortabil camp="email"><span className="sr-only">Sortează</span></CapSortabil>
                         </span>
-                      ) : f.label}
+                      ) : <CapSortabil camp={f.key as keyof Row}>{f.label}</CapSortabil>}
                     </th>
                     {/* intervalul de practică ales, între nume și email */}
                     {f.key === 'full_name' && arataSN && (
@@ -832,26 +872,26 @@ export default function RosterPage() {
                     )}
                     </Fragment>
                   ))}
-                  <th className="px-2 py-2.5 text-center whitespace-nowrap">CI</th>
+                  <th className="px-2 py-2.5 text-center whitespace-nowrap"><CapSortabil camp="doc_type">CI</CapSortabil></th>
                   {esteLista(tab) ? <>
                     {DOC_COLS_ID.map(c => (
-                      <th key={c.key} title={c.full} className="px-1 py-2.5 text-center text-[10px] w-12 normal-case tracking-normal">{c.short}</th>
+                      <th key={c.key} title={c.full} className="px-1 py-2.5 text-center text-[10px] w-12 normal-case tracking-normal"><CapSortabil camp={DOC_FLAG[c.key]}>{c.short}</CapSortabil></th>
                     ))}
                     {esteRadio ? <>
-                      <th className="px-2 py-2.5 whitespace-nowrap">Obț. / Prel.</th>
-                      <th title={VHF_COL.full} className="px-1 py-2.5 text-center text-[10px] w-12 normal-case tracking-normal">{VHF_COL.short}</th>
-                      <th className="px-2 py-2.5 whitespace-nowrap">Cerere nr./data</th>
+                      <th className="px-2 py-2.5 whitespace-nowrap"><CapSortabil camp="obtinere_prelungire">Obț. / Prel.</CapSortabil></th>
+                      <th title={VHF_COL.full} className="px-1 py-2.5 text-center text-[10px] w-12 normal-case tracking-normal"><CapSortabil camp={DOC_FLAG[VHF_COL.key]}>{VHF_COL.short}</CapSortabil></th>
+                      <th className="px-2 py-2.5 whitespace-nowrap"><CapSortabil camp="cerere_nr">Cerere nr./data</CapSortabil></th>
                     </> : (
-                      <th className="px-2 py-2.5 whitespace-nowrap">Categorie</th>
+                      <th className="px-2 py-2.5 whitespace-nowrap"><CapSortabil camp="class_caa">Categorie</CapSortabil></th>
                     )}
                     {grupeVizibile.length > 0 && (
-                      <th className="px-2 py-2.5 text-center" title="Grupa (seria principală = 1, clonele 2 și 3)">GR</th>
+                      <th className="px-2 py-2.5 text-center" title="Grupa (seria principală = 1, clonele 2 și 3)"><CapSortabil camp="grupa">GR</CapSortabil></th>
                     )}
                     {docColsEnd.map(c => (
-                      <th key={c.key} title={c.full} className="px-1 py-2.5 text-center text-[10px] w-14 normal-case tracking-normal">{c.short}</th>
+                      <th key={c.key} title={c.full} className="px-1 py-2.5 text-center text-[10px] w-14 normal-case tracking-normal"><CapSortabil camp={DOC_FLAG[c.key]}>{c.short}</CapSortabil></th>
                     ))}
                   </> : (
-                    <th className="px-2 py-2.5 min-w-[150px]">{esteRadio ? 'Obținere / Prelungire LRC' : 'Categorie'}</th>
+                    <th className="px-2 py-2.5 min-w-[150px]"><CapSortabil camp={esteRadio ? 'obtinere_prelungire' : 'class_caa'}>{esteRadio ? 'Obținere / Prelungire LRC' : 'Categorie'}</CapSortabil></th>
                   )}
                   <th className="px-2 py-2.5 text-center text-[10px] normal-case tracking-normal">
                     <button onClick={() => setSort(s => ({ mode: 'livrare', dir: s.mode === 'livrare' && s.dir === 'asc' ? 'desc' : 'asc' }))}
