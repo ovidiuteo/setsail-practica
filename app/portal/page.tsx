@@ -686,6 +686,37 @@ export default function PortalPage() {
     }
   }
 
+  // Cererea semnata poate veni si ca PDF (scanere, semnatura electronica): atunci
+  // nu trece prin editorul de imagini, se salveaza asa cum e.
+  async function salveazaPdf(
+    file: File,
+    column: 'cerere_semnata_data',
+    setStatus: (s: 'idle' | 'saving' | 'done') => void
+  ) {
+    if (!student?.id) return
+    if (file.size > 6 * 1024 * 1024) {
+      alert('Fișierul PDF e prea mare (peste 6 MB). Scanați la o rezoluție mai mică sau trimiteți o poză.')
+      return
+    }
+    setStatus('saving')
+    try {
+      const dataUrl: string = await new Promise((resolve, reject) => {
+        const fr = new FileReader()
+        fr.onerror = () => reject(new Error('citire eșuată'))
+        fr.onload = () => resolve(String(fr.result))
+        fr.readAsDataURL(file)
+      })
+      await supabase.from('students').update({ [column]: dataUrl }).eq('id', student.id)
+      setStudent((prev: any) => prev ? { ...prev, [column]: dataUrl } : prev)
+      setStatus('done')
+    } catch (err) {
+      console.error('Upload PDF error:', err)
+      setStatus('idle')
+      alert('Nu am putut salva PDF-ul. Încercați din nou.')
+    }
+  }
+  const estePdf = (f: File) => f.type === 'application/pdf' || /\.pdf$/i.test(f.name)
+
   // Upload simplu (verso CI / adeverinta adresa / certificat nastere) — comprima + salveaza in coloana
   async function handleExtraUpload(
     e: React.ChangeEvent<HTMLInputElement>,
@@ -1776,9 +1807,9 @@ export default function PortalPage() {
                     'border-gray-200 hover:border-blue-300 hover:bg-blue-50/50'}`}>
                     {cerereSemnStatus === 'saving' ? <><Loader2 size={20} className="text-blue-500 animate-spin"/><span className="text-xs text-blue-600 font-medium">Se salvează...</span></>
                      : cerereSemnStatus === 'done' ? <><CheckCircle size={22} className="text-green-600"/><span className="text-xs text-green-700 font-medium">Cerere semnată încărcată ✓<br/>(apăsați pentru a înlocui)</span></>
-                     : <><Upload size={22} className="text-gray-400"/><span className="text-xs text-gray-600 font-medium">2. Încărcați cererea SEMNATĂ (poză sau scan)</span></>}
-                    <input type="file" accept="image/*" className="hidden"
-                      onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) setEditFile({ file: f, kind: 'cerere' }) }} />
+                     : <><Upload size={22} className="text-gray-400"/><span className="text-xs text-gray-600 font-medium">2. Încărcați cererea SEMNATĂ (poză, scan sau PDF)</span></>}
+                    <input type="file" accept="image/*,application/pdf,.pdf" className="hidden"
+                      onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (!f) return; estePdf(f) ? salveazaPdf(f, 'cerere_semnata_data', setCerereSemnStatus) : setEditFile({ file: f, kind: 'cerere' }) }} />
                   </label>
                   <div className="flex-1 rounded-xl border-2 border-dashed border-gray-200 bg-gray-50 aspect-[210/297] overflow-hidden flex items-center justify-center">
                     {!student?.cerere_semnata_data
@@ -1795,8 +1826,8 @@ export default function PortalPage() {
                 </div>
                   <div className="flex gap-2 mt-1.5">
                     <label className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 bg-white hover:bg-gray-50 cursor-pointer">
-                      <Upload size={13} /> Alege fișier din telefon
-                      <input type="file" accept="image/*" className="hidden" onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) setEditFile({ file: f, kind: 'cerere' }) }} />
+                      <Upload size={13} /> Alege fișier sau PDF
+                      <input type="file" accept="image/*,application/pdf,.pdf" className="hidden" onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (!f) return; estePdf(f) ? salveazaPdf(f, 'cerere_semnata_data', setCerereSemnStatus) : setEditFile({ file: f, kind: 'cerere' }) }} />
                     </label>
                     <label className="flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg border border-gray-200 text-xs font-medium text-gray-600 bg-white hover:bg-gray-50 cursor-pointer">
                       <Camera size={13} /> Fă o poză
