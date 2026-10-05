@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Ship, RotateCcw, Check, Upload, Loader2, CheckCircle, AlertCircle, Camera, ChevronDown, ChevronUp, FileText, RadioTower, AlertTriangle, Video, MessageCircle, Film, Users, ExternalLink } from 'lucide-react'
+import { Ship, RotateCcw, Check, Upload, Loader2, CheckCircle, AlertCircle, Camera, ChevronDown, ChevronUp, FileText, RadioTower, AlertTriangle, Video, MessageCircle, Film, Users, ExternalLink, Download } from 'lucide-react'
 import CIImageEditor from '@/components/CIImageEditor'
 import PracticeBooking from '@/components/PracticeBooking'
 import { scopeForSession } from '@/lib/timeline-scope'
@@ -59,6 +59,7 @@ export default function PortalPage() {
   const [cerereData, setCerereData] = useState('')
   const [cerereSemnStatus, setCerereSemnStatus] = useState<'idle' | 'saving' | 'done'>('idle')
   const [cerereSemnBusy, setCerereSemnBusy] = useState(false)
+  const [cererePreview, setCererePreview] = useState<string | null>(null)
   const [sigPhotoStatus, setSigPhotoStatus] = useState<'idle' | 'saving' | 'done'>('idle')
 
   // Verifica daca acest cursant a finalizat deja examenul (status submitted/graded)
@@ -495,6 +496,25 @@ export default function PortalPage() {
       alert('Eroare: ' + (e?.message || e))
     }
     setCerereBusy(false)
+  }
+
+  // Cererea salvata e PDF: browserele nu o arata dintr-un data: URL, dar dintr-un
+  // blob: da — asa o putem deschide intr-un modal, nu doar descarca.
+  function deschideCerere(dataUrl: string) {
+    try {
+      const b64 = String(dataUrl).split(',')[1] || ''
+      const bin = atob(b64)
+      const buf = new Uint8Array(bin.length)
+      for (let i = 0; i < bin.length; i++) buf[i] = bin.charCodeAt(i)
+      const url = URL.createObjectURL(new Blob([buf], { type: 'application/pdf' }))
+      setCererePreview(url)
+    } catch {
+      window.open(dataUrl, '_blank')
+    }
+  }
+  function inchideCerere() {
+    if (cererePreview) URL.revokeObjectURL(cererePreview)
+    setCererePreview(null)
   }
 
   // Cererea cu semnatura cursantului pusa de noi pe ea: primeste numar, se salveaza
@@ -960,6 +980,32 @@ export default function PortalPage() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-start p-4 pb-16"
       style={{ background: 'linear-gradient(135deg, #0a1628 0%, #162b55 100%)' }}>
+
+      {/* Cererea semnată, pe tot ecranul */}
+      {cererePreview && (
+        <div className="fixed inset-0 z-50 bg-black/70 flex flex-col p-3" onClick={inchideCerere}>
+          <div className="flex items-center justify-between gap-2 mb-2 shrink-0" onClick={e => e.stopPropagation()}>
+            <span className="text-sm font-semibold text-white">Cererea de examen semnată</span>
+            <div className="flex gap-2">
+              <a href={cererePreview} download="Cerere examen radio semnata.pdf"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/10 text-white text-xs font-medium hover:bg-white/20">
+                <Download size={13} /> Descarcă
+              </a>
+              <button onClick={inchideCerere}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white text-gray-800 text-xs font-medium">
+                Închide
+              </button>
+            </div>
+          </div>
+          <div className="flex-1 bg-white rounded-xl overflow-hidden" onClick={e => e.stopPropagation()}>
+            <iframe src={cererePreview} title="Cererea semnată" className="w-full h-full" />
+          </div>
+          <p className="text-[11px] text-white/60 text-center mt-2 shrink-0">
+            Dacă documentul nu se vede pe telefon, apăsați „Descarcă".
+          </p>
+        </div>
+      )}
+
       <div className="w-full max-w-lg mt-8">
 
         {/* Logo */}
@@ -1703,11 +1749,11 @@ export default function PortalPage() {
                       ? <span className="text-xs text-gray-300 px-2 text-center">Previzualizare cerere</span>
                       : String(student.cerere_semnata_data).startsWith('data:application/pdf')
                         // cererea generată de noi e PDF, nu poză
-                        ? <a href={student.cerere_semnata_data} target="_blank" rel="noopener noreferrer"
+                        ? <button type="button" onClick={() => deschideCerere(student.cerere_semnata_data)}
                             className="flex flex-col items-center gap-2 text-center px-3">
                             <FileText size={28} className="text-blue-600" />
-                            <span className="text-xs text-blue-700 font-medium underline">Deschide cererea semnată (PDF)</span>
-                          </a>
+                            <span className="text-xs text-blue-700 font-medium underline">Vezi cererea semnată</span>
+                          </button>
                         : <img src={student.cerere_semnata_data} alt="Cererea semnată" className="w-full h-full object-contain" />}
                   </div>
                 </div>
