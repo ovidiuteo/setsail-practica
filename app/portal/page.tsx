@@ -1018,6 +1018,28 @@ export default function PortalPage() {
         {step === 'confirm' && student && (
           <div className="flex flex-col gap-4">
 
+            {/* Alegerea obținere / prelungire, singură sus de tot cât timp lipsește:
+                de ea depinde tipul cererii de examen, deci nu poate fi sărită. */}
+            {isRadioSession && !lrcChosen && (
+              <div className="order-[-20] bg-white rounded-2xl p-5 shadow-2xl border-2 border-pink-300">
+                <h2 className="font-bold text-gray-900 flex items-center gap-2">
+                  <AlertTriangle size={16} className="text-pink-600" /> Alegeți tipul cererii
+                </h2>
+                <p className="text-xs text-gray-500 mt-1 mb-3">
+                  Obținerea unui certificat nou sau prelungirea valabilității celui pe care îl aveți —
+                  de asta depinde cererea de examen.
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  {classOptions.map(o => (
+                    <button key={o.value} type="button" onClick={() => updateClass(o.value)}
+                      className="py-3 rounded-xl text-sm font-semibold border-2 border-pink-300 text-pink-800 bg-pink-50 hover:bg-pink-100 transition-colors">
+                      {o.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
             {/* Date personale */}
             <div className={'bg-white rounded-2xl p-6 shadow-2xl ' + (dateGata ? 'order-[90]' : '')}>
               {dateGata ? (
