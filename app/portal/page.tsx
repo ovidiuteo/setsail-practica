@@ -151,6 +151,8 @@ export default function PortalPage() {
   const lrcChosen = /obtinere|obținere|prelungire/i.test(classCaa)
   // Datele pe care le cere textul cererii de examen. Fără ele documentul ar ieși
   // cu linii punctate, așa că blocăm descărcarea până sunt completate.
+  // Adresa completă scrisă de cursant ține loc de dovada adresei la CI model nou
+  const adresaCompleta = ['address', 'city', 'county'].every(k => String((form as any)[k] || '').trim())
   const cerereMissing: string[] = (() => {
     if (!isRadioSession) return []
     const out: string[] = []
@@ -165,7 +167,10 @@ export default function PortalPage() {
     if (!docType) out.push('tipul actului de identitate')
     else {
       if (!student?.ci_image_data) out.push(docType === 'pasaport' ? 'poza pașaportului' : 'poza actului de identitate')
-      if (docType === 'ci_nou') {
+      // CI model nou: adresa nu e tipărită pe act, de aceea cerem versoul sau
+      // adeverința de domiciliu. Dacă adresa e deja completată, cererea iese
+      // corect și doar cu fața actului.
+      if (docType === 'ci_nou' && !adresaCompleta) {
         if (!student?.ci_verso_data) out.push('verso CI')
         if (!student?.adeverinta_adresa_data) out.push('adeverință domiciliu')
       }
@@ -1321,6 +1326,9 @@ export default function PortalPage() {
                 <div className="space-y-3 mb-5">
                   <p className="text-xs text-gray-500">
                     Cartea de identitate nouă are adresa, emitentul și codul pe <strong>verso</strong>. Încărcați versoul și o adeverință de adresă.
+                    {isRadioSession && adresaCompleta && (
+                      <> <span className="text-green-700">Adresa fiind completată mai sus, cererea de examen se poate genera și fără ele.</span></>
+                    )}
                   </p>
                   <label className={`flex items-center justify-center gap-3 w-full px-4 py-3.5 rounded-xl border-2 border-dashed cursor-pointer transition-all ${
                     versoStatus === 'done' ? 'border-green-400 bg-green-50' :
