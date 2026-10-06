@@ -2077,12 +2077,14 @@ function VerifyTab({ sessionId, token, rows, onRowUpdate, esteRadio, onCategorie
   }, [index])
 
   // Celelalte acte încărcate ale cursantului — taburi lângă actul de identitate
-  const alteActe: { key: DocKey; label: string }[] = cur
+  // Taburile actelor: actul de identitate mereu, plus cele încărcate și cele care
+  // sunt de așteptat la cursantul ăsta (gri, cât timp lipsesc)
+  const alteActe: { key: DocKey; label: string; are: boolean }[] = cur
     ? ([['verso', 'Verso CI'], ['domiciliu', 'Adeverință domiciliu'], ['cert_nastere', 'Certificat naștere'],
         ['vhf', 'Certificat LRC'], ['semnatura', 'Semnătură'],
         ['cerere', cur.cerere_nr ? `Cerere semnată · nr. ${cur.cerere_nr} / ${roDate(cur.cerere_data)}` : 'Cerere semnată']] as [DocKey, string][])
-        .filter(([k]) => !!cur[DOC_FLAG[k]])
-        .map(([key, label]) => ({ key, label }))
+        .filter(([k]) => !!cur[DOC_FLAG[k]] || docState(cur, k) !== 'na')
+        .map(([key, label]) => ({ key, label, are: !!cur[DOC_FLAG[key]] }))
     : []
   // cerculețul de verificare: gri -> verde -> galben -> roșu -> gri
   async function comutaStare(r: Row) {
@@ -2299,10 +2301,13 @@ function VerifyTab({ sessionId, token, rows, onRowUpdate, esteRadio, onCategorie
         {/* Actul de identitate și celelalte acte încărcate, plus mail și portal */}
         {(
           <div className="flex flex-wrap gap-1 mb-2">
-            {(alteActe.length ? [{ key: 'recto' as DocKey, label: 'Act de identitate' }, ...alteActe] : []).map(a => (
+            {([{ key: 'recto' as DocKey, label: 'Act de identitate', are: cur.has_ci }, ...alteActe]).map(a => (
               <button key={a.key} onClick={() => schimbaAct(a.key)}
+                title={a.are ? a.label : a.label + ' — neîncărcat'}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium border ${
-                  docKey === a.key ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>
+                  docKey === a.key ? 'border-blue-300 bg-blue-50 text-blue-700'
+                  : a.are ? 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                  : 'border-dashed border-gray-200 bg-white text-gray-300 hover:text-gray-500'}`}>
                 {a.label}
               </button>
             ))}
@@ -2316,7 +2321,7 @@ function VerifyTab({ sessionId, token, rows, onRowUpdate, esteRadio, onCategorie
             )}
             <button onClick={() => cur.email && onMail(cur.email)} disabled={!cur.email}
               title={cur.email || 'Cursantul nu are email'}
-              className="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40">
+              className="px-3 py-1.5 rounded-lg text-xs font-medium border border-green-300 bg-white text-green-700 hover:bg-green-50 disabled:opacity-40">
               ✉ Mail
             </button>
             <a href={portalLink(cur.email)} target="_blank" rel="noopener noreferrer"
