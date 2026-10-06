@@ -394,6 +394,13 @@ export async function PATCH(req: NextRequest) {
   }
   if (!Object.keys(updates).length) return NextResponse.json({ error: 'câmp invalid' }, { status: 400 })
   normalizeazaAct(updates)
+  // Obținere/prelungire se citește din clasă, deci clasa trebuie schimbată odată cu el,
+  // altfel modificarea din listă părea că nu se salvează.
+  if ('obtinere_prelungire' in updates) {
+    const ales = String(updates.obtinere_prelungire || '').toLowerCase()
+    const { data: sesiune } = await sb.from('sessions').select('class_caa').eq('id', session_id).maybeSingle()
+    updates.class_caa = classFromLrc(ales, String((sesiune as any)?.class_caa || ''))
+  }
   // id_document („SERIE NUMĂR") e folosit în documente — îl ținem în pas cu seria/numărul
   if ('ci_series' in updates || 'ci_number' in updates) {
     const { data: act } = await sb.from('students').select('ci_series, ci_number').eq('id', student_id).in('session_id', (await grupeSeriei(sb, session_id)).ids).maybeSingle()
