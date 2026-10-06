@@ -19,7 +19,7 @@ function svc() {
 // Câmpuri editabile de pe pagina gated
 const EDITABLE = new Set([
   'full_name', 'email', 'cnp', 'birth_date', 'address', 'city', 'county', 'obtinere_prelungire',
-  'verify_stare', 'verify_nota',
+  'verify_stare', 'verify_nota', 'verify_nota_vizibila',
   'communication_target', 'class_caa', 'phone',
   'ci_series', 'ci_number', 'expiry_date', 'nationality', 'country',
   'livrare_trimis_la',
@@ -239,7 +239,7 @@ export async function GET(req: NextRequest) {
   const { ids: idSesiuni, grupa: grupaSesiunii } = await grupeSeriei(sb, sessionId)
   const [{ data, error }, docSets, { data: cereri }, { data: rezervari }] = await Promise.all([
     sb.from('students')
-      .select('id, session_id, full_name, email, phone, cnp, birth_date, address, city, county, ci_series, ci_number, expiry_date, nationality, country, class_caa, obtinere_prelungire, lrc_numar, lrc_emis_la, lrc_expira_la, verify_stare, verify_nota, doc_type, communication_target, created_at, order_in_session, livrare_tip, livrare_adresa, livrare_contact, livrare_telefon, livrare_email, livrare_trimis_la')
+      .select('id, session_id, full_name, email, phone, cnp, birth_date, address, city, county, ci_series, ci_number, expiry_date, nationality, country, class_caa, obtinere_prelungire, lrc_numar, lrc_emis_la, lrc_expira_la, verify_stare, verify_nota, verify_nota_vizibila, doc_type, communication_target, created_at, order_in_session, livrare_tip, livrare_adresa, livrare_contact, livrare_telefon, livrare_email, livrare_trimis_la')
       .in('session_id', idSesiuni),
     Promise.all((Object.entries(DOC_COLS) as [DocKey, string][]).map(async ([key, col]) => {
       const { data: ids } = await sb.from('students').select('id')
@@ -273,6 +273,7 @@ export async function GET(req: NextRequest) {
     doc_type: r.doc_type || '',
     // verificarea manuală din „Verify by ID": gri / verde / galben / roșu + nota
     verify_stare: r.verify_stare || '', verify_nota: r.verify_nota || '',
+    verify_nota_vizibila: !!r.verify_nota_vizibila,
     // certificatul LRC existent, pentru verificarea termenului de prelungire
     lrc_numar: r.lrc_numar || '', lrc_emis_la: r.lrc_emis_la || '', lrc_expira_la: r.lrc_expira_la || '',
     // categoria (C / D / C,D) — la seriile C,D se afișează și se editează în listă

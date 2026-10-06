@@ -31,6 +31,7 @@ type Row = {
   expiry_date: string; nationality: string; country: string
   lrc_numar: string; lrc_emis_la: string; lrc_expira_la: string   // certificatul LRC existent
   verify_stare: string; verify_nota: string   // verificarea manuală din „Verify by ID"
+  verify_nota_vizibila: boolean               // nota se arată și cursantului, în portal
 }
 
 // Prelungirea se poate cere doar dacă certificatul expiră între data examenului
@@ -2472,16 +2473,38 @@ function ObservatiiTab({ sessionId, token, rows, onRowUpdate, variante, setVaria
   }
 
   const cuObservatii = rows.filter(r => r.verify_stare === 'atentie' || r.verify_stare === 'problema' || String(r.verify_nota || '').trim())
+  const vizibile = cuObservatii.filter(r => r.verify_nota_vizibila).length
+
+  async function patchVizibil(id: string, v: boolean) {
+    onRowUpdate(id, { verify_nota_vizibila: v } as Partial<Row>)
+    await fetch('/api/roster', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId, token, student_id: id, field: 'verify_nota_vizibila', value: v }),
+    })
+  }
+  async function comutaToate(v: boolean) {
+    for (const r of cuObservatii) if (!!r.verify_nota_vizibila !== v) await patchVizibil(r.id, v)
+  }
   const verificati = rows.filter(r => r.verify_stare === 'ok').length
   const neverificati = rows.filter(r => !r.verify_stare).length
 
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-100 max-w-4xl">
-      <div className="px-5 py-4 border-b border-gray-100">
-        <h2 className="font-semibold text-gray-900 text-sm">Observații verificare</h2>
-        <p className="text-xs text-gray-400 mt-0.5">
-          {cuObservatii.length} cu observații · {verificati} verificați fără probleme · {neverificati} neverificați
-        </p>
+      <div className="px-5 py-4 border-b border-gray-100 flex items-start justify-between gap-3 flex-wrap">
+        <div>
+          <h2 className="font-semibold text-gray-900 text-sm">Observații verificare</h2>
+          <p className="text-xs text-gray-400 mt-0.5">
+            {cuObservatii.length} cu observații · {verificati} verificați fără probleme · {neverificati} neverificați
+          </p>
+        </div>
+        {/* bifa arată nota în portalul cursantului; implicit nu se vede */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-gray-400">{vizibile} din {cuObservatii.length} vizibile în portal</span>
+          <button onClick={() => comutaToate(vizibile < cuObservatii.length)}
+            className="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 bg-white text-gray-700 hover:bg-gray-50">
+            {vizibile < cuObservatii.length ? 'Vizibile toate' : 'Invizibile toate'}
+          </button>
+        </div>
       </div>
       {cuObservatii.length === 0 ? (
         <p className="px-5 py-10 text-center text-sm text-gray-400">Nicio observație deocamdată.</p>
@@ -2499,7 +2522,12 @@ function ObservatiiTab({ sessionId, token, rows, onRowUpdate, variante, setVaria
                   {String(r.verify_nota || '').trim() || <span className="text-gray-300">fără notă — adaugă</span>}
                 </button>
               </div>
-              <span className="shrink-0 text-xs text-gray-400">{stareTitlu(r.verify_stare)}</span>
+              <label className="shrink-0 flex items-center gap-1.5 text-xs text-gray-500 cursor-pointer" title="Arată nota cursantului, în portal">
+                <input type="checkbox" checked={!!r.verify_nota_vizibila}
+                  onChange={e => patchVizibil(r.id, e.target.checked)} className="accent-green-600" />
+                vizibil
+              </label>
+              <span className="shrink-0 text-xs text-gray-400 w-28 text-right">{stareTitlu(r.verify_stare)}</span>
             </div>
           ))}
         </div>

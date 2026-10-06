@@ -1164,6 +1164,24 @@ export default function PortalPage() {
         {step === 'confirm' && student && (
           <div className="flex flex-col gap-4">
 
+            {/* Mesajul de la verificarea dosarului, când l-am făcut vizibil din listă */}
+            {student?.verify_nota_vizibila && String(student?.verify_nota || '').trim() && (
+              <div className={`order-[-30] rounded-2xl p-5 shadow-2xl border-2 ${
+                student.verify_stare === 'problema' ? 'bg-red-50 border-red-300' : 'bg-amber-50 border-amber-300'}`}>
+                <h2 className={`font-bold flex items-center gap-2 ${
+                  student.verify_stare === 'problema' ? 'text-red-800' : 'text-amber-800'}`}>
+                  <AlertTriangle size={16} /> De completat / de corectat
+                </h2>
+                <p className={`text-sm mt-1 whitespace-pre-line ${
+                  student.verify_stare === 'problema' ? 'text-red-700' : 'text-amber-800'}`}>
+                  {student.verify_nota}
+                </p>
+                <p className="text-[11px] text-gray-500 mt-2">
+                  Mesaj de la echipa SetSail, după verificarea dosarului dumneavoastră.
+                </p>
+              </div>
+            )}
+
             {/* Alegerea obținere / prelungire, singură sus de tot cât timp lipsește:
                 de ea depinde tipul cererii de examen, deci nu poate fi sărită. */}
             {isRadioSession && (!lrcChosen || !docType) && (
