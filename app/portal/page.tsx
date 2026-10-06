@@ -209,17 +209,22 @@ export default function PortalPage() {
     sala: 'mă prezint în sală', easybox: 'Easybox Sameday',
     domiciliu: 'la domiciliu', alta: 'altă adresă',
   } as Record<string, string>)[String(livrare.tip || '')] || 'completată'
-  // La cursurile fără radio adresa mai urcă o dată sus la începutul unei serii noi:
-  // din 7 zile înainte de curs până la sfârșitul primei zile de curs.
+  // Adresa stă sus la începutul unei serii noi, până la sfârșitul primei zile de curs.
+  // La cursurile lungi (C/D Snagov, C/D/S București–Limanu) e vizibilă tot acest timp;
+  // la cele intensive apare cu 7 zile înainte de curs. La radio nu mai urcă deloc.
   const fereastraAdresa = (() => {
     if (isRadioSession) return false
     const d = session?.course_start_date || session?.session_date
     if (!d) return false
     const start = new Date(d); start.setHours(0, 0, 0, 0)
-    const de_la = new Date(start); de_la.setDate(de_la.getDate() - 7)
-    const pana_la = new Date(start); pana_la.setHours(23, 59, 59, 999)
+    const panaLa = new Date(start); panaLa.setHours(23, 59, 59, 999)
     const acum = new Date()
-    return acum >= de_la && acum <= pana_la
+    if (acum > panaLa) return false
+    if (examScope === 'intensiv_cds_limanu') {
+      const deLa = new Date(start); deLa.setDate(deLa.getDate() - 7)
+      return acum >= deLa
+    }
+    return true
   })()
   // Strânsă sub „Date personale" după ce e completată și cursul a început,
   // în afara ferestrei de la începutul seriei
