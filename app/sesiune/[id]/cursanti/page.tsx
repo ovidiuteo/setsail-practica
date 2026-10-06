@@ -30,6 +30,7 @@ type Row = {
   grupa: number                    // 1 = seria principală, 2/3 = clonele (grupele)
   expiry_date: string; nationality: string; country: string
   lrc_numar: string; lrc_emis_la: string; lrc_expira_la: string   // certificatul LRC existent
+  verify_stare: string; verify_nota: string   // verificarea manuală din „Verify by ID"
 }
 
 // Prelungirea se poate cere doar dacă certificatul expiră între data examenului
@@ -233,6 +234,17 @@ const DocCell = ({ state }: { state: DocState }) =>
   : state === 'lipsa' ? <span className="text-red-500 font-bold">!</span>
   : <span className="text-gray-300">–</span>
 
+// Verificarea manuală a unui cursant: gri (neverificat) -> verde -> galben -> roșu -> gri
+const VERIFY_STARI: { stare: string; cls: string; titlu: string }[] = [
+  { stare: '',         cls: 'bg-gray-200 border-gray-300',     titlu: 'Neverificat' },
+  { stare: 'ok',       cls: 'bg-green-500 border-green-600',   titlu: 'Verificat, în regulă' },
+  { stare: 'atentie',  cls: 'bg-amber-400 border-amber-500',   titlu: 'Atenție — vezi nota' },
+  { stare: 'problema', cls: 'bg-red-500 border-red-600',       titlu: 'Problemă — vezi nota' },
+]
+const urmatoareaStare = (s: string) => VERIFY_STARI[(VERIFY_STARI.findIndex(v => v.stare === (s || '')) + 1) % VERIFY_STARI.length].stare
+const stareCls = (s: string) => (VERIFY_STARI.find(v => v.stare === (s || '')) || VERIFY_STARI[0]).cls
+const stareTitlu = (s: string) => (VERIFY_STARI.find(v => v.stare === (s || '')) || VERIFY_STARI[0]).titlu
+
 const LRC_OPTS: [string, string][] = [['', '—'], ['obtinere', 'Obținere LRC'], ['prelungire', 'Prelungire LRC']]
 const lrcLabel = (v: string) => LRC_OPTS.find(o => o[0] === v)?.[1] || '—'
 
@@ -390,6 +402,7 @@ export default function RosterPage() {
   const token = useSearchParams().get('token') || ''
   const [rows, setRows] = useState<Row[] | null>(null)
   const [verified, setVerified] = useState<Verified>({ corina: false, paula: false, ruxandra: false })
+  const [variante, setVariante] = useState<string[]>([])
   const [denied, setDenied] = useState(false)
   const [edit, setEdit] = useState<{ id: string; field: keyof Row } | null>(null)
   const [draft, setDraft] = useState('')
@@ -457,6 +470,7 @@ export default function RosterPage() {
     const j = await r.json()
     setRows(j.students || [])
     if (j.verified) setVerified(j.verified)
+    setVariante(j.verify_variante || [])
     setDocsVisible(!!j.docs_visible)
     setAccessCode(j.access_code || '')
     setVisits(j.visits || null)
@@ -912,7 +926,8 @@ export default function RosterPage() {
         ) : rows.length === 0 ? (
           <div className="text-center text-gray-400 py-16">Niciun cursant în sesiune.</div>
         ) : tab === 'verify' ? (
-          <VerifyTab sessionId={id} token={token} rows={rows} onRowUpdate={rowUpdate} esteRadio={esteRadio} onCategorie={saveCategorie} />
+          <VerifyTab sessionId={id} token={token} rows={rows} onRowUpdate={rowUpdate} esteRadio={esteRadio} onCategorie={saveCategorie}
+            variante={variante} setVariante={setVariante} />
         ) : (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 w-max">
             <table className="w-max text-sm border-collapse [&_th]:px-[1.5ch] [&_td]:px-[1.5ch] [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap [&_th]:w-auto [&_th]:min-w-0">
@@ -2018,11 +2033,13 @@ function LeaduriTab({ sessionId, token, variant = 'full', onEnrolled }: {
   )
 }
 
-function VerifyTab({ sessionId, token, rows, onRowUpdate, esteRadio, onCategorie }: {
+function VerifyTab({ sessionId, token, rows, onRowUpdate, esteRadio, onCategorie, variante, setVariante }: {
   sessionId: string; token: string; rows: Row[]
   onRowUpdate: (id: string, partial: Partial<Row>) => void
   esteRadio: boolean                                  // radio: Obținere/Prelungire LRC; ANR: categoria C/D
   onCategorie: (studentId: string, v: string) => void
+  variante: string[]                                  // notele prestabilite
+  setVariante: (v: string[]) => void
 }) {
   const [index, setIndex] = useState(0)
   const [form, setForm] = useState<Record<string, string>>({})
@@ -2030,6 +2047,7 @@ function VerifyTab({ sessionId, token, rows, onRowUpdate, esteRadio, onCategorie
   const [zoom, setZoom] = useState(1)
   const [ci, setCi] = useState<string | null | undefined>(undefined)
   const [docKey, setDocKey] = useState<DocKey>('recto')
+  const [notaPentru, setNotaPentru] = useState<string | null>(null)   // id-ul cursantului cu modalul de notă deschis
   const [editOpen, setEditOpen] = useState(false)
   const wantId = useRef<string>('')
   const cur = rows[index]
@@ -2056,6 +2074,31 @@ function VerifyTab({ sessionId, token, rows, onRowUpdate, esteRadio, onCategorie
         .filter(([k]) => !!cur[DOC_FLAG[k]])
         .map(([key, label]) => ({ key, label }))
     : []
+  // cerculețul de verificare: gri -> verde -> galben -> roșu -> gri
+  async function comutaStare(r: Row) {
+    const stare = urmatoareaStare(r.verify_stare || '')
+    onRowUpdate(r.id, { verify_stare: stare } as Partial<Row>)
+    await fetch('/api/roster', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId, token, student_id: r.id, field: 'verify_stare', value: stare }),
+    })
+  }
+  async function salveazaNota(r: Row, nota: string) {
+    onRowUpdate(r.id, { verify_nota: nota } as Partial<Row>)
+    await fetch('/api/roster', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId, token, student_id: r.id, field: 'verify_nota', value: nota }),
+    })
+  }
+  async function adaugaVarianta(text: string) {
+    const r = await fetch('/api/roster', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId, token, varianta: text }),
+    })
+    const j = await r.json().catch(() => ({}))
+    if (j.variante) setVariante(j.variante)
+  }
+
   function schimbaAct(k: DocKey) {
     if (k === docKey || !cur) return
     setDocKey(k); fetchCi(cur.id, k)
@@ -2107,12 +2150,24 @@ function VerifyTab({ sessionId, token, rows, onRowUpdate, esteRadio, onCategorie
       {/* Listă nume */}
       <div className="lg:w-56 shrink-0 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
         <div className="max-h-[80vh] overflow-y-auto py-1">
-          {rows.map((r, i) => (
-            <button key={r.id} onClick={() => goto(i)}
-              className={`w-full text-left px-3 py-2 text-sm truncate border-l-2 ${i === index ? 'bg-blue-50 text-blue-700 font-medium border-blue-500' : 'text-gray-700 hover:bg-gray-50 border-transparent'}`}>
-              <span className="text-gray-300 text-xs mr-1.5">{i + 1}</span>{r.full_name}
-            </button>
-          ))}
+          {rows.map((r, i) => {
+            const cuNota = r.verify_stare === 'atentie' || r.verify_stare === 'problema'
+            return (
+              <div key={r.id}
+                className={`flex items-center gap-1 px-2 py-1.5 border-l-2 ${i === index ? 'bg-blue-50 border-blue-500' : 'hover:bg-gray-50 border-transparent'}`}>
+                <button onClick={() => comutaStare(r)} title={stareTitlu(r.verify_stare)}
+                  className={`shrink-0 w-4 h-4 rounded-full border ${stareCls(r.verify_stare)}`} />
+                {cuNota && (
+                  <button onClick={() => setNotaPentru(r.id)} title={r.verify_nota || 'Adaugă o notă'}
+                    className="shrink-0 w-4 h-4 rounded text-xs leading-none text-gray-500 hover:text-gray-800 hover:bg-gray-200">+</button>
+                )}
+                <button onClick={() => goto(i)}
+                  className={`flex-1 min-w-0 text-left text-sm truncate ${i === index ? 'text-blue-700 font-medium' : 'text-gray-700'}`}>
+                  <span className="text-gray-300 text-xs mr-1.5">{i + 1}</span>{r.full_name}
+                </button>
+              </div>
+            )
+          })}
         </div>
       </div>
 
@@ -2220,11 +2275,93 @@ function VerifyTab({ sessionId, token, rows, onRowUpdate, esteRadio, onCategorie
         </div>
       </div>
 
+      {notaPentru && (() => {
+        const r = rows.find(x => x.id === notaPentru)
+        if (!r) return null
+        return (
+          <NotaModal row={r} variante={variante}
+            onSalveaza={async nota => { await salveazaNota(r, nota); setNotaPentru(null) }}
+            onVariantaNoua={adaugaVarianta}
+            onClose={() => setNotaPentru(null)} />
+        )
+      })()}
+
       {editOpen && (
         <CiModal sessionId={sessionId} token={token} row={cur}
           onClose={() => { setEditOpen(false); fetchCi(cur.id) }}
           onRowUpdate={onRowUpdate} />
       )}
+    </div>
+  )
+}
+
+// Nota verificării unui cursant: text liber + variante prestabilite, cu posibilitatea
+// de a adăuga o variantă nouă în listă.
+function NotaModal({ row, variante, onSalveaza, onVariantaNoua, onClose }: {
+  row: Row; variante: string[]
+  onSalveaza: (nota: string) => Promise<void> | void
+  onVariantaNoua: (text: string) => Promise<void> | void
+  onClose: () => void
+}) {
+  const [nota, setNota] = useState(row.verify_nota || '')
+  const [salvez, setSalvez] = useState(false)
+  const [variantaNoua, setVariantaNoua] = useState<string | null>(null)
+  const adauga = (text: string) => setNota(n => (n.trim() ? n.trim() + ' · ' + text : text))
+
+  function alege(v: string) {
+    if (v === '__nou__') { setVariantaNoua(''); return }
+    if (v) adauga(v)
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4">
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+        <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-gray-100">
+          <div>
+            <h3 className="font-semibold text-gray-900">Notă verificare</h3>
+            <p className="text-xs text-gray-400 mt-0.5">{row.full_name}</p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
+        </div>
+        <div className="p-5 space-y-3">
+          <select value="" onChange={e => alege(e.target.value)}
+            className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white">
+            <option value="">— alege o variantă —</option>
+            {variante.map(v => <option key={v} value={v}>{v}</option>)}
+            <option value="__nou__">(adaugă o nouă variantă prestabilită)</option>
+          </select>
+
+          {variantaNoua !== null && (
+            <div className="flex gap-2">
+              <input autoFocus value={variantaNoua} onChange={e => setVariantaNoua(e.target.value)}
+                placeholder="textul noii variante"
+                className="flex-1 px-3 py-2 rounded-lg border border-blue-300 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200" />
+              <button onClick={async () => {
+                const t = variantaNoua.trim()
+                if (!t) { setVariantaNoua(null); return }
+                await onVariantaNoua(t)
+                adauga(t)
+                setVariantaNoua(null)
+              }} className="px-3 py-2 rounded-lg text-sm font-medium text-white" style={{ background: '#0a1628' }}>Adaugă</button>
+            </div>
+          )}
+
+          <textarea value={nota} onChange={e => setNota(e.target.value)} rows={4}
+            placeholder="ce anume e de verificat / de corectat"
+            className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200" />
+        </div>
+        <div className="flex justify-between gap-2 px-5 py-4 border-t border-gray-100">
+          <button onClick={() => setNota('')} className="px-3 py-2 rounded-lg text-sm text-gray-500 hover:bg-gray-50">Golește</button>
+          <div className="flex gap-2">
+            <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm border border-gray-200 text-gray-600">Renunță</button>
+            <button onClick={async () => { setSalvez(true); try { await onSalveaza(nota.trim()) } finally { setSalvez(false) } }}
+              disabled={salvez}
+              className="px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50" style={{ background: '#0a1628' }}>
+              {salvez ? 'Se salvează…' : 'Salvează'}
+            </button>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }

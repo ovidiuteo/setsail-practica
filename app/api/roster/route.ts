@@ -18,6 +18,7 @@ function svc() {
 // Câmpuri editabile de pe pagina gated
 const EDITABLE = new Set([
   'full_name', 'email', 'cnp', 'birth_date', 'address', 'city', 'county', 'obtinere_prelungire',
+  'verify_stare', 'verify_nota',
   'communication_target', 'class_caa', 'phone',
   'ci_series', 'ci_number', 'expiry_date', 'nationality', 'country',
   'livrare_trimis_la',
@@ -237,7 +238,7 @@ export async function GET(req: NextRequest) {
   const { ids: idSesiuni, grupa: grupaSesiunii } = await grupeSeriei(sb, sessionId)
   const [{ data, error }, docSets, { data: cereri }, { data: rezervari }] = await Promise.all([
     sb.from('students')
-      .select('id, session_id, full_name, email, phone, cnp, birth_date, address, city, county, ci_series, ci_number, expiry_date, nationality, country, class_caa, obtinere_prelungire, lrc_numar, lrc_emis_la, lrc_expira_la, doc_type, communication_target, created_at, order_in_session, livrare_tip, livrare_adresa, livrare_contact, livrare_telefon, livrare_email, livrare_trimis_la')
+      .select('id, session_id, full_name, email, phone, cnp, birth_date, address, city, county, ci_series, ci_number, expiry_date, nationality, country, class_caa, obtinere_prelungire, lrc_numar, lrc_emis_la, lrc_expira_la, verify_stare, verify_nota, doc_type, communication_target, created_at, order_in_session, livrare_tip, livrare_adresa, livrare_contact, livrare_telefon, livrare_email, livrare_trimis_la')
       .in('session_id', idSesiuni),
     Promise.all((Object.entries(DOC_COLS) as [DocKey, string][]).map(async ([key, col]) => {
       const { data: ids } = await sb.from('students').select('id')
@@ -269,6 +270,8 @@ export async function GET(req: NextRequest) {
     // Informația vine din clasă (sursa de adevăr); valoarea stocată e doar fallback dacă clasa nu o conține
     obtinere_prelungire: lrcFromClass(r.class_caa) || r.obtinere_prelungire || '',
     doc_type: r.doc_type || '',
+    // verificarea manuală din „Verify by ID": gri / verde / galben / roșu + nota
+    verify_stare: r.verify_stare || '', verify_nota: r.verify_nota || '',
     // certificatul LRC existent, pentru verificarea termenului de prelungire
     lrc_numar: r.lrc_numar || '', lrc_emis_la: r.lrc_emis_la || '', lrc_expira_la: r.lrc_expira_la || '',
     // categoria (C / D / C,D) — la seriile C,D se afișează și se editează în listă
@@ -325,6 +328,8 @@ export async function GET(req: NextRequest) {
   // Tokenul paginii cu toate seriile, ca să putem pune un link înapoi la index
   const { data: idxToken } = await sb.from('setsail_info')
     .select('value').eq('key', 'radio_index_token').maybeSingle()
+  // variantele prestabilite de notă pentru verificare
+  const { data: variante } = await sb.from('verify_variante').select('text').order('created_at')
 
   return NextResponse.json({
     students: rows, verified, docs_visible: !!sess.roster_docs_visible, visits,
@@ -336,6 +341,7 @@ export async function GET(req: NextRequest) {
     skipper: { url: sess.skipper_url || '' },
     // pentru butonul „Toate sesiunile"
     serii_token: (idxToken as any)?.value || '',
+    verify_variante: (variante || []).map((v: any) => v.text),
     practica,
   })
 }
@@ -437,6 +443,7 @@ function classFromLrc(lrc: string, sessionClass: string): string {
 }
 
 // POST — upload imagine CI { session_id, token, student_id, side, imageData(dataURL) }
+//   sau { varianta } — o nouă variantă prestabilită de notă la verificare
 //   sau adăugare cursanți { session_id, token, students: [{ full_name, cnp, ... }] }
 export async function POST(req: NextRequest) {
   const sb = svc()
@@ -444,6 +451,17 @@ export async function POST(req: NextRequest) {
   const { session_id, token, student_id, side, imageData } = body || {}
   if (!(await authed(sb, session_id, token)))
     return NextResponse.json({ error: 'unauthorized' }, { status: 403 })
+
+  // ── O nouă variantă prestabilită de notă la verificare ──
+  if (body?.varianta) {
+    const text = String(body.varianta).replace(/\s+/g, ' ').trim().slice(0, 200)
+    if (!text) return NextResponse.json({ error: 'text gol' }, { status: 400 })
+    const { error } = await sb.from('verify_variante').insert({ text })
+    if (error && !/duplicate|unique/i.test(error.message))
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    const { data: toate } = await sb.from('verify_variante').select('text').order('created_at')
+    return NextResponse.json({ ok: true, variante: (toate || []).map((v: any) => v.text) })
+  }
 
   // ── Înscrie un lead ca cursant în această serie ──
   // Trece prin aceeași cale ca adăugarea manuală, deci moștenește datele și
