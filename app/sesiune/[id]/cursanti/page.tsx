@@ -429,6 +429,7 @@ export default function RosterPage() {
   useEffect(() => { setOrigin(window.location.origin) }, [])
   const [deleting, setDeleting] = useState<string | null>(null)
   const [mailOpen, setMailOpen] = useState(false)
+  const [mailCatre, setMailCatre] = useState<string[] | null>(null)   // mail către un singur cursant
   const [skipper, setSkipper] = useState<{ url: string }>({ url: '' })
   const [linkOpen, setLinkOpen] = useState(false)
   const [seriiToken, setSeriiToken] = useState('')
@@ -930,7 +931,8 @@ export default function RosterPage() {
             variante={variante} setVariante={setVariante} />
         ) : tab === 'verify' ? (
           <VerifyTab sessionId={id} token={token} rows={rows} onRowUpdate={rowUpdate} esteRadio={esteRadio} onCategorie={saveCategorie}
-            variante={variante} setVariante={setVariante} />
+            variante={variante} setVariante={setVariante}
+            portalLink={portalLink} onMail={email => setMailCatre([email])} />
         ) : (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 w-max">
             <table className="w-max text-sm border-collapse [&_th]:px-[1.5ch] [&_td]:px-[1.5ch] [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap [&_th]:w-auto [&_th]:min-w-0">
@@ -1264,8 +1266,8 @@ export default function RosterPage() {
           onRowUpdate={rowUpdate} />
       )}
 
-      {mailOpen && (
-        <MailModal sessionId={id} token={token} emails={mailEmails} onClose={() => setMailOpen(false)} />
+      {(mailOpen || mailCatre) && (
+        <MailModal sessionId={id} token={token} emails={mailCatre || mailEmails} onClose={() => { setMailOpen(false); setMailCatre(null) }} />
       )}
 
       <SkipperSyncModal rezultat={syncRes} eroare={syncErr}
@@ -2036,13 +2038,15 @@ function LeaduriTab({ sessionId, token, variant = 'full', onEnrolled }: {
   )
 }
 
-function VerifyTab({ sessionId, token, rows, onRowUpdate, esteRadio, onCategorie, variante, setVariante }: {
+function VerifyTab({ sessionId, token, rows, onRowUpdate, esteRadio, onCategorie, variante, setVariante, portalLink, onMail }: {
   sessionId: string; token: string; rows: Row[]
   onRowUpdate: (id: string, partial: Partial<Row>) => void
   esteRadio: boolean                                  // radio: Obținere/Prelungire LRC; ANR: categoria C/D
   onCategorie: (studentId: string, v: string) => void
   variante: string[]                                  // notele prestabilite
   setVariante: (v: string[]) => void
+  portalLink: (email?: string) => string              // linkul portalului cursantului
+  onMail: (email: string) => void                     // deschide mailul către un singur cursant
 }) {
   const [index, setIndex] = useState(0)
   const [form, setForm] = useState<Record<string, string>>({})
@@ -2232,16 +2236,26 @@ function VerifyTab({ sessionId, token, rows, onRowUpdate, esteRadio, onCategorie
           )}
         </div>
 
-        {/* Actul de identitate și celelalte acte încărcate */}
-        {alteActe.length > 0 && (
+        {/* Actul de identitate și celelalte acte încărcate, plus mail și portal */}
+        {(
           <div className="flex flex-wrap gap-1 mb-2">
-            {([{ key: 'recto' as DocKey, label: 'Act de identitate' }, ...alteActe]).map(a => (
+            {(alteActe.length ? [{ key: 'recto' as DocKey, label: 'Act de identitate' }, ...alteActe] : []).map(a => (
               <button key={a.key} onClick={() => schimbaAct(a.key)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-medium border ${
                   docKey === a.key ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>
                 {a.label}
               </button>
             ))}
+            {/* scrie-i sau deschide-i portalul, fără să ieși din verificare */}
+            <button onClick={() => cur.email && onMail(cur.email)} disabled={!cur.email}
+              title={cur.email || 'Cursantul nu are email'}
+              className="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40">
+              ✉ Mail
+            </button>
+            <a href={portalLink(cur.email)} target="_blank" rel="noopener noreferrer"
+              className="px-3 py-1.5 rounded-lg text-xs font-medium border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100">
+              ↗ Deschide portalul
+            </a>
           </div>
         )}
 
