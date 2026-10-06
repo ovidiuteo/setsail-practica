@@ -2029,24 +2029,37 @@ function VerifyTab({ sessionId, token, rows, onRowUpdate, esteRadio, onCategorie
   const [dirty, setDirty] = useState(false)
   const [zoom, setZoom] = useState(1)
   const [ci, setCi] = useState<string | null | undefined>(undefined)
+  const [docKey, setDocKey] = useState<DocKey>('recto')
   const [editOpen, setEditOpen] = useState(false)
   const wantId = useRef<string>('')
   const cur = rows[index]
 
-  const fetchCi = useCallback(async (id: string) => {
-    setCi(undefined); setZoom(1); wantId.current = id
-    const r = await fetch(`/api/roster?session_id=${sessionId}&token=${encodeURIComponent(token)}&student_id=${id}&side=recto`)
+  const fetchCi = useCallback(async (id: string, key: DocKey = 'recto') => {
+    setCi(undefined); setZoom(1); wantId.current = id + key
+    const r = await fetch(`/api/roster?session_id=${sessionId}&token=${encodeURIComponent(token)}&student_id=${id}&side=${key}`)
     const j = await r.json()
-    if (wantId.current === id) setCi(j.image || null)
+    if (wantId.current === id + key) setCi(j.image || null)
   }, [sessionId, token])
 
-  // La schimbarea cursantului: reîncarcă formularul + imaginea
+  // La schimbarea cursantului: reîncarcă formularul + imaginea, de la actul de identitate
   useEffect(() => {
     const c = rows[index]; if (!c) return
     setForm(Object.fromEntries(VERIFY_FIELDS.map(f => [f.key, (c[f.key] as string) || ''])))
-    setDirty(false); fetchCi(c.id)
+    setDirty(false); setDocKey('recto'); fetchCi(c.id, 'recto')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index])
+
+  // Celelalte acte încărcate ale cursantului — taburi lângă actul de identitate
+  const alteActe: { key: DocKey; label: string }[] = cur
+    ? ([['verso', 'Verso CI'], ['domiciliu', 'Adeverință domiciliu'], ['cert_nastere', 'Certificat naștere'],
+        ['vhf', 'Certificat LRC'], ['semnatura', 'Semnătură'], ['cerere', 'Cerere semnată']] as [DocKey, string][])
+        .filter(([k]) => !!cur[DOC_FLAG[k]])
+        .map(([key, label]) => ({ key, label }))
+    : []
+  function schimbaAct(k: DocKey) {
+    if (k === docKey || !cur) return
+    setDocKey(k); fetchCi(cur.id, k)
+  }
 
   async function saveCurrent() {
     if (!dirty || !cur) return
@@ -2155,20 +2168,43 @@ function VerifyTab({ sessionId, token, rows, onRowUpdate, esteRadio, onCategorie
             <button onClick={() => setZoom(1)} disabled={!ci} title="Pe lățime"
               className="px-2.5 h-8 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 text-xs disabled:opacity-40">Lățime</button>
           </div>
-          <button onClick={() => setEditOpen(true)}
-            className="px-3 h-8 rounded-lg text-xs font-medium border border-blue-200 text-blue-600 hover:bg-blue-50">✂ Editează / Crop CI</button>
+          {docKey === 'recto' && (
+            <button onClick={() => setEditOpen(true)}
+              className="px-3 h-8 rounded-lg text-xs font-medium border border-blue-200 text-blue-600 hover:bg-blue-50">✂ Editează / Crop CI</button>
+          )}
         </div>
 
-        <div className="flex-1 overflow-auto bg-gray-50 rounded-lg border border-gray-100 min-h-[320px] flex items-start justify-center">
+        {/* Actul de identitate și celelalte acte încărcate */}
+        {alteActe.length > 0 && (
+          <div className="flex flex-wrap gap-1 mb-2">
+            {([{ key: 'recto' as DocKey, label: 'Act de identitate' }, ...alteActe]).map(a => (
+              <button key={a.key} onClick={() => schimbaAct(a.key)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium border ${
+                  docKey === a.key ? 'border-blue-300 bg-blue-50 text-blue-700' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>
+                {a.label}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div className="flex-1 overflow-auto bg-gray-50 rounded-lg border border-gray-100 min-h-[320px] flex items-center justify-center p-2">
           {ci === undefined ? (
-            <div className="text-gray-400 mt-20">Se încarcă…</div>
+            <div className="text-gray-400">Se încarcă…</div>
           ) : ci === null ? (
-            <div className="text-gray-400 mt-20 text-center">
-              <p className="mb-3">Fără imagine CI.</p>
-              <button onClick={() => setEditOpen(true)} className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm">Adaugă CI</button>
+            <div className="text-gray-400 text-center">
+              <p className="mb-3">{docKey === 'recto' ? 'Fără imagine CI.' : 'Documentul nu mai există.'}</p>
+              {docKey === 'recto' && (
+                <button onClick={() => setEditOpen(true)} className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-sm">Adaugă CI</button>
+              )}
             </div>
+          ) : String(ci).startsWith('data:application/pdf') ? (
+            <iframe src={ci} title="Document PDF" className="w-full h-[70vh] bg-white rounded" />
           ) : (
-            <img src={ci} alt="CI" style={{ width: `${zoom * 100}%` }} className="max-w-none block" />
+            // la 100% documentul se încadrează în zonă; peste 100% se poate derula
+            <img src={ci} alt="Document" className="block"
+              style={zoom === 1
+                ? { maxWidth: '100%', maxHeight: '70vh' }
+                : { width: `${zoom * 100}%`, maxWidth: 'none' }} />
           )}
         </div>
 
