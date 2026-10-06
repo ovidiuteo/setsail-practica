@@ -1481,6 +1481,7 @@ export default function PortalPage() {
                 <div className="space-y-3 mb-5">
                   <div>
                     <label className={labelCls}>Adresă domiciliu (stradă, număr, bloc, apartament)</label>
+                    <p className="text-[11px] text-red-600 -mt-1 mb-1">Scrieți adresa EXACT ca în actul de identitate — va fi folosită pe brevet/diplomă.</p>
                     <input className={fieldCls('address')} value={form.address} placeholder="Str. Exemplu nr. 1, Bl. X, Ap. Y"
                       onChange={e => { setForm(f=>({...f,address:e.target.value})); setScannedFields(s=>{const n=new Set(s);n.delete('address');return n}) }} />
                   </div>
@@ -1574,6 +1575,7 @@ export default function PortalPage() {
                       <>
                         <div>
                           <label className={labelCls}>Adresă domiciliu (stradă, număr, bloc, apartament)</label>
+                    <p className="text-[11px] text-red-600 -mt-1 mb-1">Scrieți adresa EXACT ca în actul de identitate — va fi folosită pe brevet/diplomă.</p>
                           <input className={fieldCls('address')} value={form.address} placeholder="Str. Exemplu nr. 1, Bl. X, Ap. Y"
                             onChange={e => { setForm(f=>({...f,address:e.target.value})); setScannedFields(s=>{const n=new Set(s);n.delete('address');return n}) }} />
                         </div>
