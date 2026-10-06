@@ -410,6 +410,45 @@ export default function RosterPage() {
   const [ciFor, setCiFor] = useState<{ row: Row; doc: DocKey } | null>(null)
   const [tab, setTab] = useState<Tab>('cursanti')
   // Lista de cursanți: tabul principal și cele pe grupe arată același tabel
+  // Ținem minte unde ești: tabul, cursantul din Verify by ID și poziția în pagină,
+  // ca un refresh (sau o revenire din altă filă) să te lase exact unde erai.
+  const cheieLoc = `roster-loc-${id}`
+  const [cursantSalvat, setCursantSalvat] = useState<string | null>(null)
+  const locIncarcat = useRef(false)
+
+  useEffect(() => {
+    if (locIncarcat.current) return
+    locIncarcat.current = true
+    try {
+      const brut = sessionStorage.getItem(cheieLoc) || localStorage.getItem(cheieLoc)
+      if (!brut) return
+      const loc = JSON.parse(brut)
+      if (loc?.tab) setTab(loc.tab as Tab)
+      if (loc?.cursant) setCursantSalvat(String(loc.cursant))
+      if (loc?.scroll) setTimeout(() => window.scrollTo(0, Number(loc.scroll) || 0), 150)
+    } catch { /* prima vizită */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // la schimbarea tabului și la derulare notăm poziția
+  const salveazaLoc = useCallback((partial: { tab?: Tab; cursant?: string | null }) => {
+    try {
+      const vechi = JSON.parse(sessionStorage.getItem(cheieLoc) || '{}')
+      const nou = { ...vechi, ...partial, scroll: window.scrollY }
+      sessionStorage.setItem(cheieLoc, JSON.stringify(nou))
+      localStorage.setItem(cheieLoc, JSON.stringify(nou))
+    } catch { /* storage blocat */ }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cheieLoc])
+
+  useEffect(() => { salveazaLoc({ tab }) }, [tab, salveazaLoc])
+  useEffect(() => {
+    let t: any = null
+    const onScroll = () => { clearTimeout(t); t = setTimeout(() => salveazaLoc({}), 300) }
+    window.addEventListener('scroll', onScroll)
+    return () => { window.removeEventListener('scroll', onScroll); clearTimeout(t) }
+  }, [salveazaLoc])
+
   const esteLista = (t: string) => t === 'cursanti' || t.startsWith('grupa')
   const grupaTab = tab.startsWith('grupa') ? Number(tab.slice(5)) : null
   // grupele care chiar au cursanți; la o serie fără clone nu arătăm taburi de grupă
@@ -932,7 +971,8 @@ export default function RosterPage() {
         ) : tab === 'verify' ? (
           <VerifyTab sessionId={id} token={token} rows={rows} onRowUpdate={rowUpdate} esteRadio={esteRadio} onCategorie={saveCategorie}
             variante={variante} setVariante={setVariante}
-            portalLink={portalLink} onMail={email => setMailCatre([email])} accessCode={accessCode} />
+            portalLink={portalLink} onMail={email => setMailCatre([email])} accessCode={accessCode}
+            cursantInitial={cursantSalvat} onCursant={cid => salveazaLoc({ cursant: cid })} />
         ) : (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 w-max">
             <table className="w-max text-sm border-collapse [&_th]:px-[1.5ch] [&_td]:px-[1.5ch] [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap [&_th]:w-auto [&_th]:min-w-0">
@@ -2038,7 +2078,7 @@ function LeaduriTab({ sessionId, token, variant = 'full', onEnrolled }: {
   )
 }
 
-function VerifyTab({ sessionId, token, rows, onRowUpdate, esteRadio, onCategorie, variante, setVariante, portalLink, onMail, accessCode }: {
+function VerifyTab({ sessionId, token, rows, onRowUpdate, esteRadio, onCategorie, variante, setVariante, portalLink, onMail, accessCode, cursantInitial, onCursant }: {
   sessionId: string; token: string; rows: Row[]
   onRowUpdate: (id: string, partial: Partial<Row>) => void
   esteRadio: boolean                                  // radio: Obținere/Prelungire LRC; ANR: categoria C/D
@@ -2048,6 +2088,8 @@ function VerifyTab({ sessionId, token, rows, onRowUpdate, esteRadio, onCategorie
   portalLink: (email?: string) => string              // linkul portalului cursantului
   onMail: (email: string) => void                     // deschide mailul către un singur cursant
   accessCode: string                                  // codul seriei, pentru regenerarea cererii
+  cursantInitial: string | null                       // cursantul la care eram înainte de refresh
+  onCursant: (id: string) => void                     // ține minte cursantul curent
 }) {
   const [index, setIndex] = useState(0)
   const [form, setForm] = useState<Record<string, string>>({})
@@ -2068,6 +2110,17 @@ function VerifyTab({ sessionId, token, rows, onRowUpdate, esteRadio, onCategorie
     const j = await r.json()
     if (wantId.current === id + key) setCi(j.image || null)
   }, [sessionId, token])
+
+  // Revenim la cursantul de dinainte de refresh (dacă mai e în listă)
+  const sarit = useRef(false)
+  useEffect(() => {
+    if (sarit.current || !cursantInitial || !rows.length) return
+    const i = rows.findIndex(r => r.id === cursantInitial)
+    sarit.current = true
+    if (i >= 0) setIndex(i)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows.length, cursantInitial])
+  useEffect(() => { const c = rows[index]; if (c) onCursant(c.id) }, [index, rows, onCursant])
 
   // La schimbarea cursantului: reîncarcă formularul + imaginea, de la actul de identitate
   useEffect(() => {
