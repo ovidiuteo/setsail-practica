@@ -217,6 +217,18 @@ export default function PortalPage() {
     const peste6 = new Date(d); peste6.setMonth(peste6.getMonth() + 6)
     return { de_la: zi(examen), pana_la: zi(peste6) }
   })()
+  // Certificatul încărcat se încadrează în fereastra de prelungire?
+  const problemaPrelungire: string | null = (() => {
+    if (!needsLrcCert || !session?.session_date) return null
+    const m = /^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})/.exec(String(lrc.expira_la || '').trim())
+    if (!m) return null
+    const expira = new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]))
+    const examen = new Date(session.session_date); examen.setHours(0, 0, 0, 0)
+    const limita = new Date(examen); limita.setMonth(limita.getMonth() + 6)
+    if (expira < examen) return 'Brevetul a expirat deja. Alegeți Obținere.'
+    if (expira > limita) return 'Brevetul are un termen de valabilitate mai lung de 6 luni. Reveniți la cursul radio SetSail mai aproape de data de expirare.'
+    return null
+  })()
   const dateGata = detailsComplete && !!student?.ci_image_data
   // Cursul a început? (materialele sunt deja pe drum, adresa nu mai e de completat)
   const cursInceput = (() => {
@@ -1641,6 +1653,9 @@ export default function PortalPage() {
                 <p className="text-xs text-gray-400 mb-4">
                   Pentru prelungirea valabilității avem nevoie de certificatul dumneavoastră GMDSS/LRC existent.
                   Numărul și datele se completează automat din scanare — verificați-le și corectați dacă e cazul.
+                  {fereastraPrelungire && (
+                    <span className="text-red-600"> Prelungirea se face doar dacă certificatul expiră între {fereastraPrelungire.de_la} și {fereastraPrelungire.pana_la}.</span>
+                  )}
                 </p>
 
                 <label className={`flex items-center justify-center gap-3 w-full px-4 py-3.5 rounded-xl border-2 border-dashed cursor-pointer transition-all mb-4 ${
@@ -1686,9 +1701,18 @@ export default function PortalPage() {
                     <input value={lrc.expira_la} onChange={e => setLrc(v => ({ ...v, expira_la: e.target.value }))}
                       onBlur={e => saveLrcField('expira_la', e.target.value)}
                       placeholder="zz.ll.aaaa"
-                      className="w-full px-3 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200" />
+                      className={`w-full px-3 py-2.5 rounded-xl border text-sm focus:outline-none focus:ring-2 ${
+                        problemaPrelungire ? 'border-red-400 ring-1 ring-red-200 focus:ring-red-200' : 'border-gray-200 focus:ring-blue-200'}`} />
                   </div>
                 </div>
+
+                {/* Data expirării nu se încadrează în fereastra de prelungire */}
+                {problemaPrelungire && (
+                  <div className="mt-3 rounded-xl border-2 border-red-300 bg-red-50 px-4 py-3 flex gap-2">
+                    <AlertTriangle size={16} className="text-red-600 shrink-0 mt-0.5" />
+                    <p className="text-sm text-red-700 font-medium">{problemaPrelungire}</p>
+                  </div>
+                )}
 
                 {student?.lrc_certificat_data && (
                   <div className="mt-4 rounded-xl border border-gray-200 overflow-hidden bg-gray-50">
