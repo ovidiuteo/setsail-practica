@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Ship, RotateCcw, Check, Upload, Loader2, CheckCircle, AlertCircle, Camera, ChevronDown, ChevronUp, FileText, RadioTower, AlertTriangle, Video, MessageCircle, Film, Users, ExternalLink, Download } from 'lucide-react'
+import { Ship, RotateCcw, Check, Upload, Loader2, CheckCircle, AlertCircle, Camera, ChevronDown, ChevronUp, FileText, RadioTower, AlertTriangle, Video, MessageCircle, Users, ExternalLink, Download } from 'lucide-react'
 import CIImageEditor from '@/components/CIImageEditor'
 import PracticeBooking from '@/components/PracticeBooking'
 import { scopeForSession } from '@/lib/timeline-scope'
@@ -23,6 +23,16 @@ function LinkRand({ r }: { r: { url: string; titlu: string; fundal: string; icon
       </span>
       <ExternalLink size={15} className="shrink-0 text-gray-300" />
     </a>
+  )
+}
+
+// Semnul YouTube: dreptunghi rotunjit cu triunghiul de redare (alb pe fundalul roșu al pătratului)
+function IconYouTube({ size = 24 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path fill="#fff" d="M10 8.5l6 3.5-6 3.5v-7z" />
+      <rect x="2.5" y="5" width="19" height="14" rx="4" stroke="#fff" strokeWidth="1.6" />
+    </svg>
   )
 }
 
@@ -80,7 +90,7 @@ export default function PortalPage() {
   const resurse = ([
     { cheie: 'zoom_url', titlu: 'Zoom — cursul online', fundal: '#2d8cff', icon: <Video size={17} className="text-white" />, iconMare: <Video size={30} className="text-white" /> },
     { cheie: 'whatsapp_url', titlu: 'Grup WhatsApp al seriei', fundal: '#25d366', icon: <MessageCircle size={17} className="text-white" />, iconMare: <MessageCircle size={30} className="text-white" /> },
-    { cheie: 'arhiva_video_url', titlu: 'Arhivă video', fundal: '#7c3aed', icon: <Film size={17} className="text-white" />, iconMare: <Film size={30} className="text-white" /> },
+    { cheie: 'arhiva_video_url', titlu: 'Arhivă video', fundal: '#ff0000', icon: <IconYouTube size={17} />, iconMare: <IconYouTube size={30} /> },
     { cheie: 'materiale_url', titlu: 'Manuale | prezentări | teste grilă', fundal: '#0a1628', icon: <Ship size={17} className="text-white" />, iconMare: <Ship size={30} className="text-white" /> },
     { cheie: 'comunitate_url', titlu: 'SetSail — Toți într-o barcă · comunitate absolvenți SetSail', fundal: '#25d366', icon: <Users size={17} className="text-white" />, iconMare: <Users size={30} className="text-white" /> },
   ] as const)
@@ -1683,28 +1693,33 @@ export default function PortalPage() {
                   ))}
                 </div>
 
-                {/* Cele două grupuri de WhatsApp — pătrate mari, unul lângă altul */}
-                {resurse.some(r => r.cheie === 'whatsapp_url' || r.cheie === 'comunitate_url') && (
-                  <div className="grid grid-cols-2 gap-2 mt-2">
-                    {(['whatsapp_url', 'comunitate_url'] as const).map(cheie => {
-                      const r = resurse.find(x => x.cheie === cheie)
-                      if (!r) return null
-                      return (
+                {/* Grupurile de WhatsApp și arhiva video — pătrate mari, pe un rând,
+                    împărțind lățimea între ele */}
+                {(() => {
+                  const mari = (['whatsapp_url', 'comunitate_url', 'arhiva_video_url'] as const)
+                    .map(cheie => resurse.find(x => x.cheie === cheie)).filter(Boolean) as typeof resurse
+                  if (!mari.length) return null
+                  const trei = mari.length >= 3
+                  return (
+                    <div className="grid gap-2 mt-2" style={{ gridTemplateColumns: `repeat(${Math.min(mari.length, 3)}, minmax(0, 1fr))` }}>
+                      {mari.map(r => (
                         <a key={r.cheie} href={r.url} target="_blank" rel="noopener noreferrer"
-                          className="flex flex-col items-center justify-center text-center gap-2 p-4 min-h-[9rem] rounded-xl border-2 border-gray-200 hover:border-green-400 hover:bg-green-50/40 transition-all">
-                          <span className="shrink-0 w-14 h-14 rounded-2xl flex items-center justify-center" style={{ background: r.fundal }}>
+                          className={`flex flex-col items-center justify-center text-center gap-2 rounded-xl border-2 border-gray-200 hover:border-green-400 hover:bg-green-50/40 transition-all ${
+                            trei ? 'p-3 min-h-[8rem]' : 'p-4 min-h-[9rem]'}`}>
+                          <span className={`shrink-0 rounded-2xl flex items-center justify-center ${trei ? 'w-12 h-12' : 'w-14 h-14'}`}
+                            style={{ background: r.fundal }}>
                             {r.iconMare}
                           </span>
-                          <span className="text-sm font-medium text-gray-800 leading-tight">{r.titlu}</span>
+                          <span className={`font-medium text-gray-800 leading-tight ${trei ? 'text-xs' : 'text-sm'}`}>{r.titlu}</span>
                         </a>
-                      )
-                    })}
-                  </div>
-                )}
+                      ))}
+                    </div>
+                  )
+                })()}
 
-                {/* Restul — arhiva video, manuale — dedesubt */}
+                {/* Restul — manualele — dedesubt */}
                 <div className="space-y-2 mt-2">
-                  {resurse.filter(r => !['zoom_url', 'whatsapp_url', 'comunitate_url'].includes(r.cheie)).map(r => (
+                  {resurse.filter(r => !['zoom_url', 'whatsapp_url', 'comunitate_url', 'arhiva_video_url'].includes(r.cheie)).map(r => (
                     <LinkRand key={r.cheie} r={r} />
                   ))}
                 </div>
