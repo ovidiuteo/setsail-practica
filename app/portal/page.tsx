@@ -207,6 +207,16 @@ export default function PortalPage() {
   ]
   const detailsComplete = detailVals.every(v => String(v || '').trim() !== '')
   // Actul scanat + toate datele completate: secțiunea de date (și semnătura) coboară la baza paginii, pliate
+  // Prelungirea se poate cere doar pentru certificatele care expiră între data
+  // examenului și șase luni după ea
+  const fereastraPrelungire = (() => {
+    const d = session?.session_date
+    if (!isRadioSession || !d) return null
+    const zi = (x: Date) => `${String(x.getDate()).padStart(2, '0')}.${String(x.getMonth() + 1).padStart(2, '0')}.${x.getFullYear()}`
+    const examen = new Date(d)
+    const peste6 = new Date(d); peste6.setMonth(peste6.getMonth() + 6)
+    return { de_la: zi(examen), pana_la: zi(peste6) }
+  })()
   const dateGata = detailsComplete && !!student?.ci_image_data
   // Cursul a început? (materialele sunt deja pe drum, adresa nu mai e de completat)
   const cursInceput = (() => {
@@ -1155,12 +1165,20 @@ export default function PortalPage() {
                       Obținerea unui certificat nou sau prelungirea valabilității celui pe care îl aveți —
                       de asta depinde cererea de examen.
                     </p>
-                    <div className="grid grid-cols-2 gap-2">
+                    <div className="grid grid-cols-2 gap-2 items-start">
                       {classOptions.map(o => (
-                        <button key={o.value} type="button" onClick={() => updateClass(o.value)}
-                          className="py-3 rounded-xl text-sm font-semibold border-2 border-pink-300 text-pink-800 bg-pink-50 hover:bg-pink-100 transition-colors">
-                          {o.label}
-                        </button>
+                        <div key={o.value}>
+                          <button type="button" onClick={() => updateClass(o.value)}
+                            className="w-full py-3 rounded-xl text-sm font-semibold border-2 border-pink-300 text-pink-800 bg-pink-50 hover:bg-pink-100 transition-colors">
+                            {o.label}
+                          </button>
+                          {/* prelungirea se cere doar dacă certificatul expiră în fereastra examenului */}
+                          {/prelungire/i.test(o.value) && fereastraPrelungire && (
+                            <p className="text-[11px] text-red-600 mt-1 leading-tight">
+                              Doar dacă data expirării certificatului este între {fereastraPrelungire.de_la} și {fereastraPrelungire.pana_la}.
+                            </p>
+                          )}
+                        </div>
                       ))}
                     </div>
                   </div>
