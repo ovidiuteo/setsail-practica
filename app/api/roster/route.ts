@@ -237,7 +237,7 @@ export async function GET(req: NextRequest) {
   const { ids: idSesiuni, grupa: grupaSesiunii } = await grupeSeriei(sb, sessionId)
   const [{ data, error }, docSets, { data: cereri }, { data: rezervari }] = await Promise.all([
     sb.from('students')
-      .select('id, session_id, full_name, email, phone, cnp, birth_date, address, city, county, ci_series, ci_number, expiry_date, nationality, country, class_caa, obtinere_prelungire, doc_type, communication_target, created_at, order_in_session, livrare_tip, livrare_adresa, livrare_contact, livrare_telefon, livrare_email, livrare_trimis_la')
+      .select('id, session_id, full_name, email, phone, cnp, birth_date, address, city, county, ci_series, ci_number, expiry_date, nationality, country, class_caa, obtinere_prelungire, lrc_numar, lrc_emis_la, lrc_expira_la, doc_type, communication_target, created_at, order_in_session, livrare_tip, livrare_adresa, livrare_contact, livrare_telefon, livrare_email, livrare_trimis_la')
       .in('session_id', idSesiuni),
     Promise.all((Object.entries(DOC_COLS) as [DocKey, string][]).map(async ([key, col]) => {
       const { data: ids } = await sb.from('students').select('id')
@@ -269,6 +269,8 @@ export async function GET(req: NextRequest) {
     // Informația vine din clasă (sursa de adevăr); valoarea stocată e doar fallback dacă clasa nu o conține
     obtinere_prelungire: lrcFromClass(r.class_caa) || r.obtinere_prelungire || '',
     doc_type: r.doc_type || '',
+    // certificatul LRC existent, pentru verificarea termenului de prelungire
+    lrc_numar: r.lrc_numar || '', lrc_emis_la: r.lrc_emis_la || '', lrc_expira_la: r.lrc_expira_la || '',
     // categoria (C / D / C,D) — la seriile C,D se afișează și se editează în listă
     class_caa: r.class_caa || '',
     communication_target: !!r.communication_target,

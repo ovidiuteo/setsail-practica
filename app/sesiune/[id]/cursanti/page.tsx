@@ -29,6 +29,43 @@ type Row = {
   livrare_telefon: string; livrare_email: string; livrare_trimis_la: string | null
   grupa: number                    // 1 = seria principală, 2/3 = clonele (grupele)
   expiry_date: string; nationality: string; country: string
+  lrc_numar: string; lrc_emis_la: string; lrc_expira_la: string   // certificatul LRC existent
+}
+
+// Prelungirea se poate cere doar dacă certificatul expiră între data examenului
+// și șase luni după ea. Datele din certificat vin ca „zz.ll.aaaa".
+function dataRo(v: string): Date | null {
+  const m = /^(\d{1,2})[.\/-](\d{1,2})[.\/-](\d{4})/.exec(String(v || '').trim())
+  if (m) return new Date(Number(m[3]), Number(m[2]) - 1, Number(m[1]))
+  const iso = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(v || '').trim())
+  if (iso) return new Date(Number(iso[1]), Number(iso[2]) - 1, Number(iso[3]))
+  return null
+}
+const zzLlAaaa = (d: Date) =>
+  `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')}.${d.getFullYear()}`
+
+type VerifPrelungire = {
+  de_la: string; pana_la: string
+  ok: { nume: string; expira: string }[]
+  prea_devreme: { nume: string; expira: string }[]   // expirat înainte de examen
+  prea_tarziu: { nume: string; expira: string }[]    // expiră la peste 6 luni după examen
+  fara_date: string[]
+}
+function verificaPrelungiri(rows: Row[], dataExamen: string | null | undefined): VerifPrelungire | null {
+  const examen = dataRo(String(dataExamen || ''))
+  if (!examen) return null
+  const limita = new Date(examen); limita.setMonth(limita.getMonth() + 6)
+  const r: VerifPrelungire = { de_la: zzLlAaaa(examen), pana_la: zzLlAaaa(limita), ok: [], prea_devreme: [], prea_tarziu: [], fara_date: [] }
+  for (const row of rows) {
+    if (!/prelungire/i.test(row.obtinere_prelungire || '')) continue
+    const exp = dataRo(row.lrc_expira_la)
+    if (!exp) { r.fara_date.push(row.full_name); continue }
+    const intrare = { nume: row.full_name, expira: zzLlAaaa(exp) }
+    if (exp < examen) r.prea_devreme.push(intrare)
+    else if (exp > limita) r.prea_tarziu.push(intrare)
+    else r.ok.push(intrare)
+  }
+  return r
 }
 
 type Practica = {
@@ -385,6 +422,8 @@ export default function RosterPage() {
   const [practica, setPractica] = useState<Practica | null>(null)
   // seriile radio au obținere/prelungire, VHF și cerere; cele C,D au categoria
   const [esteRadio, setEsteRadio] = useState(true)
+  const [dataExamen, setDataExamen] = useState<string | null>(null)
+  const [verifPrel, setVerifPrel] = useState<VerifPrelungire | null>(null)
   const [copiedSkipper, setCopiedSkipper] = useState(false)
   const [skipperDraft, setSkipperDraft] = useState('')
   const [skipperSaving, setSkipperSaving] = useState(false)
@@ -429,6 +468,7 @@ export default function RosterPage() {
       setTitle(t)
       document.title = t
       setEsteRadio(/radio|lrc/i.test(String(j.session.class_caa || '')))
+      setDataExamen(j.session.session_date || null)
     }
   }, [id, token])
 
@@ -768,7 +808,83 @@ export default function RosterPage() {
               Verificat lista {v.label}
             </label>
           ))}
+          {/* Termenul de prelungire: certificatul trebuie să expire între examen și +6 luni */}
+          {esteRadio && (
+            <button onClick={() => setVerifPrel(verificaPrelungiri(rows, dataExamen))}
+              className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-blue-200 bg-blue-50 text-sm text-blue-800 hover:bg-blue-100">
+              Verificare prelungire
+            </button>
+          )}
         </div>
+
+        {verifPrel && (
+          <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center p-4 overflow-y-auto">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg my-8">
+              <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-gray-100">
+                <div>
+                  <h3 className="font-semibold text-gray-900">Verificare termen prelungire</h3>
+                  <p className="text-xs text-gray-400 mt-0.5">
+                    Se poate prelungi doar certificatul care expiră între {verifPrel.de_la} și {verifPrel.pana_la}.
+                  </p>
+                </div>
+                <button onClick={() => setVerifPrel(null)} className="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
+              </div>
+              <div className="p-5 space-y-4 text-sm">
+                {verifPrel.prea_devreme.length === 0 && verifPrel.prea_tarziu.length === 0 && verifPrel.fara_date.length === 0 && (
+                  <p className="text-green-700">Toți cursanții de pe prelungire se încadrează în termen.</p>
+                )}
+                {verifPrel.prea_devreme.length > 0 && (
+                  <div>
+                    <p className="font-semibold text-red-700 mb-1">Expirat înainte de examen — nu mai poate fi prelungit</p>
+                    <ul className="space-y-0.5">
+                      {verifPrel.prea_devreme.map(c => (
+                        <li key={c.nume} className="flex justify-between gap-3 text-gray-800">
+                          <span>{c.nume}</span><span className="text-red-600 font-medium">{c.expira}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {verifPrel.prea_tarziu.length > 0 && (
+                  <div>
+                    <p className="font-semibold text-amber-700 mb-1">Expiră la peste 6 luni după examen — e prea devreme pentru prelungire</p>
+                    <ul className="space-y-0.5">
+                      {verifPrel.prea_tarziu.map(c => (
+                        <li key={c.nume} className="flex justify-between gap-3 text-gray-800">
+                          <span>{c.nume}</span><span className="text-amber-700 font-medium">{c.expira}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {verifPrel.fara_date.length > 0 && (
+                  <div>
+                    <p className="font-semibold text-gray-700 mb-1">Fără certificatul încărcat — nu se poate verifica</p>
+                    <ul className="space-y-0.5 text-gray-800">
+                      {verifPrel.fara_date.map(n => <li key={n}>{n}</li>)}
+                    </ul>
+                  </div>
+                )}
+                {verifPrel.ok.length > 0 && (
+                  <div>
+                    <p className="font-semibold text-green-700 mb-1">În termen ({verifPrel.ok.length})</p>
+                    <ul className="space-y-0.5">
+                      {verifPrel.ok.map(c => (
+                        <li key={c.nume} className="flex justify-between gap-3 text-gray-600">
+                          <span>{c.nume}</span><span className="text-green-700">{c.expira}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+              <div className="flex justify-end px-5 py-4 border-t border-gray-100">
+                <button onClick={() => setVerifPrel(null)}
+                  className="px-4 py-2 rounded-lg text-sm font-medium text-white" style={{ background: '#0a1628' }}>Închide</button>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Documente (PV / Anexe) — doar dacă admin a activat vizibilitatea */}
         {docsVisible && <DocsSection sessionId={id} />}
