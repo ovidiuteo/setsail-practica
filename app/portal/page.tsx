@@ -92,6 +92,7 @@ export default function PortalPage() {
   const [livrare, setLivrare] = useState<{ tip: TipLivrare | null; adresa: string; contact: string; telefon: string; email: string }>(
     { tip: null, adresa: '', contact: '', telefon: '', email: '' })
   const [livrareSalvata, setLivrareSalvata] = useState(false)   // badge „Date salvate"
+  const [adresaDesfasurata, setAdresaDesfasurata] = useState(false)
 
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const drawing = useRef(false)
@@ -197,6 +198,32 @@ export default function PortalPage() {
   const detailsComplete = detailVals.every(v => String(v || '').trim() !== '')
   // Actul scanat + toate datele completate: secțiunea de date (și semnătura) coboară la baza paginii, pliate
   const dateGata = detailsComplete && !!student?.ci_image_data
+  // Cursul a început? (materialele sunt deja pe drum, adresa nu mai e de completat)
+  const cursInceput = (() => {
+    const d = session?.course_start_date || session?.session_date
+    if (!d) return false
+    const start = new Date(d); start.setHours(0, 0, 0, 0)
+    return new Date() >= start
+  })()
+  const livrareRezumat = ({
+    sala: 'mă prezint în sală', easybox: 'Easybox Sameday',
+    domiciliu: 'la domiciliu', alta: 'altă adresă',
+  } as Record<string, string>)[String(livrare.tip || '')] || 'completată'
+  // La cursurile fără radio adresa mai urcă o dată sus la începutul unei serii noi:
+  // din 7 zile înainte de curs până la sfârșitul primei zile de curs.
+  const fereastraAdresa = (() => {
+    if (isRadioSession) return false
+    const d = session?.course_start_date || session?.session_date
+    if (!d) return false
+    const start = new Date(d); start.setHours(0, 0, 0, 0)
+    const de_la = new Date(start); de_la.setDate(de_la.getDate() - 7)
+    const pana_la = new Date(start); pana_la.setHours(23, 59, 59, 999)
+    const acum = new Date()
+    return acum >= de_la && acum <= pana_la
+  })()
+  // Strânsă sub „Date personale" după ce e completată și cursul a început,
+  // în afara ferestrei de la începutul seriei
+  const adresaStransa = livrareSalvata && cursInceput && !fereastraAdresa
   const [dateDesfasurate, setDateDesfasurate] = useState(false)
   const [semnaturaDesfasurata, setSemnaturaDesfasurata] = useState(false)
   const ascundeDate = dateGata && !dateDesfasurate
@@ -1679,19 +1706,35 @@ export default function PortalPage() {
               </div>
             )}
 
-            {/* ── Adresa de corespondență pentru materialele de curs ── */}
-            <div className="bg-white rounded-2xl p-6 shadow-2xl">
-              <div className="flex items-start justify-between gap-3 mb-1">
-                <h2 className="font-bold text-gray-900">Adresă de corespondență materiale de curs</h2>
-                {livrareSalvata && (
-                  <span className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-green-700 bg-green-50 border border-green-200">
-                    <CheckCircle size={13} /> Date salvate
+            {/* ── Adresa de corespondență pentru materialele de curs ──
+                După ce e completată și cursul a început, materialele sunt deja trimise,
+                așa că secțiunea se strânge sub „Date personale", ca să nu încarce pagina. */}
+            <div className={'bg-white rounded-2xl p-6 shadow-2xl ' + (adresaStransa ? 'order-[92]' : '')}>
+              {adresaStransa ? (
+                <button type="button" onClick={() => setAdresaDesfasurata(v => !v)}
+                  className="w-full flex items-center justify-between gap-2 text-left">
+                  <span className="flex items-center gap-2">
+                    <CheckCircle size={16} className="text-green-600" />
+                    <span className="font-bold text-gray-900">Adresa de corespondență</span>
+                    <span className="text-xs text-gray-400">{livrareRezumat}</span>
                   </span>
-                )}
-              </div>
-              <p className="text-xs text-gray-400 mb-4">Unde trimitem materialele. Datele de contact sunt ale dumneavoastră — le puteți modifica.</p>
+                  {adresaDesfasurata ? <ChevronUp size={16} className="text-gray-400" /> : <ChevronDown size={16} className="text-gray-400" />}
+                </button>
+              ) : (<>
+                <div className="flex items-start justify-between gap-3 mb-1">
+                  <h2 className="font-bold text-gray-900">Adresă de corespondență materiale de curs</h2>
+                  {livrareSalvata && (
+                    <span className="shrink-0 flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-green-700 bg-green-50 border border-green-200">
+                      <CheckCircle size={13} /> Date salvate
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-gray-400 mb-4">Unde trimitem materialele. Datele de contact sunt ale dumneavoastră — le puteți modifica.</p>
+              </>)}
 
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4">
+              <div className={adresaStransa && !adresaDesfasurata ? 'hidden' : adresaStransa ? 'mt-4' : ''}>
+
+              <div className={`grid grid-cols-2 sm:grid-cols-4 gap-2 mb-4 ${adresaStransa ? 'text-xs' : ''}`}>
                 {([
                   { tip: 'sala', titlu: 'Nu e nevoie, mă prezint în sală' },
                   { tip: 'easybox', titlu: 'Easybox Sameday' },
@@ -1702,7 +1745,8 @@ export default function PortalPage() {
                   const verde = o.tip === 'sala'
                   return (
                     <button key={o.tip} type="button" onClick={() => alegeLivrare(o.tip)}
-                      className={`flex flex-col items-center justify-center gap-1.5 px-3 py-3 rounded-xl border-2 text-sm font-medium transition-all ${
+                      className={`flex flex-col items-center justify-center gap-1.5 rounded-xl border-2 font-medium transition-all ${
+                        adresaStransa ? 'px-2 py-2 text-xs' : 'px-3 py-3 text-sm'} ${
                         ales
                           ? (verde ? 'border-green-500 bg-green-50 text-green-700' : 'border-blue-500 bg-blue-50 text-blue-700')
                           : (verde ? 'border-green-500 text-green-700 hover:bg-green-50/60' : 'border-gray-200 text-gray-600 hover:border-blue-300 hover:bg-blue-50/40')}`}>
@@ -1753,6 +1797,7 @@ export default function PortalPage() {
                   </div>
                 </div>
               )}
+              </div>
             </div>
 
             {/* ── Radio: cerere de examen în locul semnăturii cu pixul ── */}
