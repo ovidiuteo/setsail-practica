@@ -31,6 +31,8 @@ const SECTIUNI: { scope: string; titlu: string }[] = [
   // cursurile lungi: teoria la București, practica la Limanu
   { scope: 'practica_cds_limanu', titlu: 'Serii CDS București' },
   { scope: 'intensiv_cds_limanu', titlu: 'Serii intensiv' },
+  // clasa B (și A) — ambarcațiuni de agrement fără vele
+  { scope: 'practica_ba',         titlu: 'Serii B' },
 ]
 
 function newToken(): string {
