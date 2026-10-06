@@ -2057,6 +2057,7 @@ function VerifyTab({ sessionId, token, rows, onRowUpdate, esteRadio, onCategorie
   const [docKey, setDocKey] = useState<DocKey>('recto')
   const [notaPentru, setNotaPentru] = useState<string | null>(null)   // id-ul cursantului cu modalul de notă deschis
   const [stampBusy, setStampBusy] = useState(false)
+  const [salvat, setSalvat] = useState<string | null>(null)
   const [editOpen, setEditOpen] = useState(false)
   const wantId = useRef<string>('')
   const cur = rows[index]
@@ -2178,12 +2179,16 @@ function VerifyTab({ sessionId, token, rows, onRowUpdate, esteRadio, onCategorie
     // aceeași normalizare ca pe server: seria cu majuscule, „PP" -> PASS, fără spații
     const serie = (form.ci_series || '').replace(/\s+/g, '').toUpperCase()
     const f = { ...form, ci_series: serie === 'PP' ? 'PASS' : serie, ci_number: (form.ci_number || '').replace(/\s+/g, '') }
-    await fetch('/api/roster', {
+    // propaga: aceleași date ajung pe toate fișele persoanei, din orice serie
+    const r = await fetch('/api/roster', {
       method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ session_id: sessionId, token, student_id: cur.id, fields: f }),
+      body: JSON.stringify({ session_id: sessionId, token, student_id: cur.id, fields: f, propaga: true }),
     })
+    const j = await r.json().catch(() => ({}))
     onRowUpdate(cur.id, f as Partial<Row>)
     setForm(f); setDirty(false)
+    setSalvat(j?.propagate ? `salvat · dus și la ${j.propagate} ${j.propagate === 1 ? 'altă fișă' : 'alte fișe'}` : 'salvat')
+    setTimeout(() => setSalvat(null), 2500)
   }
   async function goto(i: number) {
     if (i === index || i < 0 || i >= rows.length) return
@@ -2244,7 +2249,8 @@ function VerifyTab({ sessionId, token, rows, onRowUpdate, esteRadio, onCategorie
       <div className="min-w-[14rem] max-w-full shrink-0 bg-white rounded-xl shadow-sm border border-gray-100 p-4 self-start">
         <div className="flex items-center justify-between mb-3">
           <span className="text-xs text-gray-400">{index + 1} / {rows.length}</span>
-          {dirty && <span className="text-xs font-medium text-amber-600">● nesalvat</span>}
+          {dirty ? <span className="text-xs font-medium text-amber-600">● nesalvat</span>
+            : salvat ? <span className="text-xs font-medium text-green-600">✓ {salvat}</span> : null}
         </div>
         <div className="space-y-3">
           {VERIFY_FIELDS.map(f => {
@@ -2262,7 +2268,10 @@ function VerifyTab({ sessionId, token, rows, onRowUpdate, esteRadio, onCategorie
                     const val = f.key === 'ci_series' ? nv.toUpperCase() : f.key === 'ci_number' && pasaport ? nv.replace(/\D/g, '') : nv
                     setForm(s => ({ ...s, [f.key]: val })); setDirty(true)
                   }}
-                  onBlur={f.key === 'ci_series' && v.trim().toUpperCase() === 'PP' ? () => setForm(s => ({ ...s, ci_series: 'PASS' })) : undefined}
+                  onBlur={() => {
+                    if (f.key === 'ci_series' && v.trim().toUpperCase() === 'PP') setForm(s => ({ ...s, ci_series: 'PASS' }))
+                    saveCurrent()
+                  }}
                   className={`px-2.5 py-1.5 rounded-lg border text-sm focus:outline-none focus:ring-2 ${avertisment ? 'border-amber-300 focus:ring-amber-200' : 'border-gray-200 focus:ring-blue-200'}`} />
                 {avertisment && <span className="block text-[11px] text-amber-600 mt-0.5">{avertisment}</span>}
               </label>

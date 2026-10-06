@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
+import { cheiPersoana } from '@/lib/persoana'
 import { CARRY_FIELDS, findPersonRows, stergeDinSerie } from '@/lib/student-merge'
 import { applyMailTemplate } from '@/lib/mail-template'
 import { syncSkipper, esteEroare } from '@/lib/skipper-sync'
@@ -418,7 +419,35 @@ export async function PATCH(req: NextRequest) {
 
   const { error } = await sb.from('students').update(updates).eq('id', student_id).in('session_id', (await grupeSeriei(sb, session_id)).ids)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
-  return NextResponse.json({ ok: true })
+
+  // Datele de identitate corectate se duc la toate fișele aceleiași persoane, din
+  // orice serie (recunoscută după CNP, email sau ultimele 8 cifre de telefon).
+  let propagate = 0
+  if (body?.propaga) {
+    const dePropagat = Object.fromEntries(Object.entries(updates).filter(([k]) => CAMPURI_PERSOANA.has(k)))
+    if (Object.keys(dePropagat).length) propagate = await propagaLaPersoana(sb, String(student_id), dePropagat)
+  }
+  return NextResponse.json({ ok: true, propagate })
+}
+
+// Câmpurile care țin de persoană, nu de înscrierea într-o serie anume
+const CAMPURI_PERSOANA = new Set([
+  'full_name', 'cnp', 'birth_date', 'address', 'city', 'county', 'phone', 'email',
+  'ci_series', 'ci_number', 'id_document', 'expiry_date', 'nationality', 'country', 'doc_type',
+])
+
+// Aceleași date, pe toate fișele persoanei din alte serii
+async function propagaLaPersoana(sb: any, studentId: string, date: Record<string, any>): Promise<number> {
+  const { data: eu } = await sb.from('students').select('id, cnp, email, phone').eq('id', studentId).maybeSingle()
+  if (!eu) return 0
+  const chei = cheiPersoana(eu as any)
+  if (!chei.length) return 0
+
+  const { data: toti } = await sb.from('students').select('id, cnp, email, phone')
+  const alte = (toti || []).filter((r: any) => r.id !== studentId && cheiPersoana(r).some(k => chei.includes(k)))
+  if (!alte.length) return 0
+  const { error } = await sb.from('students').update(date).in('id', alte.map((r: any) => r.id))
+  return error ? 0 : alte.length
 }
 
 // PUT — actualizează flag-urile de verificare a listei { session_id, token, verified:{corina,paula,ruxandra} }
