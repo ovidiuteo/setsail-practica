@@ -477,6 +477,7 @@ export default function RosterPage() {
   // seriile radio au obținere/prelungire, VHF și cerere; cele C,D au categoria
   const [esteRadio, setEsteRadio] = useState(true)
   const [dataExamen, setDataExamen] = useState<string | null>(null)
+  useEffect(() => { if (!esteRadio && tab === 'leaduri') setTab('cursanti') }, [esteRadio, tab])
   const [verifPrel, setVerifPrel] = useState<VerifPrelungire | null>(null)
   const [copiedSkipper, setCopiedSkipper] = useState(false)
   const [skipperDraft, setSkipperDraft] = useState('')
@@ -946,7 +947,10 @@ export default function RosterPage() {
 
         {/* Taburi */}
         <div className="mb-4 flex gap-1 border-b border-gray-200">
-          {([['cursanti', 'Lista cursanți'], ['adrese', 'Lista verificare adrese'], ['verify', 'Verify by ID'], ['observatii', 'Observații verificare'], ['leaduri', 'Leaduri radio'], ['administrativ', 'Administrativ'],
+          {([['cursanti', 'Lista cursanți'], ['adrese', 'Lista verificare adrese'], ['verify', 'Verify by ID'], ['observatii', 'Observații verificare'],
+            // leadurile vin de pe landingul de radio, deci apar doar la seriile de radio
+            ...(esteRadio ? [['leaduri', 'Leaduri radio'] as const] : []),
+            ['administrativ', 'Administrativ'],
             ...grupeVizibile.map(g => [('grupa' + g) as Tab, 'Grupa ' + g] as const)] as const).map(([k, lbl]) => (
             <button key={k} onClick={() => setTab(k as Tab)}
               className={`px-4 py-2 text-sm font-medium -mb-px border-b-2 ${tab === k ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
@@ -1289,7 +1293,7 @@ export default function RosterPage() {
 
         {/* Leadurile de pe landing, sub lista de cursanți — cei înscriși deja
             (după email) nu mai apar aici */}
-        {esteLista(tab) && (
+        {esteLista(tab) && esteRadio && (
           <div className="mt-8">
             <h2 className="text-sm font-semibold text-gray-700 mb-1">Leaduri de pe landing</h2>
             <p className="text-xs text-gray-400 mb-3">
