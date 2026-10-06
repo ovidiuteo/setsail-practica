@@ -932,7 +932,7 @@ export default function RosterPage() {
         ) : tab === 'verify' ? (
           <VerifyTab sessionId={id} token={token} rows={rows} onRowUpdate={rowUpdate} esteRadio={esteRadio} onCategorie={saveCategorie}
             variante={variante} setVariante={setVariante}
-            portalLink={portalLink} onMail={email => setMailCatre([email])} />
+            portalLink={portalLink} onMail={email => setMailCatre([email])} accessCode={accessCode} />
         ) : (
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 w-max">
             <table className="w-max text-sm border-collapse [&_th]:px-[1.5ch] [&_td]:px-[1.5ch] [&_th]:whitespace-nowrap [&_td]:whitespace-nowrap [&_th]:w-auto [&_th]:min-w-0">
@@ -2038,7 +2038,7 @@ function LeaduriTab({ sessionId, token, variant = 'full', onEnrolled }: {
   )
 }
 
-function VerifyTab({ sessionId, token, rows, onRowUpdate, esteRadio, onCategorie, variante, setVariante, portalLink, onMail }: {
+function VerifyTab({ sessionId, token, rows, onRowUpdate, esteRadio, onCategorie, variante, setVariante, portalLink, onMail, accessCode }: {
   sessionId: string; token: string; rows: Row[]
   onRowUpdate: (id: string, partial: Partial<Row>) => void
   esteRadio: boolean                                  // radio: Obținere/Prelungire LRC; ANR: categoria C/D
@@ -2047,6 +2047,7 @@ function VerifyTab({ sessionId, token, rows, onRowUpdate, esteRadio, onCategorie
   setVariante: (v: string[]) => void
   portalLink: (email?: string) => string              // linkul portalului cursantului
   onMail: (email: string) => void                     // deschide mailul către un singur cursant
+  accessCode: string                                  // codul seriei, pentru regenerarea cererii
 }) {
   const [index, setIndex] = useState(0)
   const [form, setForm] = useState<Record<string, string>>({})
@@ -2055,6 +2056,7 @@ function VerifyTab({ sessionId, token, rows, onRowUpdate, esteRadio, onCategorie
   const [ci, setCi] = useState<string | null | undefined>(undefined)
   const [docKey, setDocKey] = useState<DocKey>('recto')
   const [notaPentru, setNotaPentru] = useState<string | null>(null)   // id-ul cursantului cu modalul de notă deschis
+  const [stampBusy, setStampBusy] = useState(false)
   const [editOpen, setEditOpen] = useState(false)
   const wantId = useRef<string>('')
   const cur = rows[index]
@@ -2077,7 +2079,8 @@ function VerifyTab({ sessionId, token, rows, onRowUpdate, esteRadio, onCategorie
   // Celelalte acte încărcate ale cursantului — taburi lângă actul de identitate
   const alteActe: { key: DocKey; label: string }[] = cur
     ? ([['verso', 'Verso CI'], ['domiciliu', 'Adeverință domiciliu'], ['cert_nastere', 'Certificat naștere'],
-        ['vhf', 'Certificat LRC'], ['semnatura', 'Semnătură'], ['cerere', 'Cerere semnată']] as [DocKey, string][])
+        ['vhf', 'Certificat LRC'], ['semnatura', 'Semnătură'],
+        ['cerere', cur.cerere_nr ? `Cerere semnată · nr. ${cur.cerere_nr} / ${roDate(cur.cerere_data)}` : 'Cerere semnată']] as [DocKey, string][])
         .filter(([k]) => !!cur[DOC_FLAG[k]])
         .map(([key, label]) => ({ key, label }))
     : []
@@ -2104,6 +2107,63 @@ function VerifyTab({ sessionId, token, rows, onRowUpdate, esteRadio, onCategorie
     })
     const j = await r.json().catch(() => ({}))
     if (j.variante) setVariante(j.variante)
+  }
+
+  // „Nr. ieșire" în colțul din stânga sus al cererii, salvat în document.
+  // La poze desenăm peste imagine; la cererea generată de noi (PDF) o refacem cu ștampila.
+  async function stampileazaNrIesire() {
+    if (!cur || !ci) return
+    const nr = cur.cerere_nr ? `${cur.cerere_nr} / ${roDate(cur.cerere_data)}` : ''
+    if (!nr) { alert('Cursantul nu are încă număr de cerere alocat.'); return }
+    setStampBusy(true)
+    try {
+      if (String(ci).startsWith('data:application/pdf')) {
+        if (!confirm(`Cererea se regenerează cu „Nr. ieșire: ${nr}" în colțul din stânga sus. Continui?`)) return
+        const r = await fetch('/api/cerere-examen', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ student_id: cur.id, access_code: accessCode, semnata: true, nr_iesire: true }),
+        })
+        const j = await r.json().catch(() => ({}))
+        if (!r.ok || j.error) { alert('Nu am putut ștampila: ' + (j.error || 'eroare')); return }
+        setCi(j.pdf)
+        onRowUpdate(cur.id, { has_cerere: true } as Partial<Row>)
+        return
+      }
+      // poză / scan: scriem ștampila pe imagine
+      const stampat: string = await new Promise((resolve, reject) => {
+        const img = new Image()
+        img.onerror = () => reject(new Error('imagine invalidă'))
+        img.onload = () => {
+          const c = document.createElement('canvas')
+          c.width = img.width; c.height = img.height
+          const ctx = c.getContext('2d')!
+          ctx.drawImage(img, 0, 0)
+          const h = Math.max(22, Math.round(img.height * 0.035))
+          ctx.font = `bold ${h}px Arial`
+          const text = `Nr. ieșire: ${nr}`
+          const w = ctx.measureText(text).width
+          const pad = Math.round(h * 0.4)
+          ctx.fillStyle = 'rgba(255,255,255,0.85)'
+          ctx.fillRect(pad, pad, w + pad * 2, h + pad * 1.6)
+          ctx.fillStyle = '#000'
+          ctx.textBaseline = 'top'
+          ctx.fillText(text, pad * 2, pad * 1.3)
+          resolve(c.toDataURL('image/jpeg', 0.92))
+        }
+        img.src = ci!
+      })
+      const r = await fetch('/api/roster', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId, token, student_id: cur.id, side: 'cerere', imageData: stampat }),
+      })
+      if (!r.ok) { const j = await r.json().catch(() => ({})); alert('Salvare eșuată: ' + (j.error || 'eroare')); return }
+      setCi(stampat)
+      onRowUpdate(cur.id, { has_cerere: true } as Partial<Row>)
+    } catch (e: any) {
+      alert('Eroare: ' + (e?.message || e))
+    } finally {
+      setStampBusy(false)
+    }
   }
 
   function schimbaAct(k: DocKey) {
@@ -2247,6 +2307,13 @@ function VerifyTab({ sessionId, token, rows, onRowUpdate, esteRadio, onCategorie
               </button>
             ))}
             {/* scrie-i sau deschide-i portalul, fără să ieși din verificare */}
+            {docKey === 'cerere' && ci && (
+              <button onClick={stampileazaNrIesire} disabled={stampBusy}
+                title="Scrie numărul de ieșire în colțul din stânga sus și salvează documentul"
+                className="px-3 py-1.5 rounded-lg text-xs font-medium border border-amber-300 bg-amber-50 text-amber-800 hover:bg-amber-100 disabled:opacity-50">
+                {stampBusy ? 'Se ștampilează…' : 'Ștampilează nr. ieșire'}
+              </button>
+            )}
             <button onClick={() => cur.email && onMail(cur.email)} disabled={!cur.email}
               title={cur.email || 'Cursantul nu are email'}
               className="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-40">

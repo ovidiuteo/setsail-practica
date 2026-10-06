@@ -54,6 +54,7 @@ export type CerereOpts = {
   sessionDate: string        // data examenului (dd.mm.yyyy)
   cerereDate: string         // data cererii (dd.mm.yyyy)
   cerereNr?: string | number  // numărul alocat din registrul de cereri
+  nrIesire?: string          // „ștampila" de registru, sus-stânga (ex. „1 / 18.08.2026")
 }
 
 export async function cererePdf(s: any, opts: CerereOpts): Promise<Buffer> {
@@ -61,6 +62,13 @@ export async function cererePdf(s: any, opts: CerereOpts): Promise<Buffer> {
   const doc = newDoc()
   const cw = doc.page.width - MARGIN * 2
 
+  // Ștampila de registru, în colțul din stânga sus
+  if (opts.nrIesire) {
+    const y = doc.y
+    doc.font('B').fontSize(10).fillColor('#000')
+      .text(`Nr. ieșire: ${opts.nrIesire}`, MARGIN, y, { width: cw / 2, align: 'left' })
+    doc.y = y   // numărul din dreapta rămâne pe același rând
+  }
   // Antet: nr. de înregistrare (dreapta), dacă a fost alocat
   if (cerereNr) {
     doc.font('B').fontSize(10).fillColor('#000')

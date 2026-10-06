@@ -32,7 +32,7 @@ export async function POST(req: NextRequest) {
   const sb = svc()
   // semnata = cererea se generează cu semnătura cursantului deja pusă pe ea și se
   // salvează ca document (nu mai e nevoie să o printeze, semneze și scaneze)
-  const { student_id, access_code, semnata } = await req.json().catch(() => ({}))
+  const { student_id, access_code, semnata, nr_iesire } = await req.json().catch(() => ({}))
   if (!student_id || !access_code)
     return NextResponse.json({ error: 'date lipsă' }, { status: 400 })
 
@@ -96,6 +96,8 @@ export async function POST(req: NextRequest) {
     const pdf = await cererePdf(st, {
       isPrelungire, sessionDate, cerereDate,
       cerereNr: numar ?? undefined,
+      // ștampila de registru cerută din lista cu token
+      nrIesire: nr_iesire && numar ? `${numar} / ${cerereDate}` : undefined,
     })
     const nume = String((st as any).full_name || 'cursant').replace(/[\\/:*?"<>|]+/g, ' ').trim()
 
