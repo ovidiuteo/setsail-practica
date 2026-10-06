@@ -32,7 +32,7 @@ const SECTIUNI: { scope: string; titlu: string }[] = [
   { scope: 'practica_cds_limanu', titlu: 'Serii CDS București' },
   { scope: 'intensiv_cds_limanu', titlu: 'Serii intensiv' },
   // clasa B (și A) — ambarcațiuni de agrement fără vele
-  { scope: 'practica_ba',         titlu: 'Serii B' },
+  { scope: 'practica_ba',         titlu: 'Serii B/A' },
 ]
 
 function newToken(): string {
