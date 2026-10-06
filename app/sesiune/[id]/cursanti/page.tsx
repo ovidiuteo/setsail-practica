@@ -76,7 +76,7 @@ type Practica = {
   neprogramati: string[]
 }
 
-type Tab = 'cursanti' | 'adrese' | 'verify' | 'leaduri' | 'administrativ' | 'grupa1' | 'grupa2' | 'grupa3'
+type Tab = 'cursanti' | 'adrese' | 'verify' | 'observatii' | 'leaduri' | 'administrativ' | 'grupa1' | 'grupa2' | 'grupa3'
 
 // Sortarea listei: alfabetic sau cronologic (când a intrat în serie), cu sens reversibil
 // „camp:<coloană>" sortează după orice câmp al rândului (text, număr sau bifă)
@@ -694,7 +694,7 @@ export default function RosterPage() {
   return (
     // Listele nu mai au lățime maximă: tabelul se întinde cât toate coloanele, iar pagina
     // scrollează orizontal. La Verify by ID rămâne pe lățimea ecranului (imaginea actului).
-    <div className={`min-h-screen bg-gray-50 p-4 sm:p-8 ${tab === 'verify' ? '' : 'w-max min-w-full'}`}>
+    <div className={`min-h-screen bg-gray-50 p-4 sm:p-8 ${tab === 'verify' || tab === 'observatii' ? '' : 'w-max min-w-full'}`}>
       <div>
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -905,7 +905,7 @@ export default function RosterPage() {
 
         {/* Taburi */}
         <div className="mb-4 flex gap-1 border-b border-gray-200">
-          {([['cursanti', 'Lista cursanți'], ['adrese', 'Lista verificare adrese'], ['verify', 'Verify by ID'], ['leaduri', 'Leaduri radio'], ['administrativ', 'Administrativ'],
+          {([['cursanti', 'Lista cursanți'], ['adrese', 'Lista verificare adrese'], ['verify', 'Verify by ID'], ['observatii', 'Observații verificare'], ['leaduri', 'Leaduri radio'], ['administrativ', 'Administrativ'],
             ...grupeVizibile.map(g => [('grupa' + g) as Tab, 'Grupa ' + g] as const)] as const).map(([k, lbl]) => (
             <button key={k} onClick={() => setTab(k as Tab)}
               className={`px-4 py-2 text-sm font-medium -mb-px border-b-2 ${tab === k ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
@@ -925,6 +925,9 @@ export default function RosterPage() {
           <div className="text-center text-gray-400 py-16">Se încarcă…</div>
         ) : rows.length === 0 ? (
           <div className="text-center text-gray-400 py-16">Niciun cursant în sesiune.</div>
+        ) : tab === 'observatii' ? (
+          <ObservatiiTab sessionId={id} token={token} rows={rows} onRowUpdate={rowUpdate}
+            variante={variante} setVariante={setVariante} />
         ) : tab === 'verify' ? (
           <VerifyTab sessionId={id} token={token} rows={rows} onRowUpdate={rowUpdate} esteRadio={esteRadio} onCategorie={saveCategorie}
             variante={variante} setVariante={setVariante} />
@@ -2291,6 +2294,79 @@ function VerifyTab({ sessionId, token, rows, onRowUpdate, esteRadio, onCategorie
           onClose={() => { setEditOpen(false); fetchCi(cur.id) }}
           onRowUpdate={onRowUpdate} />
       )}
+    </div>
+  )
+}
+
+// Toate observațiile de la verificare, într-un singur loc: cine e marcat cu galben
+// sau roșu, ce notă are, plus cei verificați fără observații.
+function ObservatiiTab({ sessionId, token, rows, onRowUpdate, variante, setVariante }: {
+  sessionId: string; token: string; rows: Row[]
+  onRowUpdate: (id: string, partial: Partial<Row>) => void
+  variante: string[]; setVariante: (v: string[]) => void
+}) {
+  const [notaPentru, setNotaPentru] = useState<string | null>(null)
+
+  async function patch(id: string, field: 'verify_stare' | 'verify_nota', value: string) {
+    onRowUpdate(id, { [field]: value } as Partial<Row>)
+    await fetch('/api/roster', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId, token, student_id: id, field, value }),
+    })
+  }
+  async function adaugaVarianta(text: string) {
+    const r = await fetch('/api/roster', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: sessionId, token, varianta: text }),
+    })
+    const j = await r.json().catch(() => ({}))
+    if (j.variante) setVariante(j.variante)
+  }
+
+  const cuObservatii = rows.filter(r => r.verify_stare === 'atentie' || r.verify_stare === 'problema' || String(r.verify_nota || '').trim())
+  const verificati = rows.filter(r => r.verify_stare === 'ok').length
+  const neverificati = rows.filter(r => !r.verify_stare).length
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm border border-gray-100 max-w-4xl">
+      <div className="px-5 py-4 border-b border-gray-100">
+        <h2 className="font-semibold text-gray-900 text-sm">Observații verificare</h2>
+        <p className="text-xs text-gray-400 mt-0.5">
+          {cuObservatii.length} cu observații · {verificati} verificați fără probleme · {neverificati} neverificați
+        </p>
+      </div>
+      {cuObservatii.length === 0 ? (
+        <p className="px-5 py-10 text-center text-sm text-gray-400">Nicio observație deocamdată.</p>
+      ) : (
+        <div className="divide-y divide-gray-50">
+          {cuObservatii.map(r => (
+            <div key={r.id} className="flex items-start gap-3 px-5 py-3">
+              <button onClick={() => patch(r.id, 'verify_stare', urmatoareaStare(r.verify_stare || ''))}
+                title={stareTitlu(r.verify_stare)}
+                className={`shrink-0 mt-0.5 w-4 h-4 rounded-full border ${stareCls(r.verify_stare)}`} />
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium text-gray-900">{r.full_name}</div>
+                <button onClick={() => setNotaPentru(r.id)}
+                  className="text-left text-xs text-gray-600 hover:text-blue-700 mt-0.5">
+                  {String(r.verify_nota || '').trim() || <span className="text-gray-300">fără notă — adaugă</span>}
+                </button>
+              </div>
+              <span className="shrink-0 text-xs text-gray-400">{stareTitlu(r.verify_stare)}</span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {notaPentru && (() => {
+        const r = rows.find(x => x.id === notaPentru)
+        if (!r) return null
+        return (
+          <NotaModal row={r} variante={variante}
+            onSalveaza={async nota => { await patch(r.id, 'verify_nota', nota); setNotaPentru(null) }}
+            onVariantaNoua={adaugaVarianta}
+            onClose={() => setNotaPentru(null)} />
+        )
+      })()}
     </div>
   )
 }

@@ -30,6 +30,24 @@ async function ciPdf(s: any): Promise<Buffer | null> {
   return docToBuffer(doc)
 }
 
+// Cererea semnată încărcată de cursant (PDF sau poză) — ține loc de cea generată
+async function cerereIncarcataPdf(s: any): Promise<Buffer | null> {
+  const parts = decodeDataUrl(s.cerere_semnata_data)
+  if (!parts) return null
+  if (parts.mime.includes('pdf')) return parts.buf
+  if (!/jpe?g|png/.test(parts.mime)) return null
+
+  const doc = newDoc()
+  const cw = doc.page.width - MARGIN * 2
+  const ch = doc.page.height - MARGIN * 2
+  try {
+    doc.image(parts.buf, MARGIN, MARGIN, { fit: [cw, ch], align: 'center', valign: 'center' })
+  } catch {
+    doc.end(); return null
+  }
+  return docToBuffer(doc)
+}
+
 const slug = (n: string) => (n || 'cursant').replace(/[\\/:*?"<>|]+/g, ' ').replace(/\s+/g, ' ').trim()
 
 export async function POST(req: NextRequest) {
@@ -68,7 +86,10 @@ export async function POST(req: NextRequest) {
       const isPrelungire = c.includes('prelungire')
       const grup = isPrelungire ? 'prelungire' : 'obtinere' // folder mare per tip
 
-      const cerere = await cererePdf(s, { isPrelungire, sessionDate, cerereDate })
+      // Dacă cursantul a încărcat cererea semnată, o folosim pe aceea — nu mai
+      // generăm una peste care să punem și semnătura.
+      const incarcata = await cerereIncarcataPdf(s)
+      const cerere = incarcata || await cererePdf(s, { isPrelungire, sessionDate, cerereDate })
       zip.file(`${grup}/${name}/${name} - Cerere ${grup}.pdf`, cerere)
 
       const ci = await ciPdf(s)
