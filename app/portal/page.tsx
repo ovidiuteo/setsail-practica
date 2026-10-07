@@ -1710,9 +1710,22 @@ export default function PortalPage() {
 
                 {/* Data expirării nu se încadrează în fereastra de prelungire */}
                 {problemaPrelungire && (
-                  <div className="mt-3 rounded-xl border-2 border-red-300 bg-red-50 px-4 py-3 flex gap-2">
+                  <div className="mt-3 rounded-xl border-2 border-red-300 bg-red-50 px-4 py-3 flex gap-3 items-start flex-wrap">
                     <AlertTriangle size={16} className="text-red-600 shrink-0 mt-0.5" />
-                    <p className="text-sm text-red-700 font-medium">{problemaPrelungire}</p>
+                    <p className="flex-1 min-w-[12rem] text-sm text-red-700 font-medium">{problemaPrelungire}</p>
+                    {/* comută pe loc între obținere și prelungire */}
+                    <div className="flex rounded-lg overflow-hidden border border-red-300 shrink-0">
+                      {classOptions.map(o => {
+                        const ales = classCaa === o.value
+                        return (
+                          <button key={o.value} type="button" onClick={() => updateClass(o.value)}
+                            className={`px-3 py-1.5 text-xs font-semibold transition-colors ${
+                              ales ? 'bg-red-600 text-white' : 'bg-white text-red-700 hover:bg-red-100'}`}>
+                            {o.label}
+                          </button>
+                        )
+                      })}
+                    </div>
                   </div>
                 )}
 
