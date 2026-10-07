@@ -1245,18 +1245,6 @@ export default function PortalPage() {
                 Ați completat deja această fișă. Puteți modifica orice informație și salva din nou.
               </div>
             )}
-            {(student?.class_caa || '').toLowerCase().match(/radio|lrc/) && examSubmitted ? (
-              <div className="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-xl text-xs text-purple-700 flex items-center gap-2">
-                <CheckCircle size={14} className="shrink-0" />
-                <span><strong>Test finalizat</strong> — examenul a fost trimis. Nu mai poate fi accesat.</span>
-              </div>
-            ) : session?.radio_exam_status === 'active' && (student?.class_caa || '').toLowerCase().match(/radio|lrc/) ? (
-              <a href={`/portal/examen?cod=${session.access_code}`}
-                className="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-xl text-xs text-purple-700 hover:bg-purple-100 transition-colors flex items-center gap-2">
-                <span className="text-base leading-none">📻</span>
-                <span><strong>Examinare Radio LRC disponibilă</strong> — apasă aici pentru a începe examenul.</span>
-              </a>
-            ) : null}
 
               {/* Info fixă */}
               <div className="bg-gray-50 rounded-xl p-3 mb-5 space-y-1.5">
@@ -1782,6 +1770,21 @@ export default function PortalPage() {
                 </div>
               </div>
             )}
+
+            {/* Examenul de radio, cât timp e deschis — sus, ca să nu stea ascuns
+                în folderul de date personale */}
+            {(student?.class_caa || '').toLowerCase().match(/radio|lrc/) && examSubmitted ? (
+              <div className="order-[-40] rounded-2xl p-5 shadow-2xl bg-purple-50 border-2 border-purple-200 flex items-center gap-2 text-sm text-purple-700">
+                <CheckCircle size={16} className="shrink-0" />
+                <span><strong>Test finalizat</strong> — examenul a fost trimis. Nu mai poate fi accesat.</span>
+              </div>
+            ) : session?.radio_exam_status === 'active' && (student?.class_caa || '').toLowerCase().match(/radio|lrc/) ? (
+              <a href={`/portal/examen?cod=${session.access_code}`}
+                className="order-[-40] rounded-2xl p-5 shadow-2xl bg-purple-50 border-2 border-purple-300 hover:bg-purple-100 transition-colors flex items-center gap-3 text-sm text-purple-800">
+                <span className="text-xl leading-none">📻</span>
+                <span><strong>Examinare Radio LRC disponibilă</strong> — apăsați aici pentru a începe examenul.</span>
+              </a>
+            ) : null}
 
             {/* Mesajul de la verificarea dosarului, când l-am făcut vizibil din listă */}
             {student?.verify_nota_vizibila && String(student?.verify_nota || '').trim()
