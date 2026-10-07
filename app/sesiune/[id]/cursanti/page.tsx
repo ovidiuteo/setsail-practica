@@ -2208,11 +2208,12 @@ function VerifyTab({ sessionId, token, rows, onRowUpdate, esteRadio, onCategorie
           c.width = img.width; c.height = img.height
           const ctx = c.getContext('2d')!
           ctx.drawImage(img, 0, 0)
-          // aceleași proporții ca pe cererea generată: text de 10pt în colțul
-          // de sus-stânga, la marginea de 20 mm a paginii A4
-          const h = Math.max(10, Math.round(img.height * 0.0119))
+          // aceleași proporții ca pe cererea generată: text de 10pt în colțul de
+          // sus-stânga, la marginea de 20 mm. Ne raportăm la lățimea paginii A4
+          // (595 pt), ca să iasă la fel și dacă poza prinde doar o parte din foaie.
+          const h = Math.max(8, Math.round(img.width * 0.0168))
           const x = Math.round(img.width * 0.095)
-          const y = Math.round(img.height * 0.067)
+          const y = Math.min(Math.round(img.width * 0.095), Math.round(img.height * 0.5))
           ctx.font = `bold ${h}px Arial, Helvetica, sans-serif`
           ctx.textBaseline = 'top'
           const text = `Nr. ieșire: ${nr}`
