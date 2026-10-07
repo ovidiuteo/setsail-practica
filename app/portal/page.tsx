@@ -1784,7 +1784,9 @@ export default function PortalPage() {
             )}
 
             {/* Mesajul de la verificarea dosarului, când l-am făcut vizibil din listă */}
-            {student?.verify_nota_vizibila && String(student?.verify_nota || '').trim() && (
+            {student?.verify_nota_vizibila && String(student?.verify_nota || '').trim()
+              // nota se arată doar cât timp e ceva de rezolvat (galben sau roșu)
+              && (student.verify_stare === 'atentie' || student.verify_stare === 'problema') && (
               <div className={`${dateGata ? 'order-[-5]' : ''} rounded-2xl p-5 shadow-2xl border-2 border-fuchsia-400 ${
                 student.verify_stare === 'problema' ? 'bg-red-50' : 'bg-amber-50'}`}>
                 <h2 className={`font-bold flex items-center gap-2 ${
