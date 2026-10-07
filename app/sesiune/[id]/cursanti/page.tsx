@@ -2104,6 +2104,8 @@ function VerifyTab({ sessionId, token, rows, onRowUpdate, esteRadio, onCategorie
   const [docKey, setDocKey] = useState<DocKey>('recto')
   const [notaPentru, setNotaPentru] = useState<string | null>(null)   // id-ul cursantului cu modalul de notă deschis
   const [stampBusy, setStampBusy] = useState(false)
+  // documentul dinainte de ștampilă, ca ștampilarea să poată fi anulată
+  const [inainteStampila, setInainteStampila] = useState<string | null>(null)
   const [salvat, setSalvat] = useState<string | null>(null)
   const [imgDirty, setImgDirty] = useState(false)
   const [imgBusy, setImgBusy] = useState(false)
@@ -2137,7 +2139,7 @@ function VerifyTab({ sessionId, token, rows, onRowUpdate, esteRadio, onCategorie
   useEffect(() => {
     const c = rows[index]; if (!c) return
     setForm(Object.fromEntries(VERIFY_FIELDS.map(f => [f.key, (c[f.key] as string) || ''])))
-    setDirty(false); setDocKey('recto'); setImgDirty(false); setCropMode(false); setSel(null); fetchCi(c.id, 'recto')
+    setDirty(false); setDocKey('recto'); setImgDirty(false); setCropMode(false); setSel(null); setInainteStampila(null); fetchCi(c.id, 'recto')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index])
 
@@ -2192,6 +2194,7 @@ function VerifyTab({ sessionId, token, rows, onRowUpdate, esteRadio, onCategorie
         })
         const j = await r.json().catch(() => ({}))
         if (!r.ok || j.error) { alert('Nu am putut ștampila: ' + (j.error || 'eroare')); return }
+        setInainteStampila(ci)
         setCi(j.pdf)
         onRowUpdate(cur.id, { has_cerere: true } as Partial<Row>)
         return
@@ -2228,6 +2231,7 @@ function VerifyTab({ sessionId, token, rows, onRowUpdate, esteRadio, onCategorie
         body: JSON.stringify({ session_id: sessionId, token, student_id: cur.id, side: 'cerere', imageData: stampat }),
       })
       if (!r.ok) { const j = await r.json().catch(() => ({})); alert('Salvare eșuată: ' + (j.error || 'eroare')); return }
+      setInainteStampila(ci)
       setCi(stampat)
       onRowUpdate(cur.id, { has_cerere: true } as Partial<Row>)
     } catch (e: any) {
@@ -2281,10 +2285,39 @@ function VerifyTab({ sessionId, token, rows, onRowUpdate, esteRadio, onCategorie
   }
   function cropUp() { dragRef.current = null }
 
+  // Scoate ștampila: la poze punem înapoi originalul, la PDF îl refacem fără ea
+  async function anuleazaStampila() {
+    if (!cur || !inainteStampila) return
+    setStampBusy(true)
+    try {
+      if (String(inainteStampila).startsWith('data:application/pdf')) {
+        const r = await fetch('/api/cerere-examen', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ student_id: cur.id, access_code: accessCode, semnata: true }),
+        })
+        const j = await r.json().catch(() => ({}))
+        if (!r.ok || j.error) { alert('Nu am putut scoate ștampila: ' + (j.error || 'eroare')); return }
+        setCi(j.pdf)
+      } else {
+        const r = await fetch('/api/roster', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: sessionId, token, student_id: cur.id, side: 'cerere', imageData: inainteStampila }),
+        })
+        if (!r.ok) { const j = await r.json().catch(() => ({})); alert('Nu am putut scoate ștampila: ' + (j.error || 'eroare')); return }
+        setCi(inainteStampila)
+      }
+      setInainteStampila(null)
+    } catch (e: any) {
+      alert('Eroare: ' + (e?.message || e))
+    } finally {
+      setStampBusy(false)
+    }
+  }
+
   function schimbaAct(k: DocKey) {
     if (k === docKey || !cur) return
     if (imgDirty && !confirm('Imaginea are modificări nesalvate. Le pierzi?')) return
-    setImgDirty(false); setCropMode(false); setSel(null)
+    setImgDirty(false); setCropMode(false); setSel(null); setInainteStampila(null)
     setDocKey(k); fetchCi(cur.id, k)
   }
 
@@ -2455,6 +2488,13 @@ function VerifyTab({ sessionId, token, rows, onRowUpdate, esteRadio, onCategorie
               </button>
             ))}
             {/* scrie-i sau deschide-i portalul, fără să ieși din verificare */}
+            {docKey === 'cerere' && ci && inainteStampila && (
+              <button onClick={anuleazaStampila} disabled={stampBusy}
+                title="Pune documentul înapoi, fără numărul de ieșire"
+                className="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-300 bg-white text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+                Anulează ștampila
+              </button>
+            )}
             {docKey === 'cerere' && ci && (
               <button onClick={stampileazaNrIesire} disabled={stampBusy}
                 title="Scrie numărul de ieșire în colțul din stânga sus și salvează documentul"
