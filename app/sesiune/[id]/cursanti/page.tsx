@@ -479,6 +479,7 @@ export default function RosterPage() {
   const [dataExamen, setDataExamen] = useState<string | null>(null)
   const [zoomUrl, setZoomUrl] = useState('')
   const [copiedZoom, setCopiedZoom] = useState(false)
+  const [scopSesiune, setScopSesiune] = useState('')
   useEffect(() => { if (!esteRadio && tab === 'leaduri') setTab('cursanti') }, [esteRadio, tab])
   const [verifPrel, setVerifPrel] = useState<VerifPrelungire | null>(null)
   const [copiedSkipper, setCopiedSkipper] = useState(false)
@@ -528,6 +529,7 @@ export default function RosterPage() {
       setEsteRadio(/radio|lrc/i.test(String(j.session.class_caa || '')))
       setDataExamen(j.session.session_date || null)
       setZoomUrl(j.session.zoom_url || '')
+      setScopSesiune(j.session.scope || '')
     }
   }, [id, token])
 
@@ -820,7 +822,8 @@ export default function RosterPage() {
                 </button>
               </>)}
             </div>
-            {/* Linkul de Zoom al seriei — de trimis cursanților */}
+            {/* Linkul de Zoom al seriei — la intensiv nu se ține curs online */}
+            {scopSesiune !== 'intensiv_cds_limanu' && (
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <span className="text-xs text-gray-400">Link Zoom:</span>
               {zoomUrl ? (<>
@@ -837,6 +840,7 @@ export default function RosterPage() {
                 <span className="text-xs text-gray-400 italic">necompletat în sesiune</span>
               )}
             </div>
+            )}
           </div>
           <div className="flex flex-col items-end gap-1.5">
           <div className="flex gap-2">
