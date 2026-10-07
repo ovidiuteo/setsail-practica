@@ -139,7 +139,7 @@ export default function PortalExamenPage() {
       // 4) Verifică studentul + nume
       const { data: st } = await supabase
         .from('students')
-        .select('id, full_name, email, session_id')
+        .select('id, full_name, email, session_id, class_caa, obtinere_prelungire')
         .eq('id', stored.student_id)
         .ilike('email', stored.email)
         .maybeSingle()
@@ -150,6 +150,11 @@ export default function PortalExamenPage() {
         return
       }
       setStudentName(st.full_name || '')
+      // obținere/prelungire vine din portal, unde cursantul a ales deja
+      const clasa = String((st as any).class_caa || '').toLowerCase()
+      const alesInPortal = clasa.includes('prelungire') ? 'prelungire'
+        : (clasa.includes('obtinere') || clasa.includes('obținere')) ? 'obtinere'
+        : String((st as any).obtinere_prelungire || '')
 
       // 5) Fetch întrebări + traduceri
       const { data: qs } = await supabase
@@ -200,12 +205,12 @@ export default function PortalExamenPage() {
       setGrila(row.grila_answers || {})
       setTrad(row.translation_answers || {})
       setFeedback(row.feedback || '')
-      setObtinerePrelungire(row.obtinere_prelungire || '')
+      setObtinerePrelungire(alesInPortal || row.obtinere_prelungire || '')
       lastSavedRef.current = {
         grila: JSON.stringify(row.grila_answers || {}),
         trad: JSON.stringify(row.translation_answers || {}),
         feedback: row.feedback || '',
-        obtinere: row.obtinere_prelungire || '',
+        obtinere: alesInPortal || row.obtinere_prelungire || '',
       }
 
       setPhase('ready')
@@ -263,10 +268,6 @@ export default function PortalExamenPage() {
   // ---------- SUBMIT FINAL ----------
   async function submitFinal() {
     if (!answerRow || !examId) return
-    if (!obtinerePrelungire) {
-      alert('Te rugăm să alegi „Obținere carnet" sau „Prelungire valabilitate" la începutul examenului.')
-      return
-    }
     if (!confirm('Sigur trimiți examenul? Nu vei mai putea modifica nimic după acest pas.')) return
     setSubmitting(true)
     try {
@@ -415,35 +416,6 @@ export default function PortalExamenPage() {
               Cod generare = {codGenerare}
             </div>
           )}
-        </div>
-
-        {/* Obținere / Prelungire */}
-        <div className="bg-white rounded-2xl p-5 shadow-sm">
-          <label className="block text-base font-semibold text-gray-900 mb-3">
-            OBȚINERE CARNET SAU PRELUNGIRE? <span className="text-red-500">*</span>
-          </label>
-          <div className="space-y-2">
-            {[
-              { val: 'obtinere', label: 'OBȚINERE CARNET (nu am mai avut brevet radio sau a expirat)' },
-              { val: 'prelungire', label: 'PRELUNGIRE VALABILITATE (carnetul mai are foarte puțin și expiră)' },
-            ].map(opt => {
-              const isSelected = obtinerePrelungire === opt.val
-              return (
-                <button key={opt.val} type="button"
-                  onClick={() => setObtinerePrelungire(opt.val)}
-                  className={`w-full flex items-start gap-3 p-3 rounded-lg border text-left transition-colors ${
-                    isSelected ? 'bg-purple-50 border-purple-300' : 'border-gray-200 hover:bg-gray-50'
-                  }`}>
-                  {isSelected
-                    ? <CircleDot size={22} className="text-purple-600 shrink-0 mt-0.5" />
-                    : <Circle size={22} className="text-gray-300 shrink-0 mt-0.5" />}
-                  <span className={`text-base ${isSelected ? 'font-bold text-gray-900' : 'text-gray-700'}`}>
-                    {opt.label}
-                  </span>
-                </button>
-              )
-            })}
-          </div>
         </div>
 
         {/* Avertisment */}
