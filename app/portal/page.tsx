@@ -260,7 +260,7 @@ export default function PortalPage() {
   })()
   // Strânsă sub „Date personale" după ce e completată și cursul a început,
   // în afara ferestrei de la începutul seriei
-  const adresaStransa = livrareSalvata && cursInceput && !fereastraAdresa
+  const adresaStransa = (livrareSalvata || !!livrare.tip) && cursInceput && !fereastraAdresa
   const [dateDesfasurate, setDateDesfasurate] = useState(false)
   const [semnaturaDesfasurata, setSemnaturaDesfasurata] = useState(false)
   const ascundeDate = dateGata && !dateDesfasurate
@@ -1802,8 +1802,10 @@ export default function PortalPage() {
             )}
 
             {/* ── Adresa de corespondență pentru materialele de curs ──
-                După ce e completată și cursul a început, materialele sunt deja trimise,
-                așa că secțiunea se strânge sub „Date personale", ca să nu încarce pagina. */}
+                La radio nu se trimit materiale, deci secțiunea nici nu apare.
+                În rest, după ce e completată și cursul a început, se strânge sub
+                „Date personale", ca să nu încarce pagina. */}
+            {!isRadioSession && (
             <div className={'bg-white rounded-2xl p-6 shadow-2xl ' + (adresaStransa ? 'order-[92]' : '')}>
               {adresaStransa ? (
                 <button type="button" onClick={() => setAdresaDesfasurata(v => !v)}
@@ -1894,6 +1896,7 @@ export default function PortalPage() {
               )}
               </div>
             </div>
+            )}
 
             {/* ── Radio: cerere de examen în locul semnăturii cu pixul ── */}
             {isRadioSession && (
