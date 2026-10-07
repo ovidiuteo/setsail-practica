@@ -2105,6 +2105,12 @@ function VerifyTab({ sessionId, token, rows, onRowUpdate, esteRadio, onCategorie
   const [notaPentru, setNotaPentru] = useState<string | null>(null)   // id-ul cursantului cu modalul de notă deschis
   const [stampBusy, setStampBusy] = useState(false)
   const [salvat, setSalvat] = useState<string | null>(null)
+  const [imgDirty, setImgDirty] = useState(false)
+  const [imgBusy, setImgBusy] = useState(false)
+  const [cropMode, setCropMode] = useState(false)
+  const [sel, setSel] = useState<{ x: number; y: number; w: number; h: number } | null>(null)
+  const imgRef = useRef<HTMLImageElement>(null)
+  const dragRef = useRef<{ x: number; y: number } | null>(null)
   const [editOpen, setEditOpen] = useState(false)
   const wantId = useRef<string>('')
   const cur = rows[index]
@@ -2131,7 +2137,7 @@ function VerifyTab({ sessionId, token, rows, onRowUpdate, esteRadio, onCategorie
   useEffect(() => {
     const c = rows[index]; if (!c) return
     setForm(Object.fromEntries(VERIFY_FIELDS.map(f => [f.key, (c[f.key] as string) || ''])))
-    setDirty(false); setDocKey('recto'); fetchCi(c.id, 'recto')
+    setDirty(false); setDocKey('recto'); setImgDirty(false); setCropMode(false); setSel(null); fetchCi(c.id, 'recto')
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [index])
 
@@ -2227,8 +2233,54 @@ function VerifyTab({ sessionId, token, rows, onRowUpdate, esteRadio, onCategorie
     }
   }
 
+  // Rotire / decupare / salvare direct în zona de previzualizare
+  const esteImagine = !!ci && !String(ci).startsWith('data:application/pdf')
+  async function rotesteImg(deg: number) {
+    if (!esteImagine || !ci) return
+    setImgBusy(true)
+    try { setCi(await rotate(ci, deg)); setImgDirty(true); setZoom(1); setCropMode(false); setSel(null) }
+    catch (e: any) { alert('Eroare la rotire: ' + (e?.message || e)) }
+    setImgBusy(false)
+  }
+  async function aplicaCrop() {
+    if (!ci || !sel || sel.w < 0.02 || sel.h < 0.02) { setCropMode(false); setSel(null); return }
+    setImgBusy(true)
+    try { setCi(await crop(ci, sel)); setImgDirty(true); setCropMode(false); setSel(null); setZoom(1) }
+    catch (e: any) { alert('Eroare la decupare: ' + (e?.message || e)) }
+    setImgBusy(false)
+  }
+  async function salveazaImg() {
+    if (!ci || !cur || !imgDirty) return
+    setImgBusy(true)
+    try {
+      const r = await fetch('/api/roster', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: sessionId, token, student_id: cur.id, side: docKey, imageData: ci }),
+      })
+      if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.error || 'eroare') }
+      setImgDirty(false)
+      onRowUpdate(cur.id, { [DOC_FLAG[docKey]]: true } as Partial<Row>)
+    } catch (e: any) { alert('Salvare imagine eșuată: ' + (e?.message || e)) }
+    setImgBusy(false)
+  }
+  function pozRelativa(e: React.PointerEvent) {
+    const el = imgRef.current
+    if (!el) return { x: 0, y: 0 }
+    const r = el.getBoundingClientRect()
+    return { x: Math.min(1, Math.max(0, (e.clientX - r.left) / r.width)), y: Math.min(1, Math.max(0, (e.clientY - r.top) / r.height)) }
+  }
+  function cropDown(e: React.PointerEvent) { if (!cropMode) return; const p = pozRelativa(e); dragRef.current = p; setSel({ x: p.x, y: p.y, w: 0, h: 0 }) }
+  function cropMove(e: React.PointerEvent) {
+    if (!cropMode || !dragRef.current) return
+    const p = pozRelativa(e), s = dragRef.current
+    setSel({ x: Math.min(s.x, p.x), y: Math.min(s.y, p.y), w: Math.abs(p.x - s.x), h: Math.abs(p.y - s.y) })
+  }
+  function cropUp() { dragRef.current = null }
+
   function schimbaAct(k: DocKey) {
     if (k === docKey || !cur) return
+    if (imgDirty && !confirm('Imaginea are modificări nesalvate. Le pierzi?')) return
+    setImgDirty(false); setCropMode(false); setSel(null)
     setDocKey(k); fetchCi(cur.id, k)
   }
 
@@ -2358,10 +2410,30 @@ function VerifyTab({ sessionId, token, rows, onRowUpdate, esteRadio, onCategorie
               className="w-8 h-8 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 text-lg disabled:opacity-40">+</button>
             <button onClick={() => setZoom(1)} disabled={!ci} title="Pe lățime"
               className="px-2.5 h-8 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 text-xs disabled:opacity-40">Lățime</button>
+
+            {/* rotire, decupare și salvare, fără să mai deschizi editorul mare */}
+            <span className="w-px h-6 bg-gray-200 mx-1" />
+            <button onClick={() => rotesteImg(-90)} disabled={!esteImagine || imgBusy || cropMode} title="Rotește stânga"
+              className="w-8 h-8 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40">⟲</button>
+            <button onClick={() => rotesteImg(90)} disabled={!esteImagine || imgBusy || cropMode} title="Rotește dreapta"
+              className="w-8 h-8 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-40">⟳</button>
+            {cropMode ? (<>
+              <button onClick={aplicaCrop} disabled={imgBusy}
+                className="px-2.5 h-8 rounded-lg text-xs font-medium text-white bg-blue-600 hover:bg-blue-500 disabled:opacity-40">Aplică</button>
+              <button onClick={() => { setCropMode(false); setSel(null) }}
+                className="px-2.5 h-8 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 text-xs">Renunță</button>
+            </>) : (
+              <button onClick={() => { setCropMode(true); setZoom(1) }} disabled={!esteImagine || imgBusy} title="Decupează"
+                className="px-2.5 h-8 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 text-xs disabled:opacity-40">✂ Decupează</button>
+            )}
+            <button onClick={salveazaImg} disabled={!imgDirty || imgBusy}
+              className={`px-2.5 h-8 rounded-lg text-xs font-medium ${imgDirty ? 'text-white bg-green-600 hover:bg-green-500' : 'border border-gray-200 text-gray-400'} disabled:opacity-40`}>
+              {imgBusy ? 'Se lucrează…' : imgDirty ? 'Salvează imaginea' : 'Salvat'}
+            </button>
           </div>
           {docKey === 'recto' && (
             <button onClick={() => setEditOpen(true)}
-              className="px-3 h-8 rounded-lg text-xs font-medium border border-blue-200 text-blue-600 hover:bg-blue-50">✂ Editează / Crop CI</button>
+              className="px-3 h-8 rounded-lg text-xs font-medium border border-blue-200 text-blue-600 hover:bg-blue-50">✂ Editor mare / înlocuiește CI</button>
           )}
         </div>
 
@@ -2410,6 +2482,20 @@ function VerifyTab({ sessionId, token, rows, onRowUpdate, esteRadio, onCategorie
             </div>
           ) : String(ci).startsWith('data:application/pdf') ? (
             <iframe src={ci} title="Document PDF" className="w-full h-[70vh] bg-white rounded" />
+          ) : cropMode ? (
+            // decupare: trage peste imagine, apoi „Aplică"
+            <div className="relative inline-block max-w-full select-none touch-none"
+              onPointerDown={cropDown} onPointerMove={cropMove} onPointerUp={cropUp} onPointerLeave={cropUp}>
+              <img ref={imgRef} src={ci} alt="Document" draggable={false}
+                className="block max-w-full max-h-[70vh] pointer-events-none" />
+              {sel && sel.w > 0 && (
+                <div className="absolute border-2 border-blue-400 bg-blue-400/20 pointer-events-none"
+                  style={{ left: `${sel.x * 100}%`, top: `${sel.y * 100}%`, width: `${sel.w * 100}%`, height: `${sel.h * 100}%` }} />
+              )}
+              <div className="absolute top-2 left-2 text-xs bg-black/60 text-white px-2 py-1 rounded pointer-events-none">
+                Trage pentru a selecta zona, apoi „Aplică"
+              </div>
+            </div>
           ) : (
             // la 100% documentul se încadrează în zonă; peste 100% se poate derula
             <img src={ci} alt="Document" className="block"
