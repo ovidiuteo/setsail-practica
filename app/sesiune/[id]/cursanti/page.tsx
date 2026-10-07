@@ -2205,16 +2205,20 @@ function VerifyTab({ sessionId, token, rows, onRowUpdate, esteRadio, onCategorie
           c.width = img.width; c.height = img.height
           const ctx = c.getContext('2d')!
           ctx.drawImage(img, 0, 0)
-          const h = Math.max(22, Math.round(img.height * 0.035))
-          ctx.font = `bold ${h}px Arial`
-          const text = `Nr. ieșire: ${nr}`
-          const w = ctx.measureText(text).width
-          const pad = Math.round(h * 0.4)
-          ctx.fillStyle = 'rgba(255,255,255,0.85)'
-          ctx.fillRect(pad, pad, w + pad * 2, h + pad * 1.6)
-          ctx.fillStyle = '#000'
+          // aceleași proporții ca pe cererea generată: text de 10pt în colțul
+          // de sus-stânga, la marginea de 20 mm a paginii A4
+          const h = Math.max(10, Math.round(img.height * 0.0119))
+          const x = Math.round(img.width * 0.095)
+          const y = Math.round(img.height * 0.067)
+          ctx.font = `bold ${h}px Arial, Helvetica, sans-serif`
           ctx.textBaseline = 'top'
-          ctx.fillText(text, pad * 2, pad * 1.3)
+          const text = `Nr. ieșire: ${nr}`
+          // contur alb subțire, ca textul să se vadă și pe hârtie umbrită
+          ctx.lineWidth = Math.max(1, h * 0.22)
+          ctx.strokeStyle = 'rgba(255,255,255,0.9)'
+          ctx.strokeText(text, x, y)
+          ctx.fillStyle = '#000'
+          ctx.fillText(text, x, y)
           resolve(c.toDataURL('image/jpeg', 0.92))
         }
         img.src = ci!
