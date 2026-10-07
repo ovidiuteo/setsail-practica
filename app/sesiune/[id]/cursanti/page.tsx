@@ -477,6 +477,8 @@ export default function RosterPage() {
   // seriile radio au obținere/prelungire, VHF și cerere; cele C,D au categoria
   const [esteRadio, setEsteRadio] = useState(true)
   const [dataExamen, setDataExamen] = useState<string | null>(null)
+  const [zoomUrl, setZoomUrl] = useState('')
+  const [copiedZoom, setCopiedZoom] = useState(false)
   useEffect(() => { if (!esteRadio && tab === 'leaduri') setTab('cursanti') }, [esteRadio, tab])
   const [verifPrel, setVerifPrel] = useState<VerifPrelungire | null>(null)
   const [copiedSkipper, setCopiedSkipper] = useState(false)
@@ -525,6 +527,7 @@ export default function RosterPage() {
       document.title = t
       setEsteRadio(/radio|lrc/i.test(String(j.session.class_caa || '')))
       setDataExamen(j.session.session_date || null)
+      setZoomUrl(j.session.zoom_url || '')
     }
   }, [id, token])
 
@@ -816,6 +819,23 @@ export default function RosterPage() {
                   {skipperSaving ? 'Se salvează…' : 'Salvează'}
                 </button>
               </>)}
+            </div>
+            {/* Linkul de Zoom al seriei — de trimis cursanților */}
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <span className="text-xs text-gray-400">Link Zoom:</span>
+              {zoomUrl ? (<>
+                <code className="px-2 py-1 rounded bg-gray-100 border border-gray-200 text-xs text-gray-700 break-all">{zoomUrl}</code>
+                <button onClick={() => { navigator.clipboard.writeText(zoomUrl); setCopiedZoom(true); setTimeout(() => setCopiedZoom(false), 2000) }}
+                  className="px-2.5 py-1 rounded-lg text-xs font-medium border border-gray-200 bg-white text-gray-700 hover:bg-gray-50">
+                  {copiedZoom ? 'Copiat ✓' : 'Copy link'}
+                </button>
+                <a href={zoomUrl} target="_blank" rel="noopener noreferrer"
+                  className="px-2.5 py-1 rounded-lg text-xs font-medium border border-blue-200 bg-blue-50 text-blue-700 hover:bg-blue-100">
+                  Deschide Zoom
+                </a>
+              </>) : (
+                <span className="text-xs text-gray-400 italic">necompletat în sesiune</span>
+              )}
             </div>
           </div>
           <div className="flex flex-col items-end gap-1.5">

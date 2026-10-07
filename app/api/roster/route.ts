@@ -143,7 +143,7 @@ export async function GET(req: NextRequest) {
   const sessionId = sp.get('session_id') || ''
   const token = sp.get('token') || ''
   const { data: sess } = await sb.from('sessions')
-    .select('roster_token, roster_verified, roster_docs_visible, class_caa, session_date, course_start_date, access_code, skipper_url, practice_booking_enabled, practice_start_date, practice_slot_minutes, practice_start_hour, practice_end_hour, practice_boats, practice_per_boat, practice_per_slot')
+    .select('roster_token, roster_verified, roster_docs_visible, class_caa, session_date, course_start_date, access_code, skipper_url, zoom_url, practice_booking_enabled, practice_start_date, practice_slot_minutes, practice_start_hour, practice_end_hour, practice_boats, practice_per_boat, practice_per_slot')
     .eq('id', sessionId).maybeSingle()
   if (!sessionId || !token || !sess?.roster_token || sess.roster_token !== token)
     return NextResponse.json({ error: 'unauthorized' }, { status: 403 })
@@ -336,7 +336,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({
     students: rows, verified, docs_visible: !!sess.roster_docs_visible, visits,
     // pentru titlul paginii/tab-ului (ex. „Curs Radio 5-7 oct")
-    session: { class_caa: sess.class_caa, session_date: sess.session_date, course_start_date: sess.course_start_date },
+    session: { class_caa: sess.class_caa, session_date: sess.session_date, course_start_date: sess.course_start_date, zoom_url: (sess as any).zoom_url || '' },
     // codul sesiunii — pentru linkul portalului cursantului
     access_code: sess.access_code || '',
     // linkul grupei de pe skipper — fără el butonul de sincronizare e dezactivat
