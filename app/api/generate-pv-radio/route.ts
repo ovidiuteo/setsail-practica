@@ -222,7 +222,7 @@ ${antetHtml}
   try {
   const {
     Document, Packer, Paragraph, TextRun, Table, TableRow, TableCell,
-    AlignmentType, BorderStyle, WidthType, ShadingType, ImageRun, VerticalAlign,
+    AlignmentType, BorderStyle, WidthType, ShadingType, ImageRun, VerticalAlign, HeightRule,
     convertMillimetersToTwip
   } = await import('docx')
 
@@ -348,15 +348,17 @@ ${antetHtml}
       spacing: { before: 60, after: 60 },
       children: [reg(txt, 16)],
     })
+    // rândurile goale rămân la fel de înalte ca cele completate
+    const inaltimeRand = { value: 420, rule: HeightRule.ATLEAST }
     if (isPrelungire) {
-      return new TableRow({ children: [
+      return new TableRow({ height: inaltimeRand, children: [
         cell([centered(s ? String(i+1) : '')], { w: colWidths[0] }),
         cell([para([reg(s?.full_name || '', 16)])], { w: colWidths[1] }),
         cell([centered(sc.grila)], { w: colWidths[2] }),
         cell([centered(sc.result)], { w: colWidths[3] }),
       ]})
     } else {
-      return new TableRow({ children: [
+      return new TableRow({ height: inaltimeRand, children: [
         cell([centered(s ? String(i+1) : '')], { w: colWidths[0] }),
         cell([para([reg(s?.full_name || '', 16)])], { w: colWidths[1] }),
         cell([centered(sc.grila)], { w: colWidths[2] }),
