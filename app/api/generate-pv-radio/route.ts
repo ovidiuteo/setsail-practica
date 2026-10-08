@@ -159,14 +159,14 @@ export async function POST(req: NextRequest) {
       const s = students[i]
       const sc = s ? getScores(s) : { grila: '', trad: '', sim: '', result: '' }
       if (isPrelungire) {
-        return `<tr>
+        return `<tr style="height:0.74cm">
           <td style="border:1px solid #000;padding:6px;text-align:center">${s ? i+1 : ''}</td>
           <td style="border:1px solid #000;padding:6px">${s?.full_name || ''}</td>
           <td style="border:1px solid #000;padding:6px;text-align:center">${sc.grila}</td>
           <td style="border:1px solid #000;padding:6px;text-align:center">${sc.result}</td>
         </tr>`
       } else {
-        return `<tr>
+        return `<tr style="height:0.74cm">
           <td style="border:1px solid #000;padding:6px;text-align:center">${s ? i+1 : ''}</td>
           <td style="border:1px solid #000;padding:6px">${s?.full_name || ''}</td>
           <td style="border:1px solid #000;padding:6px;text-align:center">${sc.grila}</td>
