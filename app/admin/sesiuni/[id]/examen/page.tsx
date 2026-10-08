@@ -862,22 +862,19 @@ export default function ExamenPage() {
         }
       })
 
-      // Traducerile: câte sunt bune după nota dată, restul primesc traducerea altei
-      // propoziții, ca rândul să arate ca al unui cursant care chiar a scris ceva.
+      // Traducerile: la fiecare propoziție luăm, la întâmplare, una dintre traducerile
+      // scrise deja de ceilalți cursanți. Dacă nimeni n-a scris nimic la propoziția
+      // aceea, punem traducerea de referință din examen.
       const tradAns: Record<string, string> = {}
-      if (translations.length) {
-        const bune = tradN === null ? translations.length : Math.max(0, Math.min(translations.length, tradN))
-        const ordine = shuffle(translations.map((_, i) => i))
-        const corecte = new Set(ordine.slice(0, bune))
-        translations.forEach((t, i) => {
-          if (corecte.has(i)) {
-            tradAns[String(t.order_no)] = t.romanian_key || ""
-          } else {
-            const altele = translations.filter(x => x.order_no !== t.order_no && (x.romanian_key || "").trim())
-            const alta = altele.length ? altele[Math.floor(Math.random() * altele.length)] : null
-            tradAns[String(t.order_no)] = alta ? alta.romanian_key : (t.romanian_key || "")
-          }
-        })
+      for (const t of translations) {
+        const cheie = String(t.order_no)
+        const scrise = answers
+          .filter(a => a.student_id !== resolveStudentId)
+          .map(a => String(a.translation_answers?.[cheie] || "").trim())
+          .filter(Boolean)
+        tradAns[cheie] = scrise.length
+          ? scrise[Math.floor(Math.random() * scrise.length)]
+          : (t.romanian_key || "")
       }
 
       // Rand existent: din „Șterge și rezolvă" SAU daca studentul ales din dropdown are deja rezultat.
