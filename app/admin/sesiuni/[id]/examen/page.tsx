@@ -862,6 +862,24 @@ export default function ExamenPage() {
         }
       })
 
+      // Traducerile: câte sunt bune după nota dată, restul primesc traducerea altei
+      // propoziții, ca rândul să arate ca al unui cursant care chiar a scris ceva.
+      const tradAns: Record<string, string> = {}
+      if (translations.length) {
+        const bune = tradN === null ? translations.length : Math.max(0, Math.min(translations.length, tradN))
+        const ordine = shuffle(translations.map((_, i) => i))
+        const corecte = new Set(ordine.slice(0, bune))
+        translations.forEach((t, i) => {
+          if (corecte.has(i)) {
+            tradAns[String(t.order_no)] = t.romanian_key || ""
+          } else {
+            const altele = translations.filter(x => x.order_no !== t.order_no && (x.romanian_key || "").trim())
+            const alta = altele.length ? altele[Math.floor(Math.random() * altele.length)] : null
+            tradAns[String(t.order_no)] = alta ? alta.romanian_key : (t.romanian_key || "")
+          }
+        })
+      }
+
       // Rand existent: din „Șterge și rezolvă" SAU daca studentul ales din dropdown are deja rezultat.
       // Resetam ce a scris cursantul (grila/traduceri), dar PASTRAM feedback-ul (review) daca e completat.
       let existingId: string | null = resolveExistingAnswerId
@@ -889,8 +907,8 @@ export default function ExamenPage() {
           exam_id: exam.id,
           student_id: resolveStudentId,
           grila_answers: grilaAns,
-          translation_answers: {},
-          feedback: keepFeedback,
+          translation_answers: tradAns,
+          feedback: keepFeedback || 'ok',
           obtinere_prelungire: '',
           grila_score: resolveGrilaScore,
           translation_score: tradN ?? 0,
