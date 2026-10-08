@@ -273,6 +273,7 @@ export default function ExamenPage() {
   const [resolveSimScore, setResolveSimScore] = useState<string>('')
   const [resolveExistingAnswerId, setResolveExistingAnswerId] = useState<string | null>(null)
   const [resolveBusy, setResolveBusy] = useState(false)
+  const [alocTrad, setAlocTrad] = useState<string | null>(null)
   // Editare punctuala a unui raspuns grila al unui cursant
   const [editQ, setEditQ] = useState<{ answer: Answer; question: Question; selected: string } | null>(null)
   const [savingEditQ, setSavingEditQ] = useState(false)
@@ -828,40 +829,10 @@ export default function ExamenPage() {
     setShowResolve(true)
   }
 
-  async function doResolve() {
-    if (!exam) { alert('Examenul nu există.'); return }
-    if (!resolveStudentId) { alert('Alege un cursant.'); return }
-    if (resolveGrilaScore < 0 || resolveGrilaScore > NUM_GRILA) {
-      alert('Punctaj grilă invalid (0-' + NUM_GRILA + ').'); return
-    }
-    const tradN = resolveTradScore === '' ? null : parseInt(resolveTradScore, 10)
-    if (tradN !== null && (isNaN(tradN) || tradN < 0 || tradN > 5)) {
-      alert('Notă traduceri trebuie 0-5 sau gol.'); return
-    }
-    const simN = resolveSimScore === '' ? null : parseInt(resolveSimScore, 10)
-    if (simN !== null && (isNaN(simN) || simN < 1 || simN > 10)) {
-      alert('Notă simulator trebuie 1-10 sau gol.'); return
-    }
-    if (questions.length !== NUM_GRILA) {
-      alert('Examenul nu are cele ' + NUM_GRILA + ' întrebări generate.'); return
-    }
-
-    setResolveBusy(true)
-    try {
-      // Construiește grila_answers: aleg random N întrebări care primesc răspunsul corect,
-      // restul primesc un răspuns greșit ales aleator dintre celelalte 3 litere
-      const indices = shuffle(questions.map((_, i) => i))
-      const correctIdx = new Set(indices.slice(0, resolveGrilaScore))
-      const grilaAns: Record<string, string> = {}
-      questions.forEach((q, i) => {
-        if (correctIdx.has(i)) {
-          grilaAns[String(q.order_no)] = q.correct_option
-        } else {
-          const wrong = (['A', 'B', 'C', 'D'] as const).filter(l => l !== q.correct_option)
-          grilaAns[String(q.order_no)] = wrong[Math.floor(Math.random() * wrong.length)]
-        }
-      })
-
+  // Traducerile „de umplutură" pentru un cursant: la fiecare propoziție luăm, la
+  // întâmplare, una dintre traducerile scrise deja de alți cursanți.
+  async function traduceriRandom(studentId: string): Promise<Record<string, string>> {
+    if (!exam) return {}
       // Traducerile: la fiecare propoziție luăm, la întâmplare, una dintre traducerile
       // scrise deja de cursanți — întâi din seria asta, iar dacă nu există, din seriile
       // trecute care au avut aceeași propoziție. Ultima variantă: traducerea de referință.
@@ -870,7 +841,7 @@ export default function ExamenPage() {
       for (const t of translations) {
         const cheie = String(t.order_no)
         pool.set(cheie, answers
-          .filter(a => a.student_id !== resolveStudentId)
+          .filter(a => a.student_id !== studentId)
           .map(a => String(a.translation_answers?.[cheie] || '').trim())
           .filter(Boolean))
       }
@@ -909,6 +880,64 @@ export default function ExamenPage() {
           ? scrise[Math.floor(Math.random() * scrise.length)]
           : (t.romanian_key || '')
       }
+
+
+    return tradAns
+  }
+
+  // Umple traducerile unui cursant care n-a scris nimic
+  async function alocaTraduceri(a: Answer) {
+    if (!exam) return
+    setAlocTrad(a.id)
+    try {
+      const tradAns = await traduceriRandom(a.student_id)
+      const { error } = await supabase.from('radio_exam_answers')
+        .update({ translation_answers: tradAns, updated_at: new Date().toISOString() })
+        .eq('id', a.id)
+      if (error) throw error
+      await loadAll()
+    } catch (e: any) {
+      alert('Eroare: ' + (e.message || String(e)))
+    } finally {
+      setAlocTrad(null)
+    }
+  }
+
+  async function doResolve() {
+    if (!exam) { alert('Examenul nu există.'); return }
+    if (!resolveStudentId) { alert('Alege un cursant.'); return }
+    if (resolveGrilaScore < 0 || resolveGrilaScore > NUM_GRILA) {
+      alert('Punctaj grilă invalid (0-' + NUM_GRILA + ').'); return
+    }
+    const tradN = resolveTradScore === '' ? null : parseInt(resolveTradScore, 10)
+    if (tradN !== null && (isNaN(tradN) || tradN < 0 || tradN > 5)) {
+      alert('Notă traduceri trebuie 0-5 sau gol.'); return
+    }
+    const simN = resolveSimScore === '' ? null : parseInt(resolveSimScore, 10)
+    if (simN !== null && (isNaN(simN) || simN < 1 || simN > 10)) {
+      alert('Notă simulator trebuie 1-10 sau gol.'); return
+    }
+    if (questions.length !== NUM_GRILA) {
+      alert('Examenul nu are cele ' + NUM_GRILA + ' întrebări generate.'); return
+    }
+
+    setResolveBusy(true)
+    try {
+      // Construiește grila_answers: aleg random N întrebări care primesc răspunsul corect,
+      // restul primesc un răspuns greșit ales aleator dintre celelalte 3 litere
+      const indices = shuffle(questions.map((_, i) => i))
+      const correctIdx = new Set(indices.slice(0, resolveGrilaScore))
+      const grilaAns: Record<string, string> = {}
+      questions.forEach((q, i) => {
+        if (correctIdx.has(i)) {
+          grilaAns[String(q.order_no)] = q.correct_option
+        } else {
+          const wrong = (['A', 'B', 'C', 'D'] as const).filter(l => l !== q.correct_option)
+          grilaAns[String(q.order_no)] = wrong[Math.floor(Math.random() * wrong.length)]
+        }
+      })
+
+      const tradAns = await traduceriRandom(resolveStudentId)
 
       // Rand existent: din „Șterge și rezolvă" SAU daca studentul ales din dropdown are deja rezultat.
       // Resetam ce a scris cursantul (grila/traduceri), dar PASTRAM feedback-ul (review) daca e completat.
@@ -1706,6 +1735,12 @@ export default function ExamenPage() {
                                 style={{ background: '#7c3aed' }}>
                                 {savingGrade === a.id ? <Loader2 size={14} className="animate-spin inline" /> : <Check size={14} className="inline mr-1" />}
                                 Salvează notele
+                              </button>
+                              {/* traduceri de umplutură, luate de la ceilalți cursanți */}
+                              <button onClick={() => alocaTraduceri(a)} disabled={alocTrad === a.id}
+                                title="Completează traducerile cu răspunsuri scrise de alți cursanți"
+                                className="px-4 py-2 rounded-lg text-xs font-medium border border-purple-200 text-purple-700 bg-white hover:bg-purple-50 disabled:opacity-50">
+                                {alocTrad === a.id ? 'Se alocă…' : '🎲 Alocă traduceri'}
                               </button>
                               {a.graded_at && (
                                 <span className="text-xs text-gray-400">
