@@ -1233,6 +1233,16 @@ export default function ExamenPage() {
             <br />• <strong>Ascuns</strong> — linkul dispare din portal, dar examenul rămâne funcțional (cine îl are deschis poate continua/trimite). Util ca să oprești accesul nou fără să închizi.
             <br />• <strong>Închis</strong> — cursanții nu mai pot trimite. Notează rezultatele.
           </p>
+
+          {/* Baremul oficial, ca să fie la îndemână când notezi */}
+          <div className="mt-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+            <div className="text-xs font-semibold text-amber-900">Barem de promovare — GMDSS-LRC (ambarcațiuni de agrement)</div>
+            <p className="text-xs text-amber-800 mt-1 leading-relaxed">
+              • <strong>Grilă</strong>: 20 de întrebări, minimum <strong>15</strong> răspunsuri corecte (art. 15).
+              <br />• <strong>Limba engleză</strong>: traducerea corectă a minimum <strong>4 fraze</strong> din fiecare parte.
+              <br />• <strong>Simulator</strong>: minimum nota <strong>7</strong>.
+            </p>
+          </div>
         </div>
 
         {/* Tabs */}
