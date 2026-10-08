@@ -19,6 +19,8 @@ type RadioExam = {
   profesor_engleza: string | null
   numar_subiecte_grila: number
   numar_subiecte_engleza: number
+  // excepții pe cursant: { student_id: 'deschis' | 'inchis' }
+  acces_individual?: Record<string, string> | null
 }
 type Question = {
   id?: string
@@ -903,6 +905,35 @@ export default function ExamenPage() {
     }
   }
 
+  // Deschide sau închide examenul pentru un singur cursant, peste starea seriei
+  async function setAccesIndividual(studentId: string, stare: 'deschis' | 'inchis' | '') {
+    if (!exam) return
+    const acum: Record<string, string> = { ...((exam.acces_individual as any) || {}) }
+    if (stare) acum[studentId] = stare
+    else delete acum[studentId]
+    setExam({ ...exam, acces_individual: acum })
+    const { error } = await supabase.from('radio_exams').update({ acces_individual: acum }).eq('id', exam.id)
+    if (error) { alert('Nu am putut salva: ' + error.message); await loadAll() }
+  }
+  // Butoanele de acces, aceleași în ambele liste
+  function AccesCursant({ studentId }: { studentId: string }) {
+    const stare = String(((exam?.acces_individual as any) || {})[studentId] || '')
+    const btn = (val: 'deschis' | 'inchis', eticheta: string, culoare: string) => (
+      <button onClick={e => { e.stopPropagation(); setAccesIndividual(studentId, stare === val ? '' : val) }}
+        title={stare === val ? 'Revino la starea seriei' : eticheta}
+        className={`px-2 py-1 rounded-md text-[11px] font-medium border ${
+          stare === val ? culoare : 'border-gray-200 text-gray-400 bg-white hover:bg-gray-50'}`}>
+        {eticheta}
+      </button>
+    )
+    return (
+      <div className="flex items-center gap-1 shrink-0">
+        {btn('deschis', 'Deschis', 'border-green-300 bg-green-50 text-green-700')}
+        {btn('inchis', 'Închis', 'border-red-300 bg-red-50 text-red-700')}
+      </div>
+    )
+  }
+
   async function doResolve() {
     if (!exam) { alert('Examenul nu există.'); return }
     if (!resolveStudentId) { alert('Alege un cursant.'); return }
@@ -1537,6 +1568,7 @@ export default function ExamenPage() {
                           <div className="text-xs text-gray-400">{s.class_caa}</div>
                         </div>
                         <div className="flex items-center gap-3 shrink-0">
+                          <AccesCursant studentId={s.id} />
                           {/* Comunicare email — toggle gri/verde */}
                           <button onClick={async()=>{ if(!s.email) return; const nv=!s.communication_target; await supabase.from('students').update({communication_target:nv}).eq('id',s.id); setStudents(students.map(st=>st.id===s.id?{...st,communication_target:nv}:st)) }}
                             disabled={!s.email} title={s.email?(s.communication_target?'Email activ':'Email inactiv'):'Fără email'}
@@ -1661,6 +1693,7 @@ export default function ExamenPage() {
                           }}>
                             {a.status === 'graded' ? 'Notat' : a.status === 'submitted' ? 'Trimis' : 'În lucru'}
                           </span>
+                          <AccesCursant studentId={a.student_id} />
                           <div className="text-xs text-gray-600">
                             <strong style={{ color: a.grila_score >= 18 ? '#16a34a' : a.grila_score >= 15 ? '#2563eb' : a.grila_score === 14 ? '#ea580c' : '#dc2626' }}>{a.grila_score}</strong>/{NUM_GRILA} grilă
                           </div>

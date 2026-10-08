@@ -53,6 +53,7 @@ export default function PortalPage() {
   const [existingSignature, setExistingSignature] = useState<string | null>(null)
   const [scannedFields, setScannedFields] = useState<Set<string>>(new Set())
   const [examSubmitted, setExamSubmitted] = useState(false)
+  const [examAcces, setExamAcces] = useState('')   // excepția pusă pe acest cursant: deschis / închis
   // Tip act detectat din OCR: ci_vechi | ci_nou | pasaport
   const [docType, setDocType] = useState<'' | 'ci_vechi' | 'ci_nou' | 'ci_strain' | 'pasaport'>('')
   const [showDetails, setShowDetails] = useState(false)   // dropdown "Date completate"
@@ -80,6 +81,15 @@ export default function PortalPage() {
       .then(({ data }) => { if (!cancelled) setExamSubmitted((data || []).some((a: any) => a.status === 'submitted' || a.status === 'graded')) })
     return () => { cancelled = true }
   }, [student?.id])
+
+  // Excepția de acces la examen, pusă de examinator pe cursantul ăsta
+  useEffect(() => {
+    if (!student?.id || !session?.id) { setExamAcces(''); return }
+    let cancelled = false
+    supabase.from('radio_exams').select('acces_individual').eq('session_id', session.id).maybeSingle()
+      .then(({ data }) => { if (!cancelled) setExamAcces(String(((data as any)?.acces_individual || {})[student.id] || '')) })
+    return () => { cancelled = true }
+  }, [student?.id, session?.id])
 
   const [form, setForm] = useState({
     phone: '', birth_date: '', ci_series: '', ci_number: '',
@@ -1773,12 +1783,15 @@ export default function PortalPage() {
 
             {/* Examenul de radio, cât timp e deschis — sus, ca să nu stea ascuns
                 în folderul de date personale */}
-            {(student?.class_caa || '').toLowerCase().match(/radio|lrc/) && examSubmitted ? (
+            {(student?.class_caa || '').toLowerCase().match(/radio|lrc/) && examSubmitted && examAcces !== 'deschis' ? (
               <div className="order-[-40] rounded-2xl p-5 shadow-2xl bg-purple-50 border-2 border-purple-200 flex items-center gap-2 text-sm text-purple-700">
                 <CheckCircle size={16} className="shrink-0" />
                 <span><strong>Test finalizat</strong> — examenul a fost trimis. Nu mai poate fi accesat.</span>
               </div>
-            ) : session?.radio_exam_status === 'active' && (student?.class_caa || '').toLowerCase().match(/radio|lrc/) ? (
+            ) : (student?.class_caa || '').toLowerCase().match(/radio|lrc/)
+              // activ = îl văd toți; altfel, doar cui i l-a deschis examinatorul anume
+              && session?.radio_exam_status !== 'draft' && examAcces !== 'inchis'
+              && (session?.radio_exam_status === 'active' || examAcces === 'deschis') ? (
               <a href={`/portal/examen?cod=${session.access_code}`}
                 className="order-[-40] rounded-2xl p-5 shadow-2xl bg-purple-50 border-2 border-purple-300 hover:bg-purple-100 transition-colors flex items-center gap-3 text-sm text-purple-800">
                 <span className="text-xl leading-none">📻</span>

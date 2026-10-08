@@ -114,12 +114,6 @@ export default function PortalExamenPage() {
                 || sessList[0]
       setSession(sess)
 
-      // 'active' si 'hidden' permit sustinerea (la 'hidden' doar linkul e ascuns din portal, examenul ruleaza)
-      if (sess.radio_exam_status !== 'active' && sess.radio_exam_status !== 'hidden') {
-        if (sess.radio_exam_status === 'closed') setPhase('closed')
-        else setPhase('no-active')
-        return
-      }
 
       // 3) Fetch examen
       const sessionIds = sessList.map((x: any) => x.id)
@@ -150,6 +144,19 @@ export default function PortalExamenPage() {
         return
       }
       setStudentName(st.full_name || '')
+
+      // Accesul: starea examenului pe serie, dar cu excepțiile puse pe cursant
+      // („deschis" îl lasă să intre oricum, „închis" îl oprește chiar dacă e activ)
+      const exceptie = String(((ex as any).acces_individual || {})[st.id] || '')
+      const deschisPeSerie = sess.radio_exam_status === 'active' || sess.radio_exam_status === 'hidden'
+      // ciorna nu se vede la nimeni, oricâte excepții ar fi
+      if (sess.radio_exam_status === 'draft' || !sess.radio_exam_status) { setPhase('no-active'); return }
+      if (exceptie === 'inchis') { setPhase('closed'); return }
+      if (!deschisPeSerie && exceptie !== 'deschis') {
+        if (sess.radio_exam_status === 'closed') setPhase('closed')
+        else setPhase('no-active')
+        return
+      }
       // obținere/prelungire vine din portal, unde cursantul a ales deja
       const clasa = String((st as any).class_caa || '').toLowerCase()
       const alesInPortal = clasa.includes('prelungire') ? 'prelungire'
@@ -198,8 +205,14 @@ export default function PortalExamenPage() {
       answerRowIdRef.current = row.id
 
       if (row.status === 'submitted' || row.status === 'graded') {
-        setPhase('already-submitted')
-        return
+        // dacă examinatorul i-a deschis examenul anume lui, îl lăsăm să continue
+        if (exceptie !== 'deschis') { setPhase('already-submitted'); return }
+        const { data: redeschis } = await supabase
+          .from('radio_exam_answers')
+          .update({ status: 'in_progress', updated_at: new Date().toISOString() })
+          .eq('id', row.id).select().single()
+        if (redeschis) row = redeschis as AnswerRow
+        setAnswerRow(row)
       }
 
       setGrila(row.grila_answers || {})
