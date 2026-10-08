@@ -863,18 +863,51 @@ export default function ExamenPage() {
       })
 
       // Traducerile: la fiecare propoziție luăm, la întâmplare, una dintre traducerile
-      // scrise deja de ceilalți cursanți. Dacă nimeni n-a scris nimic la propoziția
-      // aceea, punem traducerea de referință din examen.
+      // scrise deja de cursanți — întâi din seria asta, iar dacă nu există, din seriile
+      // trecute care au avut aceeași propoziție. Ultima variantă: traducerea de referință.
       const tradAns: Record<string, string> = {}
+      const pool = new Map<string, string[]>()   // order_no -> traduceri scrise
       for (const t of translations) {
         const cheie = String(t.order_no)
-        const scrise = answers
+        pool.set(cheie, answers
           .filter(a => a.student_id !== resolveStudentId)
-          .map(a => String(a.translation_answers?.[cheie] || "").trim())
-          .filter(Boolean)
-        tradAns[cheie] = scrise.length
+          .map(a => String(a.translation_answers?.[cheie] || '').trim())
+          .filter(Boolean))
+      }
+
+      // propozițiile la care nimeni din serie n-a scris nimic: căutăm în seriile trecute
+      const faraRaspuns = translations.filter(t => !(pool.get(String(t.order_no)) || []).length)
+      if (faraRaspuns.length) {
+        const { data: aceleasiProp } = await supabase
+          .from('radio_exam_translations')
+          .select('exam_id, order_no, english_text')
+          .in('english_text', faraRaspuns.map(t => t.english_text))
+        const dinAlteExamene = (aceleasiProp || []).filter((x: any) => x.exam_id !== exam.id)
+        if (dinAlteExamene.length) {
+          const { data: raspunsuriVechi } = await supabase
+            .from('radio_exam_answers')
+            .select('exam_id, translation_answers')
+            .in('exam_id', Array.from(new Set(dinAlteExamene.map((x: any) => x.exam_id))))
+          for (const t of faraRaspuns) {
+            const locuri = dinAlteExamene.filter((x: any) => x.english_text === t.english_text)
+            const texte: string[] = []
+            for (const loc of locuri as any[]) {
+              for (const r of (raspunsuriVechi || []) as any[]) {
+                if (r.exam_id !== loc.exam_id) continue
+                const v = String(r.translation_answers?.[String(loc.order_no)] || '').trim()
+                if (v) texte.push(v)
+              }
+            }
+            if (texte.length) pool.set(String(t.order_no), texte)
+          }
+        }
+      }
+
+      for (const t of translations) {
+        const scrise = pool.get(String(t.order_no)) || []
+        tradAns[String(t.order_no)] = scrise.length
           ? scrise[Math.floor(Math.random() * scrise.length)]
-          : (t.romanian_key || "")
+          : (t.romanian_key || '')
       }
 
       // Rand existent: din „Șterge și rezolvă" SAU daca studentul ales din dropdown are deja rezultat.
