@@ -1664,8 +1664,11 @@ export default function ExamenPage() {
                           <div className="text-xs text-gray-600">
                             <strong style={{ color: a.grila_score >= 18 ? '#16a34a' : a.grila_score >= 15 ? '#2563eb' : a.grila_score === 14 ? '#ea580c' : '#dc2626' }}>{a.grila_score}</strong>/{NUM_GRILA} grilă
                           </div>
-                          <div className="text-xs text-gray-600">
-                            <strong>{a.translation_score}</strong>/5 trad.
+                          {/* câte propoziții a tradus / nota primită / câte are examenul */}
+                          <div className="text-xs text-gray-600"
+                            title="traduceri completate / nota primită / propoziții în examen">
+                            <strong>{Object.values(a.translation_answers || {}).filter(v => String(v || '').trim()).length}</strong>
+                            /<strong>{a.translation_score}</strong>/{translations.length || 5} trad.
                           </div>
                           <div className="text-xs text-gray-600">
                             <strong>{a.simulator_score ?? '—'}</strong>/10 sim.
