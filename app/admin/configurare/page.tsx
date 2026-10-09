@@ -322,6 +322,47 @@ function CursBSection() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
+  // Helperul (butoanele galbene din caiet): cui îi apare
+  const [helperVizibil, setHelperVizibil] = useState(false)
+  const [alesi, setAlesi] = useState<string[]>([])
+  const [modalHelper, setModalHelper] = useState(false)
+  const [bifati, setBifati] = useState<Set<string>>(new Set())
+  const [cursantiBA, setCursantiBA] = useState<{ id: string; full_name: string; serie: string }[]>([])
+
+  useEffect(() => {
+    supabase.from('setsail_info').select('key, value').in('key', ['curs_b_helper_vizibil', 'curs_b_helper_studenti'])
+      .then(({ data }) => {
+        const v: Record<string, string> = {}
+        for (const r of (data || []) as any[]) v[r.key] = r.value || ''
+        setHelperVizibil(v.curs_b_helper_vizibil === '1')
+        try { setAlesi(JSON.parse(v.curs_b_helper_studenti || '[]')) } catch { setAlesi([]) }
+      })
+    // cursanții seriilor B/A, pentru lista din modal
+    supabase.from('students').select('id, full_name, sessions!session_id(session_date, class_caa, timeline_scope)')
+      .order('full_name')
+      .then(({ data }) => {
+        const esteBA = (s: any) => {
+          if (s?.timeline_scope) return s.timeline_scope === 'practica_ba'
+          const c = String(s?.class_caa || '').toUpperCase()
+          return (c.includes('A') || c.includes('B')) && !c.includes('C') && !c.includes('D') && !/RADIO|LRC/.test(c)
+        }
+        setCursantiBA((data || []).filter((r: any) => esteBA(r.sessions)).map((r: any) => ({
+          id: r.id, full_name: r.full_name || '',
+          serie: `${r.sessions?.class_caa || ''}${r.sessions?.session_date ? ' · ' + new Date(r.sessions.session_date).toLocaleDateString('ro-RO') : ''}`,
+        })))
+      })
+  }, [])
+
+  useEffect(() => { setBifati(new Set(alesi)) }, [alesi])
+
+  async function setHelper(vizibil: boolean, lista: string[]) {
+    setHelperVizibil(vizibil); setAlesi(lista)
+    await supabase.from('setsail_info').upsert([
+      { key: 'curs_b_helper_vizibil', value: vizibil ? '1' : '0' },
+      { key: 'curs_b_helper_studenti', value: JSON.stringify(lista) },
+    ], { onConflict: 'key' })
+  }
+
   async function salveaza(cheie: string, value: string) {
     await supabase.from('setsail_info').upsert({ key: cheie, value: value.trim() }, { onConflict: 'key' })
     setSalvat(cheie); setTimeout(() => setSalvat(s => (s === cheie ? null : s)), 2000)
@@ -351,6 +392,75 @@ function CursBSection() {
           </label>
         ))}
       </div>
+
+      {/* Helperul din caiet: notele de curs ascunse sub semnul întrebării */}
+      <div className="px-6 pb-6 border-t border-gray-100 pt-4">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div>
+            <div className="text-sm font-medium text-gray-800">Helper în caiet</div>
+            <p className="text-xs text-gray-400 mt-0.5">
+              Butoanele galbene cu semnul întrebării, care deschid notele de curs. Implicit nu se văd;
+              când îl faci vizibil, alegi cine anume îl primește.
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <span className="text-xs text-gray-400">{helperVizibil ? `${alesi.length} cursanți` : 'invizibil'}</span>
+            <button onClick={() => helperVizibil ? setHelper(false, alesi) : setModalHelper(true)}
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium border ${
+                helperVizibil ? 'border-green-300 bg-green-50 text-green-700' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>
+              {helperVizibil ? 'Vizibil' : 'Invizibil'}
+            </button>
+            {helperVizibil && (
+              <button onClick={() => setModalHelper(true)}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 bg-white text-gray-600 hover:bg-gray-50">
+                Schimbă lista
+              </button>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {modalHelper && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg my-8">
+            <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-gray-100">
+              <div>
+                <h3 className="font-semibold text-gray-900">Cine vede helperul</h3>
+                <p className="text-xs text-gray-400 mt-0.5">Cursanții bifați văd butoanele galbene din caiet.</p>
+              </div>
+              <button onClick={() => setModalHelper(false)} className="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
+            </div>
+            <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2">
+              <button onClick={() => setBifati(new Set(cursantiBA.map(c => c.id)))}
+                className="px-3 py-1.5 rounded-lg text-xs border border-gray-200 text-gray-600 hover:bg-gray-50">Toți</button>
+              <button onClick={() => setBifati(new Set())}
+                className="px-3 py-1.5 rounded-lg text-xs border border-gray-200 text-gray-600 hover:bg-gray-50">Niciunul</button>
+              <span className="text-xs text-gray-400 ml-auto">{bifati.size} din {cursantiBA.length}</span>
+            </div>
+            <div className="max-h-[55vh] overflow-y-auto divide-y divide-gray-50">
+              {cursantiBA.length === 0 ? (
+                <p className="px-5 py-8 text-center text-sm text-gray-400">Niciun cursant la seriile B/A.</p>
+              ) : cursantiBA.map(c => (
+                <label key={c.id} className="flex items-center gap-3 px-5 py-2.5 cursor-pointer hover:bg-gray-50">
+                  <input type="checkbox" checked={bifati.has(c.id)} className="accent-green-600"
+                    onChange={e => setBifati(b => { const n = new Set(b); e.target.checked ? n.add(c.id) : n.delete(c.id); return n })} />
+                  <span className="flex-1 min-w-0">
+                    <span className="block text-sm text-gray-800 truncate">{c.full_name}</span>
+                    <span className="block text-xs text-gray-400 truncate">{c.serie}</span>
+                  </span>
+                </label>
+              ))}
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100">
+              <button onClick={() => setModalHelper(false)} className="px-4 py-2 rounded-lg text-sm border border-gray-200 text-gray-600">Renunță</button>
+              <button onClick={() => { setHelper(true, Array.from(bifati)); setModalHelper(false) }}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-white" style={{ background: '#0a1628' }}>
+                Apply
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

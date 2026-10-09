@@ -86,6 +86,7 @@ export default function CursBPage() {
   const secunde = useRef<Record<number, number>>({})                   // unde a rămas filmul fiecărei zile
   const timere = useRef<Record<string, any>>({})
   const [descarc, setDescarc] = useState(false)
+  const [helper, setHelperActiv] = useState(false)   // butoanele galbene cu notele de curs
 
   useEffect(() => {
     (async () => {
@@ -108,10 +109,16 @@ export default function CursBPage() {
 
       // linkurile zilelor, puse din configurator
       const { data: info } = await supabase.from('setsail_info').select('key, value')
-        .in('key', ['curs_b_url_zi1', 'curs_b_url_zi2', 'curs_b_url_zi3'])
+        .in('key', ['curs_b_url_zi1', 'curs_b_url_zi2', 'curs_b_url_zi3', 'curs_b_helper_vizibil', 'curs_b_helper_studenti'])
       const l: Record<string, string> = {}
       for (const r of (info || []) as any[]) if (r.value) l[r.key] = r.value
       setLinkuri(l)
+
+      // helperul se vede doar dacă e pornit și cursantul e pe listă
+      try {
+        const lista: string[] = JSON.parse(l.curs_b_helper_studenti || '[]')
+        setHelperActiv(l.curs_b_helper_vizibil === '1' && lista.includes(st.id))
+      } catch { setHelperActiv(false) }
 
       setStare('gata')
     })()
@@ -277,15 +284,15 @@ export default function CursBPage() {
                         <div key={s.cheie} className="rounded-xl border border-gray-100">
                           <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-gray-100">
                             <span className="font-semibold text-base text-gray-900">{s.titlu}</span>
-                            <button onClick={() => comuta(s.cheie)}
+                            {helper && <button onClick={() => comuta(s.cheie)}
                               title={vazut ? 'Ascunde notele de curs' : 'Vezi notele de curs'}
                               className={`inline-flex items-center justify-center w-5 h-5 rounded-full border transition-colors shrink-0 ${
                                 vazut ? 'bg-amber-400 border-amber-500 text-white' : 'bg-amber-100 border-amber-300 text-amber-700 hover:bg-amber-200'}`}>
                               <HelpCircle size={12} />
-                            </button>
+                            </button>}
                           </div>
 
-                          {vazut && (
+                          {helper && vazut && (
                             <div className="px-4 py-3 bg-amber-50/60 border-b border-amber-100">
                               <div className="text-[11px] font-semibold text-amber-800 uppercase tracking-wide mb-1.5">Note de curs</div>
                               <div className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">
