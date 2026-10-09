@@ -294,7 +294,63 @@ export default function ConfigurarePage() {
       <SimulatoareSection />
 
       {/* Voucher Cadou (emitere + listă) */}
+      <CursBSection />
       <VoucherCadouSection />
+    </div>
+  )
+}
+
+// Linkurile celor trei zile din caietul de curs B/A — apar în portalul cursantului,
+// la capul fiecărei zile (prezentare, înregistrare, materiale…).
+function CursBSection() {
+  const ZILE = [
+    { cheie: 'curs_b_url_zi1', eticheta: 'Ziua 1 — Prim ajutor pe mare' },
+    { cheie: 'curs_b_url_zi2', eticheta: 'Ziua 2 — Manevra navei în condiții speciale' },
+    { cheie: 'curs_b_url_zi3', eticheta: 'Ziua 3 — Manevra navei în condiții speciale' },
+  ]
+  const [val, setVal] = useState<Record<string, string>>({})
+  const [salvat, setSalvat] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    supabase.from('setsail_info').select('key, value').in('key', ZILE.map(z => z.cheie))
+      .then(({ data }) => {
+        const v: Record<string, string> = {}
+        for (const r of (data || []) as any[]) v[r.key] = r.value || ''
+        setVal(v); setLoading(false)
+      })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  async function salveaza(cheie: string, value: string) {
+    await supabase.from('setsail_info').upsert({ key: cheie, value: value.trim() }, { onConflict: 'key' })
+    setSalvat(cheie); setTimeout(() => setSalvat(s => (s === cheie ? null : s)), 2000)
+  }
+
+  return (
+    <div className="mt-8 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="px-6 py-4 border-b border-gray-100">
+        <h2 className="font-semibold text-gray-900">📘 Curs B/A — linkuri pe zile</h2>
+        <p className="text-xs text-gray-400 mt-0.5">
+          Câte un link pentru fiecare zi din caietul cursantului (prezentare, înregistrare, materiale).
+          Apare în portal, la capul zilei; dacă e gol, nu apare nimic.
+        </p>
+      </div>
+      <div className="p-6 space-y-3">
+        {loading ? <div className="text-xs text-gray-400">Se încarcă…</div> : ZILE.map(z => (
+          <label key={z.cheie} className="block">
+            <span className="block text-xs text-gray-500 mb-1">{z.eticheta}</span>
+            <div className="flex items-center gap-2">
+              <input value={val[z.cheie] || ''}
+                onChange={e => setVal(v => ({ ...v, [z.cheie]: e.target.value }))}
+                onBlur={e => salveaza(z.cheie, e.target.value)}
+                placeholder="https://…"
+                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+              {salvat === z.cheie && <span className="text-xs text-green-600">salvat ✓</span>}
+            </div>
+          </label>
+        ))}
+      </div>
     </div>
   )
 }

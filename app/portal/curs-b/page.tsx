@@ -19,6 +19,7 @@ export default function CursBPage() {
   const [deschise, setDeschise] = useState<Set<string>>(new Set())
   const [ziDeschisa, setZiDeschisa] = useState<number | null>(1)
   const [salvat, setSalvat] = useState<string | null>(null)
+  const [linkuri, setLinkuri] = useState<Record<string, string>>({})   // câte un link pe zi, din configurator
   const timere = useRef<Record<string, any>>({})
 
   useEffect(() => {
@@ -39,6 +40,14 @@ export default function CursBPage() {
       const j = await r.json().catch(() => ({}))
       if (j.error) { setStare('eroare'); setEroare('Nu am putut încărca notele.'); return }
       setNote(j.note || {})
+
+      // linkurile zilelor, puse din configurator
+      const { data: info } = await supabase.from('setsail_info').select('key, value')
+        .in('key', ['curs_b_url_zi1', 'curs_b_url_zi2', 'curs_b_url_zi3'])
+      const l: Record<string, string> = {}
+      for (const r of (info || []) as any[]) if (r.value) l[r.key] = r.value
+      setLinkuri(l)
+
       setStare('gata')
     })()
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -118,6 +127,12 @@ export default function CursBPage() {
 
               {deschisaZi && (
                 <div className="px-6 pb-6">
+                  {linkuri[`curs_b_url_zi${zi.zi}`] && (
+                    <a href={linkuri[`curs_b_url_zi${zi.zi}`]} target="_blank" rel="noopener noreferrer"
+                      className="mb-4 flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-sky-200 bg-sky-50 text-sm font-medium text-sky-800 hover:bg-sky-100">
+                      <NotebookPen size={15} /> Materialele zilei {zi.zi}
+                    </a>
+                  )}
                   {zi.intro.length > 0 && (
                     <div className="mb-4 rounded-xl bg-gray-50 border border-gray-100 px-4 py-3 text-xs text-gray-500 whitespace-pre-line">
                       {zi.intro.join('\n')}
