@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Plus, Trash2, Check, X, Pencil, Copy, RefreshCw, ExternalLink, KeyRound, Loader2, FileText, Eye } from 'lucide-react'
+import { Plus, Trash2, Check, X, Pencil, Copy, RefreshCw, ExternalLink, KeyRound, Loader2, FileText, Eye, ChevronDown } from 'lucide-react'
 
 type Entity = { id: string; [key: string]: string }
 type Field = { key: string; label: string; placeholder?: string; type?: 'image' }
@@ -234,12 +234,18 @@ export default function ConfigurarePage() {
         </a>
         </div>
       </div>
-      <LandingTokenSection />
-      <RadioTokenSection />
-      <LeadsDashboardTokenSection />
-      <ActeContabileSection />
-      <StampileSection />
+      <Fold id="linkuri" titluImplicit="🔗 Linkuri publice și tokenuri" descriere="landing, radio, leaduri, acte contabile">
+        <LandingTokenSection />
+        <RadioTokenSection />
+        <LeadsDashboardTokenSection />
+        <ActeContabileSection />
+      </Fold>
 
+      <Fold id="identitate" titluImplicit="🖋️ Ștampile și semnături" descriere="documentele oficiale SetSail">
+        <StampileSection />
+      </Fold>
+
+      <Fold id="nomenclatoare" titluImplicit="📚 Nomenclatoare" descriere="locații, ambarcațiuni, evaluatori, instructori, contacte">
       <div className="grid grid-cols-2 gap-6">
         <Section title="📍 Locații de practică" table="locations"
           fields={[
@@ -279,29 +285,84 @@ export default function ConfigurarePage() {
             { key: 'signature_data', label: 'Semnătură', type: 'image' },
           ]} />
       </div>
+      </Fold>
 
-      {/* Numere notificari - sectiune separata full-width */}
-      <NotificationNumbersSection />
+      <Fold id="registre" titluImplicit="🔢 Registre de numere" descriere="notificări ANR/ANCOM și cereri de examen">
+        <NotificationNumbersSection />
+        <CerereNumbersSection />
+      </Fold>
 
-      {/* Numere cerere examen radio - registru independent, alocat per cursant */}
-      <CerereNumbersSection />
+      <Fold id="documente" titluImplicit="📎 Documentele sesiunilor" descriere="tipurile de fișiere cerute la fiecare serie">
+        <SessionFileTypesSection />
+      </Fold>
 
-
-      {/* Tipuri de fisiere necesare per categorie (ANCOM / ANR) */}
-      <SessionFileTypesSection />
-
-      {/* Simulatoare (pagini gated prin token) */}
-      <SimulatoareSection />
-
-      {/* Voucher Cadou (emitere + listă) */}
-      <CursBSection />
-      <VoucherCadouSection />
+      <Fold id="cursanti" titluImplicit="🎓 Pentru cursanți" descriere="simulatoare, caietul de curs B/A, vouchere">
+        <SimulatoareSection />
+        <CursBSection />
+        <VoucherCadouSection />
+      </Fold>
     </div>
   )
 }
 
 // Linkurile celor trei zile din caietul de curs B/A — apar în portalul cursantului,
 // la capul fiecărei zile (prezentare, înregistrare, materiale…).
+// Grupă pliabilă de setări. Titlul se poate schimba (se ține în setsail_info),
+// iar starea deschis/închis rămâne pe calculatorul tău.
+function Fold({ id, titluImplicit, descriere, children }: {
+  id: string; titluImplicit: string; descriere?: string; children: React.ReactNode
+}) {
+  const cheie = `cfg_fold_${id}`
+  const [titlu, setTitlu] = useState(titluImplicit)
+  const [deschis, setDeschis] = useState(false)
+  const [editez, setEditez] = useState(false)
+
+  useEffect(() => {
+    supabase.from('setsail_info').select('value').eq('key', cheie).maybeSingle()
+      .then(({ data }) => { if ((data as any)?.value) setTitlu((data as any).value) })
+    try { setDeschis(localStorage.getItem(`${cheie}_deschis`) === '1') } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  function comuta() {
+    setDeschis(d => {
+      try { localStorage.setItem(`${cheie}_deschis`, d ? '0' : '1') } catch {}
+      return !d
+    })
+  }
+  async function salveazaTitlu(v: string) {
+    setEditez(false)
+    const nou = v.trim()
+    if (!nou || nou === titlu) return
+    setTitlu(nou)
+    await supabase.from('setsail_info').upsert({ key: cheie, value: nou }, { onConflict: 'key' })
+  }
+
+  return (
+    <div className="mt-6 rounded-2xl border border-gray-200 bg-gray-50/60 overflow-hidden">
+      <div className="flex items-center justify-between gap-3 px-5 py-3 bg-white border-b border-gray-100">
+        <button onClick={comuta} className="flex items-center gap-2 flex-1 min-w-0 text-left">
+          <ChevronDown size={16} className={`text-gray-400 transition-transform ${deschis ? 'rotate-180' : ''}`} />
+          {editez ? (
+            <input autoFocus defaultValue={titlu} onClick={e => e.stopPropagation()}
+              onBlur={e => salveazaTitlu(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setEditez(false) }}
+              className="flex-1 px-2 py-1 rounded-lg border border-blue-300 text-sm font-semibold focus:outline-none" />
+          ) : (
+            <span className="font-semibold text-gray-900 truncate">{titlu}</span>
+          )}
+          {descriere && !editez && <span className="text-xs text-gray-400 truncate hidden sm:inline">— {descriere}</span>}
+        </button>
+        <button onClick={() => setEditez(true)} title="Redenumește grupa"
+          className="shrink-0 p-1.5 rounded-lg text-gray-300 hover:text-gray-600 hover:bg-gray-100">
+          <Pencil size={14} />
+        </button>
+      </div>
+      {deschis && <div className="p-4 [&>*:first-child]:mt-0">{children}</div>}
+    </div>
+  )
+}
+
 function CursBSection() {
   const ZILE = [
     { cheie: 'curs_b_url_zi1', eticheta: 'Ziua 1 — Prim ajutor pe mare' },
