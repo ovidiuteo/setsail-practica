@@ -161,14 +161,14 @@ export default function CursBPage() {
   function deschideZi(zi: number) {
     setZiDeschisa(d => {
       const noua = d === zi ? null : zi
-      setFilme(noua && areFilm(noua) ? new Set([noua]) : new Set())
+      setFilme(noua !== null && areFilm(noua) ? new Set([noua]) : new Set())
       return noua
     })
   }
 
   // la prima încărcare, filmul zilei deschise apare singur
   useEffect(() => {
-    if (ziDeschisa && areFilm(ziDeschisa)) setFilme(new Set([ziDeschisa]))
+    if (ziDeschisa !== null && areFilm(ziDeschisa)) setFilme(new Set([ziDeschisa]))
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [linkuri])
 
@@ -283,16 +283,10 @@ export default function CursBPage() {
                       </div>
                     </div>
                   )}
-                  <p className="mb-3 rounded-xl bg-gray-50 border border-gray-100 px-4 py-3 text-sm text-gray-700 leading-relaxed">
+                  <p className="rounded-xl bg-gray-50 border border-gray-100 px-4 py-3 text-sm text-gray-700 leading-relaxed">
                     Cursul B/A pentru SetSail înseamnă pregătirea skipperilor pentru navigația la depărtare
                     de mal, cu tratarea cât mai completă a situațiilor speciale ce pot apărea la bord.
                   </p>
-                  <textarea
-                    defaultValue={note['intro'] || ''}
-                    onChange={e => { const v = e.target.value; setNote(n => ({ ...n, intro: v })); salveaza('intro', v) }}
-                    rows={3}
-                    placeholder="Idei principale"
-                    className="w-full px-3 py-2 rounded-lg border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-sky-200 resize-y" />
                 </div>
               )}
             </div>
