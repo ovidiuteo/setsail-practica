@@ -130,12 +130,12 @@ export default function CursBPage() {
                       return (
                         <div key={s.cheie} className="rounded-xl border border-gray-100">
                           <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-gray-100">
-                            <span className="font-semibold text-sm text-gray-900">{s.titlu}</span>
+                            <span className="font-semibold text-base text-gray-900">{s.titlu}</span>
                             <button onClick={() => comuta(s.cheie)}
                               title={vazut ? 'Ascunde notele de curs' : 'Vezi notele de curs'}
-                              className={`inline-flex items-center justify-center w-7 h-7 rounded-full border transition-colors ${
+                              className={`inline-flex items-center justify-center w-5 h-5 rounded-full border transition-colors shrink-0 ${
                                 vazut ? 'bg-amber-400 border-amber-500 text-white' : 'bg-amber-100 border-amber-300 text-amber-700 hover:bg-amber-200'}`}>
-                              <HelpCircle size={15} />
+                              <HelpCircle size={12} />
                             </button>
                           </div>
 
