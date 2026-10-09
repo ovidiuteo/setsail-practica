@@ -322,20 +322,33 @@ function CursBSection() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // Helperul (butoanele galbene din caiet): cui îi apare
-  const [helperVizibil, setHelperVizibil] = useState(false)
-  const [alesi, setAlesi] = useState<string[]>([])
-  const [modalHelper, setModalHelper] = useState(false)
+  // Ce se vede în portal la cursanții B/A: caietul însuși și helperul din el.
+  // Fiecare are un comutator și o listă de cursanți.
+  type Zona = 'caiet' | 'helper'
+  const ZONE: { cheie: Zona; titlu: string; descriere: string; kVizibil: string; kLista: string }[] = [
+    { cheie: 'caiet', titlu: 'Caietul meu', kVizibil: 'curs_b_caiet_vizibil', kLista: 'curs_b_caiet_studenti',
+      descriere: 'Butonul „Curs B/A" din portal și pagina caietului. Implicit nu se vede.' },
+    { cheie: 'helper', titlu: 'Helper în caiet', kVizibil: 'curs_b_helper_vizibil', kLista: 'curs_b_helper_studenti',
+      descriere: 'Butoanele galbene cu semnul întrebării, care deschid notele de curs. Implicit nu se văd.' },
+  ]
+  const [vizibil, setVizibil] = useState<Record<Zona, boolean>>({ caiet: false, helper: false })
+  const [alesi, setAlesi] = useState<Record<Zona, string[]>>({ caiet: [], helper: [] })
+  const [modal, setModal] = useState<Zona | null>(null)
   const [bifati, setBifati] = useState<Set<string>>(new Set())
   const [cursantiBA, setCursantiBA] = useState<{ id: string; full_name: string; serie: string }[]>([])
 
   useEffect(() => {
-    supabase.from('setsail_info').select('key, value').in('key', ['curs_b_helper_vizibil', 'curs_b_helper_studenti'])
+    supabase.from('setsail_info').select('key, value')
+      .in('key', ZONE.flatMap(z => [z.kVizibil, z.kLista]))
       .then(({ data }) => {
         const v: Record<string, string> = {}
         for (const r of (data || []) as any[]) v[r.key] = r.value || ''
-        setHelperVizibil(v.curs_b_helper_vizibil === '1')
-        try { setAlesi(JSON.parse(v.curs_b_helper_studenti || '[]')) } catch { setAlesi([]) }
+        const viz: any = {}, lst: any = {}
+        for (const z of ZONE) {
+          viz[z.cheie] = v[z.kVizibil] === '1'
+          try { lst[z.cheie] = JSON.parse(v[z.kLista] || '[]') } catch { lst[z.cheie] = [] }
+        }
+        setVizibil(viz); setAlesi(lst)
       })
     // cursanții seriilor B/A, pentru lista din modal
     supabase.from('students').select('id, full_name, sessions!session_id(session_date, class_caa, timeline_scope)')
@@ -351,15 +364,17 @@ function CursBSection() {
           serie: `${r.sessions?.class_caa || ''}${r.sessions?.session_date ? ' · ' + new Date(r.sessions.session_date).toLocaleDateString('ro-RO') : ''}`,
         })))
       })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  useEffect(() => { setBifati(new Set(alesi)) }, [alesi])
+  function deschideModal(z: Zona) { setBifati(new Set(alesi[z])); setModal(z) }
 
-  async function setHelper(vizibil: boolean, lista: string[]) {
-    setHelperVizibil(vizibil); setAlesi(lista)
+  async function setZona(z: Zona, viz: boolean, lista: string[]) {
+    const meta = ZONE.find(x => x.cheie === z)!
+    setVizibil(v => ({ ...v, [z]: viz })); setAlesi(a => ({ ...a, [z]: lista }))
     await supabase.from('setsail_info').upsert([
-      { key: 'curs_b_helper_vizibil', value: vizibil ? '1' : '0' },
-      { key: 'curs_b_helper_studenti', value: JSON.stringify(lista) },
+      { key: meta.kVizibil, value: viz ? '1' : '0' },
+      { key: meta.kLista, value: JSON.stringify(lista) },
     ], { onConflict: 'key' })
   }
 
@@ -393,42 +408,45 @@ function CursBSection() {
         ))}
       </div>
 
-      {/* Helperul din caiet: notele de curs ascunse sub semnul întrebării */}
-      <div className="px-6 pb-6 border-t border-gray-100 pt-4">
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <div>
-            <div className="text-sm font-medium text-gray-800">Helper în caiet</div>
-            <p className="text-xs text-gray-400 mt-0.5">
-              Butoanele galbene cu semnul întrebării, care deschid notele de curs. Implicit nu se văd;
-              când îl faci vizibil, alegi cine anume îl primește.
-            </p>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <span className="text-xs text-gray-400">{helperVizibil ? `${alesi.length} cursanți` : 'invizibil'}</span>
-            <button onClick={() => helperVizibil ? setHelper(false, alesi) : setModalHelper(true)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-medium border ${
-                helperVizibil ? 'border-green-300 bg-green-50 text-green-700' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>
-              {helperVizibil ? 'Vizibil' : 'Invizibil'}
-            </button>
-            {helperVizibil && (
-              <button onClick={() => setModalHelper(true)}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 bg-white text-gray-600 hover:bg-gray-50">
-                Schimbă lista
+      {/* Ce văd cursanții: caietul și helperul din el */}
+      <div className="px-6 pb-6 border-t border-gray-100 pt-4 space-y-3">
+        {ZONE.map(z => (
+          <div key={z.cheie} className="flex items-center justify-between gap-3 flex-wrap">
+            <div className="min-w-[14rem] flex-1">
+              <div className="text-sm font-medium text-gray-800">{z.titlu}</div>
+              <p className="text-xs text-gray-400 mt-0.5">{z.descriere}</p>
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <span className="text-xs text-gray-400">
+                {vizibil[z.cheie] ? `${alesi[z.cheie].length} cursanți` : 'invizibil'}
+              </span>
+              <button onClick={() => vizibil[z.cheie] ? setZona(z.cheie, false, alesi[z.cheie]) : deschideModal(z.cheie)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium border ${
+                  vizibil[z.cheie] ? 'border-green-300 bg-green-50 text-green-700' : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'}`}>
+                {vizibil[z.cheie] ? 'Vizibil' : 'Invizibil'}
               </button>
-            )}
+              {vizibil[z.cheie] && (
+                <button onClick={() => deschideModal(z.cheie)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 bg-white text-gray-600 hover:bg-gray-50">
+                  Schimbă lista
+                </button>
+              )}
+            </div>
           </div>
-        </div>
+        ))}
       </div>
 
-      {modalHelper && (
+      {modal && (
         <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center p-4 overflow-y-auto">
           <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg my-8">
             <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-gray-100">
               <div>
-                <h3 className="font-semibold text-gray-900">Cine vede helperul</h3>
-                <p className="text-xs text-gray-400 mt-0.5">Cursanții bifați văd butoanele galbene din caiet.</p>
+                <h3 className="font-semibold text-gray-900">
+                  Cine vede {modal === 'caiet' ? 'caietul' : 'helperul'}
+                </h3>
+                <p className="text-xs text-gray-400 mt-0.5">Cursanții bifați îl primesc în portal.</p>
               </div>
-              <button onClick={() => setModalHelper(false)} className="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
+              <button onClick={() => setModal(null)} className="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
             </div>
             <div className="px-5 py-3 border-b border-gray-100 flex items-center gap-2">
               <button onClick={() => setBifati(new Set(cursantiBA.map(c => c.id)))}
@@ -452,8 +470,8 @@ function CursBSection() {
               ))}
             </div>
             <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100">
-              <button onClick={() => setModalHelper(false)} className="px-4 py-2 rounded-lg text-sm border border-gray-200 text-gray-600">Renunță</button>
-              <button onClick={() => { setHelper(true, Array.from(bifati)); setModalHelper(false) }}
+              <button onClick={() => setModal(null)} className="px-4 py-2 rounded-lg text-sm border border-gray-200 text-gray-600">Renunță</button>
+              <button onClick={() => { setZona(modal, true, Array.from(bifati)); setModal(null) }}
                 className="px-4 py-2 rounded-lg text-sm font-medium text-white" style={{ background: '#0a1628' }}>
                 Apply
               </button>

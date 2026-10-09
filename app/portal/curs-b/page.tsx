@@ -109,7 +109,8 @@ export default function CursBPage() {
 
       // linkurile zilelor, puse din configurator
       const { data: info } = await supabase.from('setsail_info').select('key, value')
-        .in('key', ['curs_b_url_zi1', 'curs_b_url_zi2', 'curs_b_url_zi3', 'curs_b_helper_vizibil', 'curs_b_helper_studenti'])
+        .in('key', ['curs_b_url_zi1', 'curs_b_url_zi2', 'curs_b_url_zi3',
+          'curs_b_helper_vizibil', 'curs_b_helper_studenti', 'curs_b_caiet_vizibil', 'curs_b_caiet_studenti'])
       const l: Record<string, string> = {}
       for (const r of (info || []) as any[]) if (r.value) l[r.key] = r.value
       setLinkuri(l)
@@ -119,6 +120,14 @@ export default function CursBPage() {
         const lista: string[] = JSON.parse(l.curs_b_helper_studenti || '[]')
         setHelperActiv(l.curs_b_helper_vizibil === '1' && lista.includes(st.id))
       } catch { setHelperActiv(false) }
+
+      // caietul se deschide doar cursanților aleși din configurator
+      let areCaiet = false
+      try {
+        const lista: string[] = JSON.parse(l.curs_b_caiet_studenti || '[]')
+        areCaiet = l.curs_b_caiet_vizibil === '1' && lista.includes(st.id)
+      } catch { areCaiet = false }
+      if (!areCaiet) { router.replace(`/portal?cod=${c}`); return }
 
       setStare('gata')
     })()
@@ -211,7 +220,10 @@ export default function CursBPage() {
                 </span>
                 Curs B/A — caietul meu
               </h1>
-              <p className="text-xs text-gray-400 mt-1">{nume} · notele tale se salvează singure</p>
+              <p className="mt-1">
+                <span className="text-base font-bold text-gray-900">{nume}</span>
+                <span className="text-xs text-gray-400"> · notele tale se salvează singure</span>
+              </p>
             </div>
             <span className="text-xs text-gray-400">{scrise} subiecte cu notițe</span>
           </div>

@@ -54,6 +54,7 @@ export default function PortalPage() {
   const [scannedFields, setScannedFields] = useState<Set<string>>(new Set())
   const [examSubmitted, setExamSubmitted] = useState(false)
   const [examAcces, setExamAcces] = useState('')   // excepția pusă pe acest cursant: deschis / închis
+  const [areCaiet, setAreCaiet] = useState(false)  // caietul de curs B/A, deschis din configurator
   // Tip act detectat din OCR: ci_vechi | ci_nou | pasaport
   const [docType, setDocType] = useState<'' | 'ci_vechi' | 'ci_nou' | 'ci_strain' | 'pasaport'>('')
   const [showDetails, setShowDetails] = useState(false)   // dropdown "Date completate"
@@ -80,6 +81,23 @@ export default function PortalPage() {
     supabase.from('radio_exam_answers').select('status').eq('student_id', student.id)
       .then(({ data }) => { if (!cancelled) setExamSubmitted((data || []).some((a: any) => a.status === 'submitted' || a.status === 'graded')) })
     return () => { cancelled = true }
+  }, [student?.id])
+
+  // Caietul de curs B/A: apare doar cursanților aleși în configurator
+  useEffect(() => {
+    if (!student?.id) { setAreCaiet(false); return }
+    let anulat = false
+    supabase.from('setsail_info').select('key, value').in('key', ['curs_b_caiet_vizibil', 'curs_b_caiet_studenti'])
+      .then(({ data }) => {
+        if (anulat) return
+        const v: Record<string, string> = {}
+        for (const r of (data || []) as any[]) v[r.key] = r.value || ''
+        try {
+          const lista: string[] = JSON.parse(v.curs_b_caiet_studenti || '[]')
+          setAreCaiet(v.curs_b_caiet_vizibil === '1' && lista.includes(student.id))
+        } catch { setAreCaiet(false) }
+      })
+    return () => { anulat = true }
   }, [student?.id])
 
   // Excepția de acces la examen, pusă de examinator pe cursantul ăsta
@@ -1736,7 +1754,7 @@ export default function PortalPage() {
             )}
 
             {/* ── Linkuri utile (doar cele completate în sesiune) ── */}
-            {(resurse.length > 0 || (examScope === 'practica_ba' && session?.access_code)) && (
+            {(resurse.length > 0 || (examScope === 'practica_ba' && areCaiet && session?.access_code)) && (
               <div className={'bg-white rounded-2xl p-6 shadow-2xl ' + (dateGata ? 'order-[-10]' : '')}>
                 <h2 className="font-bold text-gray-900 mb-1">Linkuri utile</h2>
                 <p className="text-xs text-gray-400 mb-4">Cursul online, materialele și grupurile seriei.</p>
@@ -1754,7 +1772,7 @@ export default function PortalPage() {
                   const mari = (['whatsapp_url', 'comunitate_url', 'arhiva_video_url'] as const)
                     .map(cheie => resurse.find(x => x.cheie === cheie)).filter(Boolean) as typeof resurse
                   // la clasa B/A, lângă grupuri stă și caietul de curs
-                  const caiet = examScope === 'practica_ba' && session?.access_code
+                  const caiet = examScope === 'practica_ba' && areCaiet && session?.access_code
                   if (!mari.length && !caiet) return null
                   const cate = mari.length + (caiet ? 1 : 0)
                   const trei = cate >= 3
