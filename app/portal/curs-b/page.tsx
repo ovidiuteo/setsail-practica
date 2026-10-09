@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
 import { CURS_B } from '@/lib/curs-b/continut'
-import { NotebookPen, HelpCircle, ChevronDown, ChevronUp, Loader2, ArrowLeft, Check } from 'lucide-react'
+import { NotebookPen, HelpCircle, ChevronDown, ChevronUp, Loader2, ArrowLeft, Check, Download } from 'lucide-react'
 
 // Cursul B/A pentru cursant: subiectele zilei, notele lui sub fiecare subiect și
 // notele de curs (ale lui Radu Diaconescu) ascunse sub semnul întrebării.
@@ -85,6 +85,7 @@ export default function CursBPage() {
   const [filme, setFilme] = useState<Set<number>>(new Set())           // zilele cu înregistrarea deschisă
   const secunde = useRef<Record<number, number>>({})                   // unde a rămas filmul fiecărei zile
   const timere = useRef<Record<string, any>>({})
+  const [descarc, setDescarc] = useState(false)
 
   useEffect(() => {
     (async () => {
@@ -137,6 +138,25 @@ export default function CursBPage() {
       setFilme(f => new Set(Array.from(f).filter(x => x === noua)))
       return noua
     })
+  }
+
+  // Referatul în format PDF, cu numele cursantului și notițele lui
+  async function descarcaReferat() {
+    setDescarc(true)
+    try {
+      const r = await fetch('/api/portal/curs-b/referat', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ student_id: studentId, access_code: cod }),
+      })
+      if (!r.ok) { const j = await r.json().catch(() => ({})); alert('Nu am putut face referatul: ' + (j.error || 'eroare')); return }
+      const blob = await r.blob()
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url; a.download = `Referat Curs B - ${nume}.pdf`; a.click()
+      setTimeout(() => URL.revokeObjectURL(url), 5000)
+    } catch (e: any) {
+      alert('Eroare: ' + (e?.message || e))
+    } finally { setDescarc(false) }
   }
 
   const comuta = (cheie: string) => setDeschise(s => {
@@ -287,6 +307,20 @@ export default function CursBPage() {
             </div>
           )
         })}
+
+        {/* Referatul: notițele cursantului, în formatul lucrării de curs */}
+        <div className="bg-white rounded-2xl p-6 shadow-2xl mb-10 text-center">
+          <h2 className="font-bold text-gray-900">Referatul meu</h2>
+          <p className="text-xs text-gray-500 mt-1 mb-4">
+            Notițele tale, strânse în formatul lucrării de curs — copertă cu numele tău, cuprins și notele pe zile.
+          </p>
+          <button onClick={descarcaReferat} disabled={descarc || scrise === 0}
+            className="inline-flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold text-white disabled:opacity-40"
+            style={{ background: '#0a1628' }}>
+            {descarc ? <><Loader2 size={15} className="animate-spin" /> Se pregătește…</> : <><Download size={15} /> Descarcă referatul de B</>}
+          </button>
+          {scrise === 0 && <p className="text-[11px] text-gray-400 mt-2">Scrie întâi câteva notițe.</p>}
+        </div>
       </div>
     </div>
   )
