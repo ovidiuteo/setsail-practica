@@ -3630,6 +3630,9 @@ function SessionFilesCard({ sess, isRadio }: { sess: any; isRadio: boolean }) {
   // Înștiințarea semnată încărcată în cardul de notificare — o arătăm și aici,
   // ca să nu pară că lipsește. Aducem doar numele, nu și base64-ul.
   const [scanNotif, setScanNotif] = useState<{ id: string; name: string } | null>(null)
+  const [adaugTip, setAdaugTip] = useState(false)
+  const [tipNou, setTipNou] = useState('')
+  const [editTip, setEditTip] = useState<string | null>(null)
 
   useEffect(() => {
     if (!open) return
@@ -3700,6 +3703,35 @@ function SessionFilesCard({ sess, isRadio }: { sess: any; isRadio: boolean }) {
     setFiles(f => f.filter(x => x.id !== id))
   }
 
+  // Descrierile (tipurile) se țin pe categorie, deci se regăsesc la toate seriile
+  async function adaugaTip() {
+    const label = (tipNou || '').trim()
+    if (!label) return
+    const maxOrd = Math.max(0, ...types.map(t => t.ordine || 0))
+    const { data, error } = await supabase.from('session_file_types')
+      .insert({ categorie, label, ordine: maxOrd + 1 }).select().single()
+    if (error) { alert('Eroare: ' + error.message); return }
+    setTypes(ts => [...ts, data]); setTipNou(''); setAdaugTip(false)
+  }
+  async function redenumesteTip(id: string, label: string) {
+    setEditTip(null)
+    const t = types.find(x => x.id === id)
+    if (!label.trim() || !t || label === t.label) return
+    setTypes(ts => ts.map(x => x.id === id ? { ...x, label } : x))
+    await supabase.from('session_file_types').update({ label }).eq('id', id)
+  }
+  async function stergeTip(t: any) {
+    const ale = files.filter(f => f.file_type_id === t.id)
+    if (!confirm(`Ștergi „${t.label}"? Dispare de la toate sesiunile ${categorie.toUpperCase()}` +
+      (ale.length ? `, împreună cu ${ale.length} fișier(e) încărcate aici.` : '.'))) return
+    for (const f of ale) await fetch('/api/session-files', {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: f.id }),
+    })
+    await supabase.from('session_file_types').delete().eq('id', t.id)
+    setFiles(fs => fs.filter(f => f.file_type_id !== t.id))
+    setTypes(ts => ts.filter(x => x.id !== t.id))
+  }
+
   const fileIcon = (mime: string) => (mime || '').startsWith('image/') ? '🖼️' : (mime || '').includes('word') ? '📝' : '📄'
   const fileRow = (f: any) => (
     <div key={f.id} className="flex items-center gap-2 text-xs">
@@ -3743,9 +3775,22 @@ function SessionFilesCard({ sess, isRadio }: { sess: any; isRadio: boolean }) {
               const dinNotificare = esteInstiintare && scanNotif
               return (
                 <div key={t.id} className="rounded-lg border border-gray-100 p-2.5">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-xs font-medium text-gray-700">{t.label}</span>
-                    {fs.length === 0 && !dinNotificare && <span className="text-[10px] text-amber-500 font-medium">lipsă</span>}
+                  <div className="flex items-center justify-between gap-2 mb-1.5">
+                    {editTip === t.id ? (
+                      <input autoFocus defaultValue={t.label}
+                        onBlur={e => redenumesteTip(t.id, e.target.value.trim())}
+                        onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); if (e.key === 'Escape') setEditTip(null) }}
+                        className="flex-1 px-2 py-1 rounded border border-blue-300 text-xs focus:outline-none" />
+                    ) : (
+                      <span className="text-xs font-medium text-gray-700">{t.label}</span>
+                    )}
+                    <div className="flex items-center gap-1 shrink-0">
+                      {fs.length === 0 && !dinNotificare && <span className="text-[10px] text-amber-500 font-medium mr-1">lipsă</span>}
+                      <button onClick={() => setEditTip(t.id)} title="Editează descrierea"
+                        className="p-1 rounded hover:bg-gray-100 text-gray-300 hover:text-gray-600"><Pencil size={12} /></button>
+                      <button onClick={() => stergeTip(t)} title="Șterge documentul (descriere + fișiere)"
+                        className="p-1 rounded hover:bg-red-50 text-gray-300 hover:text-red-500"><X size={13} /></button>
+                    </div>
                   </div>
                   {dinNotificare && (
                     <div className="flex items-center gap-2 text-xs mb-2">
@@ -3767,8 +3812,24 @@ function SessionFilesCard({ sess, isRadio }: { sess: any; isRadio: boolean }) {
               {diverse.length > 0 && <div className="space-y-1 mb-2">{diverse.map(fileRow)}</div>}
               {uploadBtn(null, 'Încarcă fișier')}
             </div>
+            {/* descriere nouă — apare apoi la toate sesiunile din categorie */}
+            {adaugTip ? (
+              <div className="flex gap-2">
+                <input autoFocus value={tipNou} onChange={e => setTipNou(e.target.value)}
+                  onKeyDown={e => { if (e.key === 'Enter') adaugaTip(); if (e.key === 'Escape') setAdaugTip(false) }}
+                  placeholder="ex: Proces verbal obținere"
+                  className="flex-1 px-2.5 py-1.5 rounded-lg border border-gray-200 text-xs focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                <button onClick={adaugaTip} className="px-3 py-1.5 rounded-lg text-xs font-medium text-white" style={{ background: '#0a1628' }}>Adaugă</button>
+                <button onClick={() => setAdaugTip(false)} className="px-3 py-1.5 rounded-lg text-xs border border-gray-200 text-gray-500">Renunță</button>
+              </div>
+            ) : (
+              <button onClick={() => setAdaugTip(true)}
+                className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50">
+                <Plus size={12} /> Adaugă document
+              </button>
+            )}
             {types.length === 0 && (
-              <p className="text-[11px] text-gray-400">Niciun tip configurat pentru {categorie.toUpperCase()}. Adaugă din Configurator → „Tipuri de fișiere necesare".</p>
+              <p className="text-[11px] text-gray-400">Niciun tip configurat pentru {categorie.toUpperCase()}. Adaugă unul de mai sus sau din Configurator.</p>
             )}
           </>)}
         </div>
