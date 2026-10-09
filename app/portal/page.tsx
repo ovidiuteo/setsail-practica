@@ -1756,9 +1756,10 @@ export default function PortalPage() {
                   // la clasa B/A, lângă grupuri stă și caietul de curs
                   const caiet = examScope === 'practica_ba' && session?.access_code
                   if (!mari.length && !caiet) return null
-                  const trei = mari.length + (caiet ? 1 : 0) >= 3
+                  const cate = mari.length + (caiet ? 1 : 0)
+                  const trei = cate >= 3
                   return (
-                    <div className="grid gap-2 mt-2" style={{ gridTemplateColumns: `repeat(${Math.min(mari.length, 3)}, minmax(0, 1fr))` }}>
+                    <div className="grid gap-2 mt-2" style={{ gridTemplateColumns: `repeat(${Math.min(cate, 3)}, minmax(0, 1fr))` }}>
                       {mari.map(r => (
                         <a key={r.cheie} href={r.url} target="_blank" rel="noopener noreferrer"
                           className={`flex flex-col items-center justify-center text-center gap-2 rounded-xl border-2 border-gray-200 hover:border-green-400 hover:bg-green-50/40 transition-all ${
