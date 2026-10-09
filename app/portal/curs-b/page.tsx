@@ -8,6 +8,32 @@ import { NotebookPen, HelpCircle, ChevronDown, ChevronUp, Loader2, ArrowLeft, Ch
 // Cursul B/A pentru cursant: subiectele zilei, notele lui sub fiecare subiect și
 // notele de curs (ale lui Radu Diaconescu) ascunse sub semnul întrebării.
 
+// Linkul zilei, pregătit pentru încorporare. Merge linkul de embed copiat din
+// YouTube („.../embed/..." sau codul <iframe …>), dar și adresa obișnuită.
+function embedYouTube(url?: string): string | null {
+  const u = String(url || '').trim()
+  if (!u) return null
+  // dacă s-a lipit tot codul <iframe …>, luăm adresa din src
+  const dinIframe = /src=["']([^"']+)["']/i.exec(u)?.[1]
+  const adresa = dinIframe || u
+  if (/youtube(-nocookie)?\.com\/embed\//i.test(adresa)) return adresa
+  const id = /youtu\.be\/([\w-]{6,})/.exec(adresa)?.[1]
+    || /[?&]v=([\w-]{6,})/.exec(adresa)?.[1]
+    || /youtube\.com\/(?:live|shorts)\/([\w-]{6,})/.exec(adresa)?.[1]
+  return id ? `https://www.youtube.com/embed/${id}?rel=0` : null
+}
+
+// Semnul YouTube — plin (alb pe roșu) când filmul e deschis
+function IconYouTube({ size = 18, plin = false }: { size?: number; plin?: boolean }) {
+  const c = plin ? '#fff' : '#ff0000'
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <rect x="2.5" y="5" width="19" height="14" rx="4" stroke={c} strokeWidth="1.8" />
+      <path fill={c} d="M10 8.5l6 3.5-6 3.5v-7z" />
+    </svg>
+  )
+}
+
 export default function CursBPage() {
   const router = useRouter()
   const [stare, setStare] = useState<'incarc' | 'gata' | 'eroare'>('incarc')
@@ -20,6 +46,7 @@ export default function CursBPage() {
   const [ziDeschisa, setZiDeschisa] = useState<number | null>(1)
   const [salvat, setSalvat] = useState<string | null>(null)
   const [linkuri, setLinkuri] = useState<Record<string, string>>({})   // câte un link pe zi, din configurator
+  const [filme, setFilme] = useState<Set<number>>(new Set())           // zilele cu înregistrarea deschisă
   const timere = useRef<Record<string, any>>({})
 
   useEffect(() => {
@@ -116,22 +143,46 @@ export default function CursBPage() {
           const deschisaZi = ziDeschisa === zi.zi
           return (
             <div key={zi.zi} className="bg-white rounded-2xl shadow-2xl mb-4 overflow-hidden">
-              <button onClick={() => setZiDeschisa(d => (d === zi.zi ? null : zi.zi))}
-                className="w-full flex items-center justify-between gap-3 px-6 py-4 text-left hover:bg-gray-50">
-                <div>
+              <div className="w-full flex items-center justify-between gap-3 px-6 py-4">
+                <button onClick={() => setZiDeschisa(d => (d === zi.zi ? null : zi.zi))} className="flex-1 min-w-0 text-left">
                   <div className="font-bold text-gray-900">Ziua {zi.zi} — {zi.titlu}</div>
                   <div className="text-xs text-gray-400 mt-0.5">{zi.instructor}{zi.data ? ` · ${zi.data}` : ''} · {zi.subiecte.length} subiecte</div>
+                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                  {/* înregistrarea zilei, pusă din configurator */}
+                  {linkuri[`curs_b_url_zi${zi.zi}`] && (
+                    embedYouTube(linkuri[`curs_b_url_zi${zi.zi}`]) ? (
+                      <button onClick={() => { setZiDeschisa(zi.zi); setFilme(f => { const n = new Set(f); n.has(zi.zi) ? n.delete(zi.zi) : n.add(zi.zi); return n }) }}
+                        title={filme.has(zi.zi) ? 'Ascunde înregistrarea' : 'Vezi înregistrarea zilei'}
+                        className={`inline-flex items-center justify-center w-9 h-9 rounded-xl transition-colors ${
+                          filme.has(zi.zi) ? 'bg-red-600' : 'bg-red-50 hover:bg-red-100'}`}>
+                        <IconYouTube size={18} plin={filme.has(zi.zi)} />
+                      </button>
+                    ) : (
+                      <a href={linkuri[`curs_b_url_zi${zi.zi}`]} target="_blank" rel="noopener noreferrer"
+                        title="Materialele zilei"
+                        className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-red-50 hover:bg-red-100">
+                        <IconYouTube size={18} />
+                      </a>
+                    )
+                  )}
+                  <button onClick={() => setZiDeschisa(d => (d === zi.zi ? null : zi.zi))} className="text-gray-400">
+                    {deschisaZi ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                  </button>
                 </div>
-                {deschisaZi ? <ChevronUp size={18} className="text-gray-400" /> : <ChevronDown size={18} className="text-gray-400" />}
-              </button>
+              </div>
 
               {deschisaZi && (
                 <div className="px-6 pb-6">
-                  {linkuri[`curs_b_url_zi${zi.zi}`] && (
-                    <a href={linkuri[`curs_b_url_zi${zi.zi}`]} target="_blank" rel="noopener noreferrer"
-                      className="mb-4 flex items-center gap-2 px-4 py-2.5 rounded-xl border-2 border-sky-200 bg-sky-50 text-sm font-medium text-sky-800 hover:bg-sky-100">
-                      <NotebookPen size={15} /> Materialele zilei {zi.zi}
-                    </a>
+                  {/* filmul rămâne pe loc, iar subiectele curg pe sub el */}
+                  {filme.has(zi.zi) && embedYouTube(linkuri[`curs_b_url_zi${zi.zi}`]) && (
+                    <div className="sticky top-0 z-10 -mx-6 px-6 pt-1 pb-3 bg-white">
+                      <div className="rounded-xl overflow-hidden border border-gray-200 bg-black" style={{ aspectRatio: '16 / 9' }}>
+                        <iframe src={embedYouTube(linkuri[`curs_b_url_zi${zi.zi}`])!} title={`Ziua ${zi.zi}`}
+                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                          allowFullScreen className="w-full h-full" />
+                      </div>
+                    </div>
                   )}
                   {zi.intro.length > 0 && (
                     <div className="mb-4 rounded-xl bg-gray-50 border border-gray-100 px-4 py-3 text-xs text-gray-500 whitespace-pre-line">
