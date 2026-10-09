@@ -98,7 +98,7 @@ export default function CursBPage() {
       if (!salvatLocal?.student_id || !salvatLocal?.email) { router.replace(`/portal?cod=${c}`); return }
 
       const { data: st } = await supabase.from('students')
-        .select('id, full_name, email, sessions!session_id(curs_b_url_zi1, curs_b_url_zi2, curs_b_url_zi3)')
+        .select('id, full_name, email, sessions!session_id(curs_b_url_intro, curs_b_url_zi1, curs_b_url_zi2, curs_b_url_zi3)')
         .eq('id', salvatLocal.student_id).ilike('email', salvatLocal.email).maybeSingle()
       if (!st) { router.replace(`/portal?cod=${c}`); return }
       setStudentId(st.id); setNume(st.full_name || '')
@@ -110,15 +110,15 @@ export default function CursBPage() {
 
       // linkurile zilelor, puse din configurator
       const { data: info } = await supabase.from('setsail_info').select('key, value')
-        .in('key', ['curs_b_url_zi1', 'curs_b_url_zi2', 'curs_b_url_zi3',
+        .in('key', ['curs_b_url_intro', 'curs_b_url_zi1', 'curs_b_url_zi2', 'curs_b_url_zi3',
           'curs_b_helper_vizibil', 'curs_b_helper_studenti', 'curs_b_caiet_vizibil', 'curs_b_caiet_studenti'])
       const l: Record<string, string> = {}
       for (const r of (info || []) as any[]) if (r.value) l[r.key] = r.value
       // linkul pus pe seria cursantului ține locul celui implicit
       const aleSeriei: any = (st as any).sessions || {}
-      for (const z of [1, 2, 3]) {
-        const v = String(aleSeriei[`curs_b_url_zi${z}`] || '').trim()
-        if (v) l[`curs_b_url_zi${z}`] = v
+      for (const k of ['curs_b_url_intro', 'curs_b_url_zi1', 'curs_b_url_zi2', 'curs_b_url_zi3']) {
+        const v = String(aleSeriei[k] || '').trim()
+        if (v) l[k] = v
       }
       setLinkuri(l)
 
@@ -154,7 +154,7 @@ export default function CursBPage() {
     }, 1000)
   }, [studentId, cod])
 
-  const areFilm = (zi: number) => !!embedYouTube(linkuri[`curs_b_url_zi${zi}`])
+  const areFilm = (zi: number) => !!embedYouTube(zi === 0 ? linkuri['curs_b_url_intro'] : linkuri[`curs_b_url_zi${zi}`])
 
   // o singură zi deschisă: celelalte se închid (și filmele lor se opresc), iar
   // ziua deschisă își arată filmul din start — oprit, de unde a rămas
@@ -239,6 +239,61 @@ export default function CursBPage() {
             strânse de un fost cursant (Radu Diaconescu, 2023) — sunt o orientare, nu înlocuiesc ce spune instructorul.
           </p>
         </div>
+
+        {/* Introducerea în curs, înaintea zilei 1 */}
+        {(() => {
+          const src = embedYouTube(linkuri['curs_b_url_intro'])
+          const link = linkuri['curs_b_url_intro']
+          const deschisa = ziDeschisa === 0
+          if (!link && !note['intro']) return null
+          return (
+            <div className="bg-white rounded-2xl shadow-2xl mb-4 overflow-hidden">
+              <div className="w-full flex items-center justify-between gap-3 px-6 py-4">
+                <button onClick={() => deschideZi(0)} className="flex-1 min-w-0 text-left">
+                  <div className="font-bold text-gray-900">Introducere</div>
+                  <div className="text-xs text-gray-400 mt-0.5">despre curs, examen și ce urmează</div>
+                </button>
+                <div className="flex items-center gap-2 shrink-0">
+                  {link && (src ? (
+                    <button onClick={() => { setZiDeschisa(0); setFilme(f => { const n = new Set(f); n.has(0) ? n.delete(0) : n.add(0); return n }) }}
+                      title={filme.has(0) ? 'Ascunde înregistrarea' : 'Vezi introducerea'}
+                      className={`inline-flex items-center justify-center w-9 h-9 rounded-xl transition-colors ${
+                        filme.has(0) ? 'bg-red-600' : 'bg-red-50 hover:bg-red-100'}`}>
+                      <IconYouTube size={18} plin={filme.has(0)} />
+                    </button>
+                  ) : (
+                    <a href={link} target="_blank" rel="noopener noreferrer" title="Materialele introductive"
+                      className="inline-flex items-center justify-center w-9 h-9 rounded-xl bg-red-50 hover:bg-red-100">
+                      <IconYouTube size={18} />
+                    </a>
+                  ))}
+                  <button onClick={() => deschideZi(0)} className="text-gray-400">
+                    {deschisa ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
+                  </button>
+                </div>
+              </div>
+
+              {deschisa && (
+                <div className="px-6 pb-6">
+                  {filme.has(0) && src && (
+                    <div className="sticky top-0 z-10 -mx-6 px-6 pt-1 pb-3 bg-white">
+                      <div className="rounded-xl overflow-hidden border border-gray-200 bg-black" style={{ aspectRatio: '16 / 9' }}>
+                        <FilmZi src={src} zi={0} start={secunde.current[0] || 0}
+                          onSecunda={(z, sec) => { secunde.current[z] = sec }} />
+                      </div>
+                    </div>
+                  )}
+                  <textarea
+                    defaultValue={note['intro'] || ''}
+                    onChange={e => { const v = e.target.value; setNote(n => ({ ...n, intro: v })); salveaza('intro', v) }}
+                    rows={3}
+                    placeholder="Idei principale"
+                    className="w-full px-3 py-2 rounded-lg border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-sky-200 resize-y" />
+                </div>
+              )}
+            </div>
+          )
+        })()}
 
         {CURS_B.map(zi => {
           const deschisaZi = ziDeschisa === zi.zi

@@ -365,6 +365,7 @@ function Fold({ id, titluImplicit, descriere, children }: {
 
 function CursBSection() {
   const ZILE = [
+    { cheie: 'curs_b_url_intro', eticheta: 'Introducere' },
     { cheie: 'curs_b_url_zi1', eticheta: 'Ziua 1 — Prim ajutor pe mare' },
     { cheie: 'curs_b_url_zi2', eticheta: 'Ziua 2 — Manevra navei în condiții speciale' },
     { cheie: 'curs_b_url_zi3', eticheta: 'Ziua 3 — Manevra navei în condiții speciale' },

@@ -99,6 +99,7 @@ const GRUPE_SESIUNE: { titlu: string; campuri: [string, string, string][] }[] = 
     ['Examinare practică în locația aprobată', 'notif_locatie_examinare', 'text'],
   ]},
   { titlu: 'Curs B/A — înregistrările zilelor', campuri: [
+    ['Introducere', 'curs_b_url_intro', 'text'],
     ['Ziua 1 — Prim ajutor pe mare', 'curs_b_url_zi1', 'text'],
     ['Ziua 2 — Manevra navei', 'curs_b_url_zi2', 'text'],
     ['Ziua 3 — Manevra navei', 'curs_b_url_zi3', 'text'],
@@ -4211,6 +4212,7 @@ export default function SessionDetailPage() {
       arhiva_video_url: (sess as any).arhiva_video_url || '',
       materiale_url: (sess as any).materiale_url || '',
       comunitate_url: (sess as any).comunitate_url || '',
+      curs_b_url_intro: (sess as any).curs_b_url_intro || '',
       curs_b_url_zi1: (sess as any).curs_b_url_zi1 || '',
       curs_b_url_zi2: (sess as any).curs_b_url_zi2 || '',
       curs_b_url_zi3: (sess as any).curs_b_url_zi3 || '',
@@ -4231,7 +4233,7 @@ export default function SessionDetailPage() {
       if (payload[col] === '') payload[col] = null
     }
     // linkurile pentru cursanți se salvează cu https:// în față
-    for (const col of ['zoom_url', 'whatsapp_url', 'arhiva_video_url', 'materiale_url', 'comunitate_url', 'curs_b_url_zi1', 'curs_b_url_zi2', 'curs_b_url_zi3'])
+    for (const col of ['zoom_url', 'whatsapp_url', 'arhiva_video_url', 'materiale_url', 'comunitate_url', 'curs_b_url_intro', 'curs_b_url_zi1', 'curs_b_url_zi2', 'curs_b_url_zi3'])
       if (col in payload) payload[col] = urlAbsolut(payload[col])
     const { error } = await supabase.from('sessions').update(payload).eq('id', sid)
     if (error) {
