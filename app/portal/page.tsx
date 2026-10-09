@@ -1,7 +1,7 @@
 'use client'
 import { useEffect, useRef, useState } from 'react'
 import { supabase } from '@/lib/supabase'
-import { Ship, RotateCcw, Check, Upload, Loader2, CheckCircle, AlertCircle, Camera, ChevronDown, ChevronUp, FileText, RadioTower, AlertTriangle, Video, MessageCircle, Users, ExternalLink, Download } from 'lucide-react'
+import { Ship, RotateCcw, Check, Upload, Loader2, CheckCircle, AlertCircle, Camera, ChevronDown, ChevronUp, FileText, RadioTower, AlertTriangle, Video, MessageCircle, Users, ExternalLink, Download, NotebookPen } from 'lucide-react'
 import CIImageEditor from '@/components/CIImageEditor'
 import PracticeBooking from '@/components/PracticeBooking'
 import { scopeForSession } from '@/lib/timeline-scope'
@@ -1736,7 +1736,7 @@ export default function PortalPage() {
             )}
 
             {/* ── Linkuri utile (doar cele completate în sesiune) ── */}
-            {resurse.length > 0 && (
+            {(resurse.length > 0 || (examScope === 'practica_ba' && session?.access_code)) && (
               <div className={'bg-white rounded-2xl p-6 shadow-2xl ' + (dateGata ? 'order-[-10]' : '')}>
                 <h2 className="font-bold text-gray-900 mb-1">Linkuri utile</h2>
                 <p className="text-xs text-gray-400 mb-4">Cursul online, materialele și grupurile seriei.</p>
@@ -1753,8 +1753,10 @@ export default function PortalPage() {
                 {(() => {
                   const mari = (['whatsapp_url', 'comunitate_url', 'arhiva_video_url'] as const)
                     .map(cheie => resurse.find(x => x.cheie === cheie)).filter(Boolean) as typeof resurse
-                  if (!mari.length) return null
-                  const trei = mari.length >= 3
+                  // la clasa B/A, lângă grupuri stă și caietul de curs
+                  const caiet = examScope === 'practica_ba' && session?.access_code
+                  if (!mari.length && !caiet) return null
+                  const trei = mari.length + (caiet ? 1 : 0) >= 3
                   return (
                     <div className="grid gap-2 mt-2" style={{ gridTemplateColumns: `repeat(${Math.min(mari.length, 3)}, minmax(0, 1fr))` }}>
                       {mari.map(r => (
@@ -1768,6 +1770,17 @@ export default function PortalPage() {
                           <span className={`font-medium text-gray-800 leading-tight ${trei ? 'text-xs' : 'text-sm'}`}>{r.titlu}</span>
                         </a>
                       ))}
+                      {caiet && (
+                        <a href={`/portal/curs-b?cod=${session.access_code}`}
+                          className={`flex flex-col items-center justify-center text-center gap-2 rounded-xl border-2 border-sky-200 hover:border-sky-400 hover:bg-sky-50/60 transition-all ${
+                            trei ? 'p-3 min-h-[8rem]' : 'p-4 min-h-[9rem]'}`}>
+                          <span className={`shrink-0 rounded-2xl flex items-center justify-center ${trei ? 'w-12 h-12' : 'w-14 h-14'}`}
+                            style={{ background: '#7dd3fc' }}>
+                            <NotebookPen size={trei ? 24 : 30} className="text-sky-900" />
+                          </span>
+                          <span className={`font-medium text-gray-800 leading-tight ${trei ? 'text-xs' : 'text-sm'}`}>Curs B/A</span>
+                        </a>
+                      )}
                     </div>
                   )
                 })()}
