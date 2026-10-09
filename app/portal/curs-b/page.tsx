@@ -245,7 +245,7 @@ export default function CursBPage() {
           const src = embedYouTube(linkuri['curs_b_url_intro'])
           const link = linkuri['curs_b_url_intro']
           const deschisa = ziDeschisa === 0
-          if (!link && !note['intro']) return null
+          // secțiunea stă mereu la început, cu textul de deschidere
           return (
             <div className="bg-white rounded-2xl shadow-2xl mb-4 overflow-hidden">
               <div className="w-full flex items-center justify-between gap-3 px-6 py-4">
@@ -283,6 +283,10 @@ export default function CursBPage() {
                       </div>
                     </div>
                   )}
+                  <p className="mb-3 rounded-xl bg-gray-50 border border-gray-100 px-4 py-3 text-sm text-gray-700 leading-relaxed">
+                    Cursul B/A pentru SetSail înseamnă pregătirea skipperilor pentru navigația la depărtare
+                    de mal, cu tratarea cât mai completă a situațiilor speciale ce pot apărea la bord.
+                  </p>
                   <textarea
                     defaultValue={note['intro'] || ''}
                     onChange={e => { const v = e.target.value; setNote(n => ({ ...n, intro: v })); salveaza('intro', v) }}
