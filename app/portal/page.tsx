@@ -54,6 +54,8 @@ export default function PortalPage() {
   const [scannedFields, setScannedFields] = useState<Set<string>>(new Set())
   const [examSubmitted, setExamSubmitted] = useState(false)
   const [examAcces, setExamAcces] = useState('')   // excepția pusă pe acest cursant: deschis / închis
+  const [examNota, setExamNota] = useState<number | null>(null)   // punctajul la grilă, din 20
+  const [examRezultatePublic, setExamRezultatePublic] = useState(false)
   const [areCaiet, setAreCaiet] = useState(false)  // caietul de curs B/A, deschis din configurator
   // Tip act detectat din OCR: ci_vechi | ci_nou | pasaport
   const [docType, setDocType] = useState<'' | 'ci_vechi' | 'ci_nou' | 'ci_strain' | 'pasaport'>('')
@@ -76,10 +78,15 @@ export default function PortalPage() {
 
   // Verifica daca acest cursant a finalizat deja examenul (status submitted/graded)
   useEffect(() => {
-    if (!student?.id) { setExamSubmitted(false); return }
+    if (!student?.id) { setExamSubmitted(false); setExamNota(null); return }
     let cancelled = false
-    supabase.from('radio_exam_answers').select('status').eq('student_id', student.id)
-      .then(({ data }) => { if (!cancelled) setExamSubmitted((data || []).some((a: any) => a.status === 'submitted' || a.status === 'graded')) })
+    supabase.from('radio_exam_answers').select('status, grila_score').eq('student_id', student.id)
+      .then(({ data }) => {
+        if (cancelled) return
+        const gata = (data || []).find((a: any) => a.status === 'submitted' || a.status === 'graded')
+        setExamSubmitted(!!gata)
+        setExamNota(gata ? Number((gata as any).grila_score ?? 0) : null)
+      })
     return () => { cancelled = true }
   }, [student?.id])
 
@@ -102,10 +109,14 @@ export default function PortalPage() {
 
   // Excepția de acces la examen, pusă de examinator pe cursantul ăsta
   useEffect(() => {
-    if (!student?.id || !session?.id) { setExamAcces(''); return }
+    if (!student?.id || !session?.id) { setExamAcces(''); setExamRezultatePublic(false); return }
     let cancelled = false
-    supabase.from('radio_exams').select('acces_individual').eq('session_id', session.id).maybeSingle()
-      .then(({ data }) => { if (!cancelled) setExamAcces(String(((data as any)?.acces_individual || {})[student.id] || '')) })
+    supabase.from('radio_exams').select('acces_individual, rezultate_publice').eq('session_id', session.id).maybeSingle()
+      .then(({ data }) => {
+        if (cancelled) return
+        setExamAcces(String(((data as any)?.acces_individual || {})[student.id] || ''))
+        setExamRezultatePublic(!!(data as any)?.rezultate_publice)
+      })
     return () => { cancelled = true }
   }, [student?.id, session?.id])
 
@@ -1816,10 +1827,27 @@ export default function PortalPage() {
             {/* Examenul de radio, cât timp e deschis — sus, ca să nu stea ascuns
                 în folderul de date personale */}
             {(student?.class_caa || '').toLowerCase().match(/radio|lrc/) && examSubmitted && examAcces !== 'deschis' ? (
-              <div className="order-[-40] rounded-2xl p-5 shadow-2xl bg-purple-50 border-2 border-purple-200 flex items-center gap-2 text-sm text-purple-700">
-                <CheckCircle size={16} className="shrink-0" />
-                <span><strong>Test finalizat</strong> — examenul a fost trimis. Nu mai poate fi accesat.</span>
-              </div>
+              examRezultatePublic && examNota !== null ? (
+                examNota >= 15 ? (
+                  <div className="order-[-40] rounded-2xl p-5 shadow-2xl bg-green-50 border-2 border-green-300 flex items-center gap-2 text-sm text-green-800">
+                    <CheckCircle size={16} className="shrink-0" />
+                    <span><strong>Test finalizat</strong> — rezultat examen {examNota}/20. Admis. Felicitări!</span>
+                  </div>
+                ) : (
+                  <div className="order-[-40] rounded-2xl p-5 shadow-2xl bg-red-50 border-2 border-red-300 flex items-start gap-2 text-sm text-red-800">
+                    <AlertTriangle size={16} className="shrink-0 mt-0.5" />
+                    <span>
+                      <strong>Test finalizat</strong> — rezultat examen {examNota}/20. Respins. Vă rugăm să vă reînscrieți
+                      la curs prin email <a href="mailto:office@setsail.ro" className="underline">office@setsail.ro</a>
+                    </span>
+                  </div>
+                )
+              ) : (
+                <div className="order-[-40] rounded-2xl p-5 shadow-2xl bg-purple-50 border-2 border-purple-200 flex items-center gap-2 text-sm text-purple-700">
+                  <CheckCircle size={16} className="shrink-0" />
+                  <span><strong>Test finalizat</strong> — examenul a fost trimis. Nu mai poate fi accesat.</span>
+                </div>
+              )
             ) : (student?.class_caa || '').toLowerCase().match(/radio|lrc/)
               // activ = îl văd toți; altfel, doar cui i l-a deschis examinatorul anume
               && session?.radio_exam_status !== 'draft' && examAcces !== 'inchis'

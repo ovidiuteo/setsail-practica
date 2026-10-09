@@ -7,7 +7,7 @@ import {
   ArrowLeft, Save, Circle, CircleDot, FileText, Users,
   Play, Lock, RotateCcw, ChevronDown, ChevronUp, Loader2, Check,
   Sparkles, ExternalLink, AlertCircle, Shuffle, Trash2, Copy,
-  Upload, X, EyeOff
+  Upload, X, EyeOff, Eye
 } from 'lucide-react'
 
 type RadioExam = {
@@ -21,6 +21,8 @@ type RadioExam = {
   numar_subiecte_engleza: number
   // excepții pe cursant: { student_id: 'deschis' | 'inchis' }
   acces_individual?: Record<string, string> | null
+  // când e pornit, cursantul vede în portal nota la grilă și dacă a fost admis
+  rezultate_publice?: boolean | null
 }
 type Question = {
   id?: string
@@ -641,6 +643,21 @@ export default function ExamenPage() {
     setRadioExamStatus(newStatus)
   }
 
+  // Publicarea rezultatelor: cursantul vede în portal nota la grilă și dacă e admis
+  async function schimbaPublicare() {
+    if (!exam) { alert('Creează mai întâi examenul.'); return }
+    const nou = !exam.rezultate_publice
+    setExam({ ...exam, rezultate_publice: nou })
+    const { error } = await supabase
+      .from('radio_exams')
+      .update({ rezultate_publice: nou })
+      .eq('id', exam.id)
+    if (error) {
+      setExam({ ...exam, rezultate_publice: !nou })
+      alert('Eroare: ' + error.message)
+    }
+  }
+
   // ---------- GRADE ----------
   async function saveGrade(answer: Answer) {
     const score = gradeDraft[answer.id] ?? 0
@@ -1226,12 +1243,30 @@ export default function ExamenPage() {
                 </button>
               )
             })}
+
+            {/* Publicarea rezultatelor în portalul cursantului */}
+            <button
+              onClick={schimbaPublicare}
+              disabled={!exam}
+              title="Cursantul vede în portal nota la grilă și dacă a fost admis"
+              className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-colors ${
+                exam?.rezultate_publice
+                  ? 'border-emerald-600 bg-emerald-600 text-white'
+                  : 'border-gray-300 bg-white text-gray-600 hover:bg-gray-50'
+              } ${!exam ? 'opacity-50 cursor-not-allowed' : ''}`}
+            >
+              {exam?.rezultate_publice
+                ? <Eye size={12} className="inline mr-1" />
+                : <EyeOff size={12} className="inline mr-1" />}
+              Publică rezultate
+            </button>
           </div>
           <p className="text-xs text-gray-400 mt-2">
             • <strong>Ciornă</strong> — editezi liber, cursanții nu văd nimic.
             <br />• <strong>Activ</strong> — cursanții pot accesa examenul din portal (necesită 20 întrebări + 5 traduceri generate).
             <br />• <strong>Ascuns</strong> — linkul dispare din portal, dar examenul rămâne funcțional (cine îl are deschis poate continua/trimite). Util ca să oprești accesul nou fără să închizi.
             <br />• <strong>Închis</strong> — cursanții nu mai pot trimite. Notează rezultatele.
+            <br />• <strong>Publică rezultate</strong> — în portal, în locul mesajului „examenul a fost trimis", cursantul vede nota la grilă și dacă a fost admis (minimum 15/20). Implicit e oprit.
           </p>
 
           {/* Baremul oficial, ca să fie la îndemână când notezi */}
