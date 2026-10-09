@@ -131,14 +131,23 @@ export default function CursBPage() {
     }, 1000)
   }, [studentId, cod])
 
-  // o singură zi deschisă: celelalte se închid, iar filmele lor se opresc
+  const areFilm = (zi: number) => !!embedYouTube(linkuri[`curs_b_url_zi${zi}`])
+
+  // o singură zi deschisă: celelalte se închid (și filmele lor se opresc), iar
+  // ziua deschisă își arată filmul din start — oprit, de unde a rămas
   function deschideZi(zi: number) {
     setZiDeschisa(d => {
       const noua = d === zi ? null : zi
-      setFilme(f => new Set(Array.from(f).filter(x => x === noua)))
+      setFilme(noua && areFilm(noua) ? new Set([noua]) : new Set())
       return noua
     })
   }
+
+  // la prima încărcare, filmul zilei deschise apare singur
+  useEffect(() => {
+    if (ziDeschisa && areFilm(ziDeschisa)) setFilme(new Set([ziDeschisa]))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [linkuri])
 
   // Referatul în format PDF, cu numele cursantului și notițele lui
   async function descarcaReferat() {
