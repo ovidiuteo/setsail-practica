@@ -142,23 +142,24 @@ export default function CursBPage() {
                           {vazut && (
                             <div className="px-4 py-3 bg-amber-50/60 border-b border-amber-100">
                               <div className="text-[11px] font-semibold text-amber-800 uppercase tracking-wide mb-1.5">Note de curs</div>
-                              <div className="text-xs text-gray-700 whitespace-pre-line leading-relaxed">
+                              <div className="text-sm text-gray-700 whitespace-pre-line leading-relaxed">
                                 {s.continut.join('\n')}
                               </div>
                             </div>
                           )}
 
                           <div className="px-4 py-3">
-                            <div className="flex items-center justify-between mb-1.5">
-                              <span className="text-[11px] uppercase tracking-wide text-gray-400">Notițele mele</span>
-                              {salvat === s.cheie && <span className="text-[11px] text-green-600 flex items-center gap-1"><Check size={11} /> salvat</span>}
-                            </div>
+                            {salvat === s.cheie && (
+                              <div className="flex justify-end mb-1">
+                                <span className="text-[11px] text-green-600 flex items-center gap-1"><Check size={11} /> salvat</span>
+                              </div>
+                            )}
                             <textarea
                               defaultValue={note[s.cheie] || ''}
                               onChange={e => { const v = e.target.value; setNote(n => ({ ...n, [s.cheie]: v })); salveaza(s.cheie, v) }}
                               rows={3}
-                              placeholder="scrie aici ce vrei să ții minte…"
-                              className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-sky-200 resize-y" />
+                              placeholder="Idei principale"
+                              className="w-full px-3 py-2 rounded-lg border border-gray-200 text-base focus:outline-none focus:ring-2 focus:ring-sky-200 resize-y" />
                           </div>
                         </div>
                       )
