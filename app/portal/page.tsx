@@ -1820,10 +1820,10 @@ export default function PortalPage() {
             )}
 
             {/* ── Adresa de corespondență pentru materialele de curs ──
-                La radio nu se trimit materiale, deci secțiunea nici nu apare.
+                La radio și la clasa B/A nu se trimit materiale, deci secțiunea nici nu apare.
                 În rest, după ce e completată și cursul a început, se strânge sub
                 „Date personale", ca să nu încarce pagina. */}
-            {!isRadioSession && (
+            {!isRadioSession && examScope !== 'practica_ba' && (
             <div className={'bg-white rounded-2xl p-6 shadow-2xl ' + (adresaStransa ? 'order-[92]' : '')}>
               {adresaStransa ? (
                 <button type="button" onClick={() => setAdresaDesfasurata(v => !v)}
