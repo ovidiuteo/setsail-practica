@@ -332,14 +332,15 @@ ${antetHtml}
   })
 
   const buffer = await Packer.toBuffer(doc)
-  const filename = isPrelungire
-    ? `Anexa_PV_LRC_PRELUNGIRE_${dateStr}.docx`
-    : `Anexa_PV_LRC_OBTINERE_${dateStr}.docx`
+  // „ANEXA examen prelungire 7 oct 2026.docx" — cum se cere la dosar
+  const ziRo = new Date(session.session_date).toLocaleDateString('ro-RO', { day: 'numeric', month: 'short', year: 'numeric' }).replace(/./g, '')
+  const filename = `ANEXA examen ${isPrelungire ? 'prelungire' : 'obtinere'} ${ziRo}.docx`
 
   return new NextResponse(buffer as unknown as BodyInit, {
     headers: {
       'Content-Type': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      'Content-Disposition': `attachment; filename="${filename}"`
+      // antetele HTTP sunt latin-1: numele merge și curățat de diacritice
+      'Content-Disposition': `attachment; filename="${filename.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^ -~]/g, '')}"; filename*=UTF-8''${encodeURIComponent(filename)}`
     }
   })
 }
