@@ -34,6 +34,42 @@ function IconYouTube({ size = 18, plin = false }: { size?: number; plin?: boolea
   )
 }
 
+// Înregistrarea unei zile. Ține minte secunda la care s-a ajuns, ca filmul să
+// pornească de acolo când îl redeschizi, și se oprește singur când se închide
+// (iframe-ul dispare din pagină).
+function FilmZi({ src, zi, start, onSecunda }: {
+  src: string; zi: number; start: number; onSecunda: (zi: number, s: number) => void
+}) {
+  const ref = useRef<HTMLIFrameElement>(null)
+  const adresa = `${src}${src.includes('?') ? '&' : '?'}enablejsapi=1&widgetid=${zi}${start ? `&start=${start}` : ''}`
+
+  useEffect(() => {
+    // cerem playerului să ne trimită starea (altfel nu primim nimic)
+    const cere = () => ref.current?.contentWindow?.postMessage(
+      JSON.stringify({ event: 'listening', id: zi, channel: 'widget' }), '*')
+    const t = setInterval(cere, 1000)
+    const stop = setTimeout(() => clearInterval(t), 8000)
+
+    function laMesaj(e: MessageEvent) {
+      if (!/\.youtube(-nocookie)?\.com$/.test(new URL(e.origin || 'https://x.invalid').hostname.replace(/^www\./, '.'))) return
+      try {
+        const d = typeof e.data === 'string' ? JSON.parse(e.data) : e.data
+        const s = d?.info?.currentTime
+        if (typeof s === 'number' && s > 0) onSecunda(zi, Math.floor(s))
+      } catch { /* alt mesaj */ }
+    }
+    window.addEventListener('message', laMesaj)
+    return () => { clearInterval(t); clearTimeout(stop); window.removeEventListener('message', laMesaj) }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [zi, src])
+
+  return (
+    <iframe ref={ref} src={adresa} title={`Ziua ${zi}`}
+      allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+      allowFullScreen className="w-full h-full" />
+  )
+}
+
 export default function CursBPage() {
   const router = useRouter()
   const [stare, setStare] = useState<'incarc' | 'gata' | 'eroare'>('incarc')
@@ -47,6 +83,7 @@ export default function CursBPage() {
   const [salvat, setSalvat] = useState<string | null>(null)
   const [linkuri, setLinkuri] = useState<Record<string, string>>({})   // câte un link pe zi, din configurator
   const [filme, setFilme] = useState<Set<number>>(new Set())           // zilele cu înregistrarea deschisă
+  const secunde = useRef<Record<number, number>>({})                   // unde a rămas filmul fiecărei zile
   const timere = useRef<Record<string, any>>({})
 
   useEffect(() => {
@@ -92,6 +129,15 @@ export default function CursBPage() {
       setTimeout(() => setSalvat(s => (s === cheie ? null : s)), 1500)
     }, 1000)
   }, [studentId, cod])
+
+  // o singură zi deschisă: celelalte se închid, iar filmele lor se opresc
+  function deschideZi(zi: number) {
+    setZiDeschisa(d => {
+      const noua = d === zi ? null : zi
+      setFilme(f => new Set(Array.from(f).filter(x => x === noua)))
+      return noua
+    })
+  }
 
   const comuta = (cheie: string) => setDeschise(s => {
     const n = new Set(s); n.has(cheie) ? n.delete(cheie) : n.add(cheie); return n
@@ -144,7 +190,7 @@ export default function CursBPage() {
           return (
             <div key={zi.zi} className="bg-white rounded-2xl shadow-2xl mb-4 overflow-hidden">
               <div className="w-full flex items-center justify-between gap-3 px-6 py-4">
-                <button onClick={() => setZiDeschisa(d => (d === zi.zi ? null : zi.zi))} className="flex-1 min-w-0 text-left">
+                <button onClick={() => deschideZi(zi.zi)} className="flex-1 min-w-0 text-left">
                   <div className="font-bold text-gray-900">Ziua {zi.zi} — {zi.titlu}</div>
                   <div className="text-xs text-gray-400 mt-0.5">{zi.instructor}{zi.data ? ` · ${zi.data}` : ''} · {zi.subiecte.length} subiecte</div>
                 </button>
@@ -166,7 +212,7 @@ export default function CursBPage() {
                       </a>
                     )
                   )}
-                  <button onClick={() => setZiDeschisa(d => (d === zi.zi ? null : zi.zi))} className="text-gray-400">
+                  <button onClick={() => deschideZi(zi.zi)} className="text-gray-400">
                     {deschisaZi ? <ChevronUp size={18} /> : <ChevronDown size={18} />}
                   </button>
                 </div>
@@ -178,10 +224,15 @@ export default function CursBPage() {
                   {filme.has(zi.zi) && embedYouTube(linkuri[`curs_b_url_zi${zi.zi}`]) && (
                     <div className="sticky top-0 z-10 -mx-6 px-6 pt-1 pb-3 bg-white">
                       <div className="rounded-xl overflow-hidden border border-gray-200 bg-black" style={{ aspectRatio: '16 / 9' }}>
-                        <iframe src={embedYouTube(linkuri[`curs_b_url_zi${zi.zi}`])!} title={`Ziua ${zi.zi}`}
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                          allowFullScreen className="w-full h-full" />
+                        <FilmZi src={embedYouTube(linkuri[`curs_b_url_zi${zi.zi}`])!} zi={zi.zi}
+                          start={secunde.current[zi.zi] || 0}
+                          onSecunda={(z, sec) => { secunde.current[z] = sec }} />
                       </div>
+                      {secunde.current[zi.zi] > 0 && (
+                        <div className="text-[11px] text-gray-400 mt-1">
+                          revine de unde ai rămas · {Math.floor(secunde.current[zi.zi] / 60)}:{String(secunde.current[zi.zi] % 60).padStart(2, '0')}
+                        </div>
+                      )}
                     </div>
                   )}
                   {zi.intro.length > 0 && (
@@ -190,7 +241,7 @@ export default function CursBPage() {
                     </div>
                   )}
 
-                  <div className="space-y-4">
+                  <div className={`space-y-4 ${filme.has(zi.zi) ? 'max-h-[55vh] overflow-y-auto pr-1' : ''}`}>
                     {zi.subiecte.map(s => {
                       const vazut = deschise.has(s.cheie)
                       return (
