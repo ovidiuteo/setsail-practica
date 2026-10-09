@@ -6,6 +6,7 @@ import CopyColoana from '@/components/CopyColoana'
 import { buildAttendanceHtml, buildQrPdfHtml, titleCaseRo } from '@/lib/print-docs'
 import CatalogZile from '@/components/CatalogZile'
 import ConfirmariSerie from '@/components/ConfirmariSerie'
+import DocumenteSerie from '@/components/DocumenteSerie'
 import { Settings } from 'lucide-react'
 import { parseStudentsText } from '@/lib/import-parse'
 import type { SyncResult } from '@/lib/skipper-result'
@@ -77,7 +78,7 @@ type Practica = {
   neprogramati: string[]
 }
 
-type Tab = 'cursanti' | 'adrese' | 'verify' | 'observatii' | 'leaduri' | 'administrativ' | 'grupa1' | 'grupa2' | 'grupa3'
+type Tab = 'cursanti' | 'adrese' | 'verify' | 'observatii' | 'leaduri' | 'administrativ' | 'documente' | 'grupa1' | 'grupa2' | 'grupa3'
 
 // Sortarea listei: alfabetic sau cronologic (când a intrat în serie), cu sens reversibil
 // „camp:<coloană>" sortează după orice câmp al rândului (text, număr sau bifă)
@@ -741,7 +742,7 @@ export default function RosterPage() {
   return (
     // Listele nu mai au lățime maximă: tabelul se întinde cât toate coloanele, iar pagina
     // scrollează orizontal. La Verify by ID rămâne pe lățimea ecranului (imaginea actului).
-    <div className={`min-h-screen bg-gray-50 p-4 sm:p-8 ${tab === 'verify' || tab === 'observatii' ? '' : 'w-max min-w-full'}`}>
+    <div className={`min-h-screen bg-gray-50 p-4 sm:p-8 ${tab === 'verify' || tab === 'observatii' || tab === 'documente' ? '' : 'w-max min-w-full'}`}>
       <div>
         <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
           <div>
@@ -974,7 +975,7 @@ export default function RosterPage() {
           {([['cursanti', 'Lista cursanți'], ['adrese', 'Lista verificare adrese'], ['verify', 'Verify by ID'], ['observatii', 'Observații verificare'],
             // leadurile vin de pe landingul de radio, deci apar doar la seriile de radio
             ...(esteRadio ? [['leaduri', 'Leaduri radio'] as const] : []),
-            ['administrativ', 'Administrativ'],
+            ['administrativ', 'Administrativ'], ['documente', 'Documente'],
             ...grupeVizibile.map(g => [('grupa' + g) as Tab, 'Grupa ' + g] as const)] as const).map(([k, lbl]) => (
             <button key={k} onClick={() => setTab(k as Tab)}
               className={`px-4 py-2 text-sm font-medium -mb-px border-b-2 ${tab === k ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-500 hover:text-gray-700'}`}>
@@ -994,6 +995,8 @@ export default function RosterPage() {
           <div className="text-center text-gray-400 py-16">Se încarcă…</div>
         ) : rows.length === 0 ? (
           <div className="text-center text-gray-400 py-16">Niciun cursant în sesiune.</div>
+        ) : tab === 'documente' ? (
+          <DocumenteSerie sessionId={id} token={token} />
         ) : tab === 'observatii' ? (
           <ObservatiiTab sessionId={id} token={token} rows={rows} onRowUpdate={rowUpdate}
             variante={variante} setVariante={setVariante} />
