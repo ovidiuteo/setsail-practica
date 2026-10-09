@@ -221,7 +221,7 @@ export const CURS_B: ZiCurs[] = [
  },
  {
   zi: 3, instructor: "Ovidiu Drugan", titlu: "Manevra navei in condiții speciale", data: "18.10.2023",
-  intro: ["Nu s-a discutat despre:", "- Obstacole in apa", "- Instalatii defecte (gatit, sanitare, dus)", "- Rau de mare excesiv"],
+  intro: [],
   subiecte: [
    { cheie: "z3-esuarea", titlu: "Esuarea", continut: [
     "- Apare de obicei atunci cand te duci spre mal in apropierea marinelor si prea putin in mijlocul",
