@@ -98,7 +98,8 @@ export default function CursBPage() {
       if (!salvatLocal?.student_id || !salvatLocal?.email) { router.replace(`/portal?cod=${c}`); return }
 
       const { data: st } = await supabase.from('students')
-        .select('id, full_name, email').eq('id', salvatLocal.student_id).ilike('email', salvatLocal.email).maybeSingle()
+        .select('id, full_name, email, sessions!session_id(curs_b_url_zi1, curs_b_url_zi2, curs_b_url_zi3)')
+        .eq('id', salvatLocal.student_id).ilike('email', salvatLocal.email).maybeSingle()
       if (!st) { router.replace(`/portal?cod=${c}`); return }
       setStudentId(st.id); setNume(st.full_name || '')
 
@@ -113,6 +114,12 @@ export default function CursBPage() {
           'curs_b_helper_vizibil', 'curs_b_helper_studenti', 'curs_b_caiet_vizibil', 'curs_b_caiet_studenti'])
       const l: Record<string, string> = {}
       for (const r of (info || []) as any[]) if (r.value) l[r.key] = r.value
+      // linkul pus pe seria cursantului ține locul celui implicit
+      const aleSeriei: any = (st as any).sessions || {}
+      for (const z of [1, 2, 3]) {
+        const v = String(aleSeriei[`curs_b_url_zi${z}`] || '').trim()
+        if (v) l[`curs_b_url_zi${z}`] = v
+      }
       setLinkuri(l)
 
       // helperul se vede doar dacă e pornit și cursantul e pe listă
