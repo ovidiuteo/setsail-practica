@@ -355,6 +355,8 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
   const [normChanges, setNormChanges] = useState<AddressChange[]|null>(null)
   const [normBusy, setNormBusy] = useState(false)
   const isRadio = (sess.class_caa || '').toLowerCase().match(/radio|lrc/) != null
+  // La seriile de A/B fiecare cursant poate fi la A sau la B, deci clasa se schimbă din listă
+  const isBA = !isRadio && /^(a|b|a,b|b,a)$/i.test(String(sess.class_caa || '').trim())
   const examClosed = (sess as any).radio_exam_status === 'closed'
   const [examResults, setExamResults] = useState<Record<string, { submitted: boolean; correct: number }>>({})
 
@@ -990,6 +992,13 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
                             <option value="Obtinere LRC">Obținere</option>
                             <option value="Prelungire LRC">Prelungire</option>
                             <option value="Radio">Radio</option>
+                          </select>
+                        ) : isBA ? (
+                          <select value={s.class_caa||''} onClick={e=>e.stopPropagation()} onChange={e=>updateClass(s, e.target.value)}
+                            className="text-xs border border-gray-200 rounded px-1 py-0.5 bg-white focus:outline-none focus:ring-1 focus:ring-purple-400">
+                            {!['A','B'].includes(s.class_caa||'') && <option value={s.class_caa||''}>{s.class_caa||'—'}</option>}
+                            <option value="A">A</option>
+                            <option value="B">B</option>
                           </select>
                         ) : (s.class_caa||'').replace(',','+')}
                       </td>
@@ -4746,7 +4755,7 @@ export default function SessionDetailPage() {
                           {type==='select-class' ? (
                             <select className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs w-full bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
                               value={editSessionValues[key]} onChange={e=>setEditSessionValues((v:any)=>({...v,[key]:e.target.value}))}>
-                              {['A','B','C','D','C,D','Radio','Obtinere LRC','Prelungire LRC'].map(c=><option key={c} value={c}>{c}</option>)}
+                              {['A','B','A,B','C','D','C,D','Radio','Obtinere LRC','Prelungire LRC'].map(c=><option key={c} value={c}>{c}</option>)}
                             </select>
                           ) : type==='select-scope' ? (
                             <select className="border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs w-full bg-white focus:outline-none focus:ring-1 focus:ring-blue-400"
