@@ -180,7 +180,10 @@ export default function PortalPage() {
   // value = exact ce salvam in DB (convenția existentă), label = ce vede cursantul.
   const examScope = session ? scopeForSession(session) : null
   const classOptions: Array<{ value: string; label: string }> =
-    examScope === 'radio_lrc'
+    // cine e doar la sailing nu e la clasa seriei: clasa lui e S
+    student?.only_sailing
+      ? [{ value: 'S', label: 'S (sailing)' }]
+    : examScope === 'radio_lrc'
       ? [{ value: 'Obtinere LRC', label: 'Obținere LRC' }, { value: 'Prelungire LRC', label: 'Prelungire LRC' }]
     : examScope === 'practica_ba'
       ? [{ value: 'B', label: 'B' }, { value: 'A', label: 'A' }]

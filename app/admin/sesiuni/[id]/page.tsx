@@ -590,17 +590,19 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
 
     // Mutam cursantul la sesiunea principala cu only_sailing=true
     const maxOrder = Math.max(0, ...(allStudents[targetSessionId]||[]).map(st => st.order_in_session || 0))
+    // Cine e la sailing nu mai e C+D: clasa lui devine S, dar rămâne în seria respectivă
     await supabase.from('students').update({
       only_sailing: true,
       session_id: targetSessionId,
       order_in_session: maxOrder + 1,
+      class_caa: 'S',
     }).eq('id', s.id)
 
     // Scoatem din lista curenta
     setStudents(students.filter(st => st.id !== s.id))
     // Adaugam la sesiunea principala in state
     if (targetSessionId !== sess.id) {
-      const updated = { ...s, only_sailing: true, session_id: targetSessionId, order_in_session: maxOrder + 1 }
+      const updated = { ...s, only_sailing: true, class_caa: 'S', session_id: targetSessionId, order_in_session: maxOrder + 1 }
       setAllStudents(targetSessionId, [...(allStudents[targetSessionId]||[]), updated])
     }
   }
@@ -860,7 +862,7 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
             <div><div className="text-xs text-gray-400 mb-1">CNP</div><input className={addCls} placeholder="1800101..." value={newSt.cnp} onChange={e=>setNewSt((s:any)=>({...s,cnp:e.target.value}))}/></div>
             <div><div className="text-xs text-gray-400 mb-1">Clasa</div>
               <select className={addCls} value={newSt.class_caa} onChange={e=>setNewSt((s:any)=>({...s,class_caa:e.target.value}))}>
-                <option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option><option value="C,D">C,D</option><option value="Radio">Radio</option><option value="Obtinere LRC">Obținere LRC</option><option value="Prelungire LRC">Prelungire LRC</option></select></div>
+                <option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option><option value="C,D">C,D</option><option value="S">S (sailing)</option><option value="Radio">Radio</option><option value="Obtinere LRC">Obținere LRC</option><option value="Prelungire LRC">Prelungire LRC</option></select></div>
             <div className="col-span-2"><div className="text-xs text-gray-400 mb-1">Email</div><input className={addCls} placeholder="email@..." value={newSt.email} onChange={e=>setNewSt((s:any)=>({...s,email:e.target.value}))}/></div>
             <div><div className="text-xs text-gray-400 mb-1">Telefon</div><input className={addCls} placeholder="07XX..." value={newSt.phone} onChange={e=>setNewSt((s:any)=>({...s,phone:e.target.value}))}/></div>
             <div><div className="text-xs text-gray-400 mb-1">Data nașterii</div><input className={addCls} placeholder="dd.mm.yyyy" value={newSt.birth_date} onChange={e=>setNewSt((s:any)=>({...s,birth_date:e.target.value}))}/></div>
@@ -959,7 +961,7 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
                         <input className={inCls+' w-16'} placeholder="123456" value={editValues.ci_number} onChange={e=>setEditValues((v:any)=>({...v,ci_number:e.target.value}))}/>
                       </div></td>
                       <td className="px-1 py-1.5"><select className={inCls} value={editValues.class_caa} onChange={e=>setEditValues((v:any)=>({...v,class_caa:e.target.value}))}>
-                        <option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option><option value="C,D">C,D</option><option value="Radio">Radio</option><option value="Obtinere LRC">Obținere LRC</option><option value="Prelungire LRC">Prelungire LRC</option></select></td>
+                        <option value="A">A</option><option value="B">B</option><option value="C">C</option><option value="D">D</option><option value="C,D">C,D</option><option value="S">S (sailing)</option><option value="Radio">Radio</option><option value="Obtinere LRC">Obținere LRC</option><option value="Prelungire LRC">Prelungire LRC</option></select></td>
                       <td className="px-1 py-1.5"><span className="text-xs" style={{color:ps.color}}>{ps.label}</span></td>
                       <td className="px-2 py-1.5"><div className="flex gap-1">
                         <button onClick={()=>saveEdit(s.id)} disabled={saving} className="p-1 rounded bg-green-100 text-green-700"><Check size={12}/></button>
@@ -4078,7 +4080,11 @@ function OnlySailingSection({ sessions, studentsMap, setStudentsMap, onCiPreview
   }
 
   async function revoke(s: Student) {
-    await supabase.from('students').update({ only_sailing: false }).eq('id', s.id)
+    // Iese de la sailing → îi punem înapoi clasa seriei (clasa S era doar cât era la sailing)
+    const clasaSeriei = sessions.find(x => x.id === s.session_id)?.class_caa || 'C,D'
+    const modif: any = { only_sailing: false }
+    if ((s.class_caa || '') === 'S') modif.class_caa = clasaSeriei
+    await supabase.from('students').update(modif).eq('id', s.id)
     // Cursantul revine vizibil in sesiunea lui (only_sailing=false)
     // Il readaugam in lista sesiunii lui cu ordinea la final
     setStudentsMap((prev:any) => {
@@ -4088,11 +4094,11 @@ function OnlySailingSection({ sessions, studentsMap, setStudentsMap, onCiPreview
         const exists = list.find((st:Student) => st.id === s.id)
         if (exists) {
           // Deja e in lista (cu only_sailing=true) - doar updatam flag
-          upd[sid] = list.map((st:Student) => st.id===s.id ? {...st, only_sailing:false} : st)
+          upd[sid] = list.map((st:Student) => st.id===s.id ? {...st, ...modif} : st)
         } else if (sid === s.session_id) {
           // Nu e in lista (a fost scos) - il readaugam
           const maxOrder = Math.max(0, ...list.map((st:Student) => st.order_in_session || 0))
-          upd[sid] = [...list, {...s, only_sailing:false, order_in_session: maxOrder+1}]
+          upd[sid] = [...list, {...s, ...modif, order_in_session: maxOrder+1}]
         }
       }
       return upd
