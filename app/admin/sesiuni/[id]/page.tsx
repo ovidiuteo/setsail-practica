@@ -1531,6 +1531,7 @@ function SidebarCard({ sess, students, allStatuses, onStatusChange, allSessions,
   const [setsailInfo, setSetsailInfo] = useState<Record<string, string>>({})
   const [sessInstructors, setSessInstructors] = useState<{ full_name: string }[]>([])
   const [sessionContactIds, setSessionContactIds] = useState<string[]>(sess.contact_person_ids || [])
+  const [portalInchis, setPortalInchis] = useState<boolean>(!!(sess as any).portal_inchis)
   const [showMailAuth, setShowMailAuth] = useState(false)
   const [authSubject, setAuthSubject] = useState('')
   const [authBody, setAuthBody] = useState('')
@@ -2288,6 +2289,31 @@ Set Sail NauticSchool
                 *
               </button>
             </div>
+
+            {/* Portalul cursanților: rămâne deschis și după finalizare, îl închizi tu când vrei */}
+            {sess.session_type === 'principal' && (
+              <div className="mt-3 flex items-center justify-between gap-2">
+                <div>
+                  <div className="text-xs text-gray-400">Portal cursanți</div>
+                  <div className="text-[11px] text-gray-400">
+                    {portalInchis ? 'Nu se mai pot conecta.' : 'Pot intra și după finalizarea seriei.'}
+                  </div>
+                </div>
+                <button onClick={async () => {
+                  const nou = !portalInchis
+                  setPortalInchis(nou)
+                  const { error } = await supabase.from('sessions').update({ portal_inchis: nou }).eq('id', sess.id)
+                  if (error) { setPortalInchis(!nou); alert('Eroare: ' + error.message) }
+                }}
+                  className={`px-2.5 py-1.5 rounded-lg text-xs font-medium border-2 transition-all ${
+                    portalInchis
+                      ? 'border-red-200 text-red-600 bg-white hover:bg-red-50'
+                      : 'border-transparent text-white'}`}
+                  style={portalInchis ? undefined : { background: '#059669' }}>
+                  {portalInchis ? '🔒 Închis' : '🔓 Deschis'}
+                </button>
+              </div>
+            )}
           </div>
         )}
       </div>
@@ -4393,7 +4419,7 @@ export default function SessionDetailPage() {
     if (status === 'completed') {
       const confirmed = window.confirm(
         'Ești sigur că sesiunea este finalizată?\n\n' +
-        '• Cursanții nu mai pot accesa portalul\n' +
+        '• Portalul rămâne deschis pentru cursanți (îl poți închide din cardul seriei)\n' +
         '• Absenții pot fi alocați la alte sesiuni\n\n' +
         'Poți reveni oricând la alt status.'
       )

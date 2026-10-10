@@ -390,7 +390,8 @@ export default function PortalPage() {
       || sessions[0]
 
     if (s.status === 'draft') { setLoginError('Sesiunea nu este activă încă. Contactați instructorul.'); return }
-    if (s.status === 'completed') { setLoginError('Această sesiune a fost finalizată și nu mai acceptă conexiuni.'); return }
+    // Portalul rămâne deschis și după finalizarea seriei; se închide doar manual, din admin.
+    if (s.portal_inchis) { setLoginError('Portalul acestei serii a fost închis. Pentru orice nelămurire scrieți la office@setsail.ro.'); return }
 
     // Cauta cursantul in TOATE sesiunile cu acest cod, plus sesiunea de absenti
     // a principalei (poate avea alt access_code). Au acces si cei de la sailing
