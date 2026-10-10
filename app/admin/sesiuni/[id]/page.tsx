@@ -17,7 +17,7 @@ import type { SyncResult } from '@/lib/skipper-result'
 import SkipperSyncModal from '@/components/SkipperSyncModal'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Download, FileText, Users, Copy, Plus, Trash2, Check, X, Pencil, GitBranch, ArrowRight, UserX, Mail, ChevronDown, Database } from 'lucide-react'
+import { ArrowLeft, Download, FileText, Users, Copy, Plus, Trash2, Check, X, Pencil, GitBranch, ArrowRight, UserX, Mail, ChevronDown, Database, NotebookPen } from 'lucide-react'
 import { urlAbsolut } from '@/lib/url-absolut'
 
 function applyTemplate(text: string, sess: any, contacts?: any[], instructors?: { full_name: string }[], setsailInfo?: Record<string, string>): string {
@@ -4624,6 +4624,13 @@ export default function SessionDetailPage() {
           <Link href={`/admin/sesiuni/${id}/examen`}
             className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-purple-200 text-purple-700 hover:bg-purple-50">
             <FileText size={12}/> Examen
+          </Link>
+        )}
+        {/* Caietele de la cursul B/A: cine a completat ce */}
+        {/^(a|b|a,b|b,a)$/i.test(String(mainSession.class_caa||'').trim()) && (
+          <Link href={`/admin/sesiuni/${id}/caiete`}
+            className="flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-lg border border-sky-200 text-sky-700 hover:bg-sky-50">
+            <NotebookPen size={12}/> Caiete de lucru
           </Link>
         )}
       </div>
