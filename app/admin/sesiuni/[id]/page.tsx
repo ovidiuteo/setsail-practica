@@ -4,7 +4,7 @@ import CIImageEditor from '@/components/CIImageEditor'
 import { supabase } from '@/lib/supabase'
 import { TIMELINE_SCOPES, timelineScopeLabel, scopeForSession } from '@/lib/timeline-scope'
 import { computeAddressChanges, AddressChange } from '@/lib/normalize-address'
-import { samePerson, mergeCarry, fillGaps } from '@/lib/student-merge'
+import { samePerson, mergeCarry, fillGaps, findPersonRows } from '@/lib/student-merge'
 import PracticeSlotsCard from '@/components/PracticeSlotsCard'
 import { applyMailTemplate } from '@/lib/mail-template'
 import LivrareCell, { livrareRang } from '@/components/LivrareCell'
@@ -354,6 +354,9 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
   const [sortDir, setSortDir] = useState<'asc'|'desc'>('asc')
   const [normChanges, setNormChanges] = useState<AddressChange[]|null>(null)
   const [normBusy, setNormBusy] = useState(false)
+  // Ștergerea unui cursant: întâi întrebăm ce anume ștergem (altele = null cât se caută)
+  const [delTarget, setDelTarget] = useState<{ s: Student; altele: any[] | null }|null>(null)
+  const [delBusy, setDelBusy] = useState(false)
   const isRadio = (sess.class_caa || '').toLowerCase().match(/radio|lrc/) != null
   // La seriile de A/B fiecare cursant poate fi la A sau la B, deci clasa se schimbă din listă
   const isBA = !isRadio && /^(a|b|a,b|b,a)$/i.test(String(sess.class_caa || '').trim())
@@ -489,12 +492,35 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
     return reordered
   }
 
+  // Ștergerea se face din modal: doar înscrierea la seria asta, sau omul din tot sistemul
   async function deleteStudent(sid: string) {
-    if (!confirm('Ștergi definitiv cursantul din baza de date?')) return
-    await supabase.from('students').delete().eq('id', sid)
-    const remaining = students.filter(s => s.id !== sid)
-    const reordered = await reorder(remaining)
+    const s = students.find(x => x.id === sid)
+    if (!s) return
+    setDelTarget({ s, altele: null })
+    const altele = await findPersonRows(supabase, s as any, sid)
+    setDelTarget(d => (d && d.s.id === sid ? { s: d.s, altele } : d))
+  }
+
+  // Scoate doar rândul din seria asta; celelalte înscrieri ale persoanei rămân
+  async function stergeParticiparea(s: Student) {
+    setDelBusy(true)
+    const { error } = await supabase.from('students').delete().eq('id', s.id)
+    if (error) { setDelBusy(false); alert('Eroare: ' + error.message); return }
+    const reordered = await reorder(students.filter(x => x.id !== s.id))
     setStudents(reordered)
+    setDelBusy(false); setDelTarget(null)
+  }
+
+  // Scoate persoana din toate seriile (cu tot ce atârnă de ea: note, plăți, examene)
+  async function stergeCursantul(s: Student, altele: any[]) {
+    setDelBusy(true)
+    const ids = [s.id, ...altele.map(a => a.id)]
+    const { error } = await supabase.from('students').delete().in('id', ids)
+    if (error) { setDelBusy(false); alert('Eroare: ' + error.message); return }
+    if (altele.length) { window.location.reload(); return }
+    const reordered = await reorder(students.filter(x => x.id !== s.id))
+    setStudents(reordered)
+    setDelBusy(false); setDelTarget(null)
   }
 
   async function moveToSession(s: Student, targetSessionId: string) {
@@ -1200,6 +1226,76 @@ function StudentsTable({ sess, students, setStudents, allSessions, allStudents, 
           </table>
         </div>
       )}
+
+      {/* Ștergere cursant: doar din serie, sau din tot sistemul */}
+      {delTarget && (() => {
+        const { s, altele } = delTarget
+        const n = altele?.length ?? 0
+        return (
+          <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4"
+            onClick={() => !delBusy && setDelTarget(null)}>
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-lg" onClick={e => e.stopPropagation()}>
+              <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-gray-100">
+                <div>
+                  <h3 className="font-semibold text-gray-900">Ștergi pe {s.full_name}?</h3>
+                  <p className="text-xs text-gray-400 mt-0.5">Alege ce anume se șterge.</p>
+                </div>
+                <button onClick={() => !delBusy && setDelTarget(null)} className="text-gray-400 hover:text-gray-700"><X size={18}/></button>
+              </div>
+
+              <div className="px-5 py-4 space-y-3">
+                {altele === null ? (
+                  <p className="text-sm text-gray-400">Se caută celelalte înscrieri ale persoanei...</p>
+                ) : n === 0 ? (
+                  <p className="text-sm text-gray-500">
+                    Nu mai este înscris nicăieri altundeva, deci ambele variante înseamnă același lucru: dispare din sistem.
+                  </p>
+                ) : (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+                    <div className="text-xs font-semibold text-amber-900">Mai e înscris în {n} {n === 1 ? 'altă serie' : 'alte serii'}:</div>
+                    <ul className="text-xs text-amber-800 mt-1 space-y-0.5">
+                      {altele.map((a: any) => (
+                        <li key={a.id}>
+                          • {a.sessions?.session_date
+                              ? new Date(a.sessions.session_date).toLocaleDateString('ro-RO', { day: '2-digit', month: 'long', year: 'numeric' })
+                              : 'serie necunoscută'}
+                          {a.sessions?.class_caa ? ` · ${String(a.sessions.class_caa).replace(',', '+')}` : ''}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+
+                <button disabled={delBusy || altele === null} onClick={() => stergeParticiparea(s)}
+                  className="w-full text-left px-4 py-3 rounded-xl border border-gray-200 hover:bg-gray-50 disabled:opacity-50">
+                  <div className="text-sm font-medium text-gray-900">Șterge doar participarea la această serie</div>
+                  <div className="text-xs text-gray-400 mt-0.5">
+                    Îl scoate din lista seriei. {n > 0 ? 'Celelalte înscrieri rămân neatinse.' : 'Fiind singura înscriere, fișa dispare.'}
+                  </div>
+                </button>
+
+                <button disabled={delBusy || altele === null} onClick={() => {
+                  if (n > 0 && !window.confirm(`Ștergi definitiv pe ${s.full_name} din toate cele ${n + 1} serii, cu documente, note și plăți cu tot?`)) return
+                  stergeCursantul(s, altele || [])
+                }}
+                  className="w-full text-left px-4 py-3 rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 disabled:opacity-50">
+                  <div className="text-sm font-medium text-red-800">Șterge cursantul cu totul din baza de date</div>
+                  <div className="text-xs text-red-600 mt-0.5">
+                    Toate cele {n + 1} înscrieri, împreună cu documentele, notele de curs, plățile și răspunsurile la examen. Nu se poate reveni.
+                  </div>
+                </button>
+              </div>
+
+              <div className="flex justify-end px-5 py-4 border-t border-gray-100">
+                <button disabled={delBusy} onClick={() => setDelTarget(null)}
+                  className="px-4 py-2 rounded-lg text-sm border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+                  {delBusy ? 'Se șterge...' : 'Anulează'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
