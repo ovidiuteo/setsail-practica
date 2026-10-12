@@ -26,6 +26,13 @@ type Student = {
   signature_pool: boolean; signature_random: string
   ci_verso_data: string; adeverinta_adresa_data: string; doc_type: string
   certificat_nastere_data: string; lrc_certificat_data: string; cerere_semnata_data: string
+  este_instructor: boolean
+}
+
+type Contract = {
+  id: string; numar: number; data_contract: string; nume: string; domiciliu: string; cnp: string
+  perioada_start: string | null; perioada_sfarsit: string | null
+  tarif_teorie: number; tarif_practica: number; note: string
 }
 
 type Session = {
@@ -518,6 +525,22 @@ export default function CursantAdminPage() {
               </button>
             </div>
 
+            {/* Instructor — deschide secțiunea de contract */}
+            <div className="flex items-center justify-between py-3 border-t border-gray-50">
+              <div>
+                <div className="text-xs font-medium text-gray-700">Instructor</div>
+                <div className="text-xs text-gray-400">Contract de prestări servicii</div>
+              </div>
+              <button onClick={async () => {
+                const nv = !form.este_instructor
+                await supabase.from('students').update({ este_instructor: nv }).eq('id', id)
+                setForm(f => ({ ...f, este_instructor: nv }))
+              }}
+                className={`w-11 h-6 rounded-full transition-all relative ${form.este_instructor ? 'bg-amber-500' : 'bg-gray-200'}`}>
+                <span className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow transition-all ${form.este_instructor ? 'left-6' : 'left-1'}`}/>
+              </button>
+            </div>
+
             {/* Clasa */}
             <div className="flex items-center justify-between py-3 border-t border-gray-50">
               <span className="text-xs font-medium text-gray-700">Clasa CAA</span>
@@ -614,6 +637,9 @@ export default function CursantAdminPage() {
               })}
             </div>
           </div>
+
+          {/* Contractul de instructor — doar la cei bifați instructor */}
+          {form.este_instructor && <ContracteInstructor student={student} />}
 
           {/* Semnatura */}
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 p-5">
@@ -788,6 +814,164 @@ export default function CursantAdminPage() {
           category={diplomaCat}
           onClose={() => setDiplomaCat(null)}
         />
+      )}
+    </div>
+  )
+}
+
+// ── Contracte de prestări servicii (instructori) ─────────────────────────────
+// Numărul vine din registrul propriu de contracte; documentul se descarcă .docx.
+function ContracteInstructor({ student }: { student: Student }) {
+  const [rows, setRows] = useState<Contract[]>([])
+  const [urmator, setUrmator] = useState<number | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [busy, setBusy] = useState(false)
+  const [edit, setEdit] = useState<Contract | null>(null)
+
+  const azi = new Date().toISOString().slice(0, 10)
+  const domiciliuStudent = [student.address, student.city, student.county]
+    .map(x => String(x || '').trim()).filter(Boolean).join(', ')
+
+  const load = useCallback(async () => {
+    setLoading(true)
+    const r = await fetch(`/api/contracte-instructor?student_id=${student.id}`)
+    const j = await r.json().catch(() => ({}))
+    setRows(j.contracte || [])
+    setUrmator(j.next ?? null)
+    setLoading(false)
+  }, [student.id])
+  useEffect(() => { load() }, [load])
+
+  async function aloca() {
+    setBusy(true)
+    const start = azi
+    const sfarsit = `${new Date().getFullYear() + 5}-12-31`
+    const r = await fetch('/api/contracte-instructor', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        student_id: student.id, data_contract: azi,
+        nume: student.full_name, domiciliu: domiciliuStudent, cnp: student.cnp,
+        perioada_start: start, perioada_sfarsit: sfarsit,
+      }),
+    })
+    const j = await r.json().catch(() => ({}))
+    setBusy(false)
+    if (j.error) { alert('Eroare: ' + j.error); return }
+    await load()
+    if (j.contract) setEdit(j.contract)
+  }
+
+  async function salveaza(c: Contract) {
+    setBusy(true)
+    const r = await fetch('/api/contracte-instructor', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(c),
+    })
+    const j = await r.json().catch(() => ({}))
+    setBusy(false)
+    if (j.error) { alert('Eroare: ' + j.error); return }
+    setEdit(null); load()
+  }
+
+  async function sterge(c: Contract) {
+    if (!confirm(`Ștergi contractul nr. ${c.numar}? Numărul rămâne liber pentru altcineva.`)) return
+    await fetch('/api/contracte-instructor', {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: c.id }),
+    })
+    load()
+  }
+
+  const inCls = 'w-full px-2.5 py-1.5 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-200'
+  const roData = (d?: string | null) => d ? new Date(d).toLocaleDateString('ro-RO') : '—'
+
+  return (
+    <div className="bg-white rounded-2xl shadow-sm border border-amber-200 p-5">
+      <div className="flex items-center justify-between mb-1">
+        <h3 className="font-semibold text-gray-900 text-sm">Contract de prestări servicii</h3>
+        <button onClick={aloca} disabled={busy}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-white disabled:opacity-50"
+          style={{ background: '#d97706' }}>
+          <FileText size={12} /> Alocă contract{urmator !== null ? ` nr. ${urmator}` : ''}
+        </button>
+      </div>
+      <p className="text-xs text-gray-400 mb-4">
+        Registru propriu de numere, separat de cel al cererilor și al înștiințărilor.
+      </p>
+
+      {loading ? (
+        <div className="text-xs text-gray-400 py-3">Se încarcă…</div>
+      ) : rows.length === 0 ? (
+        <div className="text-xs text-gray-400 py-3">Niciun contract încă.</div>
+      ) : (
+        <div className="space-y-2">
+          {rows.map(c => (
+            <div key={c.id} className="rounded-xl border border-gray-100 px-4 py-3 flex flex-wrap items-center gap-3">
+              <div className="text-sm text-gray-900">
+                <b>Contract nr. {c.numar}</b> · {roData(c.data_contract)}
+                <span className="text-gray-400"> · {roData(c.perioada_start)} – {roData(c.perioada_sfarsit)}</span>
+                <span className="text-gray-400"> · {c.tarif_teorie} lei/oră teorie, {c.tarif_practica} lei/zi practică</span>
+              </div>
+              <div className="ml-auto flex items-center gap-2">
+                <button onClick={() => setEdit(c)}
+                  className="px-2.5 py-1.5 rounded-lg text-xs border border-gray-200 text-gray-600 hover:bg-gray-50">Editează</button>
+                <a href={`/api/generate-contract-instructor?id=${c.id}&format=html`} target="_blank" rel="noopener noreferrer"
+                  className="px-2.5 py-1.5 rounded-lg text-xs border border-gray-200 text-gray-600 hover:bg-gray-50">Previzualizare</a>
+                <a href={`/api/generate-contract-instructor?id=${c.id}`}
+                  className="px-2.5 py-1.5 rounded-lg text-xs font-medium text-white" style={{ background: '#0a1628' }}>Descarcă .docx</a>
+                <button onClick={() => sterge(c)}
+                  className="p-1.5 rounded-lg text-red-300 hover:text-red-500 hover:bg-red-50"><Trash2 size={13} /></button>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {edit && (
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-start justify-center p-4 overflow-y-auto"
+          onClick={() => !busy && setEdit(null)}>
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-xl my-8" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between px-5 py-4 border-b border-gray-100">
+              <h3 className="font-semibold text-gray-900">Contract nr. {edit.numar}</h3>
+              <button onClick={() => setEdit(null)} className="text-gray-400 hover:text-gray-700"><X size={18} /></button>
+            </div>
+            <div className="p-5 grid sm:grid-cols-2 gap-3">
+              <label className="block"><span className="block text-xs text-gray-500 mb-1">Număr</span>
+                <input className={inCls} value={edit.numar}
+                  onChange={e => setEdit({ ...edit, numar: Number(e.target.value.replace(/\D/g, '')) || 0 })} /></label>
+              <label className="block"><span className="block text-xs text-gray-500 mb-1">Data contractului</span>
+                <input type="date" className={inCls} value={edit.data_contract || ''}
+                  onChange={e => setEdit({ ...edit, data_contract: e.target.value })} /></label>
+              <label className="block sm:col-span-2"><span className="block text-xs text-gray-500 mb-1">Nume instructor</span>
+                <input className={inCls} value={edit.nume || ''} onChange={e => setEdit({ ...edit, nume: e.target.value })} /></label>
+              <label className="block sm:col-span-2"><span className="block text-xs text-gray-500 mb-1">Domiciliu</span>
+                <input className={inCls} value={edit.domiciliu || ''} onChange={e => setEdit({ ...edit, domiciliu: e.target.value })} /></label>
+              <label className="block"><span className="block text-xs text-gray-500 mb-1">CNP</span>
+                <input className={inCls} value={edit.cnp || ''} onChange={e => setEdit({ ...edit, cnp: e.target.value })} /></label>
+              <div />
+              <label className="block"><span className="block text-xs text-gray-500 mb-1">Perioada — de la</span>
+                <input type="date" className={inCls} value={edit.perioada_start || ''}
+                  onChange={e => setEdit({ ...edit, perioada_start: e.target.value })} /></label>
+              <label className="block"><span className="block text-xs text-gray-500 mb-1">Perioada — până la</span>
+                <input type="date" className={inCls} value={edit.perioada_sfarsit || ''}
+                  onChange={e => setEdit({ ...edit, perioada_sfarsit: e.target.value })} /></label>
+              <label className="block"><span className="block text-xs text-gray-500 mb-1">Lei / oră teorie</span>
+                <input className={inCls} value={edit.tarif_teorie}
+                  onChange={e => setEdit({ ...edit, tarif_teorie: Number(e.target.value.replace(/\D/g, '')) || 0 })} /></label>
+              <label className="block"><span className="block text-xs text-gray-500 mb-1">Lei / zi practică</span>
+                <input className={inCls} value={edit.tarif_practica}
+                  onChange={e => setEdit({ ...edit, tarif_practica: Number(e.target.value.replace(/\D/g, '')) || 0 })} /></label>
+              <label className="block sm:col-span-2"><span className="block text-xs text-gray-500 mb-1">Note (interne)</span>
+                <textarea rows={2} className={inCls} value={edit.note || ''}
+                  onChange={e => setEdit({ ...edit, note: e.target.value })} /></label>
+            </div>
+            <div className="flex justify-end gap-2 px-5 py-4 border-t border-gray-100">
+              <button onClick={() => setEdit(null)} className="px-4 py-2 rounded-lg text-sm border border-gray-200 text-gray-600">Renunță</button>
+              <button onClick={() => salveaza(edit)} disabled={busy}
+                className="px-4 py-2 rounded-lg text-sm font-medium text-white disabled:opacity-50" style={{ background: '#059669' }}>
+                {busy ? 'Se salvează…' : 'Salvează'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

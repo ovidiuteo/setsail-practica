@@ -290,6 +290,7 @@ export default function ConfigurarePage() {
       <Fold id="registre" titluImplicit="🔢 Registre de numere" descriere="notificări ANR/ANCOM și cereri de examen">
         <NotificationNumbersSection />
         <CerereNumbersSection />
+        <ContracteNumbersSection />
       </Fold>
 
       <Fold id="documente" titluImplicit="📎 Documentele sesiunilor" descriere="tipurile de fișiere cerute la fiecare serie">
@@ -1359,6 +1360,117 @@ function CerereNumbersSection() {
                     : '—'}
                 </td>
                 <td className="px-4 py-3 text-right">
+                  <button onClick={() => remove(r.id, r.numar)}
+                    className="p-1.5 rounded-lg hover:bg-red-50 text-gray-300 hover:text-red-500 transition-colors">
+                    <Trash2 size={14}/>
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  )
+}
+
+// Registru INDEPENDENT de numere pentru contractele de prestări servicii cu
+// instructorii. Se alocă din fișa instructorului (bifa „Instructor").
+function ContracteNumbersSection() {
+  const [rows, setRows] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
+  const [next, setNext] = useState<number | null>(null)
+  const [startNr, setStartNr] = useState('')
+  const [savingStart, setSavingStart] = useState(false)
+
+  async function load() {
+    setLoading(true)
+    const r = await fetch('/api/contracte-instructor')
+    const j = await r.json().catch(() => ({}))
+    setRows(j.contracte || [])
+    setStartNr(String(j.start_number ?? ''))
+    setNext(j.next ?? null)
+    setLoading(false)
+  }
+  useEffect(() => { load() }, [])
+
+  async function saveStart() {
+    setSavingStart(true)
+    await fetch('/api/contracte-instructor', {
+      method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ start_number: startNr }),
+    })
+    setSavingStart(false)
+    load()
+  }
+
+  async function remove(id: string, numar: number) {
+    if (!confirm(`Ștergi contractul nr. ${numar}? Numărul rămâne liber pentru altcineva.`)) return
+    await fetch('/api/contracte-instructor', {
+      method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id }),
+    })
+    setRows(r => r.filter(x => x.id !== id))
+  }
+
+  return (
+    <div className="mt-8 bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100 flex-wrap gap-3">
+        <div>
+          <h2 className="font-semibold text-gray-900">📝 Numere contracte instructori</h2>
+          <p className="text-xs text-gray-400 mt-0.5">
+            {rows.length} alocate · registru independent, se alocă din fișa instructorului
+            {next !== null && <> · următorul: <b className="text-gray-600">{next}</b></>}
+          </p>
+        </div>
+        <div className="flex items-end gap-2">
+          <label className="block">
+            <span className="block text-xs text-gray-400 mb-1">Numărul de pornire</span>
+            <input value={startNr} onChange={e => setStartNr(e.target.value.replace(/\D/g, ''))}
+              placeholder="ex. 14"
+              className="w-28 px-3 py-1.5 rounded-lg border border-gray-200 text-sm" />
+          </label>
+          <button onClick={saveStart} disabled={savingStart}
+            className="px-3 py-1.5 rounded-lg text-xs font-medium border border-gray-200 text-gray-700 hover:bg-gray-100 disabled:opacity-50">
+            {savingStart ? 'Se salvează…' : 'Salvează'}
+          </button>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="text-center text-gray-400 py-8">Se încarcă...</div>
+      ) : rows.length === 0 ? (
+        <div className="text-center text-gray-400 py-8">
+          Niciun contract alocat încă. Bifează „Instructor" în fișa cursantului și alocă-i un număr.
+        </div>
+      ) : (
+        <table className="w-full text-sm">
+          <thead>
+            <tr className="bg-gray-50 text-xs text-gray-400 font-medium">
+              <th className="text-left px-6 py-3">Nr. contract</th>
+              <th className="text-left px-4 py-3">Instructor</th>
+              <th className="text-left px-4 py-3">Data</th>
+              <th className="text-left px-4 py-3">Perioada</th>
+              <th className="text-left px-4 py-3">Tarife</th>
+              <th className="px-4 py-3"></th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-50">
+            {rows.map(r => (
+              <tr key={r.id} className="hover:bg-gray-50 transition-colors">
+                <td className="px-6 py-3 font-bold text-gray-900">{r.numar}</td>
+                <td className="px-4 py-3 text-gray-700">{r.nume || r.students?.full_name || '—'}</td>
+                <td className="px-4 py-3 text-gray-500">
+                  {r.data_contract ? new Date(r.data_contract).toLocaleDateString('ro-RO') : '—'}
+                </td>
+                <td className="px-4 py-3 text-gray-400 text-xs">
+                  {r.perioada_start ? new Date(r.perioada_start).toLocaleDateString('ro-RO') : '—'}
+                  {' – '}
+                  {r.perioada_sfarsit ? new Date(r.perioada_sfarsit).toLocaleDateString('ro-RO') : '—'}
+                </td>
+                <td className="px-4 py-3 text-gray-400 text-xs">{r.tarif_teorie} / {r.tarif_practica} lei</td>
+                <td className="px-4 py-3 text-right">
+                  <a href={`/api/generate-contract-instructor?id=${r.id}`}
+                    className="text-xs text-gray-500 hover:text-gray-800 mr-3">.docx</a>
                   <button onClick={() => remove(r.id, r.numar)}
                     className="p-1.5 rounded-lg hover:bg-red-50 text-gray-300 hover:text-red-500 transition-colors">
                     <Trash2 size={14}/>
