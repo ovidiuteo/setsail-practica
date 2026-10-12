@@ -21,8 +21,10 @@ function svc() {
 const ziRo = (d?: string | null) =>
   d ? new Date(d).toLocaleDateString('ro-RO', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '...............'
 
-const PRESTATOR =
-  'S.C. SET SAIL ADVERTISING SRL, persoană juridică română, cu sediul în București, Str. Stirbei-Voda, nr. 152, ' +
+// Numele firmei stă bold, la fel ca numele instructorului mai jos
+const FIRMA = 'S.C. SET SAIL ADVERTISING SRL'
+const PRESTATOR_REST =
+  ', persoană juridică română, cu sediul în București, Str. Stirbei-Voda, nr. 152, ' +
   'bl. 26 B, sc. 4, et. 4, ap. 12, Sector 1, cod fiscal RO 16792276, nr. de înregistrare la Registrul Comerțului ' +
   'J40/15358/2004, cont bancar deschis la Banca Transilvania – București, nr. RO02BTRL04501202A79304XX, ' +
   'reprezentată prin Corina Cobianu Drugan, în calitate de furnizor (denumită în continuare „Prestator”),'
@@ -99,8 +101,8 @@ export async function GET(req: NextRequest) {
   const dataC = ziRo((c as any).data_contract)
   const start = ziRo((c as any).perioada_start)
   const sfarsit = ziRo((c as any).perioada_sfarsit)
-  const parti =
-    `Dl./Dna. ${nume}, domiciliat/ă în ${domiciliu}, CNP ${cnp}, în calitate de instructor ` +
+  const partiRest =
+    `, domiciliat/ă în ${domiciliu}, CNP ${cnp}, în calitate de instructor ` +
     '(denumit în continuare „Prestator” sau „Instructor”).'
   const intro =
     'Părțile încheie un contract de prestări servicii de instructaj in cadrul organizarii și desfășurarii cursurilor ' +
@@ -126,10 +128,11 @@ h3{font-size:12px;margin:14px 0 4px}p{margin:4px 0}
 .sigimg{width:150px;margin-top:10px}
 .sigpix{font-family:'Segoe Script','Brush Script MT',cursive;color:#1d4ed8;font-size:22px;margin-top:14px}</style></head><body>
 <h1>CONTRACT DE PRESTĂRI SERVICII</h1><h2>nr. ${(c as any).numar} din ${dataC}, încheiat între</h2>
-<p>${esc(PRESTATOR)}</p><p>și</p><p>${esc(parti)}</p><p>${esc(intro)}</p>${corp}
-<div class="semn"><div><b>Semnătura Beneficiar</b><br>S.C. SET SAIL ADVERTISING SRL<br>prin Corina Cobianu Drugan
+<p><b>${esc(FIRMA)}</b>${esc(PRESTATOR_REST)}</p><p>și</p>
+<p>Dl./Dna. <b>${esc(nume)}</b>${esc(partiRest)}</p><p>${esc(intro)}</p>${corp}
+<div class="semn"><div><b>Semnătura Beneficiar</b><br><b>S.C. SET SAIL ADVERTISING SRL</b><br>prin Corina Cobianu Drugan
 ${stampila ? `<br><img class="stamp" src="${stampila}">` : ''}</div>
-<div><b>Semnătura Prestator (Instructor)</b><br>${esc(nume)}
+<div><b>Semnătura Prestator (Instructor)</b><br><b>${esc(nume)}</b>
 ${semnaturaInstructor
   ? `<br><img class="sigimg" src="${semnaturaInstructor}">`
   : `<div class="sigpix">${esc(nume)}</div>`}</div></div>
@@ -148,6 +151,13 @@ ${auto ? '<script>window.onload=function(){setTimeout(function(){window.print()}
       alignment: opts?.align ?? AlignmentType.JUSTIFIED,
       spacing: { before: opts?.before ?? 40, after: opts?.after ?? 40 },
       children: [reg(t, opts?.bold)],
+    })
+  // Paragraf din bucăți, ca să iasă bold doar numele părților
+  const pMixt = (bucati: [string, boolean][]) =>
+    new Paragraph({
+      alignment: AlignmentType.JUSTIFIED,
+      spacing: { before: 40, after: 40 },
+      children: bucati.map(([t, bold]) => reg(t, bold)),
     })
 
   // Imaginile din zona de semnături. Ștampila cu semnătura Corinei stă pătrată,
@@ -186,9 +196,9 @@ ${auto ? '<script>window.onload=function(){setTimeout(function(){window.print()}
       children: [
         p('CONTRACT DE PRESTĂRI SERVICII', { bold: true, align: AlignmentType.CENTER, before: 0, after: 0 }),
         p(`nr. ${(c as any).numar} din ${dataC}, încheiat între`, { align: AlignmentType.CENTER, after: 200 }),
-        p(PRESTATOR),
+        pMixt([[FIRMA, true], [PRESTATOR_REST, false]]),
         p('și'),
-        p(parti),
+        pMixt([['Dl./Dna. ', false], [nume, true], [partiRest, false]]),
         p(intro, { after: 160 }),
         ...art.flatMap(([titlu, ...randuri]) => [
           p(titlu, { bold: true, before: 200 }),
@@ -204,7 +214,7 @@ ${auto ? '<script>window.onload=function(){setTimeout(function(){window.print()}
                 borders: faraMargini, width: { size: 4500, type: WidthType.DXA },
                 children: [
                   p('Semnătura Beneficiar', { bold: true, align: AlignmentType.LEFT }),
-                  p('S.C. SET SAIL ADVERTISING SRL', { align: AlignmentType.LEFT }),
+                  p(FIRMA, { bold: true, align: AlignmentType.LEFT }),
                   p('prin Corina Cobianu Drugan', { align: AlignmentType.LEFT }),
                   ...stampilaImg,
                 ],
@@ -213,7 +223,7 @@ ${auto ? '<script>window.onload=function(){setTimeout(function(){window.print()}
                 borders: faraMargini, width: { size: 4500, type: WidthType.DXA },
                 children: [
                   p('Semnătura Prestator (Instructor)', { bold: true, align: AlignmentType.LEFT }),
-                  p(nume, { align: AlignmentType.LEFT }),
+                  p(nume, { bold: true, align: AlignmentType.LEFT }),
                   ...semnaturaImg,
                 ],
               }),
