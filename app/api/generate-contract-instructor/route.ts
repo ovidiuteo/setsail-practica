@@ -69,16 +69,36 @@ function articole(tarifTeorie: number, tarifPractica: number, start: string, sfa
 }
 
 export async function GET(req: NextRequest) {
-  if (!verifyToken(req.cookies.get(ADMIN_COOKIE_NAME)?.value)) {
-    return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
-  }
-  const id = req.nextUrl.searchParams.get('id') || ''
-  const format = req.nextUrl.searchParams.get('format') || 'docx'
+  const sp = req.nextUrl.searchParams
+  const id = sp.get('id') || ''
+  const format = sp.get('format') || 'docx'
   if (!id) return NextResponse.json({ error: 'lipsește contractul' }, { status: 400 })
 
   const sb = svc()
   const { data: c } = await sb.from('contracte_instructor').select('*').eq('id', id).maybeSingle()
   if (!c) return NextResponse.json({ error: 'contractul nu există' }, { status: 404 })
+
+  // Admin, sau lista cu token a seriei din care face parte instructorul
+  if (!verifyToken(req.cookies.get(ADMIN_COOKIE_NAME)?.value)) {
+    const token = (sp.get('token') || '').trim()
+    let ok = false
+    if (token && (c as any).student_id) {
+      const { data: st } = await sb.from('students')
+        .select('session_id').eq('id', (c as any).student_id).maybeSingle()
+      const sesId = (st as any)?.session_id
+      if (sesId) {
+        const { data: s } = await sb.from('sessions')
+          .select('roster_token, parent_session_id').eq('id', sesId).maybeSingle()
+        ok = (s as any)?.roster_token === token
+        if (!ok && (s as any)?.parent_session_id) {
+          const { data: p } = await sb.from('sessions')
+            .select('roster_token').eq('id', (s as any).parent_session_id).maybeSingle()
+          ok = (p as any)?.roster_token === token
+        }
+      }
+    }
+    if (!ok) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  }
 
   // „Ștampilă cu semnătură SSA" din configurator — semnătura Corinei peste ștampilă
   const { data: stampilaDoc } = await sb.from('setsail_documents')

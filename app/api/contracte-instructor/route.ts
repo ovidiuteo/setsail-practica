@@ -25,6 +25,22 @@ function admin(req: NextRequest) {
   return verifyToken(req.cookies.get(ADMIN_COOKIE_NAME)?.value)
 }
 
+// Grupele seriei: principala + clonele ei (cursantul poate fi în oricare)
+async function grupeSeriei(sb: ReturnType<typeof svc>, sessionId: string): Promise<string[]> {
+  const { data: s } = await sb.from('sessions').select('id, parent_session_id').eq('id', sessionId).maybeSingle()
+  const principalId = (s as any)?.parent_session_id || sessionId
+  const { data: rude } = await sb.from('sessions').select('id').eq('parent_session_id', principalId)
+  return [principalId, ...((rude || []) as any[]).map(r => r.id)]
+}
+
+// Lista cu token a seriei are aceleași drepturi ca adminul, dar numai pe seria ei
+async function dinLista(sb: ReturnType<typeof svc>, sessionId: string, token: string): Promise<string[] | null> {
+  if (!sessionId || !token) return null
+  const { data } = await sb.from('sessions').select('roster_token').eq('id', sessionId).maybeSingle()
+  if (!(data as any)?.roster_token || (data as any).roster_token !== token) return null
+  return grupeSeriei(sb, sessionId)
+}
+
 const START_KEY = 'contract_instructor_start_number'
 
 // Următorul număr liber: max(existent)+1, dar cel puțin numărul de pornire
@@ -45,14 +61,27 @@ const intSau = (v: unknown, implicit: number) => {
 }
 
 export async function GET(req: NextRequest) {
-  if (!admin(req)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   const sb = svc()
-  const studentId = req.nextUrl.searchParams.get('student_id') || ''
+  const sp = req.nextUrl.searchParams
+  const studentId = sp.get('student_id') || ''
+
+  // Fie admin, fie lista cu token a seriei (atunci doar contractele cursanților ei)
+  let idStudenti: string[] | null = null
+  if (!admin(req)) {
+    const grupe = await dinLista(sb, sp.get('session_id') || '', sp.get('token') || '')
+    if (!grupe) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    const { data: sts } = await sb.from('students').select('id').in('session_id', grupe)
+    idStudenti = ((sts || []) as any[]).map(s => s.id)
+    if (studentId && !idStudenti.includes(studentId)) {
+      return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    }
+  }
 
   let q = sb.from('contracte_instructor')
     .select('*, students(full_name, session_id)')
     .order('numar', { ascending: false })
   if (studentId) q = q.eq('student_id', studentId)
+  else if (idStudenti) q = q.in('student_id', idStudenti.length ? idStudenti : ['00000000-0000-0000-0000-000000000000'])
 
   const [{ data, error }, { data: setting }] = await Promise.all([
     q,
@@ -67,11 +96,18 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  if (!admin(req)) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
   const sb = svc()
   const b = await req.json().catch(() => ({}))
   const studentId = txt(b.student_id, 60)
   if (!studentId) return NextResponse.json({ error: 'lipsește instructorul' }, { status: 400 })
+
+  if (!admin(req)) {
+    const grupe = await dinLista(sb, txt(b.session_id, 60), txt(b.token, 80))
+    if (!grupe) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+    const { data: alSeriei } = await sb.from('students')
+      .select('id').eq('id', studentId).in('session_id', grupe).maybeSingle()
+    if (!alSeriei) return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  }
 
   const { data: st } = await sb.from('students')
     .select('full_name, cnp, address, city, county').eq('id', studentId).maybeSingle()

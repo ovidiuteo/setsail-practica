@@ -331,9 +331,14 @@ const VERIFIERS: { key: keyof Verified; label: string }[] = [
   { key: 'corina', label: 'Corina' }, { key: 'paula', label: 'Paula' }, { key: 'ruxandra', label: 'Ruxandra' },
 ]
 
-// Titlul paginii/tab-ului: „Curs Radio 5-7 oct" (din clasa și datele sesiunii)
-function sessionTitle(s: { class_caa?: string | null; session_date?: string | null; course_start_date?: string | null } | null): string {
+// Titlul paginii/tab-ului: „Curs Radio 5-7 oct" (din clasa și datele sesiunii).
+// Seriile de instructori se numesc după sezon: „Instructori sezon 2026".
+function sessionTitle(s: { class_caa?: string | null; session_date?: string | null; course_start_date?: string | null; scope?: string | null } | null): string {
   if (!s?.session_date) return 'Cursanți — sesiune'
+  if (s.scope === 'instructori_setsail') {
+    const an = new Date(s.course_start_date || s.session_date).getFullYear()
+    return `Instructori sezon ${an}`
+  }
   const luna = (d: Date) => d.toLocaleDateString('ro-RO', { month: 'short' }).replace('.', '')
   const end = new Date(s.session_date)
   const start = s.course_start_date ? new Date(s.course_start_date) : null
@@ -346,6 +351,53 @@ function sessionTitle(s: { class_caa?: string | null; session_date?: string | nu
     interval = `${end.getDate()} ${luna(end)}`
   }
   return `Curs ${(s.class_caa || '').trim()} ${interval}`.replace(/\s+/g, ' ').trim()
+}
+
+// Contractul unui instructor: previzualizare + descărcare/tipărire
+function ContractModal({ contract, token, onClose }: { contract: any; token: string; onClose: () => void }) {
+  const ref = useRef<HTMLIFrameElement>(null)
+  const url = (fmt: string) =>
+    `/api/generate-contract-instructor?id=${contract.id}${fmt ? `&format=${fmt}` : ''}&token=${encodeURIComponent(token)}`
+  const roData = (d?: string | null) => d ? new Date(d).toLocaleDateString('ro-RO') : '—'
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-start justify-center p-4 overflow-y-auto" onClick={onClose}>
+      <div className="bg-white rounded-2xl shadow-xl w-full max-w-4xl my-6 flex flex-col max-h-[92vh]" onClick={e => e.stopPropagation()}>
+        <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-gray-100">
+          <div>
+            <h3 className="font-semibold text-gray-900">
+              Contract de prestări servicii nr. {contract.numar}
+            </h3>
+            <p className="text-xs text-gray-400 mt-0.5">
+              {contract.nume || ''} · {roData(contract.data_contract)}
+              {contract.perioada_start ? ` · ${roData(contract.perioada_start)} – ${roData(contract.perioada_sfarsit)}` : ''}
+            </p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-700 text-xl leading-none">×</button>
+        </div>
+
+        <div className="flex-1 overflow-hidden bg-gray-100 p-3">
+          <iframe ref={ref} src={url('html')} title="Previzualizare contract"
+            className="w-full h-[62vh] bg-white rounded-lg border border-gray-200" />
+        </div>
+
+        <div className="flex flex-wrap justify-end gap-2 px-5 py-4 border-t border-gray-100">
+          <button onClick={onClose} className="px-4 py-2 rounded-lg text-sm border border-gray-200 text-gray-600 hover:bg-gray-50">Închide</button>
+          <button onClick={() => ref.current?.contentWindow?.print()}
+            className="px-4 py-2 rounded-lg text-sm font-medium border border-gray-300 text-gray-700 hover:bg-gray-50">
+            Print
+          </button>
+          <a href={url('pdf')} target="_blank" rel="noopener noreferrer"
+            className="px-4 py-2 rounded-lg text-sm font-medium text-white" style={{ background: '#dc2626' }}>
+            Descarcă PDF
+          </a>
+          <a href={url('')} className="px-4 py-2 rounded-lg text-sm font-medium text-white" style={{ background: '#0a1628' }}>
+            Descarcă DOCX
+          </a>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 // Reduce o imagine la max 1800px lățime, JPEG 0.85
@@ -481,6 +533,11 @@ export default function RosterPage() {
   const [zoomUrl, setZoomUrl] = useState('')
   const [copiedZoom, setCopiedZoom] = useState(false)
   const [scopSesiune, setScopSesiune] = useState('')
+  // Contractele de prestări servicii — doar la seriile de instructori
+  const [contracte, setContracte] = useState<Record<string, any>>({})
+  const [urmatorNr, setUrmatorNr] = useState<number | null>(null)
+  const [contractFor, setContractFor] = useState<any | null>(null)
+  const [alocBusy, setAlocBusy] = useState<string | null>(null)
   useEffect(() => { if (!esteRadio && tab === 'leaduri') setTab('cursanti') }, [esteRadio, tab])
   const [verifPrel, setVerifPrel] = useState<VerifPrelungire | null>(null)
   const [copiedSkipper, setCopiedSkipper] = useState(false)
@@ -543,6 +600,35 @@ export default function RosterPage() {
     rowUpdate(sid, { class_caa: v } as Partial<Row>)
   }
   useEffect(() => { load() }, [load])
+
+  // Contractele seriei de instructori, pe cursant
+  const incarcaContracte = useCallback(async () => {
+    if (scopSesiune !== 'instructori_setsail' || !id || !token) return
+    const r = await fetch(`/api/contracte-instructor?session_id=${id}&token=${encodeURIComponent(token)}`)
+    const j = await r.json().catch(() => ({}))
+    const m: Record<string, any> = {}
+    for (const c of (j.contracte || []) as any[]) if (c.student_id && !m[c.student_id]) m[c.student_id] = c
+    setContracte(m)
+    setUrmatorNr(j.next ?? null)
+  }, [scopSesiune, id, token])
+  useEffect(() => { incarcaContracte() }, [incarcaContracte])
+
+  async function alocaContract(sid: string, nume: string) {
+    setAlocBusy(sid)
+    const azi = new Date().toISOString().slice(0, 10)
+    const r = await fetch('/api/contracte-instructor', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session_id: id, token, student_id: sid, nume, data_contract: azi,
+        perioada_start: azi, perioada_sfarsit: `${new Date().getFullYear() + 5}-12-31`,
+      }),
+    })
+    const j = await r.json().catch(() => ({}))
+    setAlocBusy(null)
+    if (j.error) { alert('Eroare: ' + j.error); return }
+    await incarcaContracte()
+    if (j.contract) setContractFor(j.contract)
+  }
 
   const rowUpdate = (sid: string, partial: Partial<Row>) =>
     setRows(rs => (rs || []).map(x => x.id === sid ? { ...x, ...partial } : x))
@@ -1101,6 +1187,9 @@ export default function RosterPage() {
                   </> : (
                     <th className="px-2 py-2.5 min-w-[150px]"><CapSortabil camp={esteRadio ? 'obtinere_prelungire' : 'class_caa'}>{esteRadio ? 'Obținere / Prelungire LRC' : 'Categorie'}</CapSortabil></th>
                   )}
+                  {scopSesiune === 'instructori_setsail' && (
+                    <th className="px-2 py-2.5 whitespace-nowrap text-[10px] normal-case tracking-normal">Contract</th>
+                  )}
                   <th className="px-2 py-2.5 text-center text-[10px] normal-case tracking-normal">
                     <button onClick={() => setSort(s => ({ mode: 'livrare', dir: s.mode === 'livrare' && s.dir === 'asc' ? 'desc' : 'asc' }))}
                       title="Cum primește materialele de curs — click pentru sortare"
@@ -1217,6 +1306,22 @@ export default function RosterPage() {
                         {esteRadio
                           ? <LrcSelect value={row.obtinere_prelungire} onConfirm={v => saveLrc(row.id, v)} />
                           : <CategorieSelect value={row.class_caa} onConfirm={v => saveCategorie(row.id, v)} />}
+                      </td>
+                    )}
+                    {scopSesiune === 'instructori_setsail' && (
+                      <td className="px-2 py-2 whitespace-nowrap">
+                        {contracte[row.id] ? (
+                          <button onClick={() => setContractFor(contracte[row.id])}
+                            title="Vezi contractul"
+                            className="px-2.5 py-1 rounded-lg text-xs font-medium border border-amber-200 bg-amber-50 text-amber-800 hover:bg-amber-100">
+                            nr. {contracte[row.id].numar} · {roDate(contracte[row.id].data_contract)}
+                          </button>
+                        ) : (
+                          <button onClick={() => alocaContract(row.id, row.full_name)} disabled={alocBusy === row.id}
+                            className="px-2.5 py-1 rounded-lg text-xs font-medium border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-50">
+                            {alocBusy === row.id ? 'Se alocă…' : `Alocă nr. ${urmatorNr ?? ''}`.trim()}
+                          </button>
+                        )}
                       </td>
                     )}
                     <td className="px-2 py-2 text-center">
@@ -1336,6 +1441,10 @@ export default function RosterPage() {
         <CiModal sessionId={id} token={token} row={ciFor.row} doc={ciFor.doc}
           onClose={() => setCiFor(null)}
           onRowUpdate={rowUpdate} />
+      )}
+
+      {contractFor && (
+        <ContractModal contract={contractFor} token={token} onClose={() => setContractFor(null)} />
       )}
 
       {(mailOpen || mailCatre) && (
