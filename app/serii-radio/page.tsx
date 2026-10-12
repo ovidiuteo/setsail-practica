@@ -33,6 +33,12 @@ function interval(s: Row): string {
   return `${end.getDate()} ${luna(end)} ${end.getFullYear()}`
 }
 
+// Sezonul unei serii de instructori: anul în care se ține
+function sezon(s: Row): string {
+  const d = s.course_start_date || s.session_date
+  return d ? String(new Date(d).getFullYear()) : ''
+}
+
 // Serie cu examenul deja trecut (rămâne în listă cât e pusă pe activ/focus)
 function incheiata(s: Row): boolean {
   if (!s.session_date) return false
@@ -105,9 +111,13 @@ function SeriiRadio() {
                             className="flex items-center gap-3 bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3 hover:border-blue-300 hover:shadow transition-all">
                             <div className="flex-1 min-w-0">
                               <div className="font-semibold text-gray-900">
-                                Curs {(s.class_caa || '').trim() || 'C,D'} {interval(s)}
+                                {/* seriile de instructori se numesc după sezon, nu după clasă */}
+                                {s.scope === 'instructori_setsail'
+                                  ? `Instructori sezon ${sezon(s)}`
+                                  : `Curs ${(s.class_caa || '').trim() || 'C,D'} ${interval(s)}`}
                               </div>
                               <div className="text-xs text-gray-400 mt-0.5">
+                                {s.scope === 'instructori_setsail' ? `${interval(s)} · ` : ''}
                                 {s.students} {s.students === 1 ? 'cursant' : 'cursanți'}
                                 {s.location ? ` · ${s.location}` : ''}
                               </div>

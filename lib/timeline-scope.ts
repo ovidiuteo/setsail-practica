@@ -8,6 +8,7 @@ export type TimelineScope =
   | 'intensiv_cds_limanu'
   | 'practica_ba'
   | 'radio_lrc'
+  | 'instructori_setsail'
 
 export const TIMELINE_SCOPES: Array<{ value: TimelineScope; label: string }> = [
   { value: 'practica_cds_limanu', label: 'Practica C/D/S Limanu' },
@@ -15,6 +16,7 @@ export const TIMELINE_SCOPES: Array<{ value: TimelineScope; label: string }> = [
   { value: 'intensiv_cds_limanu', label: 'Intensiv C/D/S Limanu' },
   { value: 'practica_ba',         label: 'Practica B/A' },
   { value: 'radio_lrc',           label: 'Radio LRC' },
+  { value: 'instructori_setsail', label: 'Instructori SetSail' },
 ]
 
 export const DEFAULT_TIMELINE_SCOPE: TimelineScope = 'practica_cds_limanu'
@@ -30,6 +32,7 @@ const SCOPE_SHORT: Record<TimelineScope, string> = {
   intensiv_cds_limanu: 'INTENSIV',
   practica_ba: 'B/A',
   radio_lrc: 'RADIO',
+  instructori_setsail: 'INSTRUCTORI',
 }
 
 export function timelineScopeShort(scope: string | null | undefined): string {
