@@ -1469,6 +1469,8 @@ function ContracteNumbersSection() {
                 </td>
                 <td className="px-4 py-3 text-gray-400 text-xs">{r.tarif_teorie} / {r.tarif_practica} lei</td>
                 <td className="px-4 py-3 text-right">
+                  <a href={`/api/generate-contract-instructor?id=${r.id}&format=pdf`} target="_blank" rel="noopener noreferrer"
+                    className="text-xs text-red-500 hover:text-red-700 mr-3">PDF</a>
                   <a href={`/api/generate-contract-instructor?id=${r.id}`}
                     className="text-xs text-gray-500 hover:text-gray-800 mr-3">.docx</a>
                   <button onClick={() => remove(r.id, r.numar)}

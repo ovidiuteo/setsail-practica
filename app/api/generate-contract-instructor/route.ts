@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import { verifyToken, ADMIN_COOKIE_NAME } from '@/lib/admin-auth'
+import { tintSignatureToBlueDataUrl } from '@/lib/sign-tint'
 
 export const runtime = 'nodejs'
 export const dynamic = 'force-dynamic'
@@ -82,12 +83,14 @@ export async function GET(req: NextRequest) {
     .select('file_data').eq('tip', 'stampila_cu_semnatura').maybeSingle()
   const stampila = String((stampilaDoc as any)?.file_data || '')
 
-  // Semnătura instructorului, dacă și-a semnat în portal — ca pe anexe
+  // Semnătura instructorului, dacă și-a semnat în portal — recolorată „pix albastru",
+  // exact ca pe fișele de examen (Anexa 10) ale seriilor C/D.
   let semnaturaInstructor = ''
   if ((c as any).student_id) {
     const { data: st } = await sb.from('students')
-      .select('signature_data').eq('id', (c as any).student_id).maybeSingle()
-    semnaturaInstructor = String((st as any)?.signature_data || '')
+      .select('signature_data, signature_random').eq('id', (c as any).student_id).maybeSingle()
+    const bruta = String((st as any)?.signature_data || (st as any)?.signature_random || '')
+    if (bruta) semnaturaInstructor = (await tintSignatureToBlueDataUrl(bruta)) || bruta
   }
 
   const nume = String((c as any).nume || '').trim() || '...............'
@@ -104,13 +107,18 @@ export async function GET(req: NextRequest) {
     'necesare obținerii certificatelor internaționale de conducător de ambarcațiuni de agrement, si convin următoarele:'
   const art = articole((c as any).tarif_teorie ?? 100, (c as any).tarif_practica ?? 500, start, sfarsit)
 
-  if (format === 'html') {
+  if (format === 'html' || format === 'pdf') {
+    // „PDF" = pagina se deschide și cheamă singură dialogul de tipărire (salvezi ca PDF),
+    // la fel ca la fișele de examen.
+    const auto = format === 'pdf'
     const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
     const corp = art.map(([titlu, ...randuri]) =>
       `<h3>${esc(titlu)}</h3>${randuri.map(r => `<p>${esc(r)}</p>`).join('')}`).join('')
     return new NextResponse(
-      `<!DOCTYPE html><html lang="ro"><head><meta charset="utf-8"><title>Contract nr. ${(c as any).numar}</title>
-<style>body{font-family:Arial,sans-serif;font-size:12px;line-height:1.5;max-width:18cm;margin:1.5cm auto;color:#111}
+      `<!DOCTYPE html><html lang="ro"><head><meta charset="utf-8"><title>Contract instructor nr ${(c as any).numar} ${esc(nume)}</title>
+<style>@page{size:A4 portrait;margin:15mm}
+body{font-family:Arial,sans-serif;font-size:12px;line-height:1.5;max-width:18cm;margin:1.5cm auto;color:#111}
+@media print{body{margin:0;max-width:none}}
 h1{text-align:center;font-size:15px;margin:0}h2{text-align:center;font-size:12px;font-weight:normal;margin:4px 0 18px}
 h3{font-size:12px;margin:14px 0 4px}p{margin:4px 0}
 .semn{display:flex;justify-content:space-between;align-items:flex-start;gap:30px;margin-top:40px}
@@ -124,7 +132,9 @@ ${stampila ? `<br><img class="stamp" src="${stampila}">` : ''}</div>
 <div><b>Semnătura Prestator (Instructor)</b><br>${esc(nume)}
 ${semnaturaInstructor
   ? `<br><img class="sigimg" src="${semnaturaInstructor}">`
-  : `<div class="sigpix">${esc(nume)}</div>`}</div></div></body></html>`,
+  : `<div class="sigpix">${esc(nume)}</div>`}</div></div>
+${auto ? '<script>window.onload=function(){setTimeout(function(){window.print()},400)}</script>' : ''}
+</body></html>`,
       { headers: { 'Content-Type': 'text/html; charset=utf-8' } })
   }
 

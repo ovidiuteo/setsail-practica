@@ -915,6 +915,8 @@ function ContracteInstructor({ student }: { student: Student }) {
                   className="px-2.5 py-1.5 rounded-lg text-xs border border-gray-200 text-gray-600 hover:bg-gray-50">Editează</button>
                 <a href={`/api/generate-contract-instructor?id=${c.id}&format=html`} target="_blank" rel="noopener noreferrer"
                   className="px-2.5 py-1.5 rounded-lg text-xs border border-gray-200 text-gray-600 hover:bg-gray-50">Previzualizare</a>
+                <a href={`/api/generate-contract-instructor?id=${c.id}&format=pdf`} target="_blank" rel="noopener noreferrer"
+                  className="px-2.5 py-1.5 rounded-lg text-xs font-medium text-white" style={{ background: '#dc2626' }}>Descarcă PDF</a>
                 <a href={`/api/generate-contract-instructor?id=${c.id}`}
                   className="px-2.5 py-1.5 rounded-lg text-xs font-medium text-white" style={{ background: '#0a1628' }}>Descarcă .docx</a>
                 <button onClick={() => sterge(c)}
