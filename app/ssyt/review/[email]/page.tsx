@@ -82,7 +82,7 @@ export default async function ReviewPersonPage({ params }: { params: { email: st
             <p className="text-white/90 leading-relaxed whitespace-pre-wrap">{skipperText}</p>
           </div>
         )}
-        <p className="mt-3 font-semibold text-white">Fair Winds Always! ⛵</p>
+        <p className="mt-3 font-semibold text-white">Keep on sailing! ⛵</p>
       </div>
 
       {existing && (

@@ -53,7 +53,7 @@ export default function ReviewForm({ email, questions, initial }: { email: strin
       <div className="rounded-xl p-10 text-center" style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
         <CheckCircle2 size={40} className="mx-auto mb-3" style={{ color: '#10B981' }} />
         <h2 className="text-lg font-semibold" style={{ color: '#0a1628' }}>Mulțumim! Răspunsurile au fost trimise.</h2>
-        <p className="text-sm text-gray-500 mt-1">Poți închide pagina. Fair Winds Always! ⛵</p>
+        <p className="text-sm text-gray-500 mt-1">Poți închide pagina. Keep on sailing! ⛵</p>
       </div>
     )
   }
