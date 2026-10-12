@@ -82,6 +82,14 @@ export async function GET(req: NextRequest) {
     .select('file_data').eq('tip', 'stampila_cu_semnatura').maybeSingle()
   const stampila = String((stampilaDoc as any)?.file_data || '')
 
+  // Semnătura instructorului, dacă și-a semnat în portal — ca pe anexe
+  let semnaturaInstructor = ''
+  if ((c as any).student_id) {
+    const { data: st } = await sb.from('students')
+      .select('signature_data').eq('id', (c as any).student_id).maybeSingle()
+    semnaturaInstructor = String((st as any)?.signature_data || '')
+  }
+
   const nume = String((c as any).nume || '').trim() || '...............'
   const domiciliu = String((c as any).domiciliu || '').trim() || '...............'
   const cnp = String((c as any).cnp || '').trim() || '...............'
@@ -104,16 +112,26 @@ export async function GET(req: NextRequest) {
       `<!DOCTYPE html><html lang="ro"><head><meta charset="utf-8"><title>Contract nr. ${(c as any).numar}</title>
 <style>body{font-family:Arial,sans-serif;font-size:12px;line-height:1.5;max-width:18cm;margin:1.5cm auto;color:#111}
 h1{text-align:center;font-size:15px;margin:0}h2{text-align:center;font-size:12px;font-weight:normal;margin:4px 0 18px}
-h3{font-size:12px;margin:14px 0 4px}p{margin:4px 0}.semn{display:flex;justify-content:space-between;margin-top:40px}</style></head><body>
+h3{font-size:12px;margin:14px 0 4px}p{margin:4px 0}
+.semn{display:flex;justify-content:space-between;align-items:flex-start;gap:30px;margin-top:40px}
+.semn>div{flex:1}.stamp{width:150px;height:150px;object-fit:contain;margin-top:6px}
+.sigimg{width:150px;margin-top:10px}
+.sigpix{font-family:'Segoe Script','Brush Script MT',cursive;color:#1d4ed8;font-size:22px;margin-top:14px}</style></head><body>
 <h1>CONTRACT DE PRESTĂRI SERVICII</h1><h2>nr. ${(c as any).numar} din ${dataC}, încheiat între</h2>
 <p>${esc(PRESTATOR)}</p><p>și</p><p>${esc(parti)}</p><p>${esc(intro)}</p>${corp}
 <div class="semn"><div><b>Semnătura Beneficiar</b><br>S.C. SET SAIL ADVERTISING SRL<br>prin Corina Cobianu Drugan
-${stampila ? `<br><img src="${stampila}" style="width:160px;margin-top:6px">` : ''}</div>
-<div><b>Semnătura Prestator (Instructor)</b><br>${esc(nume)}</div></div></body></html>`,
+${stampila ? `<br><img class="stamp" src="${stampila}">` : ''}</div>
+<div><b>Semnătura Prestator (Instructor)</b><br>${esc(nume)}
+${semnaturaInstructor
+  ? `<br><img class="sigimg" src="${semnaturaInstructor}">`
+  : `<div class="sigpix">${esc(nume)}</div>`}</div></div></body></html>`,
       { headers: { 'Content-Type': 'text/html; charset=utf-8' } })
   }
 
-  const { Document, Packer, Paragraph, TextRun, AlignmentType, ImageRun } = await import('docx')
+  const {
+    Document, Packer, Paragraph, TextRun, AlignmentType, ImageRun,
+    Table, TableRow, TableCell, WidthType, BorderStyle,
+  } = await import('docx')
   const reg = (t: string, bold = false) => new TextRun({ text: t, size: 22, font: 'Arial', bold })
   const p = (t: string, opts?: { bold?: boolean; align?: any; before?: number; after?: number }) =>
     new Paragraph({
@@ -122,18 +140,34 @@ ${stampila ? `<br><img src="${stampila}" style="width:160px;margin-top:6px">` : 
       children: [reg(t, opts?.bold)],
     })
 
-  // Ștampila cu semnătura Corinei, sub semnătura Beneficiarului
-  let stampilaImg: any[] = []
-  if (stampila) {
+  // Imaginile din zona de semnături. Ștampila cu semnătura Corinei stă pătrată,
+  // ca să nu se deformeze; semnătura instructorului e lângă ea, pe aceeași linie.
+  const poza = (dataUrl: string, w: number, h: number, before = 60): any[] => {
+    if (!dataUrl) return []
     try {
-      const base64 = stampila.includes(',') ? stampila.split(',')[1] : stampila
+      const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl
       const buf = Buffer.from(base64, 'base64')
-      const mt = stampila.includes('png') ? 'png' : 'jpg'
-      stampilaImg = [new Paragraph({
-        spacing: { before: 60 },
-        children: [new ImageRun({ data: buf, type: mt as any, transformation: { width: 160, height: 110 } })],
+      const mt = dataUrl.includes('png') ? 'png' : 'jpg'
+      return [new Paragraph({
+        spacing: { before },
+        children: [new ImageRun({ data: buf, type: mt as any, transformation: { width: w, height: h } })],
       })]
-    } catch (e) { console.error(e) }
+    } catch (e) { console.error(e); return [] }
+  }
+  const stampilaImg = poza(stampila, 150, 150)
+  // Dacă instructorul nu are semnătura scanată, îi scriem numele cu „pixul albastru"
+  const semnaturaImg = semnaturaInstructor
+    ? poza(semnaturaInstructor, 150, 62, 120)
+    : [new Paragraph({
+        spacing: { before: 160 },
+        children: [new TextRun({ text: nume, size: 36, font: 'Segoe Script', color: '1D4ED8' })],
+      })]
+
+  const faraMargini = {
+    top: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+    bottom: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+    left: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+    right: { style: BorderStyle.NONE, size: 0, color: 'FFFFFF' },
   }
 
   const doc = new Document({
@@ -151,10 +185,31 @@ ${stampila ? `<br><img src="${stampila}" style="width:160px;margin-top:6px">` : 
           ...randuri.map(r => p(r)),
         ]),
         p('', { before: 400 }),
-        p('Semnătura Beneficiar                                              Semnătura Prestator (Instructor)', { bold: true }),
-        p(`S.C. SET SAIL ADVERTISING SRL                              ${nume}`),
-        p('prin Corina Cobianu Drugan'),
-        ...stampilaImg,
+        new Table({
+          width: { size: 9000, type: WidthType.DXA },
+          columnWidths: [4500, 4500],
+          rows: [new TableRow({
+            children: [
+              new TableCell({
+                borders: faraMargini, width: { size: 4500, type: WidthType.DXA },
+                children: [
+                  p('Semnătura Beneficiar', { bold: true, align: AlignmentType.LEFT }),
+                  p('S.C. SET SAIL ADVERTISING SRL', { align: AlignmentType.LEFT }),
+                  p('prin Corina Cobianu Drugan', { align: AlignmentType.LEFT }),
+                  ...stampilaImg,
+                ],
+              }),
+              new TableCell({
+                borders: faraMargini, width: { size: 4500, type: WidthType.DXA },
+                children: [
+                  p('Semnătura Prestator (Instructor)', { bold: true, align: AlignmentType.LEFT }),
+                  p(nume, { align: AlignmentType.LEFT }),
+                  ...semnaturaImg,
+                ],
+              }),
+            ],
+          })],
+        }),
       ],
     }],
   })
