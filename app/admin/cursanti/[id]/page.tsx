@@ -904,23 +904,27 @@ function ContracteInstructor({ student }: { student: Student }) {
       ) : (
         <div className="space-y-2">
           {rows.map(c => (
-            <div key={c.id} className="rounded-xl border border-gray-100 px-4 py-3 flex flex-wrap items-center gap-3">
+            <div key={c.id} className="rounded-xl border border-gray-100 px-4 py-3">
               <div className="text-sm text-gray-900">
                 <b>Contract nr. {c.numar}</b> · {roData(c.data_contract)}
                 <span className="text-gray-400"> · {roData(c.perioada_start)} – {roData(c.perioada_sfarsit)}</span>
                 <span className="text-gray-400"> · {c.tarif_teorie} lei/oră teorie, {c.tarif_practica} lei/zi practică</span>
               </div>
-              <div className="ml-auto flex items-center gap-2">
+              {/* rândul 1: editare, previzualizare, ștergere */}
+              <div className="flex flex-wrap items-center gap-2 mt-3">
                 <button onClick={() => setEdit(c)}
                   className="px-2.5 py-1.5 rounded-lg text-xs border border-gray-200 text-gray-600 hover:bg-gray-50">Editează</button>
                 <a href={`/api/generate-contract-instructor?id=${c.id}&format=html`} target="_blank" rel="noopener noreferrer"
                   className="px-2.5 py-1.5 rounded-lg text-xs border border-gray-200 text-gray-600 hover:bg-gray-50">Previzualizare</a>
+                <button onClick={() => sterge(c)} title="Șterge contractul"
+                  className="p-1.5 rounded-lg text-red-300 hover:text-red-500 hover:bg-red-50"><Trash2 size={13} /></button>
+              </div>
+              {/* rândul 2: descărcările */}
+              <div className="flex flex-wrap items-center gap-2 mt-2">
                 <a href={`/api/generate-contract-instructor?id=${c.id}&format=pdf`} target="_blank" rel="noopener noreferrer"
                   className="px-2.5 py-1.5 rounded-lg text-xs font-medium text-white" style={{ background: '#dc2626' }}>Descarcă PDF</a>
                 <a href={`/api/generate-contract-instructor?id=${c.id}`}
                   className="px-2.5 py-1.5 rounded-lg text-xs font-medium text-white" style={{ background: '#0a1628' }}>Descarcă .docx</a>
-                <button onClick={() => sterge(c)}
-                  className="p-1.5 rounded-lg text-red-300 hover:text-red-500 hover:bg-red-50"><Trash2 size={13} /></button>
               </div>
             </div>
           ))}
