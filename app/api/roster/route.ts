@@ -170,6 +170,10 @@ export async function GET(req: NextRequest) {
   // Leadurile de pe landing-ul de radio (fără arhivate și fără cei deja înscriși
   // în această serie — după email), plus seriile pentru dropdownul de participare
   if (sp.get('action') === 'leads') {
+    // Seriile de instructori sunt interne — n-au landing și n-au leaduri
+    if (scopeForSession(sess) === 'instructori_setsail') {
+      return NextResponse.json({ leads: [], sessions: [] })
+    }
     const [{ data }, { data: enrolled }, sessions] = await Promise.all([
       sb.from('radio_leads').select('*').order('created_at', { ascending: false }),
       sb.from('students').select('email').eq('session_id', sessionId),
@@ -298,7 +302,8 @@ export async function GET(req: NextRequest) {
   for (const v of VERIFIERS) verified[v] = !!(sess.roster_verified as any)?.[v]
   // Vizitele pe landing-ul de radio. „Overall" repornește în ziua examenului
   // seriei precedente — de atunci încolo vizitele sunt pentru cursul următor.
-  const visits = await landingVisits(sb)
+  // Seriile de instructori sunt interne: n-au landing, deci nici vizite.
+  const visits = scopeForSession(sess) === 'instructori_setsail' ? null : await landingVisits(sb)
 
   // Intervalele de practică: câte locuri, cine e pe fiecare. Doar când
   // programarea e deschisă sau există deja rezervări.

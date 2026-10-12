@@ -863,6 +863,8 @@ export default function RosterPage() {
                 </a>
               </div>
             )}
+            {/* Seriile de instructori sunt interne: n-au landing și n-au leaduri */}
+            {scopSesiune !== 'instructori_setsail' && (
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <span className="text-xs text-gray-400">Landing page:</span>
               <code className="px-2 py-1 rounded bg-gray-100 border border-gray-200 text-xs text-gray-700 break-all">{landingLink()}</code>
@@ -881,6 +883,7 @@ export default function RosterPage() {
                 Deschide landing page
               </a>
             </div>
+            )}
             {/* Grupa de pe skipper — dacă lipsește, se poate lipi aici direct */}
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <span className="text-xs text-gray-400">Serie skipper.setsail.ro:</span>
@@ -1060,7 +1063,7 @@ export default function RosterPage() {
         <div className="mb-4 flex gap-1 border-b border-gray-200">
           {([['cursanti', 'Lista cursanți'], ['adrese', 'Lista verificare adrese'], ['verify', 'Verify by ID'], ['observatii', 'Observații verificare'],
             // leadurile vin de pe landingul de radio, deci apar doar la seriile de radio
-            ...(esteRadio ? [['leaduri', 'Leaduri radio'] as const] : []),
+            ...(esteRadio && scopSesiune !== 'instructori_setsail' ? [['leaduri', 'Leaduri radio'] as const] : []),
             ['administrativ', 'Administrativ'], ['documente', 'Documente'],
             ...grupeVizibile.map(g => [('grupa' + g) as Tab, 'Grupa ' + g] as const)] as const).map(([k, lbl]) => (
             <button key={k} onClick={() => setTab(k as Tab)}
@@ -1425,7 +1428,7 @@ export default function RosterPage() {
 
         {/* Leadurile de pe landing, sub lista de cursanți — cei înscriși deja
             (după email) nu mai apar aici */}
-        {esteLista(tab) && esteRadio && (
+        {esteLista(tab) && esteRadio && scopSesiune !== 'instructori_setsail' && (
           <div className="mt-8">
             <h2 className="text-sm font-semibold text-gray-700 mb-1">Leaduri de pe landing</h2>
             <p className="text-xs text-gray-400 mb-3">
