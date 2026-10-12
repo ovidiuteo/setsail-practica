@@ -285,7 +285,7 @@ export default function DiplomaIssueModal({ student, category = null, onClose, o
                   <div className="ml-auto flex items-center gap-2">
                     <Link href={`/admin/diplome/${current.id}`}
                       className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs border border-gray-200 bg-white hover:bg-gray-50"><Pencil size={12} /> Editează</Link>
-                    <Link href={`/admin/diplome/print?ids=${current.id}${printerId ? `&printer=${printerId}` : ''}`} target="_blank"
+                    <Link href={`/admin/diplome/print?ids=${current.id}&series=${current.series}${printerId ? `&printer=${printerId}` : ''}`} target="_blank"
                       className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs border border-gray-200 bg-white hover:bg-gray-50"><Printer size={12} /> Tipărește</Link>
                     <button onClick={() => setAsDuplicate(true)}
                       className="px-2.5 py-1.5 rounded-lg text-xs border border-amber-200 text-amber-700 bg-white hover:bg-amber-50">Emite duplicat</button>

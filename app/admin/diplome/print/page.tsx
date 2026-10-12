@@ -28,20 +28,28 @@ function PrintInner() {
   const [confirming, setConfirming] = useState(false)
   const [confirmed, setConfirmed] = useState(false)
 
+  const [seria, setSeria] = useState(series)
+
   const load = useCallback(async () => {
     setLoading(true)
-    let q = supabase.from('diplomas').select('*').eq('status', 1).eq('series', series).order('full_name')
+    // Cu id-uri date (o diplomă anume) nu filtrăm pe serie — o aflăm din diplomă.
+    let q = supabase.from('diplomas').select('*').eq('status', 1).order('full_name')
+    if (series) q = q.eq('series', series)
     q = idsParam ? q.in('id', idsParam.split(',')) : q.eq('in_print_queue', true)
-    const [{ data: dips }, { data: tpl }, { data: pr }] = await Promise.all([
-      q,
-      printerId
-        ? supabase.from('diploma_templates').select('*').eq('printer_id', printerId).eq('category', series).maybeSingle()
+    const { data: dips } = await q
+    const lista = (dips || []) as Diploma[]
+    const ser = (series || lista[0]?.series || '').toUpperCase()
+    setDiplomas(lista)
+    setSeria(ser)
+
+    const [{ data: tpl }, { data: pr }] = await Promise.all([
+      printerId && ser
+        ? supabase.from('diploma_templates').select('*').eq('printer_id', printerId).eq('category', ser).maybeSingle()
         : Promise.resolve({ data: null } as any),
       printerId
         ? supabase.from('diploma_printers').select('name').eq('id', printerId).maybeSingle()
         : Promise.resolve({ data: null } as any),
     ])
-    setDiplomas((dips || []) as Diploma[])
     const t = tpl as DiplomaTemplate | null
     if (t) {
       setFields({ ...DEFAULT_TEMPLATE_FIELDS, ...(t.fields || {}) })
@@ -100,7 +108,7 @@ function PrintInner() {
             <ArrowLeft size={16} />
           </button>
           <div className="text-sm">
-            <span className="font-semibold text-gray-900">Seria {series}</span>
+            <span className="font-semibold text-gray-900">Seria {seria}</span>
             <span className="text-gray-500"> · {diplomas.length} diplome · imprimantă: {printerName || 'neselectată'}</span>
           </div>
         </div>
@@ -127,7 +135,7 @@ function PrintInner() {
 
       {diplomas.length === 0 ? (
         <div className="p-12 text-center text-gray-400 text-sm">
-          Nimic de tipărit pentru seria {series}.
+          Nimic de tipărit pentru seria {seria}.
         </div>
       ) : (
         diplomas.map(d => (
@@ -136,7 +144,7 @@ function PrintInner() {
             data={d}
             fields={fields}
             color={color}
-            category={series}
+            category={seria}
           />
         ))
       )}
