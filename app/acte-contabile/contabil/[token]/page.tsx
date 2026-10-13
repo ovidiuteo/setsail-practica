@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Loader2, ShieldAlert, FileText, Download, Eye, X, FolderArchive, FileSpreadsheet } from 'lucide-react'
 
 type Doc = {
@@ -77,16 +77,34 @@ export default function ContabilPage({ params }: { params: { token: string } }) 
   const [plati, setPlati] = useState<Plata[]>([])
   const [preview, setPreview] = useState<Doc | null>(null)
   const [zipping, setZipping] = useState(false)
+  // superlink: toate lunile entității, cu badge-uri
+  const [toate, setToate] = useState(false)
+  const [luni, setLuni] = useState<{ luna: string; docs: number; plati: number }[]>([])
+  const [switching, setSwitching] = useState(false)
 
-  useEffect(() => {
-    ;(async () => {
-      const j = await fetch(`/api/acte-contabile/contabil/data?token=${encodeURIComponent(token)}`)
-        .then(r => r.json()).catch(() => ({ ok: false }))
-      if (!j.ok) { setPhase('denied'); return }
-      setMeta(j.meta || null); setLuna(j.luna || ''); setDocs(j.docs || []); setPlati(j.cheltuieli || [])
-      setPhase('ready')
-    })()
+  const incarca = useCallback(async (l?: string) => {
+    const q = `/api/acte-contabile/contabil/data?token=${encodeURIComponent(token)}${l ? `&luna=${l}` : ''}`
+    const j = await fetch(q).then(r => r.json()).catch(() => ({ ok: false }))
+    if (!j.ok) { setPhase('denied'); return }
+    setMeta(j.meta || null); setLuna(j.luna || ''); setDocs(j.docs || []); setPlati(j.cheltuieli || [])
+    setToate(!!j.toate)
+    if (j.toate) {
+      // luna curentă apare mereu, chiar dacă încă nu are nimic încărcat
+      const lista: { luna: string; docs: number; plati: number }[] = j.luni || []
+      const curenta = j.luna_curenta as string
+      setLuni(lista.some(x => x.luna === curenta) ? lista : [...lista, { luna: curenta, docs: 0, plati: 0 }])
+    }
+    setPhase('ready')
   }, [token])
+
+  useEffect(() => { incarca() }, [incarca])
+
+  async function schimbaLuna(l: string) {
+    if (l === luna) return
+    setSwitching(true)
+    await incarca(l)
+    setSwitching(false)
+  }
 
   useEffect(() => {
     if (meta?.label && luna) document.title = titluTab(meta.label, luna)
@@ -95,7 +113,7 @@ export default function ContabilPage({ params }: { params: { token: string } }) 
   async function downloadAll() {
     setZipping(true)
     try {
-      const res = await fetch(`/api/acte-contabile/contabil/zip?token=${encodeURIComponent(token)}`)
+      const res = await fetch(`/api/acte-contabile/contabil/zip?token=${encodeURIComponent(token)}&luna=${luna}`)
       if (!res.ok) { alert('Nu există fișiere de descărcat.'); return }
       const blob = await res.blob()
       const url = URL.createObjectURL(blob)
@@ -143,11 +161,35 @@ export default function ContabilPage({ params }: { params: { token: string } }) 
             </button>
           )}
         </div>
+
+        {/* Superlink: toate lunile, click pe badge schimbă luna afișată */}
+        {toate && luni.length > 0 && (
+          <div className="border-t border-white/10">
+            <div className="max-w-4xl mx-auto px-5 py-2.5 flex items-center gap-2 flex-wrap">
+              {luni.map(l => {
+                const activ = l.luna === luna
+                return (
+                  <button key={l.luna} onClick={() => schimbaLuna(l.luna)} disabled={switching}
+                    title={`${l.docs} ${l.docs === 1 ? 'document' : 'documente'}${l.plati ? ` · ${l.plati} plăți` : ''}`}
+                    className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition disabled:opacity-60 ${
+                      activ ? 'text-[#0a1628]' : 'bg-white/10 text-white/80 hover:bg-white/20'}`}
+                    style={activ ? { background: '#f5c842' } : undefined}>
+                    {LUNA_LABEL(l.luna)}
+                    <span className={`ml-1.5 font-normal ${activ ? 'text-[#0a1628]/60' : 'text-white/40'}`}>{l.docs}</span>
+                  </button>
+                )
+              })}
+              {switching && <Loader2 size={14} className="animate-spin text-white/50" />}
+            </div>
+          </div>
+        )}
       </header>
 
       <main className="max-w-4xl mx-auto px-5 py-6">
         {docs.length === 0 ? (
-          <div className="text-center text-slate-400 py-20 bg-white rounded-xl border border-slate-200">Niciun document încărcat pentru această lună.</div>
+          <div className="text-center text-slate-400 py-20 bg-white rounded-xl border border-slate-200">
+            Niciun document încărcat pentru {LUNA_LABEL(luna).toLowerCase()}.
+          </div>
         ) : (
           <div className="space-y-6">
             {groups.map(g => (

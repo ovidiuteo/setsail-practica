@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { canAccess, isEntity, isLuna, getOrCreateContabilToken, regenerateContabilToken } from '@/lib/acte-contabile/server'
+import { canAccess, isEntity, isLuna, getOrCreateContabilToken, regenerateContabilToken, LUNA_TOATE } from '@/lib/acte-contabile/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -9,7 +9,10 @@ export async function POST(req: NextRequest) {
   if (!body) return NextResponse.json({ ok: false, error: 'Cerere invalidă.' }, { status: 400 })
   const { entity, token, luna, regenerate } = body
   if (!isEntity(entity)) return NextResponse.json({ ok: false, error: 'invalid entity' }, { status: 400 })
-  if (!isLuna(luna)) return NextResponse.json({ ok: false, error: 'invalid luna' }, { status: 400 })
+  // „toate" = superlink-ul cu toate lunile entității
+  if (!isLuna(luna) && luna !== LUNA_TOATE) {
+    return NextResponse.json({ ok: false, error: 'invalid luna' }, { status: 400 })
+  }
   if (!(await canAccess(entity, token))) {
     return NextResponse.json({ ok: false, error: 'Acces refuzat.' }, { status: 401 })
   }

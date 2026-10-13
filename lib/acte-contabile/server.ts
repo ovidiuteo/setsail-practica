@@ -118,6 +118,30 @@ export async function listDocsForMonth(entity: Entity, luna: string): Promise<Ac
 }
 
 // --- token contabil (read-only, per lună) -------------------------------
+// „Superlink": un singur token care deschide toate lunile entității. Se ține în
+// aceeași tabelă, pe luna specială de mai jos.
+export const LUNA_TOATE = 'toate'
+
+// Lunile cu ceva de arătat (documente sau plăți), pentru badge-urile contabilului
+export async function listLuniCuDate(entity: Entity): Promise<{ luna: string; docs: number; plati: number }[]> {
+  const sb = acteServiceClient()
+  const [{ data: docs }, { data: chelt }] = await Promise.all([
+    sb.from('acte_contabile_documente').select('luna').eq('entity', entity),
+    sb.from('acte_contabile_cheltuieli').select('luna').eq('entity', entity),
+  ])
+  const nrDocs = new Map<string, number>()
+  for (const d of (docs ?? []) as { luna: string | null }[]) {
+    if (d.luna) nrDocs.set(d.luna, (nrDocs.get(d.luna) ?? 0) + 1)
+  }
+  const nrPlati = new Map<string, number>()
+  for (const c of (chelt ?? []) as { luna: string | null }[]) {
+    if (c.luna) nrPlati.set(c.luna, (nrPlati.get(c.luna) ?? 0) + 1)
+  }
+  return LUNI
+    .map(l => ({ luna: l as string, docs: nrDocs.get(l) ?? 0, plati: nrPlati.get(l) ?? 0 }))
+    .filter(x => x.docs > 0 || x.plati > 0)
+}
+
 export async function getOrCreateContabilToken(entity: Entity, luna: string): Promise<string> {
   const sb = acteServiceClient()
   const { data } = await sb.from('acte_contabile_contabil_tokens')

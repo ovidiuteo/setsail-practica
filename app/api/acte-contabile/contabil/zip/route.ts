@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { resolveContabilToken } from '@/lib/acte-contabile/server'
+import { resolveContabilToken, isLuna, LUNA_TOATE, LUNI } from '@/lib/acte-contabile/server'
 import { buildMonthZip } from '@/lib/acte-contabile/zip'
 
 export const runtime = 'nodejs'
@@ -10,7 +10,12 @@ export async function GET(req: NextRequest) {
   const token = req.nextUrl.searchParams.get('token')
   const resolved = await resolveContabilToken(token)
   if (!resolved) return NextResponse.json({ ok: false, error: 'Token invalid.' }, { status: 401 })
-  const { entity, luna } = resolved
+  const { entity } = resolved
+  // superlink: luna se alege din pagină; token pe o lună anume: doar luna lui
+  const ceruta = req.nextUrl.searchParams.get('luna')
+  const luna = resolved.luna === LUNA_TOATE
+    ? (isLuna(ceruta) ? ceruta : LUNI[new Date().getMonth()])
+    : resolved.luna
 
   const content = await buildMonthZip(entity, luna)
   if (!content) return NextResponse.json({ ok: false, error: 'Nicio înregistrare pentru această lună.' }, { status: 404 })

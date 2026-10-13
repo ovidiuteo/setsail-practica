@@ -234,6 +234,7 @@ export default function ActeContabilePage({ params }: { params: { entity: string
                 {view === 'contracte' ? <><X size={14} /> Închide contracte</> : <><FileSignature size={14} /> Contracte</>}
               </button>
             )}
+            <SuperlinkContabil entity={entity} token={token} />
             <button onClick={load} className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-white/10 hover:bg-white/20 transition">
               <RefreshCw size={14} /> Reîncarcă
             </button>
@@ -789,6 +790,79 @@ function ObservatieCell({ value, onSave }: { value: string; onSave: (v: string) 
       }}
       placeholder="ex. factura urmează, plată avans…"
       className="w-full resize-y rounded px-1.5 py-1 text-xs text-slate-700 border border-sky-300 focus:outline-none focus:ring-2 focus:ring-sky-100" />
+  )
+}
+
+// Superlink-ul contabilului: un singur link, toate lunile entității, cu badge-uri
+function SuperlinkContabil({ entity, token }: { entity: string; token: string | null }) {
+  const [open, setOpen] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [regenerating, setRegenerating] = useState(false)
+  const [url, setUrl] = useState('')
+  const [copied, setCopied] = useState(false)
+
+  async function fetchToken(regenerate: boolean): Promise<string | null> {
+    const j = await fetch('/api/acte-contabile/contabil-token', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ entity, token, luna: 'toate', regenerate }),
+    }).then(r => r.json()).catch(() => null)
+    if (j?.ok && j.token) {
+      const origin = typeof window !== 'undefined' ? window.location.origin : ''
+      return `${origin}/acte-contabile/contabil/${j.token}`
+    }
+    alert(j?.error || 'Nu am putut genera link-ul.')
+    return null
+  }
+
+  async function deschide() {
+    if (url) { setOpen(o => !o); return }
+    setBusy(true)
+    const u = await fetchToken(false)
+    if (u) { setUrl(u); setOpen(true) }
+    setBusy(false)
+  }
+
+  async function regenereaza() {
+    if (!confirm('Regenerezi superlink-ul? Cel vechi, trimis contabilului, nu va mai funcționa.')) return
+    setRegenerating(true)
+    const u = await fetchToken(true)
+    if (u) { setUrl(u); setCopied(false) }
+    setRegenerating(false)
+  }
+
+  return (
+    <div className="relative">
+      <button onClick={deschide} disabled={busy}
+        className="flex items-center gap-1.5 px-3 py-2 text-sm rounded-lg bg-white/10 hover:bg-white/20 transition disabled:opacity-60"
+        title="Un singur link pentru contabil, cu toate lunile">
+        {busy ? <Loader2 size={14} className="animate-spin" /> : <Link2 size={14} />} Superlink contabil
+      </button>
+      {open && url && (
+        <div className="absolute right-0 top-full mt-2 z-40 w-[min(92vw,460px)] bg-white border border-slate-200 rounded-xl shadow-lg p-3 text-slate-700">
+          <div className="text-xs font-medium text-slate-500 mb-1.5">
+            Link read-only cu <b>toate lunile</b>, inclusiv cea curentă — contabilul schimbă luna din badge-uri.
+          </div>
+          <input readOnly value={url} onFocus={e => e.currentTarget.select()}
+            className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-xs text-slate-600 bg-slate-50 mb-2" />
+          <div className="flex items-center gap-2">
+            <button onClick={() => { navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 1500) }}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-slate-200 text-slate-600 hover:bg-slate-50">
+              {copied ? <Check size={14} className="text-green-600" /> : <Copy size={14} />} {copied ? 'Copiat' : 'Copiază'}
+            </button>
+            <a href={url} target="_blank" rel="noreferrer"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-[#0a1628]" style={{ background: '#f5c842' }}>
+              <ExternalLink size={14} /> Deschide
+            </a>
+            <button onClick={regenereaza} disabled={regenerating}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border border-amber-200 text-amber-700 hover:bg-amber-50 disabled:opacity-60"
+              title="Generează un superlink nou și invalidează-l pe cel vechi">
+              {regenerating ? <Loader2 size={14} className="animate-spin" /> : <RefreshCw size={14} />} Regenerează
+            </button>
+            <button onClick={() => setOpen(false)} className="ml-auto p-1.5 rounded-lg text-slate-400 hover:bg-slate-50"><X size={14} /></button>
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 
