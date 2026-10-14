@@ -17,7 +17,7 @@ export default async function AdminReviewsPage() {
       id, email, regattas_count, training_count, review_text, answers, created_at, updated_at,
       participant:ssyt_participants(id, full_name)
     `).order('updated_at', { ascending: false }),
-    admin.from('ssyt_review_questions').select('id, label, position, active').order('position').order('created_at'),
+    admin.from('ssyt_review_questions').select('id, label, position, active, follow_up').order('position').order('created_at'),
     admin.from('ssyt_seasons').select('id, review_questions_token, review_button_visible').in('status', ['planning', 'active']).order('year', { ascending: false }).limit(1).maybeSingle(),
   ])
 
@@ -70,8 +70,12 @@ export default async function AdminReviewsPage() {
                 <span className="text-xs text-gray-400">{new Date(r.updated_at).toLocaleDateString('ro-RO', { day: 'numeric', month: 'short', year: 'numeric' })}</span>
               </div>
               <div className="p-5 space-y-3 text-sm">
-                <Field label="Regate / Antrenamente" value={[r.regattas_count && `${r.regattas_count} regate`, r.training_count && `antrenamente: ${r.training_count}`].filter(Boolean).join(' · ') || null} />
-                {qs.map((q: any) => <Field key={q.id} label={q.label} value={r.answers?.[q.id] || null} />)}
+                {qs.map((q: any) => (
+                  <div key={q.id}>
+                    <Field label={q.label} value={r.answers?.[q.id] || null} />
+                    {q.follow_up && r.answers?.[`${q.id}__why`] && <Field label={`↳ ${q.follow_up}`} value={r.answers[`${q.id}__why`]} />}
+                  </div>
+                ))}
                 {r.review_text && (
                   <div className="rounded-lg p-3 mt-1" style={{ background: 'rgba(255,107,53,0.06)', border: '1px solid rgba(255,107,53,0.2)' }}>
                     <div className="text-[10px] uppercase tracking-wider font-medium mb-1" style={{ color: '#FF6B35' }}>Review</div>

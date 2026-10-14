@@ -54,7 +54,7 @@ export default async function ReviewPersonPage({ params }: { params: { email: st
 
   const { data: questions } = await supabase
     .from('ssyt_review_questions')
-    .select('id, label, qtype, max_value')
+    .select('id, section, label, qtype, max_value, options, follow_up')
     .eq('active', true)
     .order('position')
     .order('created_at')

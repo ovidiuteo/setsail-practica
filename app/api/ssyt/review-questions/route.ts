@@ -73,11 +73,25 @@ export async function POST(req: NextRequest) {
   // Adăugare simplă
   const label = (body.label || '').toString().trim()
   if (!label) return NextResponse.json({ error: 'Lipsește textul întrebării.' }, { status: 400 })
-  const qtype = body.qtype === 'number' ? 'number' : 'text'
-  const max_value = Math.min(Math.max(parseInt(body.max_value, 10) || 5, 2), 10)
-  const { error } = await supabase.from('ssyt_review_questions').insert({ label, qtype, max_value, position: position + 1 })
+  const row: any = { label, qtype: normType(body.qtype), max_value: clampMax(body.max_value), position: position + 1 }
+  row.section = (body.section || '').toString().trim() || null
+  row.follow_up = (body.follow_up || '').toString().trim() || null
+  row.options = normOptions(body.qtype, body.options)
+  const { error } = await supabase.from('ssyt_review_questions').insert(row)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ success: true })
+}
+
+function normType(t: any): string {
+  return ['text', 'number', 'stars', 'choice'].includes(t) ? t : 'text'
+}
+function clampMax(v: any): number {
+  return Math.min(Math.max(parseInt(v, 10) || 5, 2), 10)
+}
+function normOptions(qtype: any, options: any): any {
+  if (qtype === 'choice') return Array.isArray(options) ? options.map((o) => o.toString()).filter(Boolean) : null
+  if (qtype === 'stars') return options && typeof options === 'object' ? { low: (options.low || '').toString(), high: (options.high || '').toString() } : null
+  return null
 }
 
 // PUT { token, id, label?, qtype?, max_value?, active?, position? } — modifică
@@ -88,10 +102,13 @@ export async function PUT(req: NextRequest) {
   if (!body.id) return NextResponse.json({ error: 'id lipsă.' }, { status: 400 })
   const upd: any = {}
   if (body.label !== undefined) upd.label = (body.label || '').toString().trim()
-  if (body.qtype !== undefined) upd.qtype = body.qtype === 'number' ? 'number' : 'text'
-  if (body.max_value !== undefined) upd.max_value = Math.min(Math.max(parseInt(body.max_value, 10) || 5, 2), 10)
+  if (body.qtype !== undefined) upd.qtype = normType(body.qtype)
+  if (body.max_value !== undefined) upd.max_value = clampMax(body.max_value)
   if (body.active !== undefined) upd.active = !!body.active
   if (body.position !== undefined) upd.position = parseInt(body.position, 10) || 0
+  if (body.section !== undefined) upd.section = (body.section || '').toString().trim() || null
+  if (body.follow_up !== undefined) upd.follow_up = (body.follow_up || '').toString().trim() || null
+  if (body.options !== undefined) upd.options = normOptions(body.qtype ?? 'text', body.options)
   const { error } = await supabase.from('ssyt_review_questions').update(upd).eq('id', body.id)
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
   return NextResponse.json({ success: true })

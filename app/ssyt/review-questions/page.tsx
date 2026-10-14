@@ -3,7 +3,10 @@ import { useEffect, useState, useCallback, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { Plus, Trash2, Save, X, Edit2, Loader2, ArrowUp, ArrowDown, Check, FileDown } from 'lucide-react'
 
-type Q = { id: string; position: number; label: string; qtype: 'text' | 'number'; max_value: number; active: boolean }
+type QType = 'text' | 'number' | 'stars' | 'choice'
+type Q = { id: string; position: number; label: string; qtype: QType; max_value: number; active: boolean; section: string | null; options: any | null; follow_up: string | null }
+
+const TYPE_LABELS: Record<QType, string> = { text: 'Text', number: 'Cifre', stars: 'Stele', choice: 'Alegere' }
 
 export const dynamic = 'force-dynamic'
 
@@ -145,30 +148,16 @@ function ImportBox({ busy, onImport }: { busy: boolean; onImport: (labels: strin
 
 function QuestionRow({ q, index, total, busy, onSave }: { q: Q; index: number; total: number; busy: boolean; onSave: (m: string, b: any) => Promise<boolean> }) {
   const [editing, setEditing] = useState(false)
-  const [label, setLabel] = useState(q.label)
-  const [qtype, setQtype] = useState<'text' | 'number'>(q.qtype)
-  const [maxValue, setMaxValue] = useState(q.max_value)
 
   if (editing) {
-    return (
-      <div className="rounded-lg p-4" style={{ background: '#fff', border: '2px solid #FF6B35' }}>
-        <textarea value={label} onChange={(e) => setLabel(e.target.value)} rows={2} className="w-full px-3 py-2 border rounded-md text-sm mb-2" style={{ borderColor: '#d1d5db' }} />
-        <div className="flex items-center gap-3 mb-3">
-          <TypePicker qtype={qtype} setQtype={setQtype} />
-          {qtype === 'number' && (
-            <label className="text-sm text-gray-600 inline-flex items-center gap-1">
-              până la
-              <input type="number" min={2} max={10} value={maxValue} onChange={(e) => setMaxValue(parseInt(e.target.value, 10) || 5)} className="w-16 px-2 py-1 border rounded-md text-sm" style={{ borderColor: '#d1d5db' }} />
-            </label>
-          )}
-        </div>
-        <div className="flex items-center gap-2 justify-end">
-          <button onClick={() => { setEditing(false); setLabel(q.label); setQtype(q.qtype); setMaxValue(q.max_value) }} className="px-3 py-1.5 text-sm text-gray-600"><X size={14} className="inline mr-1" />Anulează</button>
-          <button onClick={async () => { if (await onSave('PUT', { id: q.id, label, qtype, max_value: maxValue })) setEditing(false) }} disabled={busy || !label.trim()} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium text-white disabled:opacity-50" style={{ background: '#FF6B35' }}><Save size={14} />Salvează</button>
-        </div>
-      </div>
-    )
+    return <QuestionEditor initial={q} busy={busy} submitLabel="Salvează" onCancel={() => setEditing(false)}
+      onSubmit={async (fields) => { if (await onSave('PUT', { id: q.id, ...fields })) setEditing(false) }} />
   }
+
+  const typeDesc = q.qtype === 'number' ? `cifre (1–${q.max_value})`
+    : q.qtype === 'stars' ? 'stele (1–5)'
+    : q.qtype === 'choice' ? `alegere (${Array.isArray(q.options) ? q.options.length : 0} opț.)`
+    : 'text'
 
   return (
     <div className="rounded-lg p-4 flex items-start gap-3" style={{ background: '#fff', border: '1px solid #e5e7eb' }}>
@@ -177,10 +166,9 @@ function QuestionRow({ q, index, total, busy, onSave }: { q: Q; index: number; t
         <button disabled={index === total - 1 || busy} onClick={() => onSave('PUT', { id: q.id, position: q.position + 1 })} className="text-gray-300 hover:text-gray-600 disabled:opacity-30"><ArrowDown size={13} /></button>
       </div>
       <div className="flex-1 min-w-0">
+        {q.section && <div className="text-[10px] uppercase tracking-wider text-gray-400">{q.section}</div>}
         <div className="text-sm font-medium" style={{ color: '#0a1628' }}>{q.label}</div>
-        <div className="text-[11px] text-gray-400 mt-0.5">
-          {q.qtype === 'number' ? `cifre (buline 1–${q.max_value})` : 'text'}{!q.active && ' · inactivă'}
-        </div>
+        <div className="text-[11px] text-gray-400 mt-0.5">{typeDesc}{q.follow_up ? ` · + „${q.follow_up}"` : ''}{!q.active && ' · inactivă'}</div>
       </div>
       <div className="flex items-center gap-1 flex-shrink-0">
         <button onClick={() => setEditing(true)} className="text-gray-400 hover:text-gray-700 p-1"><Edit2 size={14} /></button>
@@ -192,10 +180,6 @@ function QuestionRow({ q, index, total, busy, onSave }: { q: Q; index: number; t
 
 function NewQuestion({ busy, onSave }: { busy: boolean; onSave: (m: string, b: any) => Promise<boolean> }) {
   const [open, setOpen] = useState(false)
-  const [label, setLabel] = useState('')
-  const [qtype, setQtype] = useState<'text' | 'number'>('text')
-  const [maxValue, setMaxValue] = useState(5)
-
   if (!open) {
     return (
       <button onClick={() => setOpen(true)} className="inline-flex items-center gap-2 px-4 py-2 rounded-md font-medium text-sm text-white" style={{ background: '#FF6B35' }}>
@@ -203,35 +187,73 @@ function NewQuestion({ busy, onSave }: { busy: boolean; onSave: (m: string, b: a
       </button>
     )
   }
+  return <QuestionEditor busy={busy} submitLabel="Adaugă" onCancel={() => setOpen(false)}
+    onSubmit={async (fields) => { if (await onSave('POST', fields)) setOpen(false) }} />
+}
+
+function QuestionEditor({ initial, busy, submitLabel, onSubmit, onCancel }: {
+  initial?: Q; busy: boolean; submitLabel: string
+  onSubmit: (fields: any) => Promise<void>; onCancel: () => void
+}) {
+  const [label, setLabel] = useState(initial?.label || '')
+  const [qtype, setQtype] = useState<QType>(initial?.qtype || 'text')
+  const [maxValue, setMaxValue] = useState(initial?.max_value || 5)
+  const [section, setSection] = useState(initial?.section || '')
+  const [followUp, setFollowUp] = useState(initial?.follow_up || '')
+  const [optsText, setOptsText] = useState(Array.isArray(initial?.options) ? initial!.options.join('\n') : '')
+  const [low, setLow] = useState(initial?.options?.low || '')
+  const [high, setHigh] = useState(initial?.options?.high || '')
+
+  function build() {
+    const fields: any = { label, qtype, max_value: maxValue, section, follow_up: qtype === 'choice' ? followUp : '' }
+    if (qtype === 'choice') fields.options = optsText.split('\n').map((s) => s.trim()).filter(Boolean)
+    else if (qtype === 'stars') fields.options = { low, high }
+    else fields.options = null
+    return fields
+  }
+
   return (
-    <div className="rounded-lg p-4" style={{ background: '#fff', border: '2px solid #FF6B35' }}>
+    <div className="w-full rounded-lg p-4" style={{ background: '#fff', border: '2px solid #FF6B35' }}>
+      <input value={section} onChange={(e) => setSection(e.target.value)} placeholder="Secțiune (opțional, ex: 🧭 Skipper)" className="w-full px-3 py-1.5 border rounded-md text-xs mb-2" style={{ borderColor: '#e5e7eb' }} />
       <textarea value={label} onChange={(e) => setLabel(e.target.value)} rows={2} placeholder="Textul întrebării…" className="w-full px-3 py-2 border rounded-md text-sm mb-2" style={{ borderColor: '#d1d5db' }} autoFocus />
-      <div className="flex items-center gap-3 mb-3">
+      <div className="flex items-center gap-3 mb-2 flex-wrap">
         <TypePicker qtype={qtype} setQtype={setQtype} />
         {qtype === 'number' && (
-          <label className="text-sm text-gray-600 inline-flex items-center gap-1">
-            până la
+          <label className="text-sm text-gray-600 inline-flex items-center gap-1">până la
             <input type="number" min={2} max={10} value={maxValue} onChange={(e) => setMaxValue(parseInt(e.target.value, 10) || 5)} className="w-16 px-2 py-1 border rounded-md text-sm" style={{ borderColor: '#d1d5db' }} />
           </label>
         )}
       </div>
+      {qtype === 'stars' && (
+        <div className="grid grid-cols-2 gap-2 mb-2">
+          <input value={low} onChange={(e) => setLow(e.target.value)} placeholder="Etichetă 1 (ex: deloc)" className="px-3 py-1.5 border rounded-md text-sm" style={{ borderColor: '#d1d5db' }} />
+          <input value={high} onChange={(e) => setHigh(e.target.value)} placeholder="Etichetă 5 (ex: foarte mult)" className="px-3 py-1.5 border rounded-md text-sm" style={{ borderColor: '#d1d5db' }} />
+        </div>
+      )}
+      {qtype === 'choice' && (
+        <>
+          <textarea value={optsText} onChange={(e) => setOptsText(e.target.value)} rows={3} placeholder={'Opțiuni, câte una pe linie\nAbracadabra\nDream\nFly\nLife'} className="w-full px-3 py-2 border rounded-md text-sm mb-2" style={{ borderColor: '#d1d5db' }} />
+          <input value={followUp} onChange={(e) => setFollowUp(e.target.value)} placeholder="Întrebare suplimentară opțională (ex: De ce?)" className="w-full px-3 py-1.5 border rounded-md text-sm mb-2" style={{ borderColor: '#e5e7eb' }} />
+        </>
+      )}
       <div className="flex items-center gap-2 justify-end">
-        <button onClick={() => { setOpen(false); setLabel('') }} className="px-3 py-1.5 text-sm text-gray-600"><X size={14} className="inline mr-1" />Anulează</button>
-        <button onClick={async () => { if (await onSave('POST', { label, qtype, max_value: maxValue })) { setOpen(false); setLabel(''); setQtype('text'); setMaxValue(5) } }} disabled={busy || !label.trim()} className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium text-white disabled:opacity-50" style={{ background: '#FF6B35' }}>
-          {busy ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} Adaugă
+        <button onClick={onCancel} className="px-3 py-1.5 text-sm text-gray-600"><X size={14} className="inline mr-1" />Anulează</button>
+        <button onClick={() => onSubmit(build())} disabled={busy || !label.trim() || (qtype === 'choice' && optsText.trim() === '')}
+          className="inline-flex items-center gap-1 px-3 py-1.5 rounded-md text-sm font-medium text-white disabled:opacity-50" style={{ background: '#FF6B35' }}>
+          {busy ? <Loader2 size={14} className="animate-spin" /> : <Save size={14} />} {submitLabel}
         </button>
       </div>
     </div>
   )
 }
 
-function TypePicker({ qtype, setQtype }: { qtype: 'text' | 'number'; setQtype: (t: 'text' | 'number') => void }) {
+function TypePicker({ qtype, setQtype }: { qtype: QType; setQtype: (t: QType) => void }) {
   return (
     <div className="inline-flex rounded-md overflow-hidden" style={{ border: '1px solid #d1d5db' }}>
-      {(['text', 'number'] as const).map((t) => (
+      {(['text', 'number', 'stars', 'choice'] as QType[]).map((t) => (
         <button key={t} onClick={() => setQtype(t)} className="px-3 py-1.5 text-sm font-medium"
           style={{ background: qtype === t ? '#FF6B35' : '#fff', color: qtype === t ? '#fff' : '#6B7280' }}>
-          {t === 'text' ? 'Text' : 'Cifre'}
+          {TYPE_LABELS[t]}
         </button>
       ))}
     </div>
