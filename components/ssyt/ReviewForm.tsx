@@ -10,6 +10,8 @@ export type ReviewQuestion = {
   max_value: number
   options: any | null // choice: string[]; stars: {low,high}
   follow_up: string | null
+  follow_up_type?: 'text' | 'number' | null
+  follow_up_when?: string | null // arată follow-up doar dacă răspunsul = această opțiune (null = mereu)
 }
 
 type Initial = {
@@ -87,10 +89,14 @@ export default function ReviewForm({ email, questions, initial }: { email: strin
               {q.qtype === 'choice' && (
                 <>
                   <Choices value={answers[q.id] || ''} options={Array.isArray(q.options) ? q.options : []} onChange={(v) => set(q.id, v)} />
-                  {q.follow_up && (
+                  {q.follow_up && (!q.follow_up_when || answers[q.id] === q.follow_up_when) && (
                     <div className="mt-3">
                       <span className="block text-xs text-gray-500 mb-1">{q.follow_up}</span>
-                      <textarea value={answers[`${q.id}__why`] || ''} onChange={(e) => set(`${q.id}__why`, e.target.value)} rows={2} className={taCls} style={{ borderColor: '#d1d5db' }} />
+                      {q.follow_up_type === 'number' ? (
+                        <Circles value={answers[`${q.id}__why`] || ''} max={q.max_value || 5} onChange={(v) => set(`${q.id}__why`, v)} allowEmpty />
+                      ) : (
+                        <textarea value={answers[`${q.id}__why`] || ''} onChange={(e) => set(`${q.id}__why`, e.target.value)} rows={2} className={taCls} style={{ borderColor: '#d1d5db' }} />
+                      )}
                     </div>
                   )}
                 </>
