@@ -38,7 +38,11 @@ export async function getPortalSession(): Promise<PortalSession | null> {
 }
 
 export function getPortalSupabase() {
-  return createClient(URL, SERVICE, { auth: { persistSession: false, autoRefreshToken: false } })
+  // Forțăm no-store: Next cache-uiește altfel fetch-ul supabase-js și portalul arată date vechi.
+  return createClient(URL, SERVICE, {
+    auth: { persistSession: false, autoRefreshToken: false },
+    global: { fetch: (input: any, init?: any) => fetch(input, { ...(init || {}), cache: 'no-store' }) },
+  })
 }
 
 // Verifica daca participantul curent poate edita pt echipa sa
