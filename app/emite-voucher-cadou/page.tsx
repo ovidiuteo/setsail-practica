@@ -23,8 +23,7 @@ const POS: any = {
     orar: { x: 0.762, y: 0.57, size: 0.05 },
   },
   valoric: {
-    // cerc alb detectat în template: centru (0.255, 0.526)
-    suma: { x: 0.255, y: 0.526, size: 0.12 },
+    suma: { x: 0.238, y: 0.72, cy: 0.70, rw: 0.11, rh: 0.06, size: 0.11 },
     name: { x: 0.72, y: 0.60, size: 0.075 },
     obs: { x: 0.72, y: 0.14, size: 0.032 },
   },
@@ -70,11 +69,12 @@ function EmiteVoucherInner() {
     const P = POS[tip]
     const full = `${form.nume} ${form.prenume}`.trim()
     if (tip === 'valoric') {
-      // cercul alb e gol în template — scriem doar suma (fără „€"), centrată în cerc
-      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'
+      // acoperă suma tipărită și rescrie
+      ctx.save(); ctx.fillStyle = '#ffffff'; ctx.beginPath()
+      ctx.ellipse(P.suma.x * W, P.suma.cy * H, P.suma.rw * W, P.suma.rh * H, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore()
+      ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic'
       ctx.fillStyle = GOLD; ctx.font = `bold ${P.suma.size * H}px Arial`
-      ctx.fillText(`${(form.suma || '').trim() || '650'}`, P.suma.x * W, P.suma.y * H)
-      ctx.textBaseline = 'alphabetic'
+      ctx.fillText(`${(form.suma || '').trim() || '650'} €`, P.suma.x * W, P.suma.y * H)
       if (full) { ctx.fillStyle = GOLD; ctx.font = `italic ${P.name.size * H}px Georgia, serif`; ctx.fillText(full, P.name.x * W, P.name.y * H) }
       if (form.observatii) { ctx.fillStyle = '#e8e2d0'; ctx.font = `italic ${P.obs.size * H}px Georgia, serif`; ctx.fillText(form.observatii, P.obs.x * W, P.obs.y * H) }
     } else {
