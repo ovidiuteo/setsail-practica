@@ -74,7 +74,7 @@ function EmiteVoucherInner() {
       ctx.ellipse(P.suma.x * W, P.suma.cy * H, P.suma.rw * W, P.suma.rh * H, 0, 0, Math.PI * 2); ctx.fill(); ctx.restore()
       ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic'
       ctx.fillStyle = GOLD; ctx.font = `bold ${P.suma.size * H}px Arial`
-      ctx.fillText(`${(form.suma || '').trim() || '650'} €`, P.suma.x * W, P.suma.y * H)
+      ctx.fillText(`${(form.suma || '').trim() || '650'}`, P.suma.x * W, P.suma.y * H)
       if (full) { ctx.fillStyle = GOLD; ctx.font = `italic ${P.name.size * H}px Georgia, serif`; ctx.fillText(full, P.name.x * W, P.name.y * H) }
       if (form.observatii) { ctx.fillStyle = '#e8e2d0'; ctx.font = `italic ${P.obs.size * H}px Georgia, serif`; ctx.fillText(form.observatii, P.obs.x * W, P.obs.y * H) }
     } else {
