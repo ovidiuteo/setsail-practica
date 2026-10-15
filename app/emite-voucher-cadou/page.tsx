@@ -37,12 +37,20 @@ function EmiteVoucherInner() {
   const [form, setForm] = useState<Form>({ nume: '', prenume: '', observatii: '', sesiune: '', locatie: '', orar: '', suma: '650' })
   const [busy, setBusy] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [vouchers, setVouchers] = useState<any[] | null>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const imgs = useRef<Record<string, HTMLImageElement>>({})
 
-  useEffect(() => {
-    fetch(`/api/voucher-cadou?token=${encodeURIComponent(token)}`).then(r => setState(r.ok ? 'ok' : 'denied')).catch(() => setState('denied'))
+  const loadVouchers = useCallback(async () => {
+    const r = await fetch(`/api/voucher-cadou?token=${encodeURIComponent(token)}&list=1`).catch(() => null)
+    if (r && r.ok) { const j = await r.json(); setVouchers(j.vouchers || []) }
   }, [token])
+
+  useEffect(() => {
+    fetch(`/api/voucher-cadou?token=${encodeURIComponent(token)}`).then(r => {
+      if (r.ok) { setState('ok'); loadVouchers() } else setState('denied')
+    }).catch(() => setState('denied'))
+  }, [token, loadVouchers])
 
   const draw = useCallback(() => {
     const cv = canvasRef.current; if (!cv) return
@@ -90,6 +98,7 @@ function EmiteVoucherInner() {
       body: JSON.stringify({ token, tip, ...form }),
     }).catch(() => {})
     setSaved(true)
+    loadVouchers()
   }
   async function saveJpg() {
     setBusy(true); await record()
@@ -174,6 +183,50 @@ function EmiteVoucherInner() {
             <div className="text-xs text-gray-400 mb-2">Previzualizare</div>
             <canvas ref={canvasRef} className="w-full h-auto rounded-lg border border-gray-100" />
           </div>
+        </div>
+
+        {/* Arhiva vouchere emise */}
+        <div className="mt-8">
+          <div className="flex items-center gap-2 mb-3">
+            <h2 className="text-base font-bold text-gray-900">Arhivă vouchere</h2>
+            {vouchers && <span className="text-xs text-gray-400">({vouchers.length})</span>}
+          </div>
+          {vouchers === null ? (
+            <div className="text-sm text-gray-400">Se încarcă…</div>
+          ) : vouchers.length === 0 ? (
+            <div className="text-sm text-gray-400 bg-white rounded-xl border border-gray-100 px-4 py-3">Niciun voucher emis încă.</div>
+          ) : (
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-gray-50 border-b border-gray-100">
+                    <tr className="text-left text-xs text-gray-500">
+                      <th className="px-4 py-2.5 font-medium">Data</th>
+                      <th className="px-4 py-2.5 font-medium">Tip</th>
+                      <th className="px-4 py-2.5 font-medium">Beneficiar</th>
+                      <th className="px-4 py-2.5 font-medium">Detalii</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {vouchers.map((v: any) => {
+                      const d = v.data_emiterii || v.created_at
+                      const detalii = v.tip === 'valoric'
+                        ? [v.suma && `${v.suma} €`, v.observatii].filter(Boolean).join(' · ')
+                        : [v.sesiune, v.locatie, v.orar].filter(Boolean).join(' · ')
+                      return (
+                        <tr key={v.id} className="border-t border-gray-50">
+                          <td className="px-4 py-2.5 text-gray-500 whitespace-nowrap">{d ? new Date(d).toLocaleDateString('ro-RO', { day: 'numeric', month: 'short', year: 'numeric' }) : '—'}</td>
+                          <td className="px-4 py-2.5"><span className="text-xs font-medium px-2 py-0.5 rounded-lg border border-gray-200 text-gray-600">{TIP_LABEL[v.tip as Tip] || v.tip}</span></td>
+                          <td className="px-4 py-2.5 font-medium text-gray-900">{`${v.nume || ''} ${v.prenume || ''}`.trim() || '—'}</td>
+                          <td className="px-4 py-2.5 text-gray-500">{detalii || '—'}</td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

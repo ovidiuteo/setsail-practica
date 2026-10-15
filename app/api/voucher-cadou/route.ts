@@ -17,11 +17,19 @@ async function tokenOk(sb: ReturnType<typeof svc>, token: string) {
   return !!data?.token && data.token === token
 }
 
-// GET ?token= — validează tokenul paginii publice
+// GET ?token= — validează tokenul; ?list=1 întoarce și arhiva de vouchere emise
 export async function GET(req: NextRequest) {
   const sb = svc()
   const token = req.nextUrl.searchParams.get('token') || ''
   if (!(await tokenOk(sb, token))) return NextResponse.json({ error: 'unauthorized' }, { status: 403 })
+  if (req.nextUrl.searchParams.get('list')) {
+    const { data } = await sb
+      .from('voucher_cadou')
+      .select('id, tip, nume, prenume, observatii, sesiune, locatie, orar, suma, data_emiterii, created_at')
+      .order('created_at', { ascending: false })
+      .limit(500)
+    return NextResponse.json({ ok: true, vouchers: data || [] })
+  }
   return NextResponse.json({ ok: true })
 }
 

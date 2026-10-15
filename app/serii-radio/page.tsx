@@ -137,6 +137,19 @@ function SeriiRadio() {
             })}
           </div>
         )}
+
+        {/* Vouchere SetSail */}
+        <div className="mt-7">
+          <h2 className="text-base font-bold text-gray-900 mb-2">Vouchere SetSail</h2>
+          <a href="/emite-voucher-cadou?token=2f6f481c92706b00c1f02b5c"
+            className="flex items-center gap-3 bg-white rounded-xl border border-gray-100 shadow-sm px-4 py-3 hover:border-blue-300 hover:shadow transition-all">
+            <div className="flex-1 min-w-0">
+              <div className="font-semibold text-gray-900">Emitere voucher cadou</div>
+              <div className="text-xs text-gray-400 mt-0.5">CDS, conducător motor sau valoric · descarcă JPG / PDF</div>
+            </div>
+            <span className="shrink-0 text-gray-300">›</span>
+          </a>
+        </div>
       </div>
     </div>
   )
