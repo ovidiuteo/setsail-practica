@@ -101,7 +101,7 @@ export default async function PortalHome() {
           <MessageSquareQuote size={20} className="flex-shrink-0" style={{ color: '#FF6B35' }} />
           <div className="flex-1">
             <div className="font-semibold" style={{ color: '#0a1628' }}>Lasă un <span style={{ color: '#FF6B35' }}>review</span> SSYT 2026</div>
-            <div className="text-xs text-gray-500">Răspunde la 4 întrebări și lasă-ne un gând despre sezon.</div>
+            <div className="text-xs text-gray-500">Răspunde la câteva întrebări și lasă-ne un gând despre sezon.</div>
           </div>
           <span className="text-xs uppercase tracking-wider text-gray-400">→</span>
         </Link>
