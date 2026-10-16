@@ -18,7 +18,7 @@ export default async function AdminReviewsPage() {
       participant:ssyt_participants(id, full_name)
     `).order('updated_at', { ascending: false }),
     admin.from('ssyt_review_questions').select('id, label, position, active, follow_up').order('position').order('created_at'),
-    admin.from('ssyt_seasons').select('id, review_questions_token, review_button_visible').in('status', ['planning', 'active']).order('year', { ascending: false }).limit(1).maybeSingle(),
+    admin.from('ssyt_seasons').select('id, review_questions_token, review_view_token, review_button_visible').in('status', ['planning', 'active']).order('year', { ascending: false }).limit(1).maybeSingle(),
   ])
 
   const rows = (reviews || []).map((r: any) => ({ ...r, participant: Array.isArray(r.participant) ? r.participant[0] : r.participant }))
@@ -51,6 +51,7 @@ export default async function AdminReviewsPage() {
       </div>
 
       <PublicLinkBar publicPath="/ssyt/review" label="Formular reviews" />
+      {season?.review_view_token && <PublicLinkBar publicPath={`/reviews-ssyt?token=${season.review_view_token}`} label="Vizualizare reviews (token, extern)" />}
       {token && <PublicLinkBar publicPath={`/ssyt/review-questions?token=${token}`} label="Editor întrebări (token)" />}
 
       {rows.length === 0 ? (
