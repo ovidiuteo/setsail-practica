@@ -77,6 +77,7 @@ export default function CursBPage() {
   const [cod, setCod] = useState('')
   const [studentId, setStudentId] = useState('')
   const [nume, setNume] = useState('')
+  const [clasa, setClasa] = useState('B')
   const [note, setNote] = useState<Record<string, string>>({})
   const [deschise, setDeschise] = useState<Set<string>>(new Set())
   const [ziDeschisa, setZiDeschisa] = useState<number | null>(1)
@@ -98,10 +99,13 @@ export default function CursBPage() {
       if (!salvatLocal?.student_id || !salvatLocal?.email) { router.replace(`/portal?cod=${c}`); return }
 
       const { data: st } = await supabase.from('students')
-        .select('id, full_name, email, sessions!session_id(curs_b_url_intro, curs_b_url_zi1, curs_b_url_zi2, curs_b_url_zi3)')
+        .select('id, full_name, email, class_caa, sessions!session_id(class_caa, curs_b_url_intro, curs_b_url_zi1, curs_b_url_zi2, curs_b_url_zi3)')
         .eq('id', salvatLocal.student_id).ilike('email', salvatLocal.email).maybeSingle()
       if (!st) { router.replace(`/portal?cod=${c}`); return }
       setStudentId(st.id); setNume(st.full_name || '')
+      // clasa lui: la o serie de B/A fiecare poate fi la A sau la B
+      const cls = String((st as any).class_caa || (st as any).sessions?.class_caa || '').trim()
+      setClasa(/^a$/i.test(cls) ? 'A' : 'B')
 
       const r = await fetch(`/api/portal/curs-b?student_id=${st.id}&access_code=${encodeURIComponent(c)}`)
       const j = await r.json().catch(() => ({}))
@@ -184,7 +188,7 @@ export default function CursBPage() {
       const blob = await r.blob()
       const url = URL.createObjectURL(blob)
       const a = document.createElement('a')
-      a.href = url; a.download = `Referat Curs B - ${nume}.pdf`; a.click()
+      a.href = url; a.download = `Referat Curs ${clasa} - ${nume}.pdf`; a.click()
       setTimeout(() => URL.revokeObjectURL(url), 5000)
     } catch (e: any) {
       alert('Eroare: ' + (e?.message || e))
@@ -405,7 +409,7 @@ export default function CursBPage() {
           <button onClick={descarcaReferat} disabled={descarc || scrise === 0}
             className="inline-flex items-center gap-2 px-5 py-3 rounded-xl text-sm font-semibold text-white disabled:opacity-40"
             style={{ background: '#0a1628' }}>
-            {descarc ? <><Loader2 size={15} className="animate-spin" /> Se pregătește…</> : <><Download size={15} /> Descarcă referatul de B</>}
+            {descarc ? <><Loader2 size={15} className="animate-spin" /> Se pregătește…</> : <><Download size={15} /> Descarcă referatul de {clasa}</>}
           </button>
           {scrise === 0 && <p className="text-[11px] text-gray-400 mt-2">Scrie întâi câteva notițe.</p>}
         </div>

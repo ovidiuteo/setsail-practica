@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
   if (!student_id || !access_code) return NextResponse.json({ error: 'date lipsă' }, { status: 400 })
 
   const { data: st } = await sb.from('students')
-    .select('id, full_name, sessions!session_id(access_code, session_date, class_caa)')
+    .select('id, full_name, class_caa, sessions!session_id(access_code, session_date, class_caa)')
     .eq('id', student_id).maybeSingle()
   const sess: any = (st as any)?.sessions
   if (!st || !sess || String(sess.access_code).toUpperCase() !== String(access_code).toUpperCase())
@@ -37,6 +37,10 @@ export async function POST(req: NextRequest) {
   for (const n of (noteRows || []) as any[]) if (String(n.text || '').trim()) note[n.cheie] = n.text
 
   const nume = String((st as any).full_name || 'Cursant').trim()
+  // Clasa cursantului (A sau B): la o serie de B/A fiecare om poate fi la altă clasă
+  const clasa = /^a$/i.test(String((st as any).class_caa || '').trim())
+    || (!String((st as any).class_caa || '').trim() && /^a$/i.test(String(sess.class_caa || '').trim()))
+    ? 'A' : 'B'
   const azi = ziRo(new Date())
   const doc = newDoc()
   const cw = doc.page.width - MARGIN * 2
@@ -49,7 +53,7 @@ export async function POST(req: NextRequest) {
   // ── Copertă ──
   doc.moveDown(6)
   doc.font('B').fontSize(18).text('Conducere ambarcațiune de agrement', { align: 'center' })
-  doc.font('B').fontSize(18).text('cu vele – obținere permis categoria B', { align: 'center' })
+  doc.font('B').fontSize(18).text(`cu vele – obținere permis categoria ${clasa}`, { align: 'center' })
   doc.moveDown(2)
   doc.font('R').fontSize(13).text(`Cursant: ${nume}`, { align: 'center' })
   doc.font('R').fontSize(12).text(azi, { align: 'center' })
@@ -59,12 +63,12 @@ export async function POST(req: NextRequest) {
 
   // ── Cuprins ──
   doc.addPage()
-  antet(`NOTE CURS B/A — ${nume}`)
+  antet(`NOTE CURS ${clasa} — ${nume}`)
   doc.font('B').fontSize(14).text('Cuprins', { align: 'left' })
   doc.moveDown(0.6)
   for (const zi of CURS_B) {
     doc.font('B').fontSize(10).fillColor('#000')
-      .text(`Curs B Ziua ${zi.zi} – ${zi.instructor} – ${zi.titlu}${zi.data ? ` ${zi.data}` : ''}`, { lineGap: 2 })
+      .text(`Curs ${clasa} Ziua ${zi.zi} – ${zi.instructor} – ${zi.titlu}${zi.data ? ` ${zi.data}` : ''}`, { lineGap: 2 })
     for (const s of zi.subiecte) {
       const are = !!note[s.cheie]
       doc.font('R').fontSize(9).fillColor(are ? '#000' : '#999')
@@ -77,9 +81,9 @@ export async function POST(req: NextRequest) {
   // ── Zilele, cu notițele cursantului ──
   for (const zi of CURS_B) {
     doc.addPage()
-    antet(`NOTE CURS B/A — ${nume}`)
+    antet(`NOTE CURS ${clasa} — ${nume}`)
     doc.font('B').fontSize(13)
-      .text(`Curs B Ziua ${zi.zi} – ${zi.instructor} – ${zi.titlu}${zi.data ? ` ${zi.data}` : ''}`, { lineGap: 3 })
+      .text(`Curs ${clasa} Ziua ${zi.zi} – ${zi.instructor} – ${zi.titlu}${zi.data ? ` ${zi.data}` : ''}`, { lineGap: 3 })
     doc.moveDown(0.6)
 
     for (const s of zi.subiecte) {
@@ -97,7 +101,7 @@ export async function POST(req: NextRequest) {
   }
 
   const pdf = await docToBuffer(doc)
-  const fisier = `Referat Curs B - ${nume}.pdf`
+  const fisier = `Referat Curs ${clasa} - ${nume}.pdf`
   const ascii = fisier.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\x20-\x7E]/g, '')
   return new NextResponse(pdf as unknown as BodyInit, {
     headers: {
