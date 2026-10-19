@@ -1007,10 +1007,24 @@ function AdeverintaVhf({ student, session }: { student: Student; session: Sessio
     })
   }, [open, student, session])
 
+  // Șablonul se încarcă o singură dată. Înainte porneau două încărcări în paralel
+  // (una înainte ca datele să fie puse în formular), iar cea care termina ultima
+  // redesena peste text cu câmpurile goale — de acolo adeverințele „goale".
+  const [sablonGata, setSablonGata] = useState(false)
+  useEffect(() => {
+    if (!open) return
+    if (imgRef.current) { setSablonGata(true); return }
+    let anulat = false
+    const im = new Image()
+    im.onload = () => { if (!anulat) { imgRef.current = im; setSablonGata(true) } }
+    im.src = '/adeverinte/vhf.jpg'
+    return () => { anulat = true }
+  }, [open])
+
   const draw = useCallback(() => {
     const cv = canvasRef.current; if (!cv) return
-    let img = imgRef.current
-    if (!img) { const im = new Image(); im.onload = () => { imgRef.current = im; draw() }; im.src = '/adeverinte/vhf.jpg'; return }
+    const img = imgRef.current
+    if (!img) return
     const W = img.naturalWidth, H = img.naturalHeight
     cv.width = W; cv.height = H
     const ctx = cv.getContext('2d')!
@@ -1029,7 +1043,7 @@ function AdeverintaVhf({ student, session }: { student: Student; session: Sessio
     put(f.sesiune, 0.685, 0.630, 0.019)                 // ridicată dublu
   }, [f])
 
-  useEffect(() => { if (open) draw() }, [open, draw])
+  useEffect(() => { if (open && sablonGata) draw() }, [open, sablonGata, draw])
 
   const fileName = `adeverinta vhf ${(f.nume || '').trim()}`.trim()
   function saveJpg() {
